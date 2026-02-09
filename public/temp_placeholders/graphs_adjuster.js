@@ -7,6 +7,7 @@ window.addEventListener("message", (event) => {
     case "all_property_keys":
       const windowId = payload?.id || null;  
       getAllNodeKeys(windowId);
+      getAllNodeIdentities(id);
       break;
 
     case "graph_search":
@@ -137,6 +138,12 @@ function persistEdgeChange(id, patch) {
   });
 }
 
+function EdgeWeightToWidth(weight) {
+  if (!weight || weight === 1) return 1;
+  // logarithmic scaling (best for graphs)
+  return Math.min(8, Math.max(1, Math.log(weight + 1) * 1.8));
+}
+
 // overwrite with the latest options (for runtime changes like Physics/ Layouts)
 function updateGraphOption(settingName, value) {
   switch (settingName) {
@@ -233,6 +240,24 @@ function getAllNodeKeys(id) {
   }, "*");
 }
 
+function getAllNodeIdentities(id) {
+  const identitySet = new Set();
+  for (const node of FULL_GRAPH.nodes.values()) {
+    if (node.hasOwnProperty('node_identity')) {
+      const identities = Array.isArray(node.node_identity)
+        ? node.node_identity
+        : [node.node_identity];
+      for (const nodeIdentity of identities) {
+        identitySet.add(nodeIdentity);
+      }
+    }
+  }
+  window.parent.postMessage({
+    type: "all_nodes_identities",
+    payload: { id, keys: [...identitySet] }
+  }, "*");
+}
+
 function restoreSettings(settings) {
   if (!settings || !Array.isArray(settings)) {
     console.warn("Invalid settings array, skipping restore.");
@@ -245,16 +270,16 @@ function restoreSettings(settings) {
       sort: settings[1] || "asc",
       amount: Math.min(settings[2] || 25, 300)
     });
-    weightEdges(settings[3]);
-    applyTitleToggle(settings[4]);
-    showNodelabels(settings[5]);
+    weightEdges(settings[5]);
+    applyTitleToggle(settings[6]);
+    showNodelabels(settings[7]);
     console.log("Skipping edit infos at index 6.");
-    networkphysics(settings[7]);
-    networkLayoutType(settings[8]);
+    networkphysics(settings[9]);
+    networkLayoutType(settings[10]);
     labelNodesWith(settings[11] || null);
-    if (settings[8] === "hierarchical") {
-      networkLayoutDirection(settings[9]);
-      networkLayoutSort(settings[10]);
+    if (settings[9] === "hierarchical") {
+      networkLayoutDirection(settings[11]);
+      networkLayoutSort(settings[12]);
     }
   } catch (err) {
     console.error("Error in restoreSettings:", err);
@@ -909,19 +934,26 @@ function recomputeVisibleEdges() {
 
 function expandNode(nodeId) {
   const neighbors = FULL_GRAPH.adjacency.get(nodeId);
-  if (!neighbors || neighbors.length === 0) return;
+  if (!neighbors || neighbors.size === 0) return;
 
-  // Add all direct neighbors that are not already visible
+  // Find first neighbor not visible
+  let neighborToExpand = null;
   for (const n of neighbors) {
     if (!VISIBLE_STATE.nodes.has(n)) {
-      VISIBLE_STATE.nodes.add(n);
+      neighborToExpand = n;
+      break;
     }
   }
 
-  // Recompute visible edges connecting currently visible nodes
+  if (neighborToExpand) {
+    VISIBLE_STATE.nodes.add(neighborToExpand);
+  }
+
+  // Recompute visible edges and render
   recomputeVisibleEdges();
   renderVisibleGraph();
 }
+
 
 
 
@@ -1073,10 +1105,15 @@ function showNodeInfos(node, state) {
 }
 
 function networkphysics(state) {
-  network.setOptions({ physics: { enabled: state ? true : false } });
+  network.setOptions({
+    physics: {
+      enabled: state,
+      ...STABLE_PHYSICS
+    }
+  });
   updateGraphOption("graph_physics", state);
-  network.stabilize();
 }
+
 
 function networkLayoutType(type) {
   if (!network) return;
@@ -1089,26 +1126,24 @@ function networkLayoutType(type) {
           direction: "UD",
           sortMethod: "directed"
         }
-      },
-      physics: window.currentOptions.physics // use boolean directly
+      }
     });
   } else {
-    // Reset layout completely to default
     network.setOptions({
-      layout: { hierarchical: { enabled: false } },
-      physics: window.currentOptions.physics // use boolean directly
+      layout: { hierarchical: { enabled: false } }
     });
   }
-  // Update stored options
+
   updateGraphOption("layout_type", type);
-  updateGraphOption("layout_direction", "UD");
-  updateGraphOption("sort_method", "directed");
-  updateGraphOption("graph_physics", window.currentOptions.physics);
-  networkphysics(window.currentOptions.physics)
+
+  // only stabilize if physics is enabled
+  if (network.physics.physicsEnabled) {
+    network.stabilize();
+  }
 
   network.fit();
-  network.stabilize();
 }
+
 
 
 function networkLayoutDirection(direction) {
@@ -1116,9 +1151,23 @@ function networkLayoutDirection(direction) {
   network.setOptions({
     layout: { hierarchical: { direction: direction } }
   });
-  updateGraphOption("layout_direction", direction);
-  network.stabilize();
+
+  if (network.physics.physicsEnabled) {
+    network.stabilize();
+  }
 }
+
+function networkLayoutSort(sort) {
+  if (!network) return;
+  network.setOptions({
+    layout: { hierarchical: { sortMethod: sort } }
+  });
+
+  if (network.physics.physicsEnabled) {
+    network.stabilize();
+  }
+}
+
 
 function networkLayoutSort(sort) {
   if (!network) return;
@@ -1341,7 +1390,8 @@ async function loadGraphFromFile(id,file) {
     });
     //Passing property keys
     getAllNodeKeys(id);
-    console.log("Graph loaded successfully");
+    getAllNodeIdentities(id);
+    console.log("Graph loaded successfully1");
 
   } catch (err) {
     console.error("Error loading graph file:", err);
@@ -1487,11 +1537,13 @@ function initializer(id){
   let defaultLimit = 25;
   applyLimit({key:"",sort:"asc",amount:defaultLimit});
   getAllNodeKeys(id);
+  getAllNodeIdentities(id);
   network.fit();
   network.redraw();
 }
 
 function createNewGraph({ id, nodes = [], edges = [] }) {
+  console.log("yooo")
   // Reset visible graph
   nodesData.clear();
   edgesData.clear();
@@ -1501,6 +1553,7 @@ function createNewGraph({ id, nodes = [], edges = [] }) {
   MODIFIED_EDGES.clear();
 
   // Build FULL_GRAPH from the provided data
+  console.log("Initializing FullGraph...");
   initializeFullGraph({ nodes, edges });
 
   // Optional: any iframe / parent init logic

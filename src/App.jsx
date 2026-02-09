@@ -586,7 +586,7 @@ function WindowVerticalSplitPanels({id, type, sourceId, initialTopHeight, minTop
   const maxHeightPx = useRef(0);
 
   const settings = iframeSettings[id];
-  console.log("settings:",settings[5],"id:",id)
+  console.log("settings:",settings[6],"id:",id)
 
   // Update container height
   useEffect(() => {
@@ -844,30 +844,48 @@ function WindowVerticalSplitPanels({id, type, sourceId, initialTopHeight, minTop
                 />
               </div>
               <div className="settings_form_div">
-                <label className="input_labels">Label nodes with</label>
-                {filterPropertyKeys && (
-                  <select
+                <label className="input_labels">Label Group</label>
+                <select
+                    className="select_option"
+                    value={settings[3]?.key || ""}
+                    onChange={(e) => {
+                      graphAction(id, "properties_tab", "settings", {
+                        iframe: iframeRef,
+                        settings: "label_nodes_grpup",
+                        state: { labelkey: e.target.value},
+                      });
+                    }}
+                  >
+                  {settings[3] && settings[3].map(key => (
+                      <option key={key} value={key}>
+                          {key}
+                      </option>
+                  ))}
+                </select>
+              </div>
+              <div className="settings_form_div">
+                <label className="input_labels">Label nodes by</label>
+                <select
                     className="select_option"
                     value={settings[11]?.key || ""}
                     onChange={(e) => {
                       graphAction(id, "properties_tab", "settings", {
                         iframe: iframeRef,
                         settings: "label_nodes_with",
-                        state: { labelkey: e.target.value, filterKey: settings[0],filterSort: settings[1], limitAmount: settings[2]},
+                        state: { labelIdentity: settings[3], labelkey: e.target.value, filterKey: settings[0],filterSort: settings[1], limitAmount: settings[2]},
                       });
                     }}
                   >
-                    {filterPropertyKeys.map((key) => (
-                      <option key={key} value={key}>
-                        {key}
-                      </option>
-                    ))}
-                  </select>
-                )}
+                  {filterPropertyKeys && filterPropertyKeys.map((key) => (
+                    <option key={key} value={key}>
+                      {key}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div className="settings_form_div">                
                 <label className="input_labels">Weight Edges</label>                
-                <select className="select_option" value={settings[3] ? (settings[3]):("")} onChange={(e) => {graphAction(id, "properties_tab", "settings", 
+                <select className="select_option" value={settings[4] ? (settings[4]):("")} onChange={(e) => {graphAction(id, "properties_tab", "settings", 
                   {
                     iframe: iframeRef,
                     settings: "weight_edges",
@@ -879,7 +897,7 @@ function WindowVerticalSplitPanels({id, type, sourceId, initialTopHeight, minTop
               </div>
               <div className="settings_form_div">                
                 <label className="input_labels">Show Titles</label>
-                <select className="select_option" value={settings[4] ? (settings[4]):("")} onChange={(e) => {graphAction(id, "properties_tab", "settings", 
+                <select className="select_option" value={settings[5] ? (settings[5]):("")} onChange={(e) => {graphAction(id, "properties_tab", "settings", 
                   {
                     iframe: iframeRef,
                     settings: "show_title",
@@ -891,7 +909,7 @@ function WindowVerticalSplitPanels({id, type, sourceId, initialTopHeight, minTop
               </div>
               <div className="settings_form_div">                
                 <label className="input_labels">Show Labels</label>                
-                <select className="select_option" value={settings[5] ? (settings[5]):("")} onChange={(e) => {graphAction(id, "properties_tab", "settings", 
+                <select className="select_option" value={settings[6] ? (settings[6]):("")} onChange={(e) => {graphAction(id, "properties_tab", "settings", 
                   {
                     iframe: iframeRef,
                     settings: "show_label",
@@ -903,7 +921,7 @@ function WindowVerticalSplitPanels({id, type, sourceId, initialTopHeight, minTop
               </div>
               <div className="settings_form_div">                
                 <label className="input_labels">Edit Informations</label>                
-                <select disabled className="select_option" value={settings[6] ? (settings[6]):("")} onChange={(e) => {graphAction(id, "properties_tab", "settings", 
+                <select disabled className="select_option" value={settings[7] ? (settings[7]):("")} onChange={(e) => {graphAction(id, "properties_tab", "settings", 
                   {
                     iframe: iframeRef,
                     settings: "edit_infos",
@@ -915,7 +933,7 @@ function WindowVerticalSplitPanels({id, type, sourceId, initialTopHeight, minTop
               </div>
               <div className="settings_form_div">                
                 <label className="input_labels">Graph Physics</label>                
-                <select className="select_option" value={settings[7] ? (settings[7]): ("")} onChange={(e) => {graphAction(id, "properties_tab", "settings", 
+                <select className="select_option" value={settings[8] ? (settings[8]): ("")} onChange={(e) => {graphAction(id, "properties_tab", "settings", 
                   {
                     iframe: iframeRef,
                     settings: "graph_physics",
@@ -927,7 +945,7 @@ function WindowVerticalSplitPanels({id, type, sourceId, initialTopHeight, minTop
               </div>
               <div className="settings_form_div">
                 <label className="input_labels">Layout type</label>
-                <select className="select_option" value={settings[8] ? (settings[8]):("default")} onChange={(e) => {graphAction(id, "properties_tab", "settings", 
+                <select className="select_option" value={settings[9] ? (settings[9]):("default")} onChange={(e) => {graphAction(id, "properties_tab", "settings", 
                   {
                     iframe: iframeRef,
                     settings: "layout_type",
@@ -939,26 +957,26 @@ function WindowVerticalSplitPanels({id, type, sourceId, initialTopHeight, minTop
               </div>
               <div className="settings_form_div">
                 <label className="input_labels">Layout direction</label>
-                <select className="select_option" value={settings[8] === "hierarchical" && settings[9] ? settings[9]:"UD"} onChange={(e) => {graphAction(id, "properties_tab", "settings", 
+                <select className="select_option" value={settings[9] === "hierarchical" && settings[10] ? settings[10]:"UD"} onChange={(e) => {graphAction(id, "properties_tab", "settings", 
                   {
                     iframe: iframeRef,
                     settings: "layout_direction",
                     state: e.target.value,
                   })}}
-                  disabled={settings[8] !== "hierarchical"}>
+                  disabled={settings[9] !== "hierarchical"}>
                   <option value="UD">Up-Down</option>
                   <option value="LR">Left-Right</option>
                 </select>                
               </div>
               <div className="settings_form_div">
                 <label className="input_labels">Sort method</label>
-                <select className="select_option" value={settings[8] === "hierarchical" && settings[10] ? settings[10]:"directed"} onChange={(e) => {graphAction(id, "properties_tab", "settings", 
+                <select className="select_option" value={settings[9] === "hierarchical" && settings[11] ? settings[11]:"directed"} onChange={(e) => {graphAction(id, "properties_tab", "settings", 
                   {
                     iframe: iframeRef,
                     settings: "sort_method",
                     state: e.target.value,
                   })}}
-                  disabled={settings[8] !== "hierarchical"}>
+                  disabled={settings[9] !== "hierarchical"}>
                   <option value="directed">Directed</option>
                   <option value="hubsize">Hub-Size</option>
                 </select>                
@@ -3122,6 +3140,23 @@ function Root() {
           prev.map(w => w.type === "graph" && w.id === id ? { ...w, filterPropertyKeys: keys } : w)
         );
       }
+      if (event.data?.type === "all_nodes_identities") {
+        const { id, keys } = event.data.payload; // keys = ['Source Node', 'Target Node']
+        // Save the flat array directly
+        setIframeSettings(prev => ({
+          ...prev,
+          [3]: keys,   // just the array of strings
+        }));
+        // Update the window settings (optional)
+        setWindows(prev =>
+          prev.map(w =>
+            w.type === "graph" && w.id === id
+              ? { ...w, IframeSettings: keys }  // store flat array instead of [{ keys: [...] }]
+              : w
+            )
+        );
+      }
+
       if (event.data?.type === "graph_filter_results") {
         const { id, results } = event.data.payload; // unpack the payload
         setWindows(prev =>
@@ -4836,7 +4871,7 @@ function Root() {
         }
         if (menuId === "reset_graph") {
           const iframe=payload;     
-          const newSettings=["","",25, "", "", true, "", true, "default", "UD", "directed"]
+          const newSettings=["","",25, "", "", "", true, "", true, "default", "UD", "directed"]
           setIframeSettings(prev => ({
             ...prev,        // spread existing entries
             [id]: newSettings // update specific id
