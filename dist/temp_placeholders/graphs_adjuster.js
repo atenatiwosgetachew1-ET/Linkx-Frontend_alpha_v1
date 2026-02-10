@@ -4,11 +4,6 @@ window.addEventListener("message", (event) => {
     case "network_components":      
       getNetworkComponents(payload);
       break;
-    case "all_property_keys":
-      const windowId = payload?.id || null;  
-      getAllNodeKeys(windowId);
-      getAllNodeIdentities(id);
-      break;
 
     case "graph_search":
       graphSearch(payload); // your existing limit function
@@ -18,7 +13,9 @@ window.addEventListener("message", (event) => {
       let setLimitEnabled = payload;
       applyLimit(setLimitEnabled); // your existing limit function
       break;
-
+    case "label_nodes_group":
+      setLableGroup = payload;
+      break;
     case "weight_edges":
       weightEdgesEnabled = payload;
       weightEdges(weightEdgesEnabled); // define logic here
@@ -35,8 +32,8 @@ window.addEventListener("message", (event) => {
       break;
 
     case "edit_infos":
-      let editInfosEnabled = payload;
-      toggleNodeInfos(editInfosEnabled);
+      let editInformationsEnabled = payload;
+      toggleNodeInfosEdit(editInformationsEnabled);
       break;
 
     case "graph_physics":
@@ -89,7 +86,7 @@ window.addEventListener("message", (event) => {
       fit_graph();
       break;
 
-    case "label_nodes_with":
+    case "label_nodes_by":
       labelNodesWith(payload);
       break;
 
@@ -237,24 +234,6 @@ function getAllNodeKeys(id) {
   window.parent.postMessage({
     type: "all_property_keys_response",
     payload: { id, keys: [...keySet] }
-  }, "*");
-}
-
-function getAllNodeIdentities(id) {
-  const identitySet = new Set();
-  for (const node of FULL_GRAPH.nodes.values()) {
-    if (node.hasOwnProperty('node_identity')) {
-      const identities = Array.isArray(node.node_identity)
-        ? node.node_identity
-        : [node.node_identity];
-      for (const nodeIdentity of identities) {
-        identitySet.add(nodeIdentity);
-      }
-    }
-  }
-  window.parent.postMessage({
-    type: "all_nodes_identities",
-    payload: { id, keys: [...identitySet] }
   }, "*");
 }
 
@@ -905,16 +884,16 @@ function applyLimit({ key = "", sort = "asc", amount = 25 }) {
     });
   }
 
-  // 3️⃣ Select window
+  // Select window
   for (const { id } of nodes) {
     VISIBLE_STATE.nodes.add(id);
     if (VISIBLE_STATE.nodes.size >= amount) break;
   }
 
-  // 4️⃣ Recompute visible edges
+  // Recompute visible edges
   recomputeVisibleEdges();
 
-  // 5️⃣ Render
+  // Render
   renderVisibleGraph();
 }
 
@@ -958,8 +937,10 @@ function expandNode(nodeId) {
 
 
 function applyTitleToggle(state) {
+  console.log("applyTitleToggle_called:",state)
   nodesData.forEach(node => {
     if (!state) {
+      console.log(0)
       nodesData.update({ id: node.id, title: undefined });
       return;
     }
@@ -972,15 +953,14 @@ function applyTitleToggle(state) {
       .filter(([_, v]) => v != null)
       .map(([k, v]) => `${k}: ${v}`)
       .join("\n");
-
+    console.log(1,"id:", node.id, "title:", title)
     nodesData.update({ id: node.id, title });
+    showTitlesEnabled=state;
   });
 }
 
 
 function applyLabelToggle(state) {
-  showLabelsEnabled = state;
-
   nodesData.forEach(node => {
     const base = FULL_GRAPH.nodes.get(node.id);
     const mod  = MODIFIED_NODES.get(node.id) || {};
@@ -989,7 +969,7 @@ function applyLabelToggle(state) {
       label: state ? (mod.label ?? base.label ?? "") : ""
     });
   });
-
+  showLabelsEnabled = state;
   network.redraw();
 }
 
@@ -1019,15 +999,34 @@ function pasteNodes(pos) {
 
 function weightEdges(state) {
   edgesData.forEach(edge => {
-    const base = FULL_GRAPH.edges.get(edge.id);
-    if (!base) return;
+    const base = FULL_GRAPH.edges.get(edge.id) || {};
+    const mod  = MODIFIED_EDGES.get(edge.id) || {};
 
+    // merge base + user modifications
+    const merged = { ...base, ...mod };
+
+    // decide width source
+    const weightValue =
+      merged.weight ??     // if user edited weight explicitly
+      merged.value ??      // if graph data has value
+      merged.width ??      // fallback
+      1;                   // default
+    const width = state
+      ? EdgeWeightToWidth(weightValue)
+      : 1;
     edgesData.update({
       id: edge.id,
-      width: state ? (base.value || 3) : 1
+      width
+    });
+    // persist visual change
+    MODIFIED_EDGES.set(edge.id, {
+      ...mod,
+      width
     });
   });
+  shwoWeightedEdgesEnabled = state;
 }
+
 
 function filterNodes(predicate, limit = 300) {
   nodesData.clear();
@@ -1105,13 +1104,27 @@ function showNodeInfos(node, state) {
 }
 
 function networkphysics(state) {
-  network.setOptions({
-    physics: {
-      enabled: state,
-      ...STABLE_PHYSICS
-    }
-  });
-  updateGraphOption("graph_physics", state);
+  const enabled = state === true || state === "true";
+  if (enabled) {
+    network.setOptions({
+      physics: {
+        ...STABLE_PHYSICS,
+        enabled: true
+      }
+    });
+    // always restart engine cleanly
+    network.startSimulation();
+    network.stabilize();
+
+  } else {
+    // stop engine cleanly
+    network.stopSimulation();
+    network.setOptions({
+      physics: { enabled: false }
+    });
+  }
+  physicsEnabled = state;
+  updateGraphOption("graph_physics", enabled);
 }
 
 
@@ -1133,7 +1146,7 @@ function networkLayoutType(type) {
       layout: { hierarchical: { enabled: false } }
     });
   }
-
+  layoutType = type;
   updateGraphOption("layout_type", type);
 
   // only stabilize if physics is enabled
@@ -1155,6 +1168,7 @@ function networkLayoutDirection(direction) {
   if (network.physics.physicsEnabled) {
     network.stabilize();
   }
+  layoutDirection = direction;
 }
 
 function networkLayoutSort(sort) {
@@ -1166,6 +1180,7 @@ function networkLayoutSort(sort) {
   if (network.physics.physicsEnabled) {
     network.stabilize();
   }
+  sortMethod = sort;
 }
 
 
@@ -1390,7 +1405,6 @@ async function loadGraphFromFile(id,file) {
     });
     //Passing property keys
     getAllNodeKeys(id);
-    getAllNodeIdentities(id);
     console.log("Graph loaded successfully1");
 
   } catch (err) {
@@ -1508,19 +1522,29 @@ function getNodeValue(node, key) {
   );
   return actualKey ? node[actualKey] : null;
 }
-
-function labelNodesWith({ labelkey, filterKey, filterSort = "asc", limitAmount = 25 }) {
+let n=0
+function labelNodesWith({ labelIdentity, labelkey, filterKey, filterSort = "asc", limitAmount = 25 }) {
+  console.log("to update labels of:",labelIdentity)
   if (!labelkey) return;
 
+  // Validate labelIdentity and provide fallback
+  const validIdentities = ["Entity Node", "Source Node", "Target Node"];
+  const identityToUse = validIdentities.includes(labelIdentity) ? labelIdentity : "Entity Node";
+
   for (const [id, node] of FULL_GRAPH.nodes) {
-    const value = node[labelkey];
-    if (value != null) {
-      MODIFIED_NODES.set(id, {
-        ...(MODIFIED_NODES.get(id) || {}),
-        label: String(value)
-      });
+    // Only label nodes with matching node_identity
+    console.log("node_identity:",n+1,node.node_identity,"identityToUse:",identityToUse)
+    if (node.node_identity === identityToUse) {
+      const value = node[labelkey];
+      if (value != null) {
+        MODIFIED_NODES.set(id, {
+          ...(MODIFIED_NODES.get(id) || {}),
+          label: String(value)
+        });
+      }
     }
   }
+  showLabelsEnabled = true;
 
   applyLimit({
     key: filterKey || "",
@@ -1532,12 +1556,12 @@ function labelNodesWith({ labelkey, filterKey, filterSort = "asc", limitAmount =
 
 
 
+
 function initializer(id){
   // Optional: apply default settings (like labels/limits)
   let defaultLimit = 25;
   applyLimit({key:"",sort:"asc",amount:defaultLimit});
   getAllNodeKeys(id);
-  getAllNodeIdentities(id);
   network.fit();
   network.redraw();
 }
@@ -1569,16 +1593,31 @@ function renderVisibleGraph() {
     const base = FULL_GRAPH.nodes.get(id);
     if (!base) continue;
 
-    const mod = MODIFIED_NODES.get(id);
-    nodeBatch.push(mod ? { ...base, ...mod } : base);
+    const mod = MODIFIED_NODES.get(id) || {};
+    const merged = { ...base, ...mod };
+
+    // build title ALWAYS if enabled
+    if (showTitlesEnabled) {
+      merged.title = Object.entries(merged)
+        .filter(([_, v]) => v != null)
+        .map(([k, v]) => `${k}: ${v}`)
+        .join("\n");
+    }
+
+    // build label ALWAYS correctly
+    merged.label = showLabelsEnabled
+      ? (merged.label ?? base.label ?? "")
+      : "";
+
+    nodeBatch.push(merged);
   }
 
   for (const id of VISIBLE_STATE.edges) {
     const base = FULL_GRAPH.edges.get(id);
     if (!base) continue;
 
-    const mod = MODIFIED_EDGES.get(id);
-    edgeBatch.push(mod ? { ...base, ...mod } : base);
+    const mod = MODIFIED_EDGES.get(id) || {};
+    edgeBatch.push({ ...base, ...mod });
   }
 
   nodesData.clear();
@@ -1589,6 +1628,7 @@ function renderVisibleGraph() {
 
   network.redraw();
 }
+
 
 
 

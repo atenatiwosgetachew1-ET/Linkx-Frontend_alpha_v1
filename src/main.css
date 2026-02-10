@@ -3626,7 +3626,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 	border-right: 0.1vh solid #EFEFEF;
 }
 .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_infos_container .graph_options_infos div:first-child span:last-child{
-	user-select: text;
+	user-select: all;
 }
 .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_infos_container .graph_options_infos div:last-child{
 	border-bottom: 0.1vh solid #FFF;

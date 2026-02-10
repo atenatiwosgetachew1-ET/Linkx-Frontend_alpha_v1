@@ -847,31 +847,29 @@ function WindowVerticalSplitPanels({id, type, sourceId, initialTopHeight, minTop
                 <label className="input_labels">Label Group</label>
                 <select
                     className="select_option"
-                    value={settings[3]?.key || ""}
+                    value={settings[3] || ""}
                     onChange={(e) => {
                       graphAction(id, "properties_tab", "settings", {
                         iframe: iframeRef,
-                        settings: "label_nodes_grpup",
-                        state: { labelkey: e.target.value},
+                        settings: "label_nodes_group",
+                        state: e.target.value,
                       });
                     }}
                   >
-                  {settings[3] && settings[3].map(key => (
-                      <option key={key} value={key}>
-                          {key}
-                      </option>
-                  ))}
+                  <option value="Entity Node">Entity Nodes</option>
+                  <option value="Source Node">Source Nodes</option>
+                  <option value="Target Node">Target Nodes</option>
                 </select>
               </div>
               <div className="settings_form_div">
                 <label className="input_labels">Label nodes by</label>
                 <select
                     className="select_option"
-                    value={settings[11]?.key || ""}
+                    value={settings[4] || ""}
                     onChange={(e) => {
                       graphAction(id, "properties_tab", "settings", {
                         iframe: iframeRef,
-                        settings: "label_nodes_with",
+                        settings: "label_nodes_by",
                         state: { labelIdentity: settings[3], labelkey: e.target.value, filterKey: settings[0],filterSort: settings[1], limitAmount: settings[2]},
                       });
                     }}
@@ -885,7 +883,7 @@ function WindowVerticalSplitPanels({id, type, sourceId, initialTopHeight, minTop
               </div>
               <div className="settings_form_div">                
                 <label className="input_labels">Weight Edges</label>                
-                <select className="select_option" value={settings[4] ? (settings[4]):("")} onChange={(e) => {graphAction(id, "properties_tab", "settings", 
+                <select className="select_option" value={settings[5] ? (settings[5]):("")} onChange={(e) => {graphAction(id, "properties_tab", "settings", 
                   {
                     iframe: iframeRef,
                     settings: "weight_edges",
@@ -897,7 +895,7 @@ function WindowVerticalSplitPanels({id, type, sourceId, initialTopHeight, minTop
               </div>
               <div className="settings_form_div">                
                 <label className="input_labels">Show Titles</label>
-                <select className="select_option" value={settings[5] ? (settings[5]):("")} onChange={(e) => {graphAction(id, "properties_tab", "settings", 
+                <select className="select_option" value={settings[6] ? (settings[6]):("")} onChange={(e) => {graphAction(id, "properties_tab", "settings", 
                   {
                     iframe: iframeRef,
                     settings: "show_title",
@@ -909,7 +907,7 @@ function WindowVerticalSplitPanels({id, type, sourceId, initialTopHeight, minTop
               </div>
               <div className="settings_form_div">                
                 <label className="input_labels">Show Labels</label>                
-                <select className="select_option" value={settings[6] ? (settings[6]):("")} onChange={(e) => {graphAction(id, "properties_tab", "settings", 
+                <select className="select_option" value={settings[7] ? (settings[7]):("")} onChange={(e) => {graphAction(id, "properties_tab", "settings", 
                   {
                     iframe: iframeRef,
                     settings: "show_label",
@@ -921,7 +919,7 @@ function WindowVerticalSplitPanels({id, type, sourceId, initialTopHeight, minTop
               </div>
               <div className="settings_form_div">                
                 <label className="input_labels">Edit Informations</label>                
-                <select disabled className="select_option" value={settings[7] ? (settings[7]):("")} onChange={(e) => {graphAction(id, "properties_tab", "settings", 
+                <select disabled className="select_option" value={settings[8] ? (settings[8]):("")} onChange={(e) => {graphAction(id, "properties_tab", "settings", 
                   {
                     iframe: iframeRef,
                     settings: "edit_infos",
@@ -933,7 +931,7 @@ function WindowVerticalSplitPanels({id, type, sourceId, initialTopHeight, minTop
               </div>
               <div className="settings_form_div">                
                 <label className="input_labels">Graph Physics</label>                
-                <select className="select_option" value={settings[8] ? (settings[8]): ("")} onChange={(e) => {graphAction(id, "properties_tab", "settings", 
+                <select className="select_option" value={settings[9] ? (settings[9]): ("")} onChange={(e) => {graphAction(id, "properties_tab", "settings", 
                   {
                     iframe: iframeRef,
                     settings: "graph_physics",
@@ -945,7 +943,7 @@ function WindowVerticalSplitPanels({id, type, sourceId, initialTopHeight, minTop
               </div>
               <div className="settings_form_div">
                 <label className="input_labels">Layout type</label>
-                <select className="select_option" value={settings[9] ? (settings[9]):("default")} onChange={(e) => {graphAction(id, "properties_tab", "settings", 
+                <select className="select_option" value={settings[10] ? (settings[10]):("default")} onChange={(e) => {graphAction(id, "properties_tab", "settings", 
                   {
                     iframe: iframeRef,
                     settings: "layout_type",
@@ -957,26 +955,26 @@ function WindowVerticalSplitPanels({id, type, sourceId, initialTopHeight, minTop
               </div>
               <div className="settings_form_div">
                 <label className="input_labels">Layout direction</label>
-                <select className="select_option" value={settings[9] === "hierarchical" && settings[10] ? settings[10]:"UD"} onChange={(e) => {graphAction(id, "properties_tab", "settings", 
+                <select className="select_option" value={settings[10] === "hierarchical" && settings[11] ? settings[11]:"UD"} onChange={(e) => {graphAction(id, "properties_tab", "settings", 
                   {
                     iframe: iframeRef,
                     settings: "layout_direction",
                     state: e.target.value,
                   })}}
-                  disabled={settings[9] !== "hierarchical"}>
+                  disabled={settings[10] !== "hierarchical"}>
                   <option value="UD">Up-Down</option>
                   <option value="LR">Left-Right</option>
                 </select>                
               </div>
               <div className="settings_form_div">
                 <label className="input_labels">Sort method</label>
-                <select className="select_option" value={settings[9] === "hierarchical" && settings[11] ? settings[11]:"directed"} onChange={(e) => {graphAction(id, "properties_tab", "settings", 
+                <select className="select_option" value={settings[10] === "hierarchical" && settings[12] ? settings[12]:"directed"} onChange={(e) => {graphAction(id, "properties_tab", "settings", 
                   {
                     iframe: iframeRef,
                     settings: "sort_method",
                     state: e.target.value,
                   })}}
-                  disabled={settings[9] !== "hierarchical"}>
+                  disabled={settings[10] !== "hierarchical"}>
                   <option value="directed">Directed</option>
                   <option value="hubsize">Hub-Size</option>
                 </select>                
@@ -1166,7 +1164,7 @@ function DraggableWindow({ children, initialPos = { top: 0, left: 0 }, orientati
     </div>
   );
 }
-function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText, loadscreenState, isSideBarMenuOpen, orientation, configurations, windowAction, graphAction, chartAction, selectedContent, selectedSubContent, selectedNodes, selectedEdges,windowResponseI,windowResponseII,formToolResponse,batchFilesSearchHybrid,batchFilesSearchHybridQuery,batchFilesSearchStrict,searchText,batchFilesSearchLimit,batchFilesSearchResults,batchFilesSearchMoreFiles,searchResultsVisible,searchPlaceholder,batchFilesCollection, batchFilesDataframeInfoI, batchFilesDataframeInfoII, batchFilesDataframeActionValue, batchFilesDataframeSourceValue, batchFilesDataframeTargetValue, batchFilesDataframeRelationshipValue, batchFilesDataframeRuleValue, sourceSessionLog, sourceStreams , sourceStreamListener, fileInputRef, textareaRefs, onClose, onMove, zIndex, onFocus, covered, graphLink, graphLinkId, graphLinkSource, graphStatus, activeGraph, chartLink, chartLinkId, activechart, iframeRef, iframeFilters, iframeSettings, selectedPropertyTab, filterPropertyKeys, filterResults, nodeProperties, BASE_URL }) {
+function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText, loadscreenState, isSideBarMenuOpen, orientation, configurations, windowAction, graphAction, chartAction, selectedContent, selectedSubContent, selectedNodes, selectedEdges,windowResponseI,windowResponseII,formToolResponse,batchFilesSearchHybrid,batchFilesSearchHybridQuery,batchFilesSearchStrict,searchText,batchFilesSearchLimit,batchFilesSearchResults,batchFilesSearchMoreFiles,searchResultsVisible,searchPlaceholder,batchFilesCollection, batchFilesDataframeInfoI, batchFilesDataframeInfoII, batchFilesDataframeActionValue, batchFilesDataframeSourceValue, batchFilesDataframeTargetValue, batchFilesDataframeRelationshipValue, batchFilesDataframeRuleValue, sourceSessionLog, sourceStreams , sourceStreamListener, fileInputRef, textareaRefs, onClose, onMove, zIndex, onFocus, covered, graphLink, graphLinkId, graphLinkSource, graphStatus, activeGraph, chartLink, chartLinkId, activechart, iframeRef, iframeFilters, iframeSettings, iframeSearch, selectedPropertyTab, filterPropertyKeys, filterResults, nodeProperties, BASE_URL }) {
   if (type === "source") {
     return (
       <DraggableWindow initialPos={{ top: 0, left: 0}} zIndex={zIndex} orientation={orientation}>
@@ -2455,6 +2453,7 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
                 iframeRef={iframeRef}  // same ref as iframe
                 iframeFilters={iframeFilters}
                 iframeSettings={iframeSettings}
+                iframeSearch={iframeSearch}
                 selectedPropertyTab={selectedPropertyTab}
                 nodeProperties={nodeProperties}
                 filterPropertyKeys={filterPropertyKeys}
@@ -2861,6 +2860,7 @@ function Root() {
   const [activeGraph, setActiveGraph] = useState(''); 
   const iframeRefs = useRef({}); //to communicate across the iframe boundary  
   const [iframeSettings, setIframeSettings] = useState({}); // object instead of array
+  const [iframeSearch, setIframeSearch] = useState({}); // object instead of array
   const [isCtrlHeld, setIsCtrlHeld] = useState(false);  
   const API_URL = import.meta.env.VITE_API_URL
   const BASE_URL = import.meta.env.VITE_BASE_URL
@@ -3139,24 +3139,8 @@ function Root() {
         setWindows(prev =>
           prev.map(w => w.type === "graph" && w.id === id ? { ...w, filterPropertyKeys: keys } : w)
         );
-      }
-      if (event.data?.type === "all_nodes_identities") {
-        const { id, keys } = event.data.payload; // keys = ['Source Node', 'Target Node']
-        // Save the flat array directly
-        setIframeSettings(prev => ({
-          ...prev,
-          [3]: keys,   // just the array of strings
-        }));
-        // Update the window settings (optional)
-        setWindows(prev =>
-          prev.map(w =>
-            w.type === "graph" && w.id === id
-              ? { ...w, IframeSettings: keys }  // store flat array instead of [{ keys: [...] }]
-              : w
-            )
-        );
-      }
-
+        console.log("IframeSettings:",iframeSettings)
+      }    
       if (event.data?.type === "graph_filter_results") {
         const { id, results } = event.data.payload; // unpack the payload
         setWindows(prev =>
@@ -3265,11 +3249,12 @@ function Root() {
     } else if (type === "graph") {
       iframeRefs.current[id] = React.createRef();
       setActiveWindowId(id);
+      const initialSettings = ["", "", 25, "", "", true, true, true, false, true, "default", "UD", "directed"];
+      // set iframe settings
       setIframeSettings(prev => ({
         ...prev,
-        [id]: ["", "", 25, "", "", true, "", true, "default", "UD", "directed"],
+        [id]: initialSettings,
       }));
-
       setWindows(prev => {
         const maxZ = prev.length ? Math.max(...prev.map(w => w.zIndex)) : 0;
         return [
@@ -3285,7 +3270,7 @@ function Root() {
             graphLink: null,
             graphStatus: null,
             activeGraph: null,
-            iframeSettings,
+            iframeSettings: initialSettings,
             covered: false,
           },
         ];
@@ -3399,6 +3384,7 @@ function Root() {
   // ---------------------------------------------------------------------------- Windows functions ---
   // --- Basic Graph actions ---
   const updateIframeSettings = (windowId, key, value) => {
+    console.log("settings to update:",windowId, key, value)
     setIframeSettings(prev => ({
       ...prev,
       [windowId]: {
@@ -3577,40 +3563,45 @@ function Root() {
               updates.selectedPropertyTab = payload;
             }
 
-            if (action === "settings") {
+            if (action === "settings") { // When Graph settings change
               const settingsMap = {
                 limit_nodes_key: [0, "key"],
                 limit_nodes_sort: [1, "sort"],
-                limit_nodes_amount: [2, "amount"],                
-                weight_edges: [3, null],
-                show_title: [4, null],
-                show_label: [5, null],
-                edit_infos: [6, null],
-                graph_physics: [7, null],
-                layout_type: [8, null],
-                layout_direction: [9, null],
-                sort_method: [10, null],
-                label_nodes_with: [11, null]
+                limit_nodes_amount: [2, "amount"],
+                label_nodes_group: [3, null] , 
+                label_nodes_by: [4, null],
+                weight_edges: [5, null],
+                show_title: [6, null],
+                show_label: [7, null],
+                edit_infos: [8, null],
+                graph_physics: [9, null],
+                layout_type: [10, null],
+                layout_direction: [11, null],
+                sort_method: [12, null],
               };
-
+              // Organizing settings (to have a concurent/ Multi settings for batch)
               const [index, key] = settingsMap[payload.settings] || [];
-              if (index !== undefined) {
+              if (index !== undefined) { // If setting really exists 
+                console.log("passing_setting_update_state:",id, index, key,payload.state)
                 updateIframeSettings(id, index, key ? payload.state[key] : payload.state);
+                // Concurrent settings
+                //------------------ Labe nodes by
+                if (payload.settings === "label_nodes_by") {//Changing a lable by always activates the show label
+                  updateIframeSettings(id, 7, true);
+                  updateIframeSettings(id, 4, payload.state.labelkey)
+                }
+                //------------------ Layout type
+                if (payload.settings === "layout_type" && payload.state === "hierarchical") {
+                  updateIframeSettings(id, 11, "UD");
+                  updateIframeSettings(id, 12, "directed");
+                }              
               }
-
-              sendToIframe(iframe, payload.settings, payload.state);
-
-              // Special case for hierarchical layout
-              if (payload.settings === "layout_type" && payload.state === "hierarchical") {
-                updateIframeSettings(id, 9, "UD");
-                updateIframeSettings(id, 10, "directed");
-              }
+              //Pass the setting change to the child iframe
+              sendToIframe(iframe, payload.settings, payload.state);              
             }
-
             if (action === "filter_keys" && payload.filter === "all_property_keys") {
               sendToIframe(iframe, "all_property_keys", { id });
             }
-
             if (action === "filter_search") {
               const { option, keyword, keys, settings } = payload;
               sendToIframe(iframe, "graph_search", { id, option, keyword, keys, settings });
@@ -4871,7 +4862,7 @@ function Root() {
         }
         if (menuId === "reset_graph") {
           const iframe=payload;     
-          const newSettings=["","",25, "", "", "", true, "", true, "default", "UD", "directed"]
+          const newSettings=["","",25, "", "", "", "", true, "", true, "default", "UD", "directed"]
           setIframeSettings(prev => ({
             ...prev,        // spread existing entries
             [id]: newSettings // update specific id
@@ -5205,6 +5196,7 @@ function Root() {
               activeGraph={window.activeGraph}
               iframeRef={iframeRefs.current[window.id]}
               iframeSettings={iframeSettings}
+              iframeSearch={iframeSearch}
               selectedPropertyTab={window.selectedPropertyTab}
               filterPropertyKeys={window.filterPropertyKeys}
               filterResults={window.filterResults}

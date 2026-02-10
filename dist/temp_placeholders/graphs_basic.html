@@ -703,10 +703,7 @@
 								};
 
 							    var network = new vis.Network(container, data, options);
-								network.setOptions({ physics: STABLE_PHYSICS });
-								network.once("stabilizationIterationsDone", () => {
-									network.setOptions({ physics: { enabled: false } });
-								});
+								network.setOptions({ physics: STABLE_PHYSICS });								
 
 
 // ------------------------------------------------------------------------------------------------------------------------ Adjustments starts
@@ -729,40 +726,43 @@
 								};
 								
 								function initializeFullGraph(graphData) {
-									console.log("Initializing FULL_GRAPH with provided graph data...");
+									console.log("Initializing FULL_GRAPH with provided graph data...");							
 									FULL_GRAPH.nodes.clear();
 									FULL_GRAPH.edges.clear();
 									FULL_GRAPH.adjacency.clear();
 
-									for (const node of graphData.nodes) {
+									// Add all nodes first
+									const nodesToAdd = graphData.nodes.map(node => {
 										FULL_GRAPH.nodes.set(node.id, node);
 										FULL_GRAPH.adjacency.set(node.id, new Set());
-									}
+										return { ...node, title: "test" }; // placeholder title
+									});
+									nodesData.add(nodesToAdd);
+									// Now update titles for tooltips
+									applyTitleToggle(true);
+
+									// Add edges
 									for (const edge of graphData.edges) {
 										const id = edge.id ?? `${edge.from}_${edge.to}`;
-										const weight_value = edge.weight || 1; // default weight if not provided
+										const weight_value = edge.weight || 1;
 										const weight = EdgeWeightToWidth(weight_value);
-										console.log(`Edge ${edge.weight} has weight ${weight_value} and width ${weight}`);
 										const weightedEdge = {
 											...edge,
-											id: id,
-											width: weight,										
+											id,
+											width: weight,
 											hoverWidth: (weight + 3) / 50
 										};
-										// store in model
 										FULL_GRAPH.edges.set(id, weightedEdge);
-
-										// store adjacency
 										FULL_GRAPH.adjacency.get(edge.from)?.add(edge.to);
 										FULL_GRAPH.adjacency.get(edge.to)?.add(edge.from);
-
-										// render in vis
 										edgesData.add(weightedEdge);
 									}
 
-									// initial render
+									// Apply initial limit or other adjustments
 									applyLimit({ key: "", sort: "asc", amount: 25 });
+									console.log("FULL_GRAPH initialization complete.");
 								}
+
 
 								// //initiate modified nodes and edges (after checking no modification has happend)
 								// if (areDataSetsEqual(original_nodes, nodesData)) {
@@ -1230,7 +1230,17 @@
 								// -------------------------------------------------------------------------------------------- Settings/Adjustments
 								//---------------------------------- Graph options adjustments
 								const settingsPanel = document.getElementById("graph_settings");
+								// initial setting values
+								let setLableGroup = "Entity Node";
+								let shwoWeightedEdgesEnabled = true;
+								let showTitlesEnabled = true;
 								let showLabelsEnabled = true;
+								let editInformationsEnabled = false;
+								let physicsEnabled = true;
+								let layoutType = "default";
+								let layoutDirection = "UD";
+								let sortMethod = "direct";
+
 								//------------------------------ Nodes Limits
 								settingsPanel.querySelector('input[placeholder="Limit"]').addEventListener("input", (e) => {
 								  if (parseInt(e.target.value, 10) < 1 || e.target.value === "") {
