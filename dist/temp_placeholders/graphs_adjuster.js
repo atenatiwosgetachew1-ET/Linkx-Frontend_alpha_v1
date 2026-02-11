@@ -953,7 +953,6 @@ function applyTitleToggle(state) {
       .filter(([_, v]) => v != null)
       .map(([k, v]) => `${k}: ${v}`)
       .join("\n");
-    console.log(1,"id:", node.id, "title:", title)
     nodesData.update({ id: node.id, title });
     showTitlesEnabled=state;
   });
@@ -1533,7 +1532,6 @@ function labelNodesWith({ labelIdentity, labelkey, filterKey, filterSort = "asc"
 
   for (const [id, node] of FULL_GRAPH.nodes) {
     // Only label nodes with matching node_identity
-    console.log("node_identity:",n+1,node.node_identity,"identityToUse:",identityToUse)
     if (node.node_identity === identityToUse) {
       const value = node[labelkey];
       if (value != null) {
