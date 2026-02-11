@@ -577,7 +577,7 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
     </div>
   );
 }
-function WindowVerticalSplitPanels({id, type, sourceId, initialTopHeight, minTopHeight, maxTopHeight, graphStatus, activeGraph, graphAction, iframeRef, iframeFilters, iframeSettings, selectedPropertyTab, nodeProperties, filterPropertyKeys, filterResults}) {
+function WindowVerticalSplitPanels({id, type, sourceId, initialTopHeight, minTopHeight, maxTopHeight, graphStatus, activeGraph, graphAction, iframeRef, iframeSearch, iframeSettings, selectedPropertyTab, nodeProperties, filterPropertyKeys, filterResults}) {
   const containerRef = useRef(null);
   const [containerHeight, setContainerHeight] = useState(0);
   const [topHeightPx, setTopHeightPx] = useState(0);
@@ -586,7 +586,8 @@ function WindowVerticalSplitPanels({id, type, sourceId, initialTopHeight, minTop
   const maxHeightPx = useRef(0);
 
   const settings = iframeSettings[id];
-  console.log("settings:",settings[6],"id:",id)
+  const search = iframeSearch[id]
+  console.log("search:",search,"activeGraph:",activeGraph)
 
   // Update container height
   useEffect(() => {
@@ -703,19 +704,12 @@ function WindowVerticalSplitPanels({id, type, sourceId, initialTopHeight, minTop
                   onSubmit={(e) => {e.preventDefault();
                     const keyword = document.getElementById(
                       `${type}_window_${id}_${iframeRef}_graph_filters_input`
-                    ).value;
-                    const linkedOption = document.getElementById(
-                      `${type}_window_${id}_${iframeRef}_graph_filters_option_input`
-                    ).checked;
-                    const keys = Array.from(
-                      document.getElementsByName(`${type}_window_${id}_${iframeRef}_graph_filters_key`)
-                    )
-                      .filter(el => el.checked)
-                      .map(el => el.value);
-                    graphAction(id, "properties_tab", "filter_search", {
+                    ).value;                    
+                    const keys = Object.keys(search[2] || {}).filter(k => search[2][k] === true);
+                    graphAction(id, "properties_tab", "search", {
                       iframe: iframeRef,
                       keyword,
-                      option: linkedOption,
+                      option: search[1],
                       keys,
                       settings: settings
                     });
@@ -723,18 +717,25 @@ function WindowVerticalSplitPanels({id, type, sourceId, initialTopHeight, minTop
                 >
               <label className="filter_form_header_label">Search <i><b>Note :</b> Make sure an attribute name is selected for more specific results.</i></label>
               <div className="filter_form_search_container">
-                <input id={`${type}_window_${id}_${iframeRef}_graph_filters_input`} type="text" placeholder="Type here to seach"/>
-                <button title="Search"><Icons id="properties_container" type="search" condition="True"/></button>
+                <input id={`${type}_window_${id}_${iframeRef}_graph_filters_input`} type="text" placeholder="Type here to seach" disabled={!activeGraph}/>
+                <button title="Search" disabled={!activeGraph}><Icons id="properties_container" type="search" condition="True"/></button>
                 <div className="filter_form_search_options_container">
-                  <input id={`${type}_window_${id}_${iframeRef}_graph_filters_option_input`} type="checkbox"/>
-                  <label htmlFor={`${type}_window_${id}_${iframeRef}_graph_filters_option_input`}>Include linked nodes</label>
+                  <input id={`${type}_window_${id}_${iframeRef}_graph_filters_linked_option_input`} type="checkbox" title='Return the linked neighbours' checked={search[1] ? search[1] : ""} onChange={(e) => graphAction(id, "properties_tab", "search_change", {componentId:1,value: e.target.checked})} disabled={!activeGraph}/>
+                  <label htmlFor={`${type}_window_${id}_${iframeRef}_graph_filters_linked_option_input`} title='Return the linked neighbours'>Include linked nodes</label>
                 </div>
                   <div className="filterPropertyKeys">       
                   {filterPropertyKeys && (
                     <div>
                       {filterPropertyKeys.map((key, index) => (
                         <span key={index}>
-                          <input id={`${type}_window_${id}_${iframeRef}_graph_filters_attribute_checkbox_${index}`} type="checkbox" value={key} name={`${type}_window_${id}_${iframeRef}_graph_filters_key`} />
+                          <input
+                            id={`${type}_window_${id}_${iframeRef}_graph_filters_attribute_checkbox_${index}`}
+                            type="checkbox"
+                            value={key}
+                            name={`${type}_window_${id}_${iframeRef}_graph_filters_key`}
+                            checked={!!search[2]?.[key]}
+                            onChange={(e) => graphAction(id, "properties_tab", "search_change", {componentId:2,value: key})}
+                          />
                           <label htmlFor={`${type}_window_${id}_${iframeRef}_graph_filters_attribute_checkbox_${index}`}>{key}</label>
                         </span>
                       ))}
@@ -744,10 +745,10 @@ function WindowVerticalSplitPanels({id, type, sourceId, initialTopHeight, minTop
                   <div className="filter_results">
                     <h4>Search Results</h4>
                     <span>
-                      Nodes found <b>{filterResults ? filterResults.nodes.length : 0}</b>
+                      Nodes found <b>{search[3] ? search[3].nodes : 0}</b>
                     </span>
                     <span>
-                      Edges found <b>{filterResults ? filterResults.edges.length : 0}</b>
+                      Edges found <b>{search[3] ? search[3].edges : 0}</b>
                     </span>
                   </div>                                                 
               </div>
@@ -799,6 +800,7 @@ function WindowVerticalSplitPanels({id, type, sourceId, initialTopHeight, minTop
                         state: payload,
                       });
                     }}
+                    disabled={!activeGraph}
                   >
                     {filterPropertyKeys.map((key) => (
                       <option key={key} value={key}>
@@ -820,6 +822,7 @@ function WindowVerticalSplitPanels({id, type, sourceId, initialTopHeight, minTop
                       state: payload,
                     });
                   }}
+                  disabled={!activeGraph}
                 >
                   <option value="asc">Asc</option>
                   <option value="desc">Desc</option>
@@ -841,6 +844,7 @@ function WindowVerticalSplitPanels({id, type, sourceId, initialTopHeight, minTop
                       state: payload,
                     });
                   }}
+                  disabled={!activeGraph}
                 />
               </div>
               <div className="settings_form_div">
@@ -855,6 +859,7 @@ function WindowVerticalSplitPanels({id, type, sourceId, initialTopHeight, minTop
                         state: e.target.value,
                       });
                     }}
+                    disabled={!activeGraph}
                   >
                   <option value="Entity Node">Entity Nodes</option>
                   <option value="Source Node">Source Nodes</option>
@@ -873,6 +878,7 @@ function WindowVerticalSplitPanels({id, type, sourceId, initialTopHeight, minTop
                         state: { labelIdentity: settings[3], labelkey: e.target.value, filterKey: settings[0],filterSort: settings[1], limitAmount: settings[2]},
                       });
                     }}
+                    disabled={!activeGraph}
                   >
                   {filterPropertyKeys && filterPropertyKeys.map((key) => (
                     <option key={key} value={key}>
@@ -888,7 +894,8 @@ function WindowVerticalSplitPanels({id, type, sourceId, initialTopHeight, minTop
                     iframe: iframeRef,
                     settings: "weight_edges",
                     state: e.target.value,
-                  })}}>
+                  })}}
+                  disabled={!activeGraph}>
                   <option value="">Off</option>
                   <option value="true">On</option>
                 </select>  
@@ -900,7 +907,8 @@ function WindowVerticalSplitPanels({id, type, sourceId, initialTopHeight, minTop
                     iframe: iframeRef,
                     settings: "show_title",
                     state: e.target.value,
-                  })}}>
+                  })}}
+                  disabled={!activeGraph}>
                   <option value="">Off</option>
                   <option value="true">On</option>
                 </select>
@@ -912,19 +920,21 @@ function WindowVerticalSplitPanels({id, type, sourceId, initialTopHeight, minTop
                     iframe: iframeRef,
                     settings: "show_label",
                     state: e.target.value,
-                  })}}>
+                  })}}
+                  disabled={!activeGraph}>
                   <option value="">Off</option>
                   <option value="true">On</option>
                 </select>
               </div>
               <div className="settings_form_div">                
                 <label className="input_labels">Edit Informations</label>                
-                <select disabled className="select_option" value={settings[8] ? (settings[8]):("")} onChange={(e) => {graphAction(id, "properties_tab", "settings", 
+                <select className="select_option" value={settings[8] ? (settings[8]):("")} onChange={(e) => {graphAction(id, "properties_tab", "settings", 
                   {
                     iframe: iframeRef,
                     settings: "edit_infos",
                     state: e.target.value,
-                  })}}>
+                  })}}
+                  disabled={!activeGraph || 1==1}>
                   <option value="">Off</option>
                   <option value="true">On</option>
                 </select>
@@ -936,7 +946,8 @@ function WindowVerticalSplitPanels({id, type, sourceId, initialTopHeight, minTop
                     iframe: iframeRef,
                     settings: "graph_physics",
                     state: e.target.value,
-                  })}}>
+                  })}}
+                  disabled={!activeGraph}>
                   <option value="">Off</option>
                   <option value="true">On</option>
                 </select>                
@@ -948,7 +959,8 @@ function WindowVerticalSplitPanels({id, type, sourceId, initialTopHeight, minTop
                     iframe: iframeRef,
                     settings: "layout_type",
                     state: e.target.value,
-                  })}}>
+                  })}}
+                  disabled={!activeGraph}>
                   <option value="default">Default</option>
                   <option value="hierarchical">hierarchical</option>
                 </select>                
@@ -961,7 +973,7 @@ function WindowVerticalSplitPanels({id, type, sourceId, initialTopHeight, minTop
                     settings: "layout_direction",
                     state: e.target.value,
                   })}}
-                  disabled={settings[10] !== "hierarchical"}>
+                  disabled={!activeGraph || settings[10] !== "hierarchical"}>
                   <option value="UD">Up-Down</option>
                   <option value="LR">Left-Right</option>
                 </select>                
@@ -974,7 +986,7 @@ function WindowVerticalSplitPanels({id, type, sourceId, initialTopHeight, minTop
                     settings: "sort_method",
                     state: e.target.value,
                   })}}
-                  disabled={settings[10] !== "hierarchical"}>
+                  disabled={!activeGraph || settings[10] !== "hierarchical"}>
                   <option value="directed">Directed</option>
                   <option value="hubsize">Hub-Size</option>
                 </select>                
@@ -2444,7 +2456,7 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
                 id={id}
                 type={type}
                 sourceId={graphLinkSource}
-                initialTopHeight="90%"
+                initialTopHeight="100%"
                 minTopHeight="20%"
                 maxTopHeight="100%"
                 graphStatus={graphStatus}
@@ -3141,11 +3153,25 @@ function Root() {
         );
         console.log("IframeSettings:",iframeSettings)
       }    
-      if (event.data?.type === "graph_filter_results") {
-        const { id, results } = event.data.payload; // unpack the payload
-        setWindows(prev =>
-          prev.map(w => w.type === "graph" && w.id === id ? { ...w, filterResults: results } : w)
-        );
+      if (event.data?.type === "graph_search_results") {        
+        const { id, nodes, edges } = event.data.payload; // unpack the payload
+        console.log("graph_search_results:",id,nodes, edges)
+          setWindows(prev =>
+            prev.map(w => {
+              if (w.type === "graph" && w.id === id) {
+                const oldSearch = w.iframeSearch || ['', '', {}, { nodes: 0, edges: 0 }]; // default structure
+                const newSearch = [...oldSearch]; // clone array
+                // Separate the results into nodes and edges counts
+                newSearch[3] = {
+                  nodes: nodes ?? 0,   // count of nodes
+                  edges: edges ?? 0    // count of edges
+                };
+                console.log("newsearch:",newSearch)
+                return { ...w, iframeSearch: newSearch };
+              }
+              return w;
+            })
+          );
       }
       if (event.data?.type === "network_components") {
         console.log(5)
@@ -3250,7 +3276,12 @@ function Root() {
       iframeRefs.current[id] = React.createRef();
       setActiveWindowId(id);
       const initialSettings = ["", "", 25, "", "", true, true, true, false, true, "default", "UD", "directed"];
-      // set iframe settings
+      const initialSearch = ["","",{},{"nodes":0,"edges":0}]
+      // set iframe search and settings the Window parmas
+      setIframeSearch(prev => ({
+        ...prev,
+        [id]: initialSearch,
+      }));
       setIframeSettings(prev => ({
         ...prev,
         [id]: initialSettings,
@@ -3270,6 +3301,7 @@ function Root() {
             graphLink: null,
             graphStatus: null,
             activeGraph: null,
+            iframeSearch: initialSearch,
             iframeSettings: initialSettings,
             covered: false,
           },
@@ -3375,7 +3407,6 @@ function Root() {
       return newWindows;
     });
   };
-
   const handleMoveWindow = (id, newPos) => {
     setWindows(prev =>
       prev.map(w => (w.id === id ? { ...w, position: newPos } : w))
@@ -3562,7 +3593,6 @@ function Root() {
             if (action === "switch_tab") {
               updates.selectedPropertyTab = payload;
             }
-
             if (action === "settings") { // When Graph settings change
               const settingsMap = {
                 limit_nodes_key: [0, "key"],
@@ -3599,13 +3629,67 @@ function Root() {
               //Pass the setting change to the child iframe
               sendToIframe(iframe, payload.settings, payload.state);              
             }
-            if (action === "filter_keys" && payload.filter === "all_property_keys") {
-              sendToIframe(iframe, "all_property_keys", { id });
-            }
-            if (action === "filter_search") {
+            if (action === "search") {
               const { option, keyword, keys, settings } = payload;
               sendToIframe(iframe, "graph_search", { id, option, keyword, keys, settings });
             }
+            if (action === "search_change") {
+              const { componentId, value } = payload;   
+              console.log("here1:",componentId,value)           
+              console.log("here2:",id,componentId,value)
+              // key 2 = object
+              // if (componentId === 0) { // Stoped (not functional) for now (Because it has a delay to show the input change, as its value )
+              //   setIframeSearch(prev => ({
+              //     ...prev,
+              //     [id]: {
+              //       ...prev[componentId],
+              //       componentId: value,   // FULL replace, always
+              //     },
+              //   }));
+              // }
+              if (componentId === 2) {
+                setIframeSearch(prev => {
+                  const prevSearch = prev[id] || ['', '', {}, {}];
+                  const prevObj = prevSearch[2] || {};
+
+                  const newObj = { ...prevObj };
+
+                  if (newObj[value]) {
+                    delete newObj[value];        // toggle off
+                  } else {
+                    newObj[value] = true;        // insert
+                  }
+
+                  return {
+                    ...prev,
+                    [id]: [
+                      prevSearch[0],
+                      prevSearch[1],
+                      newObj,        // preserved object
+                      prevSearch[3],
+                    ],
+                  };
+                });
+              }
+
+              // default behavior for other keys
+              setIframeSearch(prev => {
+              const prevSearch = prev[id] || ['', '', {}, {}];
+
+              return {
+                ...prev,
+                [id]: [
+                  componentId === 0 ? value : prevSearch[0],
+                  componentId === 1 ? value : prevSearch[1],
+                  prevSearch[2],
+                  componentId === 3 ? value : prevSearch[3],
+                ],
+              };
+            });     
+            }
+            if (action === "filter_keys" && payload.filter === "all_property_keys") {
+              sendToIframe(iframe, "all_property_keys", { id });
+            }            
           }
 
           // ------------------ Iframe options ------------------

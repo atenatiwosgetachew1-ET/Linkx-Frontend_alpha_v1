@@ -3424,6 +3424,11 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 	color: #FFF;
 	border: 1px solid #EEE;
 }
+.window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_filters_container .filter_form .filter_form_search_container div span input[type="checkbox"] + label:active {
+	background-color: #e6e6e6;
+	color: #AAA;
+	border: 1px solid #e1e1e1;
+}
 .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_filters_container .filter_form .filter_form_search_container div span label{
 	position: relative;
 	display: block;

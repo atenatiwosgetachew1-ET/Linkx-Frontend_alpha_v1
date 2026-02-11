@@ -735,12 +735,16 @@
 									const nodesToAdd = graphData.nodes.map(node => {
 										FULL_GRAPH.nodes.set(node.id, node);
 										FULL_GRAPH.adjacency.set(node.id, new Set());
-										return { ...node, title: "test" }; // placeholder title
+										return { ...node, title: "" }; // placeholder title
 									});
 									nodesData.add(nodesToAdd);
-									// Now update titles for tooltips
-									applyTitleToggle(true);
-
+									// Now update titles for tooltips only for smaller graphs to avoid performance issues
+									if (FULL_GRAPH.nodes.size <= 25) {
+										applyTitleToggle(true);
+									}	
+									else {
+										applyTitleToggle(false);
+									}
 									// Add edges
 									for (const edge of graphData.edges) {
 										const id = edge.id ?? `${edge.from}_${edge.to}`;

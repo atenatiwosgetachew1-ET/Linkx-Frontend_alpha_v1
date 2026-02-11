@@ -1212,8 +1212,19 @@ function graphSearch({ id, keyword, option, keys, settings }) {
     for (const [edgeId, e] of FULL_GRAPH.edges.entries()) {
       edgesData.add(e);
     }
-
     network.redraw();
+    // Post message with window id 
+    window.parent.postMessage(
+      {
+        type: "graph_search_results",
+        payload: {
+          id: id,          // include the window ID
+          nodes: 0,
+          edges: 0
+        }
+      },
+      "*"
+    );
     return;
   }
 
@@ -1245,16 +1256,32 @@ function graphSearch({ id, keyword, option, keys, settings }) {
     if (matched.size >= limit) break;
   }
   // --- Include linked nodes if option is true ---
-  if (option) { // include linked nodes
-    const additional = new Set();
-    for (const nodeId of matched) {
+  if (option) { 
+    // Multi-hop traversal (chain expansion)
+    const visited = new Set(matched);   // already included
+    const queue = [...matched];         // BFS queue
+
+    while (queue.length > 0) {
+      const nodeId = queue.shift();
+
       for (const e of FULL_GRAPH.edges.values()) {
-        if (e.from === nodeId) additional.add(e.to);
-        if (e.to === nodeId) additional.add(e.from);
+        let neighbor = null;
+
+        if (e.from === nodeId) neighbor = e.to;
+        else if (e.to === nodeId) neighbor = e.from;
+
+        if (neighbor !== null && !visited.has(neighbor)) {
+          visited.add(neighbor);
+          queue.push(neighbor);
+        }
       }
     }
-    for (const id of additional) matched.add(id);
+
+    // replace matched with full reachable set
+    matched.clear();
+    for (const id of visited) matched.add(id);
   }
+
 
   nodesData.clear();
   edgesData.clear();
@@ -1268,12 +1295,32 @@ function graphSearch({ id, keyword, option, keys, settings }) {
   }
 
   // Add visible edges
+  const edgeSet = new Set();
   for (const e of FULL_GRAPH.edges.values()) {
     const visibleEdge = option ? visible.has(e.from) || visible.has(e.to) : visible.has(e.from) && visible.has(e.to);
-    if (visibleEdge) edgesData.add(e);
-  }
+    if (visibleEdge) {
+      edgesData.add(e);
 
+      //Countiung edges
+      const a = String(e.from);
+      const b = String(e.to);
+      const key = a < b ? `${a}-${b}` : `${b}-${a}`;
+      edgeSet.add(key);
+    }
+  }
   network.redraw();
+  // Post message with window id 
+  window.parent.postMessage(
+    {
+      type: "graph_search_results",
+      payload: {
+        id: id,          // include the window ID
+        nodes: nodesData.length,
+        edges: edgeSet.size
+      }
+    },
+    "*"
+  );
 }
 
 async function exportGraph(type) {
