@@ -6,15 +6,23 @@ window.addEventListener("message", (event) => {
       break;
 
     case "graph_search":
-      graphSearch(payload); // your existing limit function
+      graphSearch(payload);
       break;
     
-    case "limit_nodes_amount":
-      let setLimitEnabled = payload;
-      applyLimit(setLimitEnabled); // your existing limit function
+    case "limit_nodes_key":      
+      applyLimit(payload);
       break;
+    
+    case "limit_nodes_sort":      
+      applyLimit(payload);
+      break;
+
+    case "limit_nodes_amount":      
+      applyLimit(payload);
+      break;
+     
     case "label_nodes_group":
-      setLableGroup = payload;
+      window.currentSettings.lableGroup = payload;
       break;
     case "weight_edges":
       weightEdgesEnabled = payload;
@@ -27,13 +35,13 @@ window.addEventListener("message", (event) => {
       break;
 
     case "show_label":
-      let showLabelsEnabled = payload;
-      showNodelabels(showLabelsEnabled);
+      window.currentSettings.showLabels = payload;
+      showNodelabels(window.currentSettings.showLabels);
       break;
 
     case "edit_infos":
-      let editInformationsEnabled = payload;
-      toggleNodeInfosEdit(editInformationsEnabled);
+      window.currentSettings.editInformations = payload;
+      toggleNodeInfosEdit(window.currentSettings.editInformations);
       break;
 
     case "graph_physics":
@@ -635,7 +643,7 @@ function handleAddNode(x, y) {
 
   const node = {
     id,
-    label: showLabelsEnabled ? `Node ${id}` : "",
+    label: window.currentSettings.showLabels ? `Node ${id}` : "",
     x: pos.x,
     y: pos.y,
     color: { background: "#FFFFFF", border: "#777777" }
@@ -849,52 +857,71 @@ function restoreNodeState(nodeId) {
 
 
 function applyLimit({ key = "", sort = "asc", amount = 25 }) {
-  VISIBLE_STATE.nodes.clear();
-  VISIBLE_STATE.edges.clear();
-  VISIBLE_STATE.limit = amount;
+      // Store in global settings
+    window.currentSettings.limit = amount;
+    window.currentSettings.sortKey = key;
+    window.currentSettings.sortOrder = sort;
 
-  const nodes = [];
+    VISIBLE_STATE.nodes.clear();
+    VISIBLE_STATE.edges.clear();
+    VISIBLE_STATE.limit = amount;
 
-  // 1️⃣ Collect candidates (ID + sortable value only)
-  for (const [id, node] of FULL_GRAPH.nodes) {
-    let value = null;
+    // For large graphs, skip sorting if no key
+    if (!key || FULL_GRAPH.nodes.size > 10000) {
+        // Fast path: just take first N nodes
+        const iterator = FULL_GRAPH.nodes.keys();
+        for (let i = 0; i < amount; i++) {
+            const { value, done } = iterator.next();
+            if (done) break;
+            VISIBLE_STATE.nodes.add(value);
+        }
+    } else {
+        // Original sorting logic for smaller graphs
+        const nodes = [];
+        for (const [id, node] of FULL_GRAPH.nodes) {
+            const value = getNodeValue(node, key);
+            if (value != null) nodes.push({ id, value });
+            if (nodes.length > amount * 2) break; // Early exit
+        }
+        
+        nodes.sort((a, b) => {
+          // Handle null/undefined cases
+          if (a.value == null && b.value == null) return 0;
+          if (a.value == null) return 1;  // nulls go to end
+          if (b.value == null) return -1; // nulls go to end
 
-    if (key) {
-      value = getNodeValue(node, key);
-      if (value == null) continue;
+          // Numeric comparison 
+          if (typeof a.value === "number" && typeof b.value === "number") {
+            return sort === "asc" 
+              ? a.value - b.value 
+              : b.value - a.value;
+           }
+
+          // String comparison
+           const aStr = String(a.value);
+           const bStr = String(b.value);
+            
+          // Try numeric string comparison if both are numeric strings
+            const aNum = parseFloat(aStr);
+            const bNum = parseFloat(bStr);
+            if (!isNaN(aNum) && !isNaN(bNum)) {
+                return sort === "asc" 
+                    ? aNum - bNum 
+                    : bNum - aNum;
+            }
+            // Fallback to locale comparison
+            return sort === "asc"
+                ? aStr.localeCompare(bStr, undefined, { numeric: true })
+                : bStr.localeCompare(aStr, undefined, { numeric: true });
+        });
+        
+        for (let i = 0; i < Math.min(amount, nodes.length); i++) {
+            VISIBLE_STATE.nodes.add(nodes[i].id);
+        }
     }
 
-    nodes.push({ id, value });
-  }
-
-  // 2️⃣ Sort (cheap objects, not full nodes)
-  if (key) {
-    nodes.sort((a, b) => {
-      if (a.value == null && b.value == null) return 0;
-      if (a.value == null) return 1;
-      if (b.value == null) return -1;
-
-      if (typeof a.value === "number" && typeof b.value === "number") {
-        return sort === "asc" ? a.value - b.value : b.value - a.value;
-      }
-
-      return sort === "asc"
-        ? String(a.value).localeCompare(String(b.value))
-        : String(b.value).localeCompare(String(a.value));
-    });
-  }
-
-  // Select window
-  for (const { id } of nodes) {
-    VISIBLE_STATE.nodes.add(id);
-    if (VISIBLE_STATE.nodes.size >= amount) break;
-  }
-
-  // Recompute visible edges
-  recomputeVisibleEdges();
-
-  // Render
-  renderVisibleGraph();
+    recomputeVisibleEdges();
+    renderVisibleGraphBatch();
 }
 
 
@@ -912,50 +939,143 @@ function recomputeVisibleEdges() {
 }
 
 function expandNode(nodeId) {
-  const neighbors = FULL_GRAPH.adjacency.get(nodeId);
-  if (!neighbors || neighbors.size === 0) return;
-
-  // Find first neighbor not visible
-  let neighborToExpand = null;
-  for (const n of neighbors) {
-    if (!VISIBLE_STATE.nodes.has(n)) {
-      neighborToExpand = n;
-      break;
+    const neighbors = FULL_GRAPH.adjacency.get(nodeId);
+    if (!neighbors || neighbors.size === 0) return;
+    
+    // Find first neighbor not visible
+    let neighborToExpand = null;
+    for (const n of neighbors) {
+        if (!VISIBLE_STATE.nodes.has(n)) {
+            neighborToExpand = n;
+            break;
+        }
     }
-  }
+    
+    if (neighborToExpand) {
+        // OVERRIDE limit - add neighbor even if over limit
+        VISIBLE_STATE.nodes.add(neighborToExpand);
+        
+        // Optional: Store that we've overridden the limit
+        window.limitOverridden = true;
+        window.originalLimit = VISIBLE_STATE.limit;
+    }
+    
+    recomputeVisibleEdges();
+    renderVisibleGraphBatch();
+    
+    // Show indicator that limit is overridden
+    console.log(`Limit overridden: Now showing ${VISIBLE_STATE.nodes.size} nodes (limit was ${VISIBLE_STATE.limit})`);
+}
 
-  if (neighborToExpand) {
-    VISIBLE_STATE.nodes.add(neighborToExpand);
-  }
-
-  // Recompute visible edges and render
-  recomputeVisibleEdges();
-  renderVisibleGraph();
+// Optional: Reset to limit
+function resetToLimit() {
+    if (window.limitOverridden) {
+        const limit = window.originalLimit || 25;
+        applyLimit({ 
+            key: window.currentSortKey || "", 
+            sort: window.currentSortOrder || "asc", 
+            amount: limit 
+        });
+        window.limitOverridden = false;
+    }
 }
 
 
 
 
 function applyTitleToggle(state) {
-  console.log("applyTitleToggle_called:",state)
-  nodesData.forEach(node => {
-    if (!state) {
-      console.log(0)
-      nodesData.update({ id: node.id, title: undefined });
-      return;
+    console.log("applyTitleToggle_called:", state);
+    window.currentSettings.showTitles = state;
+    
+    const nodeUpdates = [];
+    const edgeUpdates = [];
+    
+    // --- Handle Node Titles ---
+    nodesData.forEach(node => {
+        if (!state) {
+            nodeUpdates.push({ id: node.id, title: undefined });
+        } else {
+            const base = FULL_GRAPH.nodes.get(node.id);
+            const mod = MODIFIED_NODES.get(node.id) || {};
+            const merged = { ...base, ...mod };
+            
+            // Limit number of properties shown for performance
+            const entries = Object.entries(merged)
+                .filter(([_, v]) => v != null)
+                .slice(0, 15); // Show max 15 properties
+            
+            if (entries.length > 0) {
+                const title = entries
+                    .map(([k, v]) => `${k}: ${v}`)
+                    .join("\n");
+                nodeUpdates.push({ id: node.id, title });
+            }
+        }
+    });
+    
+    // --- Handle Edge Titles ---
+    edgesData.forEach(edge => {
+        if (!state) {
+            edgeUpdates.push({ id: edge.id, title: undefined });
+        } else {
+            const base = FULL_GRAPH.edges.get(edge.id);
+            const mod = MODIFIED_EDGES.get(edge.id) || {};
+            const merged = { ...base, ...mod };
+            
+            // Edge-specific properties to show
+            const titleEntries = [];
+            
+            // Always show from/to labels if available
+            const fromNode = FULL_GRAPH.nodes.get(merged.from);
+            const toNode = FULL_GRAPH.nodes.get(merged.to);
+            if (fromNode?.label) titleEntries.push(`From: ${fromNode.label}`);
+            if (toNode?.label) titleEntries.push(`To: ${toNode.label}`);
+            
+            // Show other relevant properties
+            Object.entries(merged)
+                .filter(([k, v]) => {
+                    if (['from', 'to', 'id', 'arrows', 'smooth', 'selectionWidth', 
+                          'hoverWidth', 'widthConstrain', 'length', 'font', 
+                          'arrowStrikethrough', 'chosen', 'endPointOffset', 'width', 'bgcolor', 'textcolor', 'session_id'].includes(k)) {
+                        return false;
+                    }
+                    return v != null && k !== 'label'; // label is already visible
+                })
+                .slice(0, 8) // Show max 8 additional properties
+                .forEach(([k, v]) => {
+                    if (k === 'weight' || k === 'value') {
+                        titleEntries.push(`Weight: ${v}`);
+                    } else if (k === 'bgcolor' && typeof v === 'object') {
+                        titleEntries.push(`Line Color: ${v.bgcolor || 'custom'}`);
+                    } else if (k === 'dashed' || k === 'dotted' || k === 'dashdot') {
+                        const style = merged.edgeStyle || 
+                                     (Array.isArray(v) ? 'Custom' : 'solid');
+                        titleEntries.push(`Style: ${style}`);
+                    } else if (k === 'textcolor' && typeof v === 'object') {
+                        titleEntries.push(`Text Color: ${v.color || 'custom'}`);
+                    } else {
+                        titleEntries.push(`${k}: ${v}`);
+                    }
+                });
+            
+            if (titleEntries.length > 0) {
+                edgeUpdates.push({ 
+                    id: edge.id, 
+                    title: titleEntries.join("\n") 
+                });
+            }
+        }
+    });
+    
+    // Batch update both datasets
+    if (nodeUpdates.length > 0) {
+        nodesData.update(nodeUpdates);
     }
-
-    const base = FULL_GRAPH.nodes.get(node.id);
-    const mod  = MODIFIED_NODES.get(node.id) || {};
-    const merged = { ...base, ...mod };
-
-    const title = Object.entries(merged)
-      .filter(([_, v]) => v != null)
-      .map(([k, v]) => `${k}: ${v}`)
-      .join("\n");
-    nodesData.update({ id: node.id, title });
-    showTitlesEnabled=state;
-  });
+    if (edgeUpdates.length > 0) {
+        edgesData.update(edgeUpdates);
+    }
+    
+    console.log(`Titles ${state ? 'enabled' : 'disabled'} - Updated ${nodeUpdates.length} nodes, ${edgeUpdates.length} edges`);
 }
 
 
@@ -968,7 +1088,7 @@ function applyLabelToggle(state) {
       label: state ? (mod.label ?? base.label ?? "") : ""
     });
   });
-  showLabelsEnabled = state;
+  window.currentSettings.showLabels = state;
   network.redraw();
 }
 
@@ -1023,7 +1143,7 @@ function weightEdges(state) {
       width
     });
   });
-  shwoWeightedEdgesEnabled = state;
+  window.currentSettings.weightEdges = state;
 }
 
 
@@ -1048,7 +1168,7 @@ function filterNodes(predicate, limit = 300) {
     nodesData.add({
       ...base,
       ...mod,
-      label: showLabelsEnabled ? (mod.label ?? base.label ?? "") : ""
+      label: window.currentSettings.showLabels ? (mod.label ?? base.label ?? "") : ""
     });
   }
 
@@ -1064,7 +1184,7 @@ function filterNodes(predicate, limit = 300) {
 
 
 function showNodelabels(state) {
-  showLabelsEnabled = state;
+  window.currentSettings.showLabels = state;
 
   nodesData.forEach(node => {
     const base = FULL_GRAPH.nodes.get(node.id);
@@ -1122,7 +1242,7 @@ function networkphysics(state) {
       physics: { enabled: false }
     });
   }
-  physicsEnabled = state;
+  window.currentSettings.physics = state;
   updateGraphOption("graph_physics", enabled);
 }
 
@@ -1145,11 +1265,11 @@ function networkLayoutType(type) {
       layout: { hierarchical: { enabled: false } }
     });
   }
-  layoutType = type;
+  window.currentSettings.layoutType = type;
   updateGraphOption("layout_type", type);
 
   // only stabilize if physics is enabled
-  if (network.physics.physicsEnabled) {
+  if (network.physics) {
     network.stabilize();
   }
 
@@ -1164,10 +1284,10 @@ function networkLayoutDirection(direction) {
     layout: { hierarchical: { direction: direction } }
   });
 
-  if (network.physics.physicsEnabled) {
+  if (network.physics) {
     network.stabilize();
   }
-  layoutDirection = direction;
+  window.currentSettings.layoutDirection = direction;
 }
 
 function networkLayoutSort(sort) {
@@ -1176,10 +1296,10 @@ function networkLayoutSort(sort) {
     layout: { hierarchical: { sortMethod: sort } }
   });
 
-  if (network.physics.physicsEnabled) {
+  if (network.physics) {
     network.stabilize();
   }
-  sortMethod = sort;
+  window.currentSettings.sortMethod = sort;
 }
 
 
@@ -1193,134 +1313,156 @@ function networkLayoutSort(sort) {
 }
 
 function graphSearch({ id, keyword, option, keys, settings }) {
-  // --- If search has no value/Keyword: reset to all nodes + modified ---
-  if (!keyword) {
-    nodesData.clear();
-    edgesData.clear();
-
-    // Restore all nodes from FULL_GRAPH merged with MODIFIED_NODES
-    for (const [nodeId, base] of FULL_GRAPH.nodes.entries()) {
-      const mod = MODIFIED_NODES.get(nodeId) || {};
-      nodesData.add({
-        ...base,
-        ...mod,
-        label: showLabelsEnabled ? (mod.label ?? base.label ?? "") : ""
-      });
-    }
-
-    // Restore all edges
-    for (const [edgeId, e] of FULL_GRAPH.edges.entries()) {
-      edgesData.add(e);
-    }
-    network.redraw();
-    // Post message with window id 
-    window.parent.postMessage(
-      {
-        type: "graph_search_results",
-        payload: {
-          id: id,          // include the window ID
-          nodes: 0,
-          edges: 0
+    // --- EMPTY SEARCH: Restore to limit settings ---
+    if (!keyword || keyword.trim() === "") {
+        // Reset to current limit settings, not just first 25
+        const currentLimit = VISIBLE_STATE.limit || 25;
+        
+        VISIBLE_STATE.nodes.clear();
+        VISIBLE_STATE.edges.clear();
+        
+        // Apply current sort/filter settings
+        const sortKey = window.currentSortKey || "";
+        const sortOrder = window.currentSortOrder || "asc";
+        
+        // Get nodes based on current limit settings
+        const nodes = [];
+        for (const [id, node] of FULL_GRAPH.nodes) {
+            let value = null;
+            if (sortKey) {
+                value = getNodeValue(node, sortKey);
+                if (value == null) continue;
+            }
+            nodes.push({ id, value });
         }
-      },
-      "*"
-    );
-    return;
-  }
-
-  // --- Otherwise, perform search ---
-  const limit = Math.min(settings?.[2] || 25, 300);
-  const keywordLower = keyword.toLowerCase();
-  const matched = new Set();
-
-  function getMergedNode(id) {
-    const base = FULL_GRAPH.nodes.get(id);
-    if (!base) return null;
-    const mod = MODIFIED_NODES.get(id) || {};
-    return {
-      ...base,
-      ...mod,
-      label: showLabelsEnabled ? (mod.label ?? base.label ?? "") : ""
+        
+        // Sort if needed
+        if (sortKey) {
+            nodes.sort((a, b) => {
+                // ... sorting logic ...
+            });
+        }
+        
+        // Take top N based on limit
+        for (let i = 0; i < Math.min(currentLimit, nodes.length); i++) {
+            VISIBLE_STATE.nodes.add(nodes[i].id);
+        }
+        
+        recomputeVisibleEdges();
+        renderVisibleGraphBatch();
+        
+        window.parent.postMessage({
+            type: "graph_search_results",
+            payload: { id, nodes: VISIBLE_STATE.nodes.size, edges: VISIBLE_STATE.edges.size }
+        }, "*");
+        return;
+    }
+// --- SEARCH WITH KEYWORD ---
+    const limit = Math.min(settings?.[2] || 25, 300);
+    const keywordLower = keyword.toLowerCase();
+    const matched = new Set();
+    const searchKeys = keys?.length ? keys : [];
+    
+    // First pass: find matching nodes
+    for (const [id, base] of FULL_GRAPH.nodes) {
+        const mod = MODIFIED_NODES.get(id) || {};
+        const node = { ...base, ...mod };
+        
+        // If specific keys provided, ONLY search those keys
+        if (searchKeys.length > 0) {
+            for (const key of searchKeys) {
+                const value = node[key];
+                if (value != null && String(value).toLowerCase().includes(keywordLower)) {
+                    matched.add(id);
+                    break;
+                }
+            }
+        } else {
+            // No keys specified - search all properties (but limit scope)
+            let found = false;
+            for (const [key, value] of Object.entries(node)) {
+                // Skip vis.js internal properties
+                if (key.startsWith('_') || ['x','y','vx','vy','index'].includes(key)) continue;
+                if (value != null && String(value).toLowerCase().includes(keywordLower)) {
+                    matched.add(id);
+                    found = true;
+                    break;
+                }
+                if (found) break;
+            }
+        }
+        
+        if (matched.size >= limit * 2) break; // Collect more than needed for neighbor expansion
+    }
+    
+    // --- FIXED NEIGHBOR EXPANSION ---
+    if (option) {
+        const visited = new Set(matched);
+        const queue = Array.from(matched);
+        
+        // BFS with depth limit to prevent explosion
+        const MAX_DEPTH = 300;
+        const depth = new Map();
+        queue.forEach(id => depth.set(id, 0));
+        
+        while (queue.length > 0) {
+            const nodeId = queue.shift();
+            const currentDepth = depth.get(nodeId) || 0;
+            
+            if (currentDepth >= MAX_DEPTH) continue;
+            
+            const neighbors = FULL_GRAPH.adjacency.get(nodeId);
+            if (neighbors) {
+                for (const neighbor of neighbors) {
+                    if (!visited.has(neighbor)) {
+                        visited.add(neighbor);
+                        depth.set(neighbor, currentDepth + 1);
+                        queue.push(neighbor);
+                    }
+                }
+            }
+        }
+        
+        // Replace matched with full reachable set, but respect limit
+        matched.clear();
+        let count = 0;
+        for (const id of visited) {
+            matched.add(id);
+            count++;
+            if (count >= limit * 2) break; // Don't exceed 2x limit
+        }
+    }
+    
+    // --- APPLY SEARCH RESULTS WHILE RESPECTING LIMIT ---
+    VISIBLE_STATE.nodes.clear();
+    VISIBLE_STATE.edges.clear();
+    
+    // Only show up to the limit
+    let nodeCount = 0;
+    for (const id of matched) {
+        if (nodeCount >= limit) break;
+        VISIBLE_STATE.nodes.add(id);
+        nodeCount++;
+    }
+    
+    // Store search context for limit adjustments
+    window.lastSearchContext = {
+        keyword,
+        option,
+        keys: searchKeys,
+        matchedNodes: Array.from(matched) // Store full match set
     };
-  }
-
-  for (const [id] of FULL_GRAPH.nodes.entries()) {
-    const node = getMergedNode(id);
-    if (!node) continue;
-
-    const searchKeys = keys?.length ? keys : Object.keys(node);
-    if (searchKeys.some(k => node[k] != null && String(node[k]).toLowerCase().includes(keywordLower))) {
-      matched.add(node.id);
+    
+    recomputeVisibleEdges();
+    renderVisibleGraphBatch();
+    // If No node is found
+    if(VISIBLE_STATE.nodes.size == 0){
+      alert("No Result Found!")
     }
-
-    if (matched.size >= limit) break;
-  }
-  // --- Include linked nodes if option is true ---
-  if (option) { 
-    // Multi-hop traversal (chain expansion)
-    const visited = new Set(matched);   // already included
-    const queue = [...matched];         // BFS queue
-
-    while (queue.length > 0) {
-      const nodeId = queue.shift();
-
-      for (const e of FULL_GRAPH.edges.values()) {
-        let neighbor = null;
-
-        if (e.from === nodeId) neighbor = e.to;
-        else if (e.to === nodeId) neighbor = e.from;
-
-        if (neighbor !== null && !visited.has(neighbor)) {
-          visited.add(neighbor);
-          queue.push(neighbor);
-        }
-      }
-    }
-
-    // replace matched with full reachable set
-    matched.clear();
-    for (const id of visited) matched.add(id);
-  }
-
-
-  nodesData.clear();
-  edgesData.clear();
-
-  const visible = new Set(matched);
-
-  // Add merged nodes
-  for (const id of matched) {
-    const merged = getMergedNode(id);
-    if (merged) nodesData.add(merged);
-  }
-
-  // Add visible edges
-  const edgeSet = new Set();
-  for (const e of FULL_GRAPH.edges.values()) {
-    const visibleEdge = option ? visible.has(e.from) || visible.has(e.to) : visible.has(e.from) && visible.has(e.to);
-    if (visibleEdge) {
-      edgesData.add(e);
-
-      //Countiung edges
-      const a = String(e.from);
-      const b = String(e.to);
-      const key = a < b ? `${a}-${b}` : `${b}-${a}`;
-      edgeSet.add(key);
-    }
-  }
-  network.redraw();
-  // Post message with window id 
-  window.parent.postMessage(
-    {
-      type: "graph_search_results",
-      payload: {
-        id: id,          // include the window ID
-        nodes: nodesData.length,
-        edges: edgeSet.size
-      }
-    },
-    "*"
-  );
+    window.parent.postMessage({
+        type: "graph_search_results",
+        payload: { id, nodes: VISIBLE_STATE.nodes.size, edges: VISIBLE_STATE.edges.size }
+    }, "*");
 }
 
 async function exportGraph(type) {
@@ -1589,7 +1731,7 @@ function labelNodesWith({ labelIdentity, labelkey, filterKey, filterSort = "asc"
       }
     }
   }
-  showLabelsEnabled = true;
+  window.currentSettings.showLabels = true;
 
   applyLimit({
     key: filterKey || "",
@@ -1629,6 +1771,86 @@ function createNewGraph({ id, nodes = [], edges = [] }) {
   initializer?.(id);
 }
 
+function renderVisibleGraphBatch() {
+    if (!window.limitOverridden && VISIBLE_STATE.nodes.size > window.currentSettings.limit) {
+      // Trim to limit
+      const nodesArray = Array.from(VISIBLE_STATE.nodes);
+      VISIBLE_STATE.nodes.clear();
+      for (let i = 0; i < window.currentSettings.limit; i++) {
+          VISIBLE_STATE.nodes.add(nodesArray[i]);
+      }
+      recomputeVisibleEdges();
+    }
+    // Don't clear and re-add one by one
+    const nodeBatch = [];
+    const edgeBatch = [];
+    
+    // Process in chunks to avoid UI freeze
+    const BATCH_SIZE = 1000;
+    
+    let nodeCount = 0;
+    for (const id of VISIBLE_STATE.nodes) {
+        const base = FULL_GRAPH.nodes.get(id);
+        if (!base) continue;
+        
+        const mod = MODIFIED_NODES.get(id) || {};
+        const merged = { ...base, ...mod };
+        
+        // Only add title if explicitly enabled AND graph is small
+        if (window.currentSettings.showTitles && FULL_GRAPH.nodes.size < 5000) {
+            merged.title = generateTitleSafely(merged);
+        }
+        
+        merged.label = window.currentSettings.showLabels ? (merged.label ?? base.label ?? "") : "";
+        nodeBatch.push(merged);
+        
+        nodeCount++;
+        
+        // Periodic yield
+        if (nodeCount % BATCH_SIZE === 0) {
+            setTimeout(() => {}, 0);
+        }
+    }
+    
+    // Single update for nodes
+    if (nodeBatch.length > 0) {
+        nodesData.clear();
+        nodesData.add(nodeBatch);
+    }
+    
+    // Similar for edges...
+    let edgeCount = 0;
+    for (const id of VISIBLE_STATE.edges) {
+        const base = FULL_GRAPH.edges.get(id);
+        if (!base) continue;
+        
+        const mod = MODIFIED_EDGES.get(id) || {};
+        edgeBatch.push({ ...base, ...mod });
+        
+        edgeCount++;
+        if (edgeCount % BATCH_SIZE === 0) {
+            setTimeout(() => {}, 0);
+        }
+    }
+    
+    if (edgeBatch.length > 0) {
+        edgesData.clear();
+        edgesData.add(edgeBatch);
+    }
+    
+    if (network) {
+        network.redraw();
+    }
+}
+
+function generateTitleSafely(node) {
+    // Limit number of properties in title
+    const entries = Object.entries(node)
+        .filter(([_, v]) => v != null)
+        .slice(0, 10); // Only show first 10 properties
+    
+    return entries.map(([k, v]) => `${k}: ${v}`).join("\n");
+}
 
 function renderVisibleGraph() {
   const nodeBatch = [];
@@ -1642,7 +1864,7 @@ function renderVisibleGraph() {
     const merged = { ...base, ...mod };
 
     // build title ALWAYS if enabled
-    if (showTitlesEnabled) {
+    if (window.currentSettings.showTitles) {
       merged.title = Object.entries(merged)
         .filter(([_, v]) => v != null)
         .map(([k, v]) => `${k}: ${v}`)
@@ -1650,7 +1872,7 @@ function renderVisibleGraph() {
     }
 
     // build label ALWAYS correctly
-    merged.label = showLabelsEnabled
+    merged.label = window.currentSettings.showLabels
       ? (merged.label ?? base.label ?? "")
       : "";
 

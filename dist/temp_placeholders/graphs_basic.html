@@ -701,6 +701,7 @@
 									physics:  STABLE_PHYSICS,
 									layout: {}
 								};
+								
 
 							    var network = new vis.Network(container, data, options);
 								network.setOptions({ physics: STABLE_PHYSICS });								
@@ -726,47 +727,73 @@
 								};
 								
 								function initializeFullGraph(graphData) {
-									console.log("Initializing FULL_GRAPH with provided graph data...");							
+									console.log("Initializing FULL_GRAPH with provided graph data...");
+									
 									FULL_GRAPH.nodes.clear();
 									FULL_GRAPH.edges.clear();
 									FULL_GRAPH.adjacency.clear();
 
-									// Add all nodes first
-									const nodesToAdd = graphData.nodes.map(node => {
+									// Batch process nodes - NO vis updates during initialization
+									const nodeMap = new Map();
+									
+									// First pass: store all nodes in FULL_GRAPH only
+									for (const node of graphData.nodes) {
 										FULL_GRAPH.nodes.set(node.id, node);
 										FULL_GRAPH.adjacency.set(node.id, new Set());
-										return { ...node, title: "" }; // placeholder title
-									});
-									nodesData.add(nodesToAdd);
-									// Now update titles for tooltips only for smaller graphs to avoid performance issues
-									if (FULL_GRAPH.nodes.size <= 25) {
-										applyTitleToggle(true);
-									}	
-									else {
-										applyTitleToggle(false);
+										nodeMap.set(node.id, node);
 									}
-									// Add edges
+
+									// Second pass: process edges in batches
+									const edgeMap = new Map();
 									for (const edge of graphData.edges) {
 										const id = edge.id ?? `${edge.from}_${edge.to}`;
-										const weight_value = edge.weight || 1;
-										const weight = EdgeWeightToWidth(weight_value);
+										
+										// Store edge with minimal processing
 										const weightedEdge = {
 											...edge,
 											id,
-											width: weight,
-											hoverWidth: (weight + 3) / 50
+											width: 1 // Default, don't calculate weight yet
 										};
+										
 										FULL_GRAPH.edges.set(id, weightedEdge);
-										FULL_GRAPH.adjacency.get(edge.from)?.add(edge.to);
-										FULL_GRAPH.adjacency.get(edge.to)?.add(edge.from);
-										edgesData.add(weightedEdge);
+										edgeMap.set(id, weightedEdge);
+										
+										// Update adjacency
+										const fromSet = FULL_GRAPH.adjacency.get(edge.from);
+										const toSet = FULL_GRAPH.adjacency.get(edge.to);
+										if (fromSet) fromSet.add(edge.to);
+										if (toSet) toSet.add(edge.from);
 									}
 
-									// Apply initial limit or other adjustments
-									applyLimit({ key: "", sort: "asc", amount: 25 });
+									// CRITICAL: Don't add nodes to vis yet for large graphs
+									if (FULL_GRAPH.nodes.size <= 5000) {
+										// Only add to vis if graph is reasonably sized
+										nodesData.add([...nodeMap.values()]);
+										edgesData.add([...edgeMap.values()]);
+									}
+
+									// Skip title generation completely for large graphs
+									if (FULL_GRAPH.nodes.size > 1000) {
+										showTitles = false;
+									}
+
+									// Apply limit WITHOUT rendering
+									VISIBLE_STATE.nodes.clear();
+									VISIBLE_STATE.edges.clear();
+									
+									// Just take first N nodes without sorting
+									const iterator = FULL_GRAPH.nodes.keys();
+									for (let i = 0; i < 25; i++) {
+										const { value, done } = iterator.next();
+										if (done) break;
+										VISIBLE_STATE.nodes.add(value);
+									}
+									
+									// Batch render visible graph
+									renderVisibleGraphBatch();
+									
 									console.log("FULL_GRAPH initialization complete.");
 								}
-
 
 								// //initiate modified nodes and edges (after checking no modification has happend)
 								// if (areDataSetsEqual(original_nodes, nodesData)) {
@@ -1233,44 +1260,49 @@
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 								// -------------------------------------------------------------------------------------------- Settings/Adjustments
 								//---------------------------------- Graph options adjustments
-								const settingsPanel = document.getElementById("graph_settings");
-								// initial setting values
-								let setLableGroup = "Entity Node";
-								let shwoWeightedEdgesEnabled = true;
-								let showTitlesEnabled = true;
-								let showLabelsEnabled = true;
-								let editInformationsEnabled = false;
-								let physicsEnabled = true;
-								let layoutType = "default";
-								let layoutDirection = "UD";
-								let sortMethod = "direct";
+								//const settingsPanel = document.getElementById("graph_settings");							
+								// initial options that reflect before runtime changes
+								window.currentSettings = {
+									lableGroup : "Entity Node",
+									limit: 25,
+									sortKey: "",
+									sortOrder: "asc",
+									weightEdges: true,
+									showTitles: true,
+									showLabels: true,
+									editInformations: false,
+									physics: true,
+									layoutType: "default",
+									layoutDirection: "UD",
+									sortMethod: "direct"
+								};
 
-								//------------------------------ Nodes Limits
-								settingsPanel.querySelector('input[placeholder="Limit"]').addEventListener("input", (e) => {
-								  if (parseInt(e.target.value, 10) < 1 || e.target.value === "") {
-									  e.target.value = 1; // reset to 1
-								  }
-								  const limit = parseInt(e.target.value, 10);
-								  //applyLimit("","asc",limit);
-								});
-								//------------------------------ Weight Edges
-								settingsPanel.querySelectorAll('input[type="checkbox"]')[0].addEventListener("change", (e) => {
-								  weightEdges(e.target.checked)
-								});
-								//------------------------------ Show Titles
-								settingsPanel.querySelectorAll('input[type="checkbox"]')[1].addEventListener("change", (e) => {
-								  applyTitleToggle(e.target.checked)
-								});
-								//------------------------------ Show Labels
-								settingsPanel.querySelectorAll('input[type="checkbox"]')[2].addEventListener("change", (e) => {
-								  showLabelsEnabled = e.target.checked; // track state								  
-  								  showNodelabels(showLabelsEnabled);  								  
-								});							
-								//------------------------------ reset graph
-								const graph_reset=document.getElementById("graph_reset_btn");
-								graph_reset.addEventListener("click", (e) => {
-									resetGraph()
-								});
+								// //------------------------------ Nodes Limits
+								// settingsPanel.querySelector('input[placeholder="Limit"]').addEventListener("input", (e) => {
+								//   if (parseInt(e.target.value, 10) < 1 || e.target.value === "") {
+								// 	  e.target.value = 1; // reset to 1
+								//   }
+								//   const limit = parseInt(e.target.value, 10);
+								//   //applyLimit("","asc",limit);
+								// });
+								// //------------------------------ Weight Edges
+								// settingsPanel.querySelectorAll('input[type="checkbox"]')[0].addEventListener("change", (e) => {
+								//   weightEdges(e.target.checked)
+								// });
+								// //------------------------------ Show Titles
+								// settingsPanel.querySelectorAll('input[type="checkbox"]')[1].addEventListener("change", (e) => {
+								//   applyTitleToggle(e.target.checked)
+								// });
+								// //------------------------------ Show Labels
+								// settingsPanel.querySelectorAll('input[type="checkbox"]')[2].addEventListener("change", (e) => {
+								//   showLabels = e.target.checked; // track state								  
+  								//   showNodelabels(showLabels);  								  
+								// });							
+								// //------------------------------ reset graph
+								// const graph_reset=document.getElementById("graph_reset_btn");
+								// graph_reset.addEventListener("click", (e) => {
+								// 	resetGraph()
+								// });
 
 								let fittedOnce = false;
 								network.once("afterDrawing", () => {
