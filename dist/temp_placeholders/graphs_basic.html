@@ -547,7 +547,7 @@
 												<option value="dotted" style="font-size: 10px;">····· Dotted ·····</option>										
 												<option value="dashdot" style="font-size: 10px;">-·-·- Dashdot -·-·-</option>
 										</select>
-										<label style="color: #333;">Weight </label>
+										<label style="color: #333;">Width </label>
 										<input id="edgeWeightInput" type="number" class="small_input" min="1" max="6" title="Adjust Edge Weight"/>																				
 								    </div>
 								</div>
@@ -592,8 +592,9 @@
 									}
 								});
 							    
-							    // Make nodesData accessible globally for updates
+							    // Make nodesData and edgesData accessible globally for updates
 							    window.nodesData = nodesData;
+							    window.edgesData = edgesData;
 
 							    var container = document.getElementById('mynetwork');
 							    var data = {
@@ -645,6 +646,7 @@
 										arrows: "to",
 										width: 1, // default thickness
 										hoverWidth: 1,
+										title: undefined, // default no title
 										font: {
 										    size: 10
 										},
@@ -688,6 +690,7 @@
 										arrows: "to",
 										width: 1, // default thickness
 										hoverWidth: 1,
+										title: undefined, // default no title
 										font: {
 										    size: 10
 										},
@@ -747,12 +750,12 @@
 									const edgeMap = new Map();
 									for (const edge of graphData.edges) {
 										const id = edge.id ?? `${edge.from}_${edge.to}`;
-										
 										// Store edge with minimal processing
 										const weightedEdge = {
 											...edge,
 											id,
-											width: 1 // Default, don't calculate weight yet
+											width: edge.weight ?? 1, // Default
+											title: edge.title || undefined // Only set title if it exists
 										};
 										
 										FULL_GRAPH.edges.set(id, weightedEdge);
@@ -1164,9 +1167,12 @@
 								document.getElementById('edgeWeightInput').addEventListener('change', function(e) {								  
 								    const selectedEdges = network.getSelectedEdges();
 								    if (selectedEdges.length > 0) {
-										const size = this.value;
+										let size = this.value;
 								    	selectedEdges.forEach(edgeId => {
+											if (size < 1) size = 1;
+											if (size > 6) size = 6;
 								        	edgesData.update({ id: edgeId, width: size });
+											console.log("Updating edge", edgeId, "to weight", size);
 								        	updateEdgesWeight(edgeId,this.value);
 								      	});
 								    }

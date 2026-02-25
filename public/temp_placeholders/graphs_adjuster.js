@@ -143,10 +143,21 @@ function persistEdgeChange(id, patch) {
   });
 }
 
-function EdgeWeightToWidth(weight) {
-  if (!weight || weight === 1) return 1;
-  // logarithmic scaling (best for graphs)
-  return Math.min(8, Math.max(1, Math.log(weight + 1) * 1.8));
+function EdgeWeightToWidth(weight, minW, maxW) {
+  console.log("EdgeWeightToWidth:",weight, minW, maxW);
+  const minWidth = 1;
+  const maxWidth = 6;
+    // If all weights are equal → use middle width
+  if (minW === maxW && minW == 1) {
+    return minWidth;
+  }
+  else{
+    minW = 0;
+  }
+  const normalized = (Math.log(weight + 1) - Math.log(minW + 1)) /
+                     (Math.log(maxW + 1) - Math.log(minW + 1));
+
+  return minWidth + normalized * (maxWidth - minWidth);
 }
 
 // overwrite with the latest options (for runtime changes like Physics/ Layouts)
@@ -433,15 +444,17 @@ function updateEdgesWeight(edgeId, width) {
     return;
   }
 
-  const safeWidth = Math.max(1, Number(width) || 1);
+  // Constrain width between 1 and 6
+  const safeWidth = Math.max(1, Math.min(Number(width) || 1, 6));
+
   MODIFIED_EDGES.set(edgeId, {
     ...(MODIFIED_EDGES.get(edgeId) || {}),
-    width: safeWidth
+    width: safeWidth    
   });
 
   edgesData.update({
     id: edgeId,
-    width: safeWidth
+    width: safeWidth    
   });
 }
 
@@ -843,11 +856,6 @@ function handleUngroupNode(groupId) {
 }
 
 
-
-
-
-
-
 function restoreNodeState(nodeId) {
   const mod = window.MODIFIED_NODES.get(nodeId);
   if (!mod) return;
@@ -980,9 +988,6 @@ function resetToLimit() {
     }
 }
 
-
-
-
 function applyTitleToggle(state) {
     console.log("applyTitleToggle_called:", state);
     window.currentSettings.showTitles = state;
@@ -990,7 +995,6 @@ function applyTitleToggle(state) {
     const nodeUpdates = [];
     const edgeUpdates = [];
     
-    // --- Handle Node Titles ---
     // --- Handle Node Titles ---
     nodesData.forEach(node => {
         if (!state) {
@@ -1016,7 +1020,7 @@ function applyTitleToggle(state) {
                     
                     // Exclude these internal/system keys
                     const excludeKeys = [
-                        'session_id', 'rel_type', 'x', 'y', 'vx', 'vy', 'index', 
+                        'session_id', 'label', 'rel_type', 'x', 'y', 'vx', 'vy', 'index', 
                         'edges', 'neighbors', 'color', 'shape', 'borderWidth', 
                         'borderWidthSelected', 'image', 'iconPath', 'title', 
                         'size', 'font', 'margin', 'shadow'
@@ -1028,16 +1032,18 @@ function applyTitleToggle(state) {
                     // If not in either list, keep it (but limit total)
                     return true;
                 })
-                .slice(0, 10) // Show max 10 additional properties
+                .slice(0, 50) // Show max 50 additional properties
                 .forEach(([k, v]) => {
                     // Special formatting for certain keys
                     if (k === 'node_identity') {
                         titleEntries.push(`Identity: ${v}`);
-                    } else if (k === 'id' && v === node.id) {
-                        // Skip showing id if it's the same as node id (redundant)
-                        return;
-                    } else if (typeof v === 'object') {
-                        titleEntries.push(`${k}: ${JSON.stringify(v).slice(0, 30)}...`);
+                    } 
+                    // else if (k === 'id' && v === node.id) {
+                    //     // Skip showing id if it's the same as node id (redundant)
+                    //     return;
+                    // } 
+                    else if (typeof v === 'object') {
+                        titleEntries.push(`${k}: ${JSON.stringify(v).slice(0, 50)}...`);
                     } else {
                         titleEntries.push(`${k}: ${v}`);
                     }
@@ -1052,48 +1058,37 @@ function applyTitleToggle(state) {
     // --- Handle Edge Titles ---
     edgesData.forEach(edge => {
         if (!state) {
-            edgeUpdates.push({ id: edge.id, title: undefined });
+          edgeUpdates.push({ id: edge.id, title: null }); // <- force clearing
         } else {
             const base = FULL_GRAPH.edges.get(edge.id);
             const mod = MODIFIED_EDGES.get(edge.id) || {};
             const merged = { ...base, ...mod };
-            
-            // Edge-specific properties to show
+
             const titleEntries = [];
-            
-            // Always show from/to labels if available
+
             const fromNode = FULL_GRAPH.nodes.get(merged.from);
             const toNode = FULL_GRAPH.nodes.get(merged.to);
             if (fromNode?.label) titleEntries.push(`From: ${fromNode.label}`);
             if (toNode?.label) titleEntries.push(`To: ${toNode.label}`);
-            
-            // Show other relevant properties
+
             Object.entries(merged)
                 .filter(([k, v]) => {
-                    if (['from', 'to', 'id', 'arrows', 'smooth', 'selectionWidth', 
-                          'hoverWidth', 'widthConstrain', 'length', 'font', 
-                          'arrowStrikethrough', 'chosen', 'endPointOffset', 'width', 'bgcolor', 'textcolor', 'session_id', 'color', 'baseColor'].includes(k)) {
+                    if (['from','to','id','arrows','smooth','selectionWidth','hoverWidth','width','widthConstrain','length','font','arrowStrikethrough','chosen','endPointOffset','bgcolor','textcolor','session_id','color','baseColor','Text Color', 'label'].includes(k)) {
                         return false;
                     }
                     return v != null;
                 })
-                .slice(0, 8) // Show max 8 additional properties
+                .slice(0, 50)
                 .forEach(([k, v]) => {
                     if (k === 'label') {
                         titleEntries.push(`Text Color: ${v.color || 'custom'}`);                  
-                    } else if (k === 'weight' || k === 'value') {
-                        titleEntries.push(`Weight: ${v}`);
-                    }else {
+                    } else {
                         titleEntries.push(`${k}: ${v}`);
                     }
                 });
-            
-            if (titleEntries.length > 0) {
-                edgeUpdates.push({ 
-                    id: edge.id, 
-                    title: titleEntries.join("\n") 
-                });
-            }
+
+            // Always push, even if empty
+            edgeUpdates.push({ id: edge.id, title: titleEntries.join("\n") });
         }
     });
     
@@ -1102,6 +1097,7 @@ function applyTitleToggle(state) {
         nodesData.update(nodeUpdates);
     }
     if (edgeUpdates.length > 0) {
+        console.log("found edgeUpdates :",edgeUpdates)
         edgesData.update(edgeUpdates);
     }
     
@@ -1147,32 +1143,53 @@ function pasteNodes(pos) {
 }
 
 function weightEdges(state) {
+  const graph_edges = FULL_GRAPH.edges;
+
+  let minW = Infinity;
+  let maxW = -Infinity;
+
+  // FIRST PASS — compute real min/max using merged weights
+  graph_edges.forEach(edge => {
+    const base = FULL_GRAPH.edges.get(edge.id) || {};
+    const mod  = MODIFIED_EDGES.get(edge.id) || {};
+    const merged = { ...base, ...mod };
+    console.log("mod:",mod)
+    const weightValue =
+      merged.weight ??
+      merged.width ??
+      merged.value ??
+      1;
+
+    if (weightValue < minW) minW = weightValue;
+    if (weightValue > maxW) maxW = weightValue;
+  });
+
+  // SECOND PASS — apply widths
   edgesData.forEach(edge => {
     const base = FULL_GRAPH.edges.get(edge.id) || {};
     const mod  = MODIFIED_EDGES.get(edge.id) || {};
-
-    // merge base + user modifications
     const merged = { ...base, ...mod };
 
-    // decide width source
     const weightValue =
-      merged.weight ??     // if user edited weight explicitly
-      merged.value ??      // if graph data has value
-      merged.width ??      // fallback
-      1;                   // default
+      merged.weight ??
+      merged.width ??
+      merged.value ??
+      1;
+
     const width = state
-      ? EdgeWeightToWidth(weightValue)
+      ? EdgeWeightToWidth(weightValue, minW, maxW)
       : 1;
     edgesData.update({
       id: edge.id,
       width
     });
-    // persist visual change
+
     MODIFIED_EDGES.set(edge.id, {
       ...mod,
       width
     });
   });
+
   window.currentSettings.weightEdges = state;
 }
 
@@ -1770,10 +1787,6 @@ function labelNodesWith({ labelIdentity, labelkey, filterKey, filterSort = "asc"
   });
 }
 
-
-
-
-
 function initializer(id){
   // Optional: apply default settings (like labels/limits)
   let defaultLimit = 25;
@@ -1828,7 +1841,7 @@ function renderVisibleGraphBatch() {
         
         // Only add title if explicitly enabled AND graph is small
         if (window.currentSettings.showTitles && FULL_GRAPH.nodes.size < 5000) {
-            merged.title = generateTitleSafely(merged);
+            merged.title = generateNodeTitleSafely(merged);
         }
         
         merged.label = window.currentSettings.showLabels ? (merged.label ?? base.label ?? "") : "";
@@ -1853,16 +1866,24 @@ function renderVisibleGraphBatch() {
     for (const id of VISIBLE_STATE.edges) {
         const base = FULL_GRAPH.edges.get(id);
         if (!base) continue;
-        
+
         const mod = MODIFIED_EDGES.get(id) || {};
-        edgeBatch.push({ ...base, ...mod });
-        
+        const merged = { ...base, ...mod };
+
+        // Add edge titles if titles are enabled
+        if (window.currentSettings.showTitles) {
+            merged.title = generateEdgeTitleSafely(merged);
+        }
+
+        edgeBatch.push(merged);
+
         edgeCount++;
+        // Periodic yield to avoid UI freeze
         if (edgeCount % BATCH_SIZE === 0) {
             setTimeout(() => {}, 0);
         }
     }
-    
+
     if (edgeBatch.length > 0) {
         edgesData.clear();
         edgesData.add(edgeBatch);
@@ -1873,13 +1894,57 @@ function renderVisibleGraphBatch() {
     }
 }
 
-function generateTitleSafely(node) {
-    // Limit number of properties in title
-    const entries = Object.entries(node)
+function generateNodeTitleSafely(node) {
+  const excludeKeys = ['session_id', 'rel_type', 'x', 'y', 'vx', 'vy', 'index', 'edges', 'neighbors', 'color', 'shape', 'borderWidth', 'borderWidthSelected', 'image', 'iconPath', 'title', 'size', 'font', 'margin', 'shadow'];
+  const entries = Object.entries(node)
+    .filter(([k]) => {
+      // Keep these important keys
+      const keepKeys = ['node_identity', 'id', 'type', 'category', 'department', 'name', 'description'];                    
+      // Exclude these internal/system keys
+      const excludeKeys = ['session_id', 'Label', 'rel_type', 'x', 'y', 'vx', 'vy', 'index', 'edges', 'neighbors', 'color', 'shape', 'borderWidth', 'borderWidthSelected', 'image', 'iconPath', 'title', 'size', 'font', 'margin', 'shadow'];
+        if (keepKeys.includes(k)) return true;
+        if (excludeKeys.includes(k)) return false;
+        // If not in either list, keep it (but limit total)
+          return true;
+        })
+    .slice(0, 50);
+  return entries.map(([k, v]) => `${k}: ${v}`).join("\n");
+}
+
+function generateEdgeTitleSafely(edge) {
+    // Merge base and modified data
+    const base = FULL_GRAPH.edges.get(edge.id) || {};
+    const mod = MODIFIED_EDGES.get(edge.id) || {};
+    const merged = { ...base, ...mod };
+
+    // Start building title entries
+    const entries = Object.entries(merged)
         .filter(([_, v]) => v != null)
-        .slice(0, 10); // Only show first 10 properties
-    
-    return entries.map(([k, v]) => `${k}: ${v}`).join("\n");
+        .filter(([k]) => !['from', 'to', 'id', 'arrows', 'smooth', 'selectionWidth', 'width',
+                          'hoverWidth', 'widthConstrain', 'length', 'font', 'label', 
+                          'arrowStrikethrough', 'chosen', 'endPointOffset', 'bgcolor', 'textcolor', 'session_id', 'color', 'baseColor', 'Text Color'].includes(k)) // skip standard visual keys
+        .slice(0, 50); // max 50 properties
+
+    let titleText = entries.map(([k, v]) => {
+        if (typeof v === 'object') return `${k}: ${JSON.stringify(v).slice(0,30)}...`;
+        return `${k}: ${v}`;
+    }).join("\n");
+
+    // Always include "from → to" for clarity
+    const fromLabel = FULL_GRAPH.nodes.get(merged.from)?.label || merged.from;
+    const toLabel = FULL_GRAPH.nodes.get(merged.to)?.label || merged.to;
+    titleText = `From: ${fromLabel}\nTo: ${toLabel}` + (titleText ? `\n${titleText}` : '');
+
+    return titleText;
+}
+
+// Batch update all edge titles
+function updateAllEdgeTitles() {
+    const edgeUpdates = [];
+    edgesData.forEach(edge => {
+        edgeUpdates.push({ id: edge.id, title: generateEdgeTitleSafely(edge) });
+    });
+    edgesData.update(edgeUpdates);
 }
 
 function renderVisibleGraph() {
