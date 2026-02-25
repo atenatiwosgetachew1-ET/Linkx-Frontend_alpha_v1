@@ -1162,7 +1162,6 @@ function weightEdges(state) {
 
     if (weightValue < minW) minW = weightValue;
     if (weightValue > maxW) maxW = weightValue;
-    console.log("weightValue:",weightValue,"minW:",minW," maxW:",maxW)
   });
 
   // SECOND PASS — apply widths
@@ -1180,7 +1179,6 @@ function weightEdges(state) {
     const width = state
       ? EdgeWeightToWidth(weightValue, minW, maxW)
       : 1;
-    console.log("edge widthhhh:",width)
     edgesData.update({
       id: edge.id,
       width

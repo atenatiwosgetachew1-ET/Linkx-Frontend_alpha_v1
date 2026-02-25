@@ -3155,12 +3155,14 @@ function Root() {
       }    
       if (event.data?.type === "graph_search_results") {        
         const { id, nodes, edges } = event.data.payload; // unpack the payload
+        let newSearch
         console.log("graph_search_results:",id,nodes, edges)
           setWindows(prev =>
             prev.map(w => {
               if (w.type === "graph" && w.id === id) {
                 const oldSearch = w.iframeSearch || ['', '', {}, { nodes: 0, edges: 0 }]; // default structure
-                const newSearch = [...oldSearch]; // clone array
+                console.log("oldSearch:",oldSearch)
+                newSearch = [...oldSearch]; // clone array
                 // Separate the results into nodes and edges counts
                 newSearch[3] = {
                   nodes: nodes ?? 0,   // count of nodes
@@ -3172,6 +3174,10 @@ function Root() {
               return w;
             })
           );
+          setIframeSearch(prev => ({
+            ...prev,
+            [id]: newSearch
+          }));
       }
       if (event.data?.type === "network_components") {
         console.log(5)

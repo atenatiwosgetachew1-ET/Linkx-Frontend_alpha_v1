@@ -1251,7 +1251,7 @@ function showNodelabels(state) {
 function showNodeInfos(node, state) {
   if (!node) return {};
 
-  const excludeKeys = ["size", "x", "y", "vx", "vy", "index", "edges", "neighbors","colorBehavior","baseColor", "color", "shape", "borderWidth", "borderWidthSelected", "borderWidth1", "image", "imagePadding", "iconPath", "title"]; // keys to ignore
+  const excludeKeys = ["size", "x", "y", "vx", "vy", "rel_type", "session_id", "index", "edges", "neighbors","colorBehavior","baseColor", "color", "shape", "borderWidth", "borderWidthSelected", "borderWidth1", "image", "imagePadding", "iconPath", "title"]; // keys to ignore
   const result = {};
   Object.entries(node).forEach(([key, value]) => {
     if (!excludeKeys.includes(key)) {

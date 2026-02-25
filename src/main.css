@@ -3552,7 +3552,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   position: relative;
   min-height: 5vh;
   width: 97%;
-  max-height: 45vh;
+  max-height: 55vh;
   min-width: 10vw;
   top: 0vh;
   overflow-y: auto;
@@ -3589,6 +3589,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 	text-overflow: ellipsis;
 	cursor: default;
 	color: #555;
+	user-select: text;
 }
 .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_infos_container .graph_options_infos div span:first-child{
 	width: 22%;
