@@ -4142,7 +4142,7 @@ function Root() {
           }
           else{
             newSubContent = "batch_input_form_pageII";
-          }          
+          }           
         }
         if (menuId === "batch_files_search_useSearch") {
           setBatchFilesSearchResults({ results: [], message: "" });        
