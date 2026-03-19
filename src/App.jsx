@@ -1176,7 +1176,7 @@ function DraggableWindow({ children, initialPos = { top: 0, left: 0 }, orientati
     </div>
   );
 }
-function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText, loadscreenState, isSideBarMenuOpen, orientation, configurations, windowAction, graphAction, chartAction, selectedContent, selectedSubContent, selectedNodes, selectedEdges,windowResponseI,windowResponseII,formToolResponse,batchFilesSearchHybrid,batchFilesSearchHybridQuery,batchFilesSearchStrict,searchText,batchFilesSearchLimit,batchFilesSearchResults,batchFilesSearchMoreFiles,searchResultsVisible,searchPlaceholder,batchFilesCollection, batchFilesDataframeInfoI, batchFilesDataframeInfoII, batchFilesDataframeActionValue, batchFilesDataframeSourceValue, batchFilesDataframeTargetValue, batchFilesDataframeRelationshipValue, batchFilesDataframeRuleValue, sourceSessionLog, sourceStreams , sourceStreamListener, fileInputRef, textareaRefs, onClose, onMove, zIndex, onFocus, covered, graphLink, graphLinkId, graphLinkSource, graphStatus, activeGraph, chartLink, chartLinkId, activechart, iframeRef, iframeFilters, iframeSettings, iframeSearch, selectedPropertyTab, filterPropertyKeys, filterResults, nodeProperties, BASE_URL }) {
+function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText, loadscreenState, isSideBarMenuOpen, orientation, configurations, windowAction, graphAction, chartAction, selectedContent, selectedSubContent, selectedNodes, selectedEdges,windowResponseI,windowResponseII,formToolResponse,sourceAddressType,sourceAddressText,batchFilesSearchHybrid,batchFilesSearchHybridQuery,batchFilesSearchStrict,searchText,batchFilesSearchLimit,batchFilesSearchResults,batchFilesSearchMoreFiles,searchResultsVisible,searchPlaceholder,batchFilesCollection, batchFilesDataframeInfoI, batchFilesDataframeInfoII, batchFilesDataframeActionValue, batchFilesDataframeSourceValue, batchFilesDataframeTargetValue, batchFilesDataframeRelationshipValue, batchFilesDataframeRuleValue, sourceSessionLog, sourceStreams , sourceStreamListener, fileInputRef, textareaRefs, onClose, onMove, zIndex, onFocus, covered, graphLink, graphLinkId, graphLinkSource, graphStatus, activeGraph, chartLink, chartLinkId, activechart, iframeRef, iframeFilters, iframeSettings, iframeSearch, selectedPropertyTab, filterPropertyKeys, filterResults, nodeProperties, BASE_URL }) {
   if (type === "source") {
     return (
       <DraggableWindow initialPos={{ top: 0, left: 0}} zIndex={zIndex} orientation={orientation}>
@@ -1323,32 +1323,38 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
                           <form onSubmit={(e) => { e.preventDefault(); 
                             if (windowResponseI === "Connection established!") {
                               // Disconnect logic
-                              const brokerAddress = document.getElementById("source_input_address_text").value;
-                              const hdfsAddress = document.getElementById("source_storage_address_text").value;
+                              //const sourceAddressType = Array.from(document.getElementsByName("source_input_address_type")).find(el => el.checked)?.value || null;
+                              //const sourceAddress = document.getElementById("source_input_address_text").value;
+                              const storageAddress = document.getElementById("source_storage_address_text").value;
                               windowAction(id, "batch_input_form", "disconnect", {
-                                broker: brokerAddress,
-                                hdfs: hdfsAddress,
+                                addressType: sourceAddressType,
+                                broker: sourceAddressText,
+                                hdfs: storageAddress,
                                 session_id:id                                
                               });
                             }
                             else if (windowResponseI === "Disconnecting failed!") {
                               // Disconnect logic
-                              const brokerAddress = document.getElementById("source_input_address_text").value;
-                              const hdfsAddress = document.getElementById("source_storage_address_text").value;
+                              //const sourceAddressType = Array.from(document.getElementsByName("source_input_address_type")).find(el => el.checked)?.value || null;
+                              //const sourceAddress = document.getElementById("source_input_address_text").value;
+                              const storageAddress = document.getElementById("source_storage_address_text").value;
                               windowAction(id, "batch_input_form", "disconnect", {
-                                broker: brokerAddress,
-                                hdfs: hdfsAddress,
-                                session_id:id,
+                                addressType: sourceAddressType,
+                                address: sourceAddressText,
+                                storage: storageAddress,
+                                session_id:id                                
                               });
                             }
                             else {
-                              // Connect logic
-                              const brokerAddress = document.getElementById("source_input_address_text").value;
-                              const hdfsAddress = document.getElementById("source_storage_address_text").value;
-                              console.log("session id2",sessionId)
+                              // connect logic
+                              //const sourceAddressType = Array.from(document.getElementsByName("source_input_address_type")).find(el => el.checked)?.value || null;
+                              //const sourceAddress = document.getElementById("source_input_address_text").value;
+                              const storageAddress = document.getElementById("source_storage_address_text").value;
+                              console.log("render sourceAddress:", sourceAddressText);
                               windowAction(id, "batch_input_form", "connect", {
-                                broker: brokerAddress,
-                                hdfs: hdfsAddress,
+                                addressType: sourceAddressType,
+                                address: sourceAddressText,
+                                storage: storageAddress,
                                 session_id:id                                
                               });
                             }
@@ -1360,16 +1366,26 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
                             <fieldset>
                               <legend><b>Broker/API</b> Connection</legend>
                               <div className="box_inputs_container">
-                                <input id="broker_address_radio" className="radioinput" type="radio" name="source_input_address_type" defaultChecked />
+                                <input id="broker_address_radio" className="radioinput" type="radio" name="source_input_address_type" value="broker" checked={sourceAddressType === "broker"} 
+                                  onChange={(e) => windowAction(id,"batch_input_form_address","change",e.target.value)}
+                                  disabled={
+                                    windowResponseI === "Connecting..." ? 'True' : 
+                                    windowResponseI === "Connection established!" ? 'True': ''
+                                  }/>
                                 <label htmlFor="broker_address_radio">Kafka Broker</label>
-                                <input id="api_address_radio" className="radioinput" type="radio" name="source_input_address_type" disabled/>
+                                <input id="api_address_radio" className="radioinput" type="radio" name="source_input_address_type" value="api" checked={sourceAddressType === "api"} onChange={(e) => windowAction(id,"batch_input_form_address","change",e.target.value)}
+                                  disabled={
+                                    windowResponseI === "Connecting..." ? 'True' : 
+                                    windowResponseI === "Connection established!" ? 'True': ''
+                                  }/>
                                 <label htmlFor="api_address_radio">REST API</label>
                               </div>
-                              <input id="source_input_address_text" placeholder="Enter Broker/API Address" className="textinput" type="text"
+                              <input id="source_input_address_text" placeholder="Enter Broker/API Address" defaultValue={sourceAddressText} className="textinput" type="text"
                               disabled={
                                 windowResponseI === "Connecting..." ? 'True' : 
                                 windowResponseI === "Connection established!" ? 'True': ''
                               }
+                              onChange={(e) => windowAction(id,"source_storage_address_text","change",e.target.value)}
                               style={{
                                 color: windowResponseI === "Connection established!" ? '#AAA' : '',
                                 backgroundColor: windowResponseI === "Connection established!" ? '#EEE' : '',
@@ -1379,10 +1395,14 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
                             <fieldset>
                               <legend><b>HDFS</b> Connection</legend>
                               <div className="box_inputs_container">
-                                <input id="hadoop_address_radio" className="radioinput" type="radio" name="source_storage_address_type" defaultChecked />
+                                <input id="hadoop_address_radio" className="radioinput" type="radio" name="source_storage_address_type" value="storage" checked={sourceAddressType === "storage"} onChange={(e) => windowAction(id,"batch_input_form_address","change",e.target.value)} 
+                                  disabled={
+                                    windowResponseI === "Connecting..." ? 'True' : 
+                                    windowResponseI === "Connection established!" ? 'True': ''
+                                  }/>
                                 <label htmlFor="hadoop_address_radio">Hadoop Cluster</label>
                               </div>                            
-                                <input id="source_storage_address_text" placeholder="Enter HDFS Address" defaultValue={configurations.active_storage_address} className="textinput" type="text" required
+                                <input id="source_storage_address_text" placeholder="Enter HDFS Address" defaulValue={sourceAddressText} className="textinput" type="text"
                                 disabled={
                                   windowResponseI === "Connecting..." ? 'True' : 
                                   windowResponseI === "Connection established!" ? 'True': ''
@@ -2056,7 +2076,8 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
                       </button>
                       <button onClick={() => {
                           if (selectedSubContent === "batch_input_form_pageI" && windowResponseI === "Connection established!"){
-                            windowAction(id, "batch_input_form_swap", "page_II",null);
+                            const sourceAddress = document.getElementById("source_input_address_text").value;
+                            windowAction(id, "batch_input_form_swap", "page_II",{"addressType":sourceAddressType,"address":sourceAddress});
                           }
                           else if (selectedSubContent === "batch_input_form_pageI" && windowResponseI === "Dataset uploaded!"){
                             windowAction(id, "batch_input_form_swap", "page_III",null);
@@ -2079,7 +2100,7 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
                           }
                         }}
                         disabled={
-                          selectedSubContent === "batch_input_form_pageI" && windowResponseI === "Connection established!" ||
+                          selectedSubContent === "batch_input_form_pageI" && windowResponseI === "Connection established!" && formToolResponse === "Connected!" ||
                           selectedSubContent === "batch_input_form_pageI" && windowResponseI === "Dataset uploaded!" && formToolResponse === "Connected!" ||
                           selectedSubContent === "batch_input_form_pageII" && windowResponseI === "Dataset uploaded!" && formToolResponse === "Connected!" ||
                           selectedSubContent === "batch_input_form_pageII" && batchFilesCollection.length> 0  || 
@@ -2781,7 +2802,7 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
     )
   }
 }
-function Main({setSessionId, API_URL,debounceRef,setConfigurations, configurations,windows, setWindows, openWindows }) {
+function Main({userName,setSessionId, API_URL,debounceRef,setConfigurations, configurations,windows, setWindows, openWindows }) {
   const hasRunRef = useRef(false);
   const iframeRef = useRef(null);
   useEffect(() => {
@@ -2794,8 +2815,8 @@ function Main({setSessionId, API_URL,debounceRef,setConfigurations, configuratio
     // openWindows('chart', '',iframeRef);
   }, []);
   return (
-    <main id='main'>\
-    <NetworkBackground/>
+    <main id='main'>
+      <NetworkBackground name={userName} />    
     </main>
   );
 }
@@ -2835,7 +2856,6 @@ function Root() {
   const [loadscreenText, setloadscreenText] = useState('');
   const [isSideBarMenuOpen, setIsSideBarMenuOpen] = useState(false);
   const [selectedContent, setSelectedContent] = useState(null); // content to show inside the windows
-  const [selectedSubContent, setSelectedSubContent] = useState(null); // content to show inside the windows
   const [batchFilesSearchHybrid, setBatchFilesSearchHybrid] = useState(false);
   const [batchFilesSearchHiveQuery, setbatchFilesSearchHiveQuery] = useState(false);
   const [batchFilesSearchStrict, setBatchFilesSearchStrict] = useState(true);
@@ -2874,6 +2894,7 @@ function Root() {
   const [iframeSettings, setIframeSettings] = useState({}); // object instead of array
   const [iframeSearch, setIframeSearch] = useState({}); // object instead of array
   const [isCtrlHeld, setIsCtrlHeld] = useState(false);  
+  const [userName, setUserName] = useState(null);
   const API_URL = import.meta.env.VITE_API_URL
   const BASE_URL = import.meta.env.VITE_BASE_URL
   //const BASE_URL = "http://localhost:5173"
@@ -3132,9 +3153,59 @@ function Root() {
     };
   }, []);
 
-  //-------------------------------------------------------------------------------- node properties listner
+  //-------------------------------------------------------------------------------- messages listner
   useEffect(() => {
     const handleIframeMessage = (event) => {
+      console.log("event detected:",event)
+      // --- JWT authentication message with no verification---
+      if (event.data?.action === "authenticate") {
+        // check origin for security
+        if (event.origin !== "http://localhost:3000") return;
+
+        // JWT may be inside payload
+        const token = event.data.token || event.data.payload?.token;
+        if (!token) {
+          console.warn("No token found in message");
+          return;
+        }
+
+        console.log("Received JWT:", token);
+
+        // decode payload
+        try {
+          const payload = JSON.parse(
+            atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))
+          );
+          console.log("JWT payload:", payload);
+          //alert(`Linkx: Authentication request received! Welcome '${payload.Name}'`);
+          // store the name in state
+          setUserName(payload.Name);
+          // store for app
+          // setAuthToken(token);
+          // setAuthPayload(payload);
+        } catch (err) {
+          console.error("Failed to decode JWT:", err);
+        }
+      }
+      // --- JWT authentication message with verification ---
+      // if (event.data?.action === "authenticate") {
+      //   const token = event.data.payload?.token;
+        
+      //   // Step 3 → send JWT to server for verification
+      //   const res = await fetch("/api/verify-token", {
+      //     method: "POST",
+      //     headers: { "Content-Type": "application/json" },
+      //     body: JSON.stringify({ token })
+      //   });
+
+      //   const result = await res.json();
+
+      //   if (result.valid) {
+      //     console.log("JWT verified! Payload:", result.payload);
+      //   } else {
+      //     console.error("Invalid token!", result.error);
+      //   }
+      // }
       if (event.data?.type === "nodeProperties") {
         const properties = event.data.payload; // unpack the payload
         const mostTopGraphWindow=windowIdRef.current;
@@ -3264,6 +3335,8 @@ function Root() {
                       selectedSubContent: null,
                       formData: {},
                       windowResponseI: null,
+                      sourceAddressType: 'broker',
+                      sourceAddressText: '',
                       formToolResponse: null,
                       batchFilesSearchResults: null,
                     },
@@ -3836,7 +3909,25 @@ function Root() {
             );
           }        
         }
+        if (menuId === "batch_input_form_address" && action === "change" && payload) {
+          console.log("address_change:",payload);
+          //setSourceAddressType(payload);
+          setWindows(prev =>
+            prev.map(w =>
+              w.id === id ? { ...w, sourceAddressType: payload } : w
+            )
+          );
+        }
+        if (menuId === "source_storage_address_text" && action === "change" && payload) {
+          console.log("address_change:",payload);
+          setWindows(prev =>
+            prev.map(w =>
+              w.id === id ? { ...w, sourceAddressText: payload } : w
+            )
+          );
+        }
         if (menuId === "batch_input_form" && action === "connect" && payload) {
+          console.log("connection_payload:",payload);
           setWindows(prev =>
             prev.map(w =>
               w.id === id ? { ...w, windowResponseI: "Connecting..." } : w
@@ -3958,17 +4049,100 @@ function Root() {
           newSubContent = "batch_input_form_pageI";
         }
         if (menuId === "batch_input_form_swap" && action === "page_II") {
-          newContent = "batch_input";
-          newSubContent = "batch_input_form_pageII";
-                    setWindows(prev =>
+          if (payload){ //For Broker and API jumps to dataframe creation
+            if (payload["addressType"] === "broker"){ //For kafka broker
+              pass
+            }
+            else if (payload["addressType"] === "api"){ //API is Expected                          
+              //Request a dataframe creation from the api address           
+              // Set new timeout for debounce
+              debounceRef.current = setTimeout(() => {
+                const newLoadscreenText="Creating Dataframe "
+                setWindows(prev =>
+                  prev.map(w =>
+                  w.id === id ? { ...w, batchFilesDataframeInfoI:[],batchFilesDataframeActionValue,loadscreenState: true,loadscreenText:newLoadscreenText} : w
+                  )
+                );
+                //Requesting dataframe creation
+                let dataSourceKind="address";
+                const payload1 = {
+                    id: "create_DF",
+                    type: payload["addressType"],
+                    kind: dataSourceKind,
+                    session_id: id,//Source window id
+                    value: payload["address"], 
+                  };
+                fetch(`${API_URL}/live_batch_files`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify(payload1),
+                })
+                .then((res) => res.json())
+                .then((data) => { 
+                    console.log("public source data:",data)   
+                    var arrayData=Object.values(data.results)
+                    if (data.message == "success!"){
+                      //Changing window content
+                      alert("Dataframe created")
+                      console.log("arrayData:",arrayData)
+                      newContent = "batch_input";
+                      newSubContent = "batch_input_form_pageIII";
+                      //Setting DataframeInfoI        
+                      setWindows(prev =>
+                        prev.map(w =>
+                          w.id === id ? { ...w, batchFilesDataframeInfoI:arrayData,loadscreenState: false, loadscreenText:null, selectedContent:newContent,selectedSubContent:newSubContent,batchFilesDataframeActionValue:null } : w
+                        )
+                      );
+                    }
+                    else {
+                      alert("faild to create a dataframe1",data.message)
+                      setWindows(prev =>
+                        prev.map(w =>
+                          w.id === id ? { ...w, batchFilesDataframeInfoI:[],loadscreenState: false } : w
+                        )
+                      );
+                    }
+                  })
+                .catch((err) => {
+                  console.error(err);
+                  alert("requestID8234690944 failed!");
+                  setWindows(prev =>
+                    prev.map(w =>
+                      w.id === id ? { ...w, batchFilesDataframeInfoI: null, loadscreenState: false} : w
+                    )
+                  );
+                });
+              }, 300); // debounce delay   
+            }
+            else{ //For storage goes to searching and filtering datas
+              newContent = "batch_input";
+              newSubContent = "batch_input_form_pageII";
+              setWindows(prev =>
+                prev.map(w =>
+                  w.id === id ? { ...w, batchFilesCollection: [] } : w
+                )
+              );
+            } 
+          }
+          else{ //If no payload is passed it takes nochange 
+            newContent = "batch_input";
+            newSubContent = "batch_input_form_pageI";
+            setWindows(prev =>
             prev.map(w =>
               w.id === id ? { ...w, batchFilesCollection: [] } : w
             )
-          );  
+          );
+          }              
         }
         if (menuId === "batch_input_form_swap_passive" && action === "page_II") {
           newContent = "batch_input";
-          newSubContent = "batch_input_form_pageII";      
+          const targetWindow = windowsRef.current.find(w => w.id === String(id) || w.id === Number(id));        
+          if (targetWindow.sourceAddressType === "api"){
+            newSubContent = "batch_input_form_pageI";  
+          }
+          else{
+            newSubContent = "batch_input_form_pageII";
+          }          
         }
         if (menuId === "batch_files_search_useSearch") {
           setBatchFilesSearchResults({ results: [], message: "" });        
@@ -4164,7 +4338,7 @@ function Root() {
               // File is already selected, remove it
               console.log(`deSelecting file: ${filename}`,filesize);
               newBatchFilesCollection = newBatchFilesCollection.filter(
-              (file) => !(file.name === filename && file.size === filesize)              );
+              (file) => !(file.name === filename && file.size === filesize));
             } else {
               // File is not selected, add it
               console.log(`Selecting file: ${filename}`,filesize);
@@ -4186,9 +4360,11 @@ function Root() {
             //Requesting dataframe creation
             let dataSourceKind="";
             if (windowResponseI == "Dataset uploaded!"){
+              console.log("16/03/2026",1)
                 dataSourceKind = "files"
             }
-            if (batchFilesSearchHybrid == true || windowResponseI == "Connection established!"){ // For both hdfs (files) and hybrid (kewords) search results
+            if (batchFilesSearchHybrid == true && windowResponseI == "Connection established!"){ // For both hdfs (files) and hybrid (kewords) search results
+              console.log("16/03/2026",2)
                dataSourceKind = "hybrid"
             }
             // if (batchFilesSearchHybridQuery == true){
@@ -5228,7 +5404,7 @@ function Root() {
         />
         <Taskbar windows={windows} isTaskBarOpen={isTaskBarOpen} activeWindowId={activeWindowId} focusWindow={handleFocusWindow} toggleAction={handleToggleMenu} isCtrlHeld={isCtrlHeld}/>
         <Configurations sessionId={sessionId} actions={handleConfigurationActions} loadscreenState={loadscreenState} setloadscreenState={setloadscreenState} toggleAction={handleToggleMenu} configurations={configurations} isConfigurationsOpen={isConfigurationsOpen}/>
-        <Main setSessionId={setSessionId} API_URL={API_URL} debounceRef={debounceRef} setConfigurations={setConfigurations} configurations={configurations} windows={windows} setWindows={setWindows} openWindows={handleOpenWindows} />
+        <Main userName={userName} setSessionId={setSessionId} API_URL={API_URL} debounceRef={debounceRef} setConfigurations={setConfigurations} configurations={configurations} windows={windows} setWindows={setWindows} openWindows={handleOpenWindows} />
         {/* ----------------------
             Windows Container
         ---------------------- */}
@@ -5259,6 +5435,8 @@ function Root() {
               windowResponseI={window.windowResponseI}
               windowResponseII={window.windowResponseII}
               formToolResponse={window.formToolResponse}
+              sourceAddressType={window.sourceAddressType}// Local
+              sourceAddressText={window.sourceAddressText}// Local
               batchFilesSearchHybrid={window.batchFilesSearchHybrid}
               batchFilesSearchHiveQuery={window.batchFilesSearchHiveQuery}
               batchFilesSearchStrict={window.batchFilesSearchStrict}

@@ -1,13 +1,15 @@
+'use client';
 import React, { useRef, useEffect } from "react";
 
 const NODE_COUNT = 60;
 const SPEED = 0.6;
 
-export default function MinimalLeftGlobe() {
+export default function NetworkAnimation({ name }) {
   const canvasRef = useRef(null);
   const rafRef = useRef(0);
   const nodesRef = useRef([]);
 
+  // Initialize nodes positions and velocities
   const initNodes = (w, h) => {
     nodesRef.current = Array.from({ length: NODE_COUNT }, () => {
       const size = 4 + Math.random() * 5;
@@ -40,22 +42,21 @@ export default function MinimalLeftGlobe() {
       const h = canvas.height;
       const nodes = nodesRef.current;
 
-      // single background paint (no clearRect)
+      // Clear background
       ctx.fillStyle = "#edf4f6";
       ctx.fillRect(0, 0, w, h);
 
-      // group by color (minimize state changes)
+      // Move nodes
       const buckets = {};
       for (const n of nodes) {
         (buckets[n.color] ??= []).push(n);
-
         n.x += n.vx;
         n.y += n.vy;
-
         if (n.x < 0 || n.x > w) n.vx *= -1;
         if (n.y < 0 || n.y > h) n.vy *= -1;
       }
 
+      // Draw nodes
       for (const color in buckets) {
         ctx.fillStyle = color;
         ctx.beginPath();
@@ -65,13 +66,6 @@ export default function MinimalLeftGlobe() {
         }
         ctx.fill();
       }
-
-      // brand text
-      ctx.font = "bold 18px sans-serif";
-      ctx.fillStyle = "rgba(0,0,0,0.15)";
-      ctx.textAlign = "right";
-      ctx.textBaseline = "bottom";
-      ctx.fillText("Linkx (Beta V1.0)", w - 20, h - 20);
 
       rafRef.current = requestAnimationFrame(draw);
     };
@@ -85,16 +79,34 @@ export default function MinimalLeftGlobe() {
   }, []);
 
   return (
-    <canvas
-      ref={canvasRef}
-      style={{
-        position: "fixed",
-        inset: 0,
-        width: "100vw",
-        height: "100vh",
-        display: "block",
-        background: "#fff",
-      }}
-    />
+    <div style={{ position: "relative", width: "100vw", height: "100vh" }}>
+      {/* Canvas */}
+      <canvas
+        ref={canvasRef}
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          width: "100%",
+          height: "100%",
+          display: "block",
+        }}
+      />
+
+      {/* Dynamic text overlay */}
+      <div
+        style={{
+          position: "absolute",
+          bottom: 20,
+          right: 20,
+          fontWeight: "bold",
+          fontSize: "18px",
+          color: "rgba(0,0,0,0.15)",
+          pointerEvents: "none", // clicks pass through
+        }}
+      >
+        {name ? `Welcome ${name}` : "Linkx (Beta V1.0)"}
+      </div>
+    </div>
   );
 }

@@ -889,7 +889,7 @@ function applyLimit({ key = "", sort = "asc", amount = 25 }) {
         for (const [id, node] of FULL_GRAPH.nodes) {
             const value = getNodeValue(node, key);
             if (value != null) nodes.push({ id, value });
-            if (nodes.length > amount * 2) break; // Early exit
+            // if (nodes.length > amount * 2) break; // Early exit
         }
         
         nodes.sort((a, b) => {
