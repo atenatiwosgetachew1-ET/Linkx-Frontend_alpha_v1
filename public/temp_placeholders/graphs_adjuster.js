@@ -2084,6 +2084,21 @@ function ensureJsPdf() {
   return window.__linkxJsPdfLoader;
 }
 
+function downloadPdfWithoutBlob(doc, filename) {
+  try {
+    const dataUri = doc.output("datauristring");
+    const a = document.createElement("a");
+    a.href = dataUri;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    return true;
+  } catch (_err) {
+    return false;
+  }
+}
+
 async function downloadGraphReport(report) {
   let JsPdfConstructor = null;
   try {
@@ -2356,7 +2371,10 @@ async function downloadGraphReport(report) {
   }
 
   const filename = `LinkxGraph_report_${Date.now()}.pdf`;
-  doc.save(filename);
+  const savedByDataUri = downloadPdfWithoutBlob(doc, filename);
+  if (!savedByDataUri) {
+    doc.save(filename);
+  }
 }
 
 async function generateGraphReport(payload) {
