@@ -1860,7 +1860,8 @@ function numberFormat(value) {
   return Number.isFinite(safe) ? safe.toLocaleString() : "0";
 }
 
-const REPORT_LOGO_SRC = "../thumbnails/windows_thumbnail_active.png";
+const REPORT_LOGO_SRC = "../site_images/Linkx square (1024x1024).png";
+const REPORT_WATERMARK_SRC = "../site_images/Logo_of_Ethiopian_INSA.png";
 
 function buildGraphReportData(payload) {
   const sourceWindowId = payload?.id || null;
@@ -1930,22 +1931,36 @@ function buildGraphReportData(payload) {
   };
 }
 
-function loadImageAsDataUrl(src) {
+function loadImageAsDataUrl(src, options = {}) {
   return new Promise(resolve => {
     if (!src) {
       resolve(null);
       return;
     }
 
+    const alpha = typeof options.alpha === "number"
+      ? Math.max(0, Math.min(1, options.alpha))
+      : 1;
+    const maxSide = Number(options.maxSide) > 0 ? Number(options.maxSide) : 0;
+
     const img = new Image();
     img.crossOrigin = "anonymous";
     img.onload = () => {
       try {
+        const sourceWidth = img.naturalWidth || img.width;
+        const sourceHeight = img.naturalHeight || img.height;
+        const sourceMax = Math.max(sourceWidth, sourceHeight) || 1;
+        const scale = maxSide > 0 ? Math.min(1, maxSide / sourceMax) : 1;
+        const targetWidth = Math.max(1, Math.round(sourceWidth * scale));
+        const targetHeight = Math.max(1, Math.round(sourceHeight * scale));
+
         const canvas = document.createElement("canvas");
-        canvas.width = img.naturalWidth || img.width;
-        canvas.height = img.naturalHeight || img.height;
+        canvas.width = targetWidth;
+        canvas.height = targetHeight;
         const ctx = canvas.getContext("2d");
-        ctx.drawImage(img, 0, 0);
+        ctx.clearRect(0, 0, targetWidth, targetHeight);
+        ctx.globalAlpha = alpha;
+        ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
         resolve(canvas.toDataURL("image/png"));
       } catch (_err) {
         resolve(null);
@@ -2093,86 +2108,122 @@ async function downloadGraphReport(report) {
   const footerLimit = pageHeight - margin;
   let y = margin;
 
+  const [logoDataUrl, watermarkDataUrl] = await Promise.all([
+    loadImageAsDataUrl(REPORT_LOGO_SRC, { maxSide: 220 }),
+    loadImageAsDataUrl(REPORT_WATERMARK_SRC, { alpha: 0.065, maxSide: 900 })
+  ]);
+
+  const drawPageDecorations = () => {
+    if (watermarkDataUrl) {
+      const wmSize = Math.min(contentWidth * 0.68, 320);
+      const wmX = (pageWidth - wmSize) / 2;
+      const wmY = (pageHeight - wmSize) / 2;
+      try {
+        doc.addImage(watermarkDataUrl, "PNG", wmX, wmY, wmSize, wmSize);
+      } catch (_err) {
+        // Keep report generation robust if watermark fails.
+      }
+    }
+
+    doc.setDrawColor(232, 236, 242);
+    doc.setLineWidth(0.7);
+    doc.line(margin, margin - 8, pageWidth - margin, margin - 8);
+    doc.line(margin, pageHeight - margin + 8, pageWidth - margin, pageHeight - margin + 8);
+  };
+
+  drawPageDecorations();
+
   const ensureSpace = neededHeight => {
     if ((y + neededHeight) <= footerLimit) return;
     doc.addPage();
     y = margin;
+    drawPageDecorations();
   };
 
   const drawSectionTitle = title => {
-    ensureSpace(22);
+    ensureSpace(24);
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(12);
-    doc.setTextColor(31, 58, 85);
+    doc.setFontSize(10);
+    doc.setTextColor(33, 57, 79);
     doc.text(String(title), margin, y);
-    y += 14;
-    doc.setDrawColor(226, 231, 238);
-    doc.setLineWidth(0.8);
-    doc.line(margin, y, pageWidth - margin, y);
-    y += 10;
+    doc.setDrawColor(212, 220, 229);
+    doc.setLineWidth(0.9);
+    doc.line(margin + 118, y - 3, pageWidth - margin, y - 3);
+    y += 11;
   };
 
   const drawList = (rows, formatter, emptyText = "No data found.") => {
     if (!Array.isArray(rows) || rows.length === 0) {
-      ensureSpace(14);
+      ensureSpace(12);
       doc.setFont("helvetica", "normal");
-      doc.setFontSize(10);
-      doc.setTextColor(90, 90, 90);
+      doc.setFontSize(8.8);
+      doc.setTextColor(106, 111, 118);
       doc.text(String(emptyText), margin + 2, y);
-      y += 14;
+      y += 12;
       return;
     }
 
     for (const row of rows) {
       const text = String(formatter(row));
-      const lines = doc.splitTextToSize(text, contentWidth - 10);
+      const lines = doc.splitTextToSize(text, contentWidth - 18);
       for (const line of lines) {
-        ensureSpace(13);
+        ensureSpace(12);
+        doc.setFillColor(190, 198, 208);
+        doc.circle(margin + 4, y - 2.5, 1.2, "F");
         doc.setFont("helvetica", "normal");
-        doc.setFontSize(10);
-        doc.setTextColor(64, 64, 64);
-        doc.text(line, margin + 4, y);
-        y += 13;
+        doc.setFontSize(8.8);
+        doc.setTextColor(58, 63, 69);
+        doc.text(line, margin + 10, y);
+        y += 12;
       }
     }
   };
 
-  const logoDataUrl = await loadImageAsDataUrl(REPORT_LOGO_SRC);
-  const logoSize = logoDataUrl ? 32 : 0;
-  const titleStartX = margin + (logoSize ? (logoSize + 10) : 0);
-  const titleTopY = y + 2;
+  const headerHeight = 72;
+  ensureSpace(headerHeight + 8);
+  doc.setFillColor(248, 250, 252);
+  doc.roundedRect(margin, y - 2, contentWidth, headerHeight, 7, 7, "F");
 
+  const logoSize = logoDataUrl ? 38 : 0;
+  const logoX = margin + 10;
+  const logoY = y + 12;
   if (logoDataUrl) {
     try {
-      doc.addImage(logoDataUrl, "PNG", margin, y, logoSize, logoSize);
+      doc.addImage(logoDataUrl, "PNG", logoX, logoY, logoSize, logoSize);
     } catch (_err) {
       // Keep report generation robust even if logo image fails.
     }
   }
 
+  const titleStartX = margin + (logoSize ? 58 : 12);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7.8);
+  doc.setTextColor(105, 113, 122);
+  doc.text("CONFIDENTIAL REPORT", titleStartX, y + 12);
+
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(20);
+  doc.setFontSize(15.5);
   doc.setTextColor(31, 58, 85);
-  doc.text("Linkx Graph Report", titleStartX, titleTopY + 14);
+  doc.text("Linkx Graph Report", titleStartX, y + 28);
 
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(10);
-  doc.setTextColor(92, 92, 92);
-  doc.text(`Source Window: ${String(report.sourceWindowId ?? "-")}`, titleStartX, titleTopY + 29);
-  doc.text(`Generated At: ${String(report.generatedAt ?? "-")}`, titleStartX, titleTopY + 42);
+  doc.setFontSize(8.6);
+  doc.setTextColor(97, 103, 110);
+  doc.text(`Source Window: ${String(report.sourceWindowId ?? "-")}`, titleStartX, y + 43);
+  doc.text(`Generated At: ${String(report.generatedAt ?? "-")}`, titleStartX, y + 56);
 
-  y += Math.max(52, logoSize + 12);
+  y += headerHeight + 8;
   doc.setDrawColor(218, 226, 235);
-  doc.setLineWidth(1);
+  doc.setLineWidth(0.8);
   doc.line(margin, y, pageWidth - margin, y);
-  y += 14;
+  y += 12;
 
   if (report.graphSnapshotDataUrl) {
     drawSectionTitle("Visible Graph Snapshot");
-    ensureSpace(250);
+    ensureSpace(248);
 
-    const maxWidth = contentWidth;
-    const maxHeight = 220;
+    const maxWidth = contentWidth - 20;
+    const maxHeight = 212;
     let imageWidth = maxWidth;
     let imageHeight = maxHeight;
 
@@ -2190,16 +2241,22 @@ async function downloadGraphReport(report) {
       imageHeight = maxHeight;
     }
 
+    const frameX = margin + 10;
+    const frameY = y - 4;
+    const frameWidth = contentWidth - 20;
+    const frameHeight = imageHeight + 10;
     const imageX = margin + ((contentWidth - imageWidth) / 2);
-    doc.setDrawColor(216, 223, 232);
-    doc.setLineWidth(0.8);
-    doc.rect(imageX - 2, y - 2, imageWidth + 4, imageHeight + 4);
+    doc.setFillColor(250, 251, 253);
+    doc.roundedRect(frameX, frameY, frameWidth, frameHeight, 5, 5, "F");
+    doc.setDrawColor(217, 224, 233);
+    doc.setLineWidth(0.75);
+    doc.roundedRect(frameX, frameY, frameWidth, frameHeight, 5, 5, "S");
     try {
       doc.addImage(report.graphSnapshotDataUrl, "PNG", imageX, y, imageWidth, imageHeight);
     } catch (_err) {
       doc.setFont("helvetica", "normal");
-      doc.setFontSize(10);
-      doc.setTextColor(110, 110, 110);
+      doc.setFontSize(8.8);
+      doc.setTextColor(110, 113, 117);
       doc.text("Graph snapshot is unavailable for this report.", margin, y + 14);
       imageHeight = 18;
     }
@@ -2218,17 +2275,37 @@ async function downloadGraphReport(report) {
     ["Density", `${Number(report.densityPercent || 0).toFixed(2)}%`]
   ];
 
-  for (const [key, value] of summaryRows) {
-    ensureSpace(14);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(10);
-    doc.setTextColor(60, 60, 60);
-    doc.text(`${key}:`, margin + 2, y);
+  const summaryGap = 10;
+  const summaryCardWidth = (contentWidth - summaryGap) / 2;
+  const summaryCardHeight = 26;
+  const summaryRowsPerColumn = Math.ceil(summaryRows.length / 2);
+  const summarySectionHeight = (summaryRowsPerColumn * (summaryCardHeight + 6)) + 4;
+  ensureSpace(summarySectionHeight);
+
+  for (let i = 0; i < summaryRows.length; i += 1) {
+    const [key, value] = summaryRows[i];
+    const col = i % 2;
+    const row = Math.floor(i / 2);
+    const cardX = margin + (col * (summaryCardWidth + summaryGap));
+    const cardY = y + (row * (summaryCardHeight + 6));
+
+    doc.setFillColor(248, 250, 252);
+    doc.roundedRect(cardX, cardY, summaryCardWidth, summaryCardHeight, 4, 4, "F");
+    doc.setDrawColor(223, 229, 237);
+    doc.setLineWidth(0.6);
+    doc.roundedRect(cardX, cardY, summaryCardWidth, summaryCardHeight, 4, 4, "S");
+
     doc.setFont("helvetica", "normal");
-    doc.text(String(value), margin + 120, y);
-    y += 14;
+    doc.setFontSize(7.7);
+    doc.setTextColor(112, 118, 126);
+    doc.text(String(key).toUpperCase(), cardX + 8, cardY + 10);
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9.1);
+    doc.setTextColor(44, 49, 54);
+    doc.text(String(value), cardX + 8, cardY + 20);
   }
-  y += 6;
+  y += summarySectionHeight + 3;
 
   drawSectionTitle("Relationship Types");
   drawList(
@@ -2249,12 +2326,12 @@ async function downloadGraphReport(report) {
   drawSectionTitle("Top Nodes By Degree");
   if (!Array.isArray(report.topNodesByDegree) || report.topNodesByDegree.length === 0) {
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
+    doc.setFontSize(8.8);
     doc.setTextColor(90, 90, 90);
     doc.text("No nodes found.", margin + 2, y);
-    y += 14;
+    y += 12;
   } else {
-    const rowHeight = 17;
+    const rowHeight = 16;
     for (const item of report.topNodesByDegree) {
       ensureSpace(rowHeight + 6);
       const label = item.label && String(item.label).trim() !== ""
@@ -2262,13 +2339,13 @@ async function downloadGraphReport(report) {
         : String(item.id);
       const identity = String(item.identity || "Unspecified");
       const degree = numberFormat(item.degree);
-      const rowRgb = lighterRgb(identityColor(identity), 0.84);
+      const rowRgb = lighterRgb(identityColor(identity), 0.9);
 
       doc.setFillColor(rowRgb.r, rowRgb.g, rowRgb.b);
-      doc.roundedRect(margin, y - 10.5, contentWidth, rowHeight, 3, 3, "F");
+      doc.roundedRect(margin, y - 10, contentWidth, rowHeight, 3, 3, "F");
 
       doc.setFont("helvetica", "normal");
-      doc.setFontSize(9.8);
+      doc.setFontSize(8.7);
       doc.setTextColor(44, 44, 44);
       doc.text(`${label} (degree: ${degree})`, margin + 8, y);
 
