@@ -1841,9 +1841,9 @@ function escapeHtml(value) {
 
 function identityColor(identity) {
   const normalized = String(identity || "Unspecified").toLowerCase();
-  if (normalized === "source node") return "#0ea5e9";
-  if (normalized === "target node") return "#f59e0b";
-  if (normalized === "entity node") return "#4f46e5";
+  if (normalized === "source node" || normalized === "source") return "#0ea5e9";
+  if (normalized === "target node" || normalized === "target") return "#f59e0b";
+  if (normalized === "entity node" || normalized === "entity") return "#4f46e5";
   if (normalized === "unspecified") return "#6b7280";
 
   let hash = 0;
@@ -1863,6 +1863,16 @@ function numberFormat(value) {
 const REPORT_LOGO_SRC = "../site_images/Linkx square (1024x1024).png";
 const REPORT_WATERMARK_SRC = "../site_images/Logo_of_Ethiopian_INSA.png";
 
+function normalizeReportIdentity(identity) {
+  const raw = String(identity || "").trim();
+  const normalized = raw.toLowerCase();
+  if (normalized === "source node" || normalized === "source") return "Source";
+  if (normalized === "target node" || normalized === "target") return "Target";
+  if (normalized === "entity node" || normalized === "entity") return "Entity";
+  if (!raw) return "Unspecified";
+  return raw;
+}
+
 function buildGraphReportData(payload) {
   const sourceWindowId = payload?.id || null;
   const visibleNodes = nodesData.get();
@@ -1880,7 +1890,7 @@ function buildGraphReportData(payload) {
     nodeLookup.set(key, node);
     degreeCounter.set(key, 0);
 
-    const identity = node.node_identity || "Unspecified";
+    const identity = normalizeReportIdentity(node.node_identity || "Unspecified");
     nodeIdentityCounter.set(identity, (nodeIdentityCounter.get(identity) || 0) + 1);
   }
 
@@ -1902,7 +1912,7 @@ function buildGraphReportData(payload) {
       return {
         id: nodeId,
         label: node.label || "",
-        identity: node.node_identity || "Unspecified",
+        identity: normalizeReportIdentity(node.node_identity || "Unspecified"),
         degree
       };
     });
@@ -2084,15 +2094,123 @@ function ensureJsPdf() {
   return window.__linkxJsPdfLoader;
 }
 
-function downloadPdfWithoutBlob(doc, filename) {
+function ensureHtml2Canvas() {
+  if (window.html2canvas) {
+    return Promise.resolve(window.html2canvas);
+  }
+
+  if (window.__linkxHtml2CanvasLoader) {
+    return window.__linkxHtml2CanvasLoader;
+  }
+
+  const sources = [
+    "https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js",
+    "https://unpkg.com/html2canvas@1.4.1/dist/html2canvas.min.js"
+  ];
+
+  const loadScript = src => new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = src;
+    script.async = true;
+    script.onload = () => resolve(true);
+    script.onerror = () => reject(new Error(`Failed to load ${src}`));
+    document.head.appendChild(script);
+  });
+
+  window.__linkxHtml2CanvasLoader = (async () => {
+    for (const src of sources) {
+      try {
+        await loadScript(src);
+        if (window.html2canvas) {
+          return window.html2canvas;
+        }
+      } catch (_err) {
+        // Try next source.
+      }
+    }
+    throw new Error("html2canvas loader failed");
+  })().catch(err => {
+    window.__linkxHtml2CanvasLoader = null;
+    throw err;
+  });
+
+  return window.__linkxHtml2CanvasLoader;
+}
+
+function waitForFrames(frameCount = 2) {
+  return new Promise(resolve => {
+    let count = Math.max(1, Number(frameCount) || 1);
+    const tick = () => {
+      count -= 1;
+      if (count <= 0) {
+        resolve();
+        return;
+      }
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  });
+}
+
+async function renderReportCanvasFromTemplate(report) {
+  const html2canvasRef = await ensureHtml2Canvas();
+  const iframe = document.createElement("iframe");
+  iframe.src = "../temp_placeholders/graph_reports.html";
+  iframe.style.position = "fixed";
+  iframe.style.left = "-12000px";
+  iframe.style.top = "0";
+  iframe.style.width = "1040px";
+  iframe.style.height = "1800px";
+  iframe.style.border = "0";
+  iframe.style.opacity = "0";
+  iframe.style.pointerEvents = "none";
+  document.body.appendChild(iframe);
+
   try {
-    const dataUri = doc.output("datauristring");
+    await new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error("Report template load timeout")), 5000);
+      iframe.onload = () => {
+        clearTimeout(timeout);
+        resolve(true);
+      };
+    });
+
+    if (!iframe.contentWindow || !iframe.contentDocument) {
+      throw new Error("Report template iframe is unavailable");
+    }
+
+    iframe.contentWindow.postMessage({ action: "graph_report", payload: report }, "*");
+    await waitForFrames(3);
+
+    const root = iframe.contentDocument.querySelector(".report_container") || iframe.contentDocument.body;
+    if (!root) {
+      throw new Error("Report template root not found");
+    }
+
+    const canvas = await html2canvasRef(root, {
+      scale: 2,
+      useCORS: true,
+      backgroundColor: "#fcfefd",
+      logging: false
+    });
+    return canvas;
+  } finally {
+    iframe.remove();
+  }
+}
+
+function downloadPdfViaBlobUrl(doc, filename) {
+  try {
+    const blob = doc.output("blob");
+    if (!blob) return false;
+    const objectUrl = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = dataUri;
+    a.href = objectUrl;
     a.download = filename;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
     return true;
   } catch (_err) {
     return false;
@@ -2115,9 +2233,35 @@ async function downloadGraphReport(report) {
     format: "a4",
     compress: true
   });
+  const filename = `LinkxInvestigation_report_${Date.now()}.pdf`;
 
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
+
+  // Preferred path: render the same HTML report template into PDF for higher visual fidelity.
+  try {
+    const templateCanvas = await renderReportCanvasFromTemplate(report);
+    if (templateCanvas?.width > 0 && templateCanvas?.height > 0) {
+      const marginPdf = 22;
+      const maxWidth = pageWidth - (marginPdf * 2);
+      const maxHeight = pageHeight - (marginPdf * 2);
+      const ratio = Math.min(maxWidth / templateCanvas.width, maxHeight / templateCanvas.height);
+      const drawWidth = templateCanvas.width * ratio;
+      const drawHeight = templateCanvas.height * ratio;
+      const drawX = (pageWidth - drawWidth) / 2;
+      const drawY = marginPdf;
+      const imageData = templateCanvas.toDataURL("image/png");
+      doc.addImage(imageData, "PNG", drawX, drawY, drawWidth, drawHeight, undefined, "FAST");
+      const savedByBlobPreferred = downloadPdfViaBlobUrl(doc, filename);
+      if (!savedByBlobPreferred) {
+        doc.save(filename);
+      }
+      return;
+    }
+  } catch (err) {
+    console.warn("HTML template PDF rendering failed. Falling back to manual PDF layout.", err);
+  }
+
   const margin = 34;
   const contentWidth = pageWidth - (margin * 2);
   const footerLimit = pageHeight - margin;
@@ -2214,18 +2358,19 @@ async function downloadGraphReport(report) {
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7.8);
   doc.setTextColor(105, 113, 122);
-  doc.text("CONFIDENTIAL REPORT", titleStartX, y + 12);
+  doc.text("CONFIDENTIAL INVESTIGATION", titleStartX, y + 12);
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(15.5);
   doc.setTextColor(31, 58, 85);
-  doc.text("Linkx Graph Report", titleStartX, y + 28);
+  doc.text("Linkx Investigation Report", titleStartX, y + 28);
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8.6);
   doc.setTextColor(97, 103, 110);
-  doc.text(`Source Window: ${String(report.sourceWindowId ?? "-")}`, titleStartX, y + 43);
-  doc.text(`Generated At: ${String(report.generatedAt ?? "-")}`, titleStartX, y + 56);
+  doc.text(`Case Reference: INV-${String(report.sourceWindowId ?? "-")}`, titleStartX, y + 43);
+  doc.text(`Source Window: ${String(report.sourceWindowId ?? "-")}`, titleStartX, y + 50);
+  doc.text(`Generated At: ${String(report.generatedAt ?? "-")}`, titleStartX, y + 57);
 
   y += headerHeight + 8;
   doc.setDrawColor(218, 226, 235);
@@ -2234,7 +2379,7 @@ async function downloadGraphReport(report) {
   y += 12;
 
   if (report.graphSnapshotDataUrl) {
-    drawSectionTitle("Visible Graph Snapshot");
+    drawSectionTitle("Evidence Snapshot");
     ensureSpace(248);
 
     const maxWidth = contentWidth - 20;
@@ -2278,15 +2423,15 @@ async function downloadGraphReport(report) {
     y += imageHeight + 16;
   }
 
-  drawSectionTitle("Summary");
+  drawSectionTitle("Investigation Snapshot");
   const summaryRows = [
-    ["Visible Nodes", numberFormat(report.visibleNodes)],
-    ["Visible Edges", numberFormat(report.visibleEdges)],
-    ["Total Nodes", numberFormat(report.totalNodes)],
-    ["Total Edges", numberFormat(report.totalEdges)],
-    ["Selected Nodes", numberFormat(report.selectedNodes)],
-    ["Selected Edges", numberFormat(report.selectedEdges)],
-    ["Average Degree", Number(report.averageDegree || 0).toFixed(2)],
+    ["Observed Entities", numberFormat(report.visibleNodes)],
+    ["Observed Relationships", numberFormat(report.visibleEdges)],
+    ["Total Entities", numberFormat(report.totalNodes)],
+    ["Total Relationships", numberFormat(report.totalEdges)],
+    ["Focused Entities", numberFormat(report.selectedNodes)],
+    ["Focused Relationships", numberFormat(report.selectedEdges)],
+    ["Connectivity Index", Number(report.averageDegree || 0).toFixed(2)],
     ["Density", `${Number(report.densityPercent || 0).toFixed(2)}%`]
   ];
 
@@ -2322,7 +2467,7 @@ async function downloadGraphReport(report) {
   }
   y += summarySectionHeight + 3;
 
-  drawSectionTitle("Relationship Types");
+  drawSectionTitle("Relationship Breakdown");
   drawList(
     report.relationshipTypes,
     item => `${item.type}: ${numberFormat(item.count)}`,
@@ -2330,7 +2475,7 @@ async function downloadGraphReport(report) {
   );
   y += 4;
 
-  drawSectionTitle("Node Identity Distribution");
+  drawSectionTitle("Entity Distribution");
   drawList(
     report.nodeIdentityDistribution,
     item => `${item.identity}: ${numberFormat(item.count)}`,
@@ -2338,7 +2483,7 @@ async function downloadGraphReport(report) {
   );
   y += 4;
 
-  drawSectionTitle("Top Nodes By Degree");
+  drawSectionTitle("Priority Entities");
   if (!Array.isArray(report.topNodesByDegree) || report.topNodesByDegree.length === 0) {
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8.8);
@@ -2348,7 +2493,7 @@ async function downloadGraphReport(report) {
   } else {
     const rowHeight = 16;
     for (const item of report.topNodesByDegree) {
-      ensureSpace(rowHeight + 6);
+      ensureSpace(rowHeight + 2);
       const label = item.label && String(item.label).trim() !== ""
         ? String(item.label)
         : String(item.id);
@@ -2366,13 +2511,73 @@ async function downloadGraphReport(report) {
 
       doc.setTextColor(88, 88, 88);
       doc.text(identity, pageWidth - margin - 8, y, { align: "right" });
-      y += rowHeight + 4;
+      y += rowHeight;
     }
   }
+  y += 0;
 
-  const filename = `LinkxGraph_report_${Date.now()}.pdf`;
-  const savedByDataUri = downloadPdfWithoutBlob(doc, filename);
-  if (!savedByDataUri) {
+  drawSectionTitle("Investigation Summary");
+  const remarkStatus = (() => {
+    const visibleNodes = Number(report.visibleNodes) || 0;
+    const visibleEdges = Number(report.visibleEdges) || 0;
+    const selectedNodes = Number(report.selectedNodes) || 0;
+    if (visibleNodes <= 0) return "No Observable Activity";
+    if (visibleEdges <= 0) return "Entity-Only Activity";
+    if (selectedNodes > 0) return "Focused Examination";
+    const ratio = visibleNodes > 0 ? (visibleEdges / visibleNodes) : 0;
+    if (ratio >= 2.5) return "High Relationship Density";
+    if (ratio >= 1.2) return "Moderate Relationship Density";
+    return "Low Relationship Density";
+  })();
+
+  const remarkText = `Based on the current graph scope, the investigation indicates ${numberFormat(report.visibleNodes)} observed entities connected through ${numberFormat(report.visibleEdges)} relationships. The network shows a density of ${Number(report.densityPercent || 0).toFixed(2)}% with a connectivity index of ${Number(report.averageDegree || 0).toFixed(2)}. Current focus includes ${numberFormat(report.selectedNodes)} selected entities. Overall assessment status: ${remarkStatus}. This remark is generated from the active analytical snapshot and should be reviewed together with the detailed findings before final case submission.`;
+  const remarkLines = doc.splitTextToSize(remarkText, contentWidth - 4);
+  for (const line of remarkLines) {
+    ensureSpace(12);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8.8);
+    doc.setTextColor(58, 63, 69);
+    doc.text(line, margin + 2, y);
+    y += 11;
+  }
+  y += 4;
+
+  drawSectionTitle("Investigator Remark");
+  ensureSpace(92);
+  doc.setDrawColor(223, 229, 237);
+  doc.setLineWidth(0.6);
+  doc.roundedRect(margin, y - 8, contentWidth, 82, 4, 4, "S");
+  doc.setDrawColor(235, 239, 244);
+  for (let lineY = y + 10; lineY <= y + 66; lineY += 14) {
+    doc.line(margin + 8, lineY, pageWidth - margin - 8, lineY);
+  }
+  y += 86;
+
+  ensureSpace(14);
+  doc.setDrawColor(223, 229, 237);
+  doc.setLineWidth(0.6);
+  doc.line(margin, y, pageWidth - margin, y);
+  y += 10;
+  const signatureRightStartX = margin + (contentWidth * 0.6);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8.6);
+  doc.setTextColor(44, 49, 54);
+  doc.text("Investigator Name", margin + 2, y);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(61, 83, 107);
+  doc.text("Inverstigator", margin + 92, y);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(44, 49, 54);
+  doc.text("Signature", signatureRightStartX, y);
+  doc.setFont("helvetica", "normal");
+  const signatureLineStartX = signatureRightStartX + 44;
+  const signatureLineEndX = Math.min(signatureLineStartX + 128, pageWidth - margin - 2);
+  doc.setDrawColor(120, 135, 151);
+  doc.line(signatureLineStartX, y + 1, signatureLineEndX, y + 1);
+  doc.text("-", signatureLineStartX + 4, y);
+
+  const savedByBlob = downloadPdfViaBlobUrl(doc, filename);
+  if (!savedByBlob) {
     doc.save(filename);
   }
 }
