@@ -98,6 +98,10 @@ window.addEventListener("message", (event) => {
       labelNodesWith(payload);
       break;
 
+    case "graph_report":
+      generateGraphReport(payload);
+      break;
+
     default:
       console.warn("Unknown action:", action);
       break;
@@ -1120,26 +1124,104 @@ function applyLabelToggle(state) {
 
 
 function copyNodes(selectedIds) {
-  localClipboard = selectedIds
+  const CLIPBOARD_STORAGE_KEY = "linkx_graph_clipboard_v1";
+  const safeSelectedIds = Array.isArray(selectedIds) ? selectedIds : [];
+  const selectedNodeIds = new Set(safeSelectedIds.map(id => String(id)));
+
+  const copiedNodes = safeSelectedIds
     .map(id => nodesData.get(id))
     .filter(Boolean)
     .map(n => ({ ...n }));
+
+  const copiedEdges = edgesData.get({
+    filter: edge =>
+      selectedNodeIds.has(String(edge.from)) &&
+      selectedNodeIds.has(String(edge.to))
+  }).map(edge => ({ ...edge }));
+
+  // Keep clipboard as an array for existing UI checks (localClipboard.length)
+  // and attach linked edges as metadata for paste reconstruction.
+  copiedNodes.__edges = copiedEdges;
+  localClipboard = copiedNodes;
+
+  const clipboardPayload = copiedNodes.map(node => ({ ...node }));
+  clipboardPayload.__edges = copiedEdges.map(edge => ({ ...edge }));
+
+  try {
+    localStorage.setItem(
+      CLIPBOARD_STORAGE_KEY,
+      JSON.stringify({
+        nodes: clipboardPayload.map(node => ({ ...node })),
+        edges: clipboardPayload.__edges.map(edge => ({ ...edge }))
+      })
+    );
+  } catch (_err) {
+    // ignore storage errors
+  }
+
+  // Persist clipboard to parent so all graph iframes receive the same nodes+edges.
+  window.parent.postMessage(
+    {
+      type: "clipboard_set",
+      payload: clipboardPayload
+    },
+    "*"
+  );
 }
 
 function pasteNodes(pos) {
-  localClipboard.forEach((n, i) => {
+  const clipboardNodes = Array.isArray(localClipboard)
+    ? localClipboard
+    : Array.isArray(localClipboard?.nodes)
+      ? localClipboard.nodes
+      : [];
+
+  if (clipboardNodes.length === 0) return;
+
+  const idMap = new Map();
+
+  clipboardNodes.forEach((n, i) => {
     let id = Date.now() + i;
     if(String(n.id).startsWith("Group")){
       id = `Group ${id}`
     }
+
+    idMap.set(String(n.id), id);
+
     nodesData.add({
       ...n,
       id,
       x: pos.x + i * 20,
       y: pos.y + i * 20
     });
-    MODIFIED_NODES.set(id, { ...n });
+    MODIFIED_NODES.set(id, { ...n, id });
   });
+
+  const copiedEdges = Array.isArray(clipboardNodes.__edges)
+    ? clipboardNodes.__edges
+    : Array.isArray(localClipboard?.edges)
+      ? localClipboard.edges
+    : [];
+
+  const remappedEdges = copiedEdges
+    .map((edge, index) => {
+      const from = idMap.get(String(edge.from));
+      const to = idMap.get(String(edge.to));
+      if (!from || !to) return null;
+
+      const edgeId = `${Date.now()}_edge_${index}`;
+      return { ...edge, id: edgeId, from, to };
+    })
+    .filter(Boolean);
+
+  if (remappedEdges.length > 0) {
+    edgesData.add(remappedEdges);
+    remappedEdges.forEach(edge => {
+      MODIFIED_EDGES.set(edge.id, { ...edge });
+    });
+  }
+
+  network?.redraw();
 }
 
 function weightEdges(state) {
@@ -1748,6 +1830,464 @@ function getNetworkComponents(payload){
   );
 }
 
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function identityColor(identity) {
+  const normalized = String(identity || "Unspecified").toLowerCase();
+  if (normalized === "source node") return "#0ea5e9";
+  if (normalized === "target node") return "#f59e0b";
+  if (normalized === "entity node") return "#4f46e5";
+  if (normalized === "unspecified") return "#6b7280";
+
+  let hash = 0;
+  for (let i = 0; i < normalized.length; i += 1) {
+    hash = ((hash << 5) - hash) + normalized.charCodeAt(i);
+    hash |= 0;
+  }
+  const hue = Math.abs(hash) % 360;
+  return `hsl(${hue}, 60%, 45%)`;
+}
+
+function numberFormat(value) {
+  const safe = Number(value);
+  return Number.isFinite(safe) ? safe.toLocaleString() : "0";
+}
+
+const REPORT_LOGO_SRC = "../thumbnails/windows_thumbnail_active.png";
+
+function buildGraphReportData(payload) {
+  const sourceWindowId = payload?.id || null;
+  const visibleNodes = nodesData.get();
+  const visibleEdges = edgesData.get();
+  const selectedNodeIds = network?.getSelectedNodes?.() || [];
+  const selectedEdgeIds = network?.getSelectedEdges?.() || [];
+
+  const relationshipCounter = new Map();
+  const nodeIdentityCounter = new Map();
+  const degreeCounter = new Map();
+  const nodeLookup = new Map();
+
+  for (const node of visibleNodes) {
+    const key = String(node.id);
+    nodeLookup.set(key, node);
+    degreeCounter.set(key, 0);
+
+    const identity = node.node_identity || "Unspecified";
+    nodeIdentityCounter.set(identity, (nodeIdentityCounter.get(identity) || 0) + 1);
+  }
+
+  for (const edge of visibleEdges) {
+    const relType = edge.rel_type || edge.type || edge.label || "Unspecified";
+    relationshipCounter.set(relType, (relationshipCounter.get(relType) || 0) + 1);
+
+    const fromKey = String(edge.from);
+    const toKey = String(edge.to);
+    degreeCounter.set(fromKey, (degreeCounter.get(fromKey) || 0) + 1);
+    degreeCounter.set(toKey, (degreeCounter.get(toKey) || 0) + 1);
+  }
+
+  const topNodesByDegree = Array.from(degreeCounter.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 8)
+    .map(([nodeId, degree]) => {
+      const node = nodeLookup.get(nodeId) || {};
+      return {
+        id: nodeId,
+        label: node.label || "",
+        identity: node.node_identity || "Unspecified",
+        degree
+      };
+    });
+
+  const nodeCount = visibleNodes.length;
+  const edgeCount = visibleEdges.length;
+  const density = nodeCount > 1
+    ? ((2 * edgeCount) / (nodeCount * (nodeCount - 1))) * 100
+    : 0;
+  const averageDegree = nodeCount > 0 ? (2 * edgeCount) / nodeCount : 0;
+
+  return {
+    sourceWindowId,
+    generatedAt: new Date().toLocaleString(),
+    visibleNodes: nodeCount,
+    visibleEdges: edgeCount,
+    totalNodes: FULL_GRAPH.nodes.size,
+    totalEdges: FULL_GRAPH.edges.size,
+    selectedNodes: selectedNodeIds.length,
+    selectedEdges: selectedEdgeIds.length,
+    averageDegree,
+    densityPercent: density,
+    relationshipTypes: Array.from(relationshipCounter.entries()).map(([type, count]) => ({ type, count })),
+    nodeIdentityDistribution: Array.from(nodeIdentityCounter.entries()).map(([identity, count]) => ({ identity, count })),
+    topNodesByDegree
+  };
+}
+
+function loadImageAsDataUrl(src) {
+  return new Promise(resolve => {
+    if (!src) {
+      resolve(null);
+      return;
+    }
+
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      try {
+        const canvas = document.createElement("canvas");
+        canvas.width = img.naturalWidth || img.width;
+        canvas.height = img.naturalHeight || img.height;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0);
+        resolve(canvas.toDataURL("image/png"));
+      } catch (_err) {
+        resolve(null);
+      }
+    };
+    img.onerror = () => resolve(null);
+    img.src = src;
+  });
+}
+
+function getGraphSnapshotDataUrl() {
+  try {
+    const canvas = network?.canvas?.frame?.canvas || document.querySelector("#mynetwork canvas");
+    if (!canvas) return null;
+    return canvas.toDataURL("image/png");
+  } catch (_err) {
+    return null;
+  }
+}
+
+function colorToRgb(color) {
+  const fallback = { r: 235, g: 238, b: 243 };
+  const value = String(color || "").trim();
+
+  if (/^#([0-9a-f]{3})$/i.test(value)) {
+    const hex = value.slice(1);
+    return {
+      r: parseInt(hex[0] + hex[0], 16),
+      g: parseInt(hex[1] + hex[1], 16),
+      b: parseInt(hex[2] + hex[2], 16)
+    };
+  }
+
+  if (/^#([0-9a-f]{6})$/i.test(value)) {
+    return {
+      r: parseInt(value.slice(1, 3), 16),
+      g: parseInt(value.slice(3, 5), 16),
+      b: parseInt(value.slice(5, 7), 16)
+    };
+  }
+
+  const hslMatch = value.match(/^hsl\(\s*(-?\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)%\s*,\s*(\d+(?:\.\d+)?)%\s*\)$/i);
+  if (hslMatch) {
+    const h = ((Number(hslMatch[1]) % 360) + 360) % 360;
+    const s = Number(hslMatch[2]) / 100;
+    const l = Number(hslMatch[3]) / 100;
+    const c = (1 - Math.abs((2 * l) - 1)) * s;
+    const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+    const m = l - (c / 2);
+
+    let rp = 0;
+    let gp = 0;
+    let bp = 0;
+    if (h < 60) { rp = c; gp = x; bp = 0; }
+    else if (h < 120) { rp = x; gp = c; bp = 0; }
+    else if (h < 180) { rp = 0; gp = c; bp = x; }
+    else if (h < 240) { rp = 0; gp = x; bp = c; }
+    else if (h < 300) { rp = x; gp = 0; bp = c; }
+    else { rp = c; gp = 0; bp = x; }
+
+    return {
+      r: Math.round((rp + m) * 255),
+      g: Math.round((gp + m) * 255),
+      b: Math.round((bp + m) * 255)
+    };
+  }
+
+  return fallback;
+}
+
+function lighterRgb(color, factor = 0.84) {
+  const rgb = colorToRgb(color);
+  const mix = Math.max(0, Math.min(1, factor));
+  return {
+    r: Math.round(rgb.r + (255 - rgb.r) * mix),
+    g: Math.round(rgb.g + (255 - rgb.g) * mix),
+    b: Math.round(rgb.b + (255 - rgb.b) * mix)
+  };
+}
+
+function ensureJsPdf() {
+  if (window.jspdf && window.jspdf.jsPDF) {
+    return Promise.resolve(window.jspdf.jsPDF);
+  }
+
+  if (window.__linkxJsPdfLoader) {
+    return window.__linkxJsPdfLoader;
+  }
+
+  const sources = [
+    "https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js",
+    "https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js"
+  ];
+
+  const loadScript = src => new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = src;
+    script.async = true;
+    script.onload = () => resolve(true);
+    script.onerror = () => reject(new Error(`Failed to load ${src}`));
+    document.head.appendChild(script);
+  });
+
+  window.__linkxJsPdfLoader = (async () => {
+    for (const src of sources) {
+      try {
+        await loadScript(src);
+        if (window.jspdf && window.jspdf.jsPDF) {
+          return window.jspdf.jsPDF;
+        }
+      } catch (_err) {
+        // Try next source.
+      }
+    }
+    throw new Error("jsPDF loader failed");
+  })().catch(err => {
+    window.__linkxJsPdfLoader = null;
+    throw err;
+  });
+
+  return window.__linkxJsPdfLoader;
+}
+
+async function downloadGraphReport(report) {
+  let JsPdfConstructor = null;
+  try {
+    JsPdfConstructor = await ensureJsPdf();
+  } catch (err) {
+    console.error("Report PDF generation failed: jsPDF unavailable.", err);
+    alert("Could not generate report PDF. jsPDF library is not available.");
+    return;
+  }
+
+  const doc = new JsPdfConstructor({
+    orientation: "portrait",
+    unit: "pt",
+    format: "a4",
+    compress: true
+  });
+
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = 34;
+  const contentWidth = pageWidth - (margin * 2);
+  const footerLimit = pageHeight - margin;
+  let y = margin;
+
+  const ensureSpace = neededHeight => {
+    if ((y + neededHeight) <= footerLimit) return;
+    doc.addPage();
+    y = margin;
+  };
+
+  const drawSectionTitle = title => {
+    ensureSpace(22);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(12);
+    doc.setTextColor(31, 58, 85);
+    doc.text(String(title), margin, y);
+    y += 14;
+    doc.setDrawColor(226, 231, 238);
+    doc.setLineWidth(0.8);
+    doc.line(margin, y, pageWidth - margin, y);
+    y += 10;
+  };
+
+  const drawList = (rows, formatter, emptyText = "No data found.") => {
+    if (!Array.isArray(rows) || rows.length === 0) {
+      ensureSpace(14);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      doc.setTextColor(90, 90, 90);
+      doc.text(String(emptyText), margin + 2, y);
+      y += 14;
+      return;
+    }
+
+    for (const row of rows) {
+      const text = String(formatter(row));
+      const lines = doc.splitTextToSize(text, contentWidth - 10);
+      for (const line of lines) {
+        ensureSpace(13);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(10);
+        doc.setTextColor(64, 64, 64);
+        doc.text(line, margin + 4, y);
+        y += 13;
+      }
+    }
+  };
+
+  const logoDataUrl = await loadImageAsDataUrl(REPORT_LOGO_SRC);
+  const logoSize = logoDataUrl ? 32 : 0;
+  const titleStartX = margin + (logoSize ? (logoSize + 10) : 0);
+  const titleTopY = y + 2;
+
+  if (logoDataUrl) {
+    try {
+      doc.addImage(logoDataUrl, "PNG", margin, y, logoSize, logoSize);
+    } catch (_err) {
+      // Keep report generation robust even if logo image fails.
+    }
+  }
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(20);
+  doc.setTextColor(31, 58, 85);
+  doc.text("Linkx Graph Report", titleStartX, titleTopY + 14);
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+  doc.setTextColor(92, 92, 92);
+  doc.text(`Source Window: ${String(report.sourceWindowId ?? "-")}`, titleStartX, titleTopY + 29);
+  doc.text(`Generated At: ${String(report.generatedAt ?? "-")}`, titleStartX, titleTopY + 42);
+
+  y += Math.max(52, logoSize + 12);
+  doc.setDrawColor(218, 226, 235);
+  doc.setLineWidth(1);
+  doc.line(margin, y, pageWidth - margin, y);
+  y += 14;
+
+  if (report.graphSnapshotDataUrl) {
+    drawSectionTitle("Visible Graph Snapshot");
+    ensureSpace(250);
+
+    const maxWidth = contentWidth;
+    const maxHeight = 220;
+    let imageWidth = maxWidth;
+    let imageHeight = maxHeight;
+
+    try {
+      const imageProps = doc.getImageProperties(report.graphSnapshotDataUrl);
+      if (imageProps && imageProps.width > 0 && imageProps.height > 0) {
+        imageHeight = (maxWidth * imageProps.height) / imageProps.width;
+        if (imageHeight > maxHeight) {
+          imageHeight = maxHeight;
+          imageWidth = (maxHeight * imageProps.width) / imageProps.height;
+        }
+      }
+    } catch (_err) {
+      imageWidth = maxWidth;
+      imageHeight = maxHeight;
+    }
+
+    const imageX = margin + ((contentWidth - imageWidth) / 2);
+    doc.setDrawColor(216, 223, 232);
+    doc.setLineWidth(0.8);
+    doc.rect(imageX - 2, y - 2, imageWidth + 4, imageHeight + 4);
+    try {
+      doc.addImage(report.graphSnapshotDataUrl, "PNG", imageX, y, imageWidth, imageHeight);
+    } catch (_err) {
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      doc.setTextColor(110, 110, 110);
+      doc.text("Graph snapshot is unavailable for this report.", margin, y + 14);
+      imageHeight = 18;
+    }
+    y += imageHeight + 16;
+  }
+
+  drawSectionTitle("Summary");
+  const summaryRows = [
+    ["Visible Nodes", numberFormat(report.visibleNodes)],
+    ["Visible Edges", numberFormat(report.visibleEdges)],
+    ["Total Nodes", numberFormat(report.totalNodes)],
+    ["Total Edges", numberFormat(report.totalEdges)],
+    ["Selected Nodes", numberFormat(report.selectedNodes)],
+    ["Selected Edges", numberFormat(report.selectedEdges)],
+    ["Average Degree", Number(report.averageDegree || 0).toFixed(2)],
+    ["Density", `${Number(report.densityPercent || 0).toFixed(2)}%`]
+  ];
+
+  for (const [key, value] of summaryRows) {
+    ensureSpace(14);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(60, 60, 60);
+    doc.text(`${key}:`, margin + 2, y);
+    doc.setFont("helvetica", "normal");
+    doc.text(String(value), margin + 120, y);
+    y += 14;
+  }
+  y += 6;
+
+  drawSectionTitle("Relationship Types");
+  drawList(
+    report.relationshipTypes,
+    item => `${item.type}: ${numberFormat(item.count)}`,
+    "No relationship types found."
+  );
+  y += 4;
+
+  drawSectionTitle("Node Identity Distribution");
+  drawList(
+    report.nodeIdentityDistribution,
+    item => `${item.identity}: ${numberFormat(item.count)}`,
+    "No node identities found."
+  );
+  y += 4;
+
+  drawSectionTitle("Top Nodes By Degree");
+  if (!Array.isArray(report.topNodesByDegree) || report.topNodesByDegree.length === 0) {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.setTextColor(90, 90, 90);
+    doc.text("No nodes found.", margin + 2, y);
+    y += 14;
+  } else {
+    const rowHeight = 17;
+    for (const item of report.topNodesByDegree) {
+      ensureSpace(rowHeight + 6);
+      const label = item.label && String(item.label).trim() !== ""
+        ? String(item.label)
+        : String(item.id);
+      const identity = String(item.identity || "Unspecified");
+      const degree = numberFormat(item.degree);
+      const rowRgb = lighterRgb(identityColor(identity), 0.84);
+
+      doc.setFillColor(rowRgb.r, rowRgb.g, rowRgb.b);
+      doc.roundedRect(margin, y - 10.5, contentWidth, rowHeight, 3, 3, "F");
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9.8);
+      doc.setTextColor(44, 44, 44);
+      doc.text(`${label} (degree: ${degree})`, margin + 8, y);
+
+      doc.setTextColor(88, 88, 88);
+      doc.text(identity, pageWidth - margin - 8, y, { align: "right" });
+      y += rowHeight + 4;
+    }
+  }
+
+  const filename = `LinkxGraph_report_${Date.now()}.pdf`;
+  doc.save(filename);
+}
+
+async function generateGraphReport(payload) {
+  const report = buildGraphReportData(payload);
+  report.graphSnapshotDataUrl = getGraphSnapshotDataUrl();
+  await downloadGraphReport(report);
+}
+
 function getNodeValue(node, key) {
   if (typeof key !== "string" || key.trim() === "") return null;
   const normalizedKey = key.trim().toLowerCase();
@@ -1990,9 +2530,3 @@ function renderVisibleGraph() {
 
   network.redraw();
 }
-
-
-
-
-
-

@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Graph Reports</title>
+  <style>
+    body {
+      margin: 0;
+      min-height: 100vh;
+      width: 100vw;
+      background: radial-gradient(circle at center, #fff, #fcfefd);
+      color: #333;
+      font-family: "Segoe UI", Roboto, Arial, sans-serif;
+      overflow-y: auto;
+      user-select: none;
+    }
+
+    .report_container {
+      width: min(94vw, 1000px);
+      margin: 2vh auto;
+      padding: 2vh 2vw;
+    }
+
+    .report_header {
+      margin-bottom: 2vh;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+      padding-bottom: 1vh;
+    }
+
+    .report_header h1 {
+      margin: 0;
+      font-size: 20px;
+      font-weight: 500;
+      color: #1f3a55;
+    }
+
+    .report_header p {
+      margin: 0.8vh 0 0;
+      color: #555;
+      font-size: 13px;
+    }
+
+    .report_grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(260px, 1fr));
+      gap: 1vh 1vw;
+      margin-bottom: 1.5vh;
+    }
+
+    .report_item {
+      display: flex;
+      justify-content: space-between;
+      gap: 1vw;
+      border: 1px solid rgba(0, 0, 0, 0.08);
+      border-radius: 0.5vh;
+      background: rgba(255, 255, 255, 0.65);
+      padding: 1vh 0.9vw;
+      font-size: 13px;
+    }
+
+    .report_item b {
+      color: #1f3a55;
+      font-weight: 600;
+    }
+
+    .report_section {
+      border: 1px solid rgba(0, 0, 0, 0.08);
+      border-radius: 0.5vh;
+      background: rgba(255, 255, 255, 0.65);
+      margin-bottom: 1.2vh;
+      overflow: hidden;
+    }
+
+    .report_section h2 {
+      margin: 0;
+      padding: 0.9vh 0.9vw;
+      font-size: 14px;
+      font-weight: 600;
+      color: #1f3a55;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+      background: rgba(255, 255, 255, 0.4);
+    }
+
+    .report_section ul {
+      margin: 0;
+      padding: 0.6vh 0.9vw;
+      list-style: none;
+    }
+
+    .report_section li {
+      font-size: 13px;
+      color: #555;
+      line-height: 1.6;
+      padding: 0.3vh 0;
+      border-bottom: 1px dashed rgba(0, 0, 0, 0.06);
+    }
+
+    .report_section li:last-child {
+      border-bottom: none;
+    }
+
+    @media (max-width: 780px) {
+      .report_grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="report_container">
+    <div class="report_header">
+      <h1>Linkx Graph Report</h1>
+      <p>Source Window: <span id="report_source_id">-</span></p>
+      <p>Generated At: <span id="report_generated_at">-</span></p>
+    </div>
+
+    <div class="report_grid">
+      <div class="report_item"><b>Visible Nodes</b><span id="report_visible_nodes">0</span></div>
+      <div class="report_item"><b>Visible Edges</b><span id="report_visible_edges">0</span></div>
+      <div class="report_item"><b>Total Nodes</b><span id="report_total_nodes">0</span></div>
+      <div class="report_item"><b>Total Edges</b><span id="report_total_edges">0</span></div>
+      <div class="report_item"><b>Selected Nodes</b><span id="report_selected_nodes">0</span></div>
+      <div class="report_item"><b>Selected Edges</b><span id="report_selected_edges">0</span></div>
+      <div class="report_item"><b>Average Degree</b><span id="report_avg_degree">0.00</span></div>
+      <div class="report_item"><b>Density</b><span id="report_density">0.00%</span></div>
+    </div>
+
+    <div class="report_section">
+      <h2>Relationship Types</h2>
+      <ul id="report_relationship_types"><li>No data.</li></ul>
+    </div>
+
+    <div class="report_section">
+      <h2>Node Identity Distribution</h2>
+      <ul id="report_node_identity_distribution"><li>No data.</li></ul>
+    </div>
+
+    <div class="report_section">
+      <h2>Top Nodes By Degree</h2>
+      <ul id="report_top_degree_nodes"><li>No data.</li></ul>
+    </div>
+  </div>
+
+  <script src="../temp_placeholders/graph_reports.js"></script>
+</body>
+</html>

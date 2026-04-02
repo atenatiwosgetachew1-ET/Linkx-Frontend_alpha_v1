@@ -579,16 +579,81 @@
 							    var edgesData = new vis.DataSet();
 								let graphData = null;
 								
-							    window.parent.postMessage({ type: "clipboard_get" }, "*");
-							    let localClipboard = [];
+									const CLIPBOARD_STORAGE_KEY = "linkx_graph_clipboard_v1";
 
-								window.addEventListener("message", e => {
-									if (e.data.type === "clipboard_data") {
-								    	localClipboard = e.data.payload || [];
+									function normalizeClipboardPayload(payload) {
+										if (Array.isArray(payload)) {
+											const nodes = payload.map(node => ({ ...node }));
+											const edges = Array.isArray(payload.__edges)
+												? payload.__edges.map(edge => ({ ...edge }))
+												: [];
+											nodes.__edges = edges;
+											return nodes;
+										}
+
+										const nodes = Array.isArray(payload?.nodes)
+											? payload.nodes.map(node => ({ ...node }))
+											: [];
+										const edges = Array.isArray(payload?.edges)
+											? payload.edges.map(edge => ({ ...edge }))
+											: [];
+										nodes.__edges = edges;
+										return nodes;
 									}
+
+									function clipboardArrayToObject(arrPayload) {
+										const nodes = Array.isArray(arrPayload)
+											? arrPayload.map(node => ({ ...node }))
+											: [];
+										const edges = Array.isArray(arrPayload?.__edges)
+											? arrPayload.__edges.map(edge => ({ ...edge }))
+											: [];
+										return { nodes, edges };
+									}
+
+									function readClipboardFromStorage() {
+										try {
+											const raw = localStorage.getItem(CLIPBOARD_STORAGE_KEY);
+											if (!raw) return normalizeClipboardPayload([]);
+											const parsed = JSON.parse(raw);
+											return normalizeClipboardPayload(parsed);
+										} catch (_err) {
+											return normalizeClipboardPayload([]);
+										}
+									}
+
+									function writeClipboardToStorage(arrPayload) {
+										try {
+											localStorage.setItem(
+												CLIPBOARD_STORAGE_KEY,
+												JSON.stringify(clipboardArrayToObject(arrPayload))
+											);
+										} catch (_err) {
+											// ignore storage errors
+										}
+									}
+
+								    window.parent.postMessage({ type: "clipboard_get" }, "*");
+								    let localClipboard = readClipboardFromStorage();
+
+									window.addEventListener("message", e => {
+										if (e.data.type === "clipboard_data") {
+									    	localClipboard = normalizeClipboardPayload(e.data.payload);
+									    	writeClipboardToStorage(localClipboard);
+										}
 									if (e.data?.type === "init_graph") {
 										graphData = e.data.payload;
 										initializeFullGraph(graphData);
+									}
+								});
+
+								window.addEventListener("storage", e => {
+									if (e.key !== CLIPBOARD_STORAGE_KEY || !e.newValue) return;
+									try {
+										const parsed = JSON.parse(e.newValue);
+										localClipboard = normalizeClipboardPayload(parsed);
+									} catch (_err) {
+										// ignore malformed values
 									}
 								});
 							    
@@ -843,9 +908,9 @@
 											selectedNodes = [nodeId];
 											network.selectNodes(selectedNodes);
 										}								        
-										if (selectedNodes.length === 1) {
-								            // Show Copy Nodes
-											menuHTML += `<div class="menu_item" data-action="copy" data-id="${nodeId}">Copy</div>`;
+											if (selectedNodes.length === 1) {
+									            // Show Copy Nodes
+												menuHTML += `<div class="menu_item" data-action="copy" data-id="${nodeId}">Copy (Nodes+Edges)</div>`;
 								            if (edges.length === 0) {
 								                menuHTML += `<div class="menu_item" data-action="delete" data-id="${nodeId}">Delete Node</div>`;
 								            }
@@ -856,9 +921,9 @@
 								                menuHTML += `<div class="menu_item" data-action="unlink" data-id="${nodeId}">Unlink Node</div>`;
 								            }								                
 								        }
-										else if (selectedNodes.length > 1) {
-											const fullyLinked = areAllSelectedNodesLinked(selectedNodes);
-											menuHTML += `<div class="menu_item" data-action="copy">Copy Nodes</div>`;
+											else if (selectedNodes.length > 1) {
+												const fullyLinked = areAllSelectedNodesLinked(selectedNodes);
+												menuHTML += `aph <div class="menu_item" data-action="copy">Copy Nodes/Edges</div>`;
 											if (fullyLinked) {
 												menuHTML += `<div class="menu_item" data-action="unlinks">Unlink Nodes</div>`;
 											} else {

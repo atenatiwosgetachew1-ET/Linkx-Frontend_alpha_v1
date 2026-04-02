@@ -11,19 +11,67 @@ import Icons from './Icons.jsx'
 // import WindowsActions from './WindowsActions.jsx'
 
 //window.clipboardBuffer = [];
-const clipboard = [];
+let clipboard = { nodes: [], edges: [] };
+
+const normalizeClipboardPayload = (payload) => {
+  if (Array.isArray(payload)) {
+    const nodes = payload.map(item => ({ ...item }));
+    const edges = Array.isArray(payload.__edges)
+      ? payload.__edges.map(edge => ({ ...edge }))
+      : [];
+    return { nodes, edges };
+  }
+
+  const nodes = Array.isArray(payload?.nodes)
+    ? payload.nodes.map(item => ({ ...item }))
+    : [];
+  const edges = Array.isArray(payload?.edges)
+    ? payload.edges.map(edge => ({ ...edge }))
+    : [];
+
+  return { nodes, edges };
+};
+
+const serializeClipboardPayload = (value) => {
+  const nodes = Array.isArray(value?.nodes)
+    ? value.nodes.map(item => ({ ...item }))
+    : [];
+  const edges = Array.isArray(value?.edges)
+    ? value.edges.map(edge => ({ ...edge }))
+    : [];
+
+  // Backward-compatible shape for older iframe scripts:
+  // an array clipboard with attached edge metadata.
+  nodes.__edges = edges;
+  return nodes;
+};
+
+const broadcastClipboard = () => {
+  const payload = serializeClipboardPayload(clipboard);
+  for (let i = 0; i < window.frames.length; i += 1) {
+    try {
+      window.frames[i].postMessage(
+        { type: "clipboard_data", payload },
+        "*"
+      );
+    } catch (_err) {
+      // Ignore inaccessible frames.
+    }
+  }
+};
 
 window.addEventListener("message", e => {
-  if (e.data.type === "clipboard_get") {
-    e.source.postMessage(
-      { type: "clipboard_data", payload: clipboard },
+  if (e.data?.type === "clipboard_get") {
+    const payload = serializeClipboardPayload(clipboard);
+    e.source?.postMessage(
+      { type: "clipboard_data", payload },
       e.origin
     );
   }
 
-  if (e.data.type === "clipboard_set") {
-    clipboard.length = 0;
-    clipboard.push(...e.data.payload);
+  if (e.data?.type === "clipboard_set") {
+    clipboard = normalizeClipboardPayload(e.data.payload);
+    broadcastClipboard();
   }
 });
 function ToggleMenu({ onToggle, isToggleMenuOpen, toggleAction, isMaximized, windows, orientation}){
@@ -1037,12 +1085,13 @@ function WindowVerticalSplitPanels({id, type, sourceId, initialTopHeight, minTop
   );
 }
 function IframeEmbed({wId,id,fileName,title,activeGraph,graphAction,iframeRef,BASE_URL}) {
+  const iframeBasePath = '/linkx/temp_placeholders';
   if (id === "source_placeholder"){
     return (
       <div className="iframe_graph">
         <iframe
           ref={iframeRef}
-          src={`${BASE_URL}/linkx/temp_placeholders/source_placeholder.html`}
+          src={`${iframeBasePath}/source_placeholder.html`}
           width="100%"
           height="98%"
           style={{ border: 'none' }}
@@ -1056,7 +1105,7 @@ function IframeEmbed({wId,id,fileName,title,activeGraph,graphAction,iframeRef,BA
       <div className="iframe_graph">
         <iframe
           ref={iframeRef}
-          src={`${BASE_URL}/linkx/temp_placeholders/graph_placeholder.html`}
+          src={`${iframeBasePath}/graph_placeholder.html`}
           width="100%"
           height="98%"
           style={{ border: 'none' }}
@@ -1079,7 +1128,7 @@ function IframeEmbed({wId,id,fileName,title,activeGraph,graphAction,iframeRef,BA
       <div className="iframe_graph">
         <iframe
           ref={iframeRef}
-          src={`${BASE_URL}/linkx/temp_placeholders/charts_basic.html`}
+          src={`${iframeBasePath}/charts_basic.html`}
           width="100%"
           height="98%"
           style={{ border: 'none' }}
@@ -1093,7 +1142,7 @@ function IframeEmbed({wId,id,fileName,title,activeGraph,graphAction,iframeRef,BA
       <div className="iframe_graph">
         <iframe
           ref={iframeRef}
-          src={`${BASE_URL}/linkx/temp_placeholders/${activeGraph}.html`}
+          src={`${iframeBasePath}/${activeGraph}.html`}
           width="100%"
           height="98%"
           style={{ border: 'none' }}
@@ -2446,6 +2495,11 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
                     <li onClick={() => windowAction(`export_graph_options_${type}_${id}`, "update")}>
                       <div className="window_side_bar_menu_list_I">
                         <span onClick={() => {windowAction(id, "export_graph", "json", iframeRef);}}>Export JSON</span>
+                      </div>                      
+                    </li>
+                    <li onClick={() => windowAction(`export_graph_options_${type}_${id}`, "update")}>
+                      <div className="window_side_bar_menu_list_I">
+                        <span onClick={() => {windowAction(id, "graph_report", "html", iframeRef);}}>Generate Report</span>
                       </div>                      
                     </li>
                   </ul>
@@ -5112,6 +5166,15 @@ function Root() {
             );
           }          
         }
+        if (menuId === "graph_report") {
+          const iframe=payload;          
+          if (iframe?.current && iframe.current.contentWindow) {
+            iframe.current.contentWindow.postMessage(
+              { action: menuId, payload: { id, format: action || "html" } },
+              "*"
+            );
+          }          
+        }
         if (menuId === "window_change_view") {
           const iframe=payload;  
           setIsMaximized(prev => !prev);
@@ -5510,4 +5573,3 @@ function Root() {
 }
 
 export default Root;
-
