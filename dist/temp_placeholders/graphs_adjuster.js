@@ -25,8 +25,7 @@ window.addEventListener("message", (event) => {
       window.currentSettings.lableGroup = payload;
       break;
     case "weight_edges":
-      weightEdgesEnabled = payload;
-      weightEdges(weightEdgesEnabled); // define logic here
+      weightEdges(payload);
       break;
 
     case "show_title":
@@ -147,21 +146,144 @@ function persistEdgeChange(id, patch) {
   });
 }
 
-function EdgeWeightToWidth(weight, minW, maxW) {
-  console.log("EdgeWeightToWidth:",weight, minW, maxW);
+function EdgeWeightToWidth(weight, scale) {
   const minWidth = 1;
   const maxWidth = 6;
-    // If all weights are equal → use middle width
-  if (minW === maxW && minW == 1) {
+  const minW = Math.max(0, scale?.min ?? 0);
+  const maxW = Math.max(minW, scale?.max ?? minW);
+  const useLog = !!scale?.useLog;
+
+  if (maxW <= minW) {
     return minWidth;
   }
-  else{
-    minW = 0;
-  }
-  const normalized = (Math.log(weight + 1) - Math.log(minW + 1)) /
-                     (Math.log(maxW + 1) - Math.log(minW + 1));
 
-  return minWidth + normalized * (maxWidth - minWidth);
+  const clampedWeight = Math.min(maxW, Math.max(minW, weight));
+  let normalized = 0;
+
+  if (useLog) {
+    const minLog = Math.log(minW + 1);
+    const maxLog = Math.log(maxW + 1);
+    normalized = (Math.log(clampedWeight + 1) - minLog) / (maxLog - minLog);
+  } else {
+    normalized = (clampedWeight - minW) / (maxW - minW);
+  }
+
+  const safeNormalized = Number.isFinite(normalized) ? normalized : 0;
+  return minWidth + safeNormalized * (maxWidth - minWidth);
+}
+
+function toFiniteNumber(value) {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null;
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    const normalized = trimmed.replace(/,/g, "");
+    const numeric = Number(normalized);
+    if (Number.isFinite(numeric)) return numeric;
+
+    // Range support, e.g. "20-50" or "300000 - 1000000"
+    const rangeMatch = normalized.match(/(-?\d+(?:\.\d+)?)\s*[-–—]\s*(-?\d+(?:\.\d+)?)/);
+    if (rangeMatch) {
+      const lower = Number(rangeMatch[1]);
+      const upper = Number(rangeMatch[2]);
+      if (Number.isFinite(lower) && Number.isFinite(upper)) {
+        return (lower + upper) / 2;
+      }
+    }
+
+    // Fallback: try integer extraction for values like "350000 ETB"
+    const parsedInteger = parseInt(normalized, 10);
+    return Number.isFinite(parsedInteger) ? parsedInteger : null;
+  }
+  return null;
+}
+
+function toIntegerNumber(value) {
+  const numeric = toFiniteNumber(value);
+  if (numeric == null) return null;
+  return Math.trunc(numeric);
+}
+
+function normalizeEdgeWeightMode(state) {
+  if (state === true || state === "true") return "default";
+  if (state === false || state === "false" || state == null) return "";
+  return String(state).trim();
+}
+
+function getDefaultEdgeWidth(edgeId) {
+  const base = FULL_GRAPH.edges.get(edgeId) || {};
+  const numeric = toFiniteNumber(base.width ?? base.weight ?? base.value);
+  if (numeric == null) return 1;
+  return Math.max(1, numeric);
+}
+
+function getNodeNumericValueMap(key) {
+  const values = new Map();
+  if (!key) return values;
+
+  for (const [nodeId, node] of FULL_GRAPH.nodes) {
+    const numeric = toIntegerNumber(getNodeValue(node, key));
+    if (numeric != null) {
+      values.set(nodeId, numeric);
+    }
+  }
+  return values;
+}
+
+function getEdgeWeightFromNodeValues(edge, nodeValues) {
+  const sourceValue = nodeValues.get(edge.from);
+  const targetValue = nodeValues.get(edge.to);
+
+  if (sourceValue != null && targetValue != null) {
+    return Math.max(0, Math.round((sourceValue + targetValue) / 2));
+  }
+  if (sourceValue != null) return Math.max(0, sourceValue);
+  if (targetValue != null) return Math.max(0, targetValue);
+  return 1;
+}
+
+function getPercentile(sortedValues, percentile) {
+  if (!Array.isArray(sortedValues) || sortedValues.length === 0) return 1;
+  const bounded = Math.max(0, Math.min(1, percentile));
+  const index = (sortedValues.length - 1) * bounded;
+  const lowerIndex = Math.floor(index);
+  const upperIndex = Math.ceil(index);
+  if (lowerIndex === upperIndex) {
+    return sortedValues[lowerIndex];
+  }
+  const lowerValue = sortedValues[lowerIndex];
+  const upperValue = sortedValues[upperIndex];
+  const ratio = index - lowerIndex;
+  return lowerValue + (upperValue - lowerValue) * ratio;
+}
+
+function getAdaptiveWeightScale(values) {
+  const positives = (values || []).filter(v => Number.isFinite(v) && v >= 0);
+  if (positives.length === 0) {
+    return { min: 1, max: 1, useLog: false };
+  }
+
+  const sorted = positives.slice().sort((a, b) => a - b);
+  const absoluteMin = sorted[0];
+  const absoluteMax = sorted[sorted.length - 1];
+
+  let rangeMin = getPercentile(sorted, 0.05);
+  let rangeMax = getPercentile(sorted, 0.95);
+
+  if (!Number.isFinite(rangeMin) || !Number.isFinite(rangeMax) || rangeMax <= rangeMin) {
+    rangeMin = absoluteMin;
+    rangeMax = absoluteMax;
+  }
+
+  if (rangeMax <= rangeMin) {
+    return { min: rangeMin, max: rangeMax, useLog: false };
+  }
+
+  const spreadRatio = (rangeMax + 1) / (Math.max(0, rangeMin) + 1);
+  const useLog = spreadRatio > 30;
+  return { min: rangeMin, max: rangeMax, useLog };
 }
 
 // overwrite with the latest options (for runtime changes like Physics/ Layouts)
@@ -1225,42 +1347,42 @@ function pasteNodes(pos) {
 }
 
 function weightEdges(state) {
-  const graph_edges = FULL_GRAPH.edges;
+  const mode = normalizeEdgeWeightMode(state);
+  const isOff = mode === "";
+  const isDefault = mode === "default";
+  const nodeValues = !isOff && !isDefault ? getNodeNumericValueMap(mode) : null;
+  const computedEdgeWeights = new Map();
+  let adaptiveScale = { min: 1, max: 1, useLog: false };
 
-  let minW = Infinity;
-  let maxW = -Infinity;
+  if (!isOff && !isDefault) {
+    const sampledWeights = [];
 
-  // FIRST PASS — compute real min/max using merged weights
-  graph_edges.forEach(edge => {
-    const base = FULL_GRAPH.edges.get(edge.id) || {};
-    const mod  = MODIFIED_EDGES.get(edge.id) || {};
-    const merged = { ...base, ...mod };
-    console.log("mod:",mod)
-    const weightValue =
-      merged.weight ??
-      merged.width ??
-      merged.value ??
-      1;
+    FULL_GRAPH.edges.forEach((baseEdge, edgeId) => {
+      const mod = MODIFIED_EDGES.get(edgeId) || {};
+      const merged = { ...baseEdge, ...mod };
+      const weightValue = getEdgeWeightFromNodeValues(merged, nodeValues);
+      computedEdgeWeights.set(edgeId, weightValue);
+      sampledWeights.push(weightValue);
+    });
 
-    if (weightValue < minW) minW = weightValue;
-    if (weightValue > maxW) maxW = weightValue;
-  });
+    adaptiveScale = getAdaptiveWeightScale(sampledWeights);
+  }
 
-  // SECOND PASS — apply widths
   edgesData.forEach(edge => {
-    const base = FULL_GRAPH.edges.get(edge.id) || {};
-    const mod  = MODIFIED_EDGES.get(edge.id) || {};
-    const merged = { ...base, ...mod };
+    const mod = MODIFIED_EDGES.get(edge.id) || {};
+    let width = 1;
 
-    const weightValue =
-      merged.weight ??
-      merged.width ??
-      merged.value ??
-      1;
+    if (isDefault) {
+      width = getDefaultEdgeWidth(edge.id);
+    } else if (!isOff) {
+      let weightValue = computedEdgeWeights.get(edge.id);
+      if (weightValue == null) {
+        const merged = { ...(FULL_GRAPH.edges.get(edge.id) || {}), ...mod };
+        weightValue = getEdgeWeightFromNodeValues(merged, nodeValues);
+      }
+      width = EdgeWeightToWidth(weightValue, adaptiveScale);
+    }
 
-    const width = state
-      ? EdgeWeightToWidth(weightValue, minW, maxW)
-      : 1;
     edgesData.update({
       id: edge.id,
       width
@@ -1272,7 +1394,7 @@ function weightEdges(state) {
     });
   });
 
-  window.currentSettings.weightEdges = state;
+  window.currentSettings.weightEdges = mode;
 }
 
 
@@ -1376,10 +1498,174 @@ function networkphysics(state) {
 }
 
 
+function isManualLayoutType(type) {
+  return type === "circle" || type === "star" || type === "radial";
+}
+
+function getVisibleLayoutNodeIds() {
+  return Array.from(VISIBLE_STATE.nodes).filter(id => FULL_GRAPH.nodes.has(id) && nodesData.get(id));
+}
+
+function getVisibleNeighborCount(nodeId, visibleSet) {
+  const neighbors = FULL_GRAPH.adjacency.get(nodeId);
+  if (!neighbors) return 0;
+
+  let count = 0;
+  neighbors.forEach(neighborId => {
+    if (visibleSet.has(neighborId)) count += 1;
+  });
+  return count;
+}
+
+function getLayoutCenterNode(nodeIds, visibleSet) {
+  if (!Array.isArray(nodeIds) || nodeIds.length === 0) return null;
+
+  let centerId = nodeIds[0];
+  let maxDegree = -1;
+  nodeIds.forEach(nodeId => {
+    const degree = getVisibleNeighborCount(nodeId, visibleSet);
+    if (degree > maxDegree) {
+      maxDegree = degree;
+      centerId = nodeId;
+    }
+  });
+
+  return centerId;
+}
+
+function getLayoutRadius(nodeCount, baseRadius = 200, step = 16, maxRadius = 1800) {
+  return Math.max(baseRadius, Math.min(maxRadius, nodeCount * step));
+}
+
+function applyManualLayout(type, { fitToView = true, redraw = true } = {}) {
+  if (!network || !isManualLayoutType(type)) return;
+
+  const nodeIds = getVisibleLayoutNodeIds();
+  if (nodeIds.length === 0) return;
+
+  const visibleSet = new Set(nodeIds);
+  const updates = [];
+
+  if (type === "circle") {
+    if (nodeIds.length === 1) {
+      updates.push({ id: nodeIds[0], x: 0, y: 0 });
+    } else {
+      const radius = getLayoutRadius(nodeIds.length, 220, 15, 1600);
+      const angleStep = (Math.PI * 2) / nodeIds.length;
+      nodeIds.forEach((nodeId, index) => {
+        const angle = (-Math.PI / 2) + (index * angleStep);
+        updates.push({
+          id: nodeId,
+          x: radius * Math.cos(angle),
+          y: radius * Math.sin(angle)
+        });
+      });
+    }
+  }
+
+  if (type === "star") {
+    const centerId = getLayoutCenterNode(nodeIds, visibleSet);
+    if (centerId != null) {
+      updates.push({ id: centerId, x: 0, y: 0 });
+      const ringNodes = nodeIds.filter(nodeId => nodeId !== centerId);
+      const radius = getLayoutRadius(ringNodes.length, 230, 18, 1700);
+      const angleStep = ringNodes.length > 0 ? (Math.PI * 2) / ringNodes.length : 0;
+
+      ringNodes.forEach((nodeId, index) => {
+        const angle = (-Math.PI / 2) + (index * angleStep);
+        updates.push({
+          id: nodeId,
+          x: radius * Math.cos(angle),
+          y: radius * Math.sin(angle)
+        });
+      });
+    }
+  }
+
+  if (type === "radial") {
+    const centerId = getLayoutCenterNode(nodeIds, visibleSet);
+    if (centerId != null) {
+      const queue = [centerId];
+      const visited = new Set([centerId]);
+      const layerByNode = new Map([[centerId, 0]]);
+
+      while (queue.length > 0) {
+        const current = queue.shift();
+        const currentLayer = layerByNode.get(current) || 0;
+        const neighbors = FULL_GRAPH.adjacency.get(current);
+        if (!neighbors) continue;
+
+        neighbors.forEach(neighborId => {
+          if (!visibleSet.has(neighborId) || visited.has(neighborId)) return;
+          visited.add(neighborId);
+          layerByNode.set(neighborId, currentLayer + 1);
+          queue.push(neighborId);
+        });
+      }
+
+      let maxLayer = 0;
+      layerByNode.forEach(layer => {
+        if (layer > maxLayer) maxLayer = layer;
+      });
+      const disconnectedLayer = maxLayer + 1;
+
+      nodeIds.forEach(nodeId => {
+        if (!layerByNode.has(nodeId)) {
+          layerByNode.set(nodeId, disconnectedLayer);
+        }
+      });
+
+      const nodesByLayer = new Map();
+      nodeIds.forEach(nodeId => {
+        const layer = layerByNode.get(nodeId) || 0;
+        if (!nodesByLayer.has(layer)) nodesByLayer.set(layer, []);
+        nodesByLayer.get(layer).push(nodeId);
+      });
+
+      const layerGap = getLayoutRadius(nodeIds.length, 140, 2, 260);
+      const sortedLayers = Array.from(nodesByLayer.keys()).sort((a, b) => a - b);
+
+      sortedLayers.forEach(layer => {
+        const layerNodes = nodesByLayer.get(layer) || [];
+        if (layer === 0) {
+          updates.push({ id: layerNodes[0], x: 0, y: 0 });
+          return;
+        }
+
+        const radius = layer * layerGap;
+        const angleStep = layerNodes.length > 0 ? (Math.PI * 2) / layerNodes.length : 0;
+        const angleOffset = layer % 2 ? angleStep / 2 : 0;
+
+        layerNodes.forEach((nodeId, index) => {
+          const angle = (-Math.PI / 2) + angleOffset + (index * angleStep);
+          updates.push({
+            id: nodeId,
+            x: radius * Math.cos(angle),
+            y: radius * Math.sin(angle)
+          });
+        });
+      });
+    }
+  }
+
+  if (updates.length > 0) {
+    nodesData.update(updates);
+  }
+
+  if (fitToView) {
+    network.fit();
+  }
+
+  if (redraw) {
+    network.redraw();
+  }
+}
+
 function networkLayoutType(type) {
   if (!network) return;
 
-  if (type === "hierarchical") {
+  const layoutType = type || "default";
+  if (layoutType === "hierarchical") {
     network.setOptions({
       layout: {
         hierarchical: {
@@ -1394,18 +1680,23 @@ function networkLayoutType(type) {
       layout: { hierarchical: { enabled: false } }
     });
   }
-  window.currentSettings.layoutType = type;
-  updateGraphOption("layout_type", type);
 
-  // only stabilize if physics is enabled
+  window.currentSettings.layoutType = layoutType;
+  updateGraphOption("layout_type", layoutType);
+
+  if (isManualLayoutType(layoutType)) {
+    // Keep shape deterministic when applying manual layouts.
+    network.stopSimulation();
+    applyManualLayout(layoutType, { fitToView: true, redraw: true });
+    return;
+  }
+
   if (network.physics) {
     network.stabilize();
   }
 
   network.fit();
 }
-
-
 
 function networkLayoutDirection(direction) {
   if (!network) return;
@@ -1417,6 +1708,7 @@ function networkLayoutDirection(direction) {
     network.stabilize();
   }
   window.currentSettings.layoutDirection = direction;
+  updateGraphOption("layout_direction", direction);
 }
 
 function networkLayoutSort(sort) {
@@ -1429,16 +1721,7 @@ function networkLayoutSort(sort) {
     network.stabilize();
   }
   window.currentSettings.sortMethod = sort;
-}
-
-
-function networkLayoutSort(sort) {
-  if (!network) return;
-  network.setOptions({
-    layout: { hierarchical: { sortMethod: sort } }
-  });
   updateGraphOption("layout_sort", sort);
-  network.stabilize();
 }
 
 function graphSearch({ id, keyword, option, keys, settings }) {
@@ -2727,7 +3010,16 @@ function renderVisibleGraphBatch() {
     if (edgeBatch.length > 0) {
         edgesData.clear();
         edgesData.add(edgeBatch);
+    } else {
+        edgesData.clear();
     }
+
+    const activeLayoutType = window.currentSettings.layoutType;
+    if (isManualLayoutType(activeLayoutType)) {
+        applyManualLayout(activeLayoutType, { fitToView: false, redraw: false });
+    }
+
+    weightEdges(window.currentSettings.weightEdges);
     
     if (network) {
         network.redraw();
@@ -2752,30 +3044,23 @@ function generateNodeTitleSafely(node) {
 }
 
 function generateEdgeTitleSafely(edge) {
-    // Merge base and modified data
     const base = FULL_GRAPH.edges.get(edge.id) || {};
     const mod = MODIFIED_EDGES.get(edge.id) || {};
     const merged = { ...base, ...mod };
 
-    // Start building title entries
-    const entries = Object.entries(merged)
-        .filter(([_, v]) => v != null)
-        .filter(([k]) => !['from', 'to', 'id', 'arrows', 'smooth', 'selectionWidth', 'width',
-                          'hoverWidth', 'widthConstrain', 'length', 'font', 'label', 
-                          'arrowStrikethrough', 'chosen', 'endPointOffset', 'bgcolor', 'textcolor', 'session_id', 'color', 'baseColor', 'Text Color'].includes(k)) // skip standard visual keys
-        .slice(0, 50); // max 50 properties
+    const fromNodeBase = FULL_GRAPH.nodes.get(merged.from) || {};
+    const fromNodeMod = MODIFIED_NODES.get(merged.from) || {};
+    const toNodeBase = FULL_GRAPH.nodes.get(merged.to) || {};
+    const toNodeMod = MODIFIED_NODES.get(merged.to) || {};
 
-    let titleText = entries.map(([k, v]) => {
-        if (typeof v === 'object') return `${k}: ${JSON.stringify(v).slice(0,30)}...`;
-        return `${k}: ${v}`;
-    }).join("\n");
+    const fromLabel = fromNodeMod.label ?? fromNodeBase.label ?? merged.from;
+    const toLabel = toNodeMod.label ?? toNodeBase.label ?? merged.to;
 
-    // Always include "from → to" for clarity
-    const fromLabel = FULL_GRAPH.nodes.get(merged.from)?.label || merged.from;
-    const toLabel = FULL_GRAPH.nodes.get(merged.to)?.label || merged.to;
-    titleText = `From: ${fromLabel}\nTo: ${toLabel}` + (titleText ? `\n${titleText}` : '');
+    const weightCandidate = merged.weight ?? merged.value ?? merged.width ?? 1;
+    const weightValue = toFiniteNumber(weightCandidate);
+    const normalizedWeight = weightValue == null ? 1 : weightValue;
 
-    return titleText;
+    return `From: ${fromLabel}\nTo: ${toLabel}\nWeight: ${normalizedWeight}`;
 }
 
 // Batch update all edge titles

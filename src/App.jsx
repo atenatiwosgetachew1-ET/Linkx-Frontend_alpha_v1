@@ -935,18 +935,29 @@ function WindowVerticalSplitPanels({id, type, sourceId, initialTopHeight, minTop
                   ))}
                 </select>
               </div>
-              <div className="settings_form_div">                
-                <label className="input_labels">Weight Edges</label>                
-                <select className="select_option" value={settings[5] ? (settings[5]):("")} onChange={(e) => {graphAction(id, "properties_tab", "settings", 
-                  {
-                    iframe: iframeRef,
-                    settings: "weight_edges",
-                    state: e.target.value,
-                  })}}
-                  disabled={!activeGraph}>
+              <div className="settings_form_div">
+                <label className="input_labels">Weight Edges by</label>
+                <select
+                  className="select_option"
+                  value={settings[5] === true || settings[5] === "true" ? "default" : (settings[5] || "")}
+                  onChange={(e) => {
+                    graphAction(id, "properties_tab", "settings",
+                      {
+                        iframe: iframeRef,
+                        settings: "weight_edges",
+                        state: e.target.value,
+                      });
+                  }}
+                  disabled={!activeGraph}
+                >
                   <option value="">Off</option>
-                  <option value="true">On</option>
-                </select>  
+                  <option value="default">Default</option>
+                  {filterPropertyKeys && filterPropertyKeys.map((key) => (
+                    <option key={`edge-weight-${key}`} value={key}>
+                      {key}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div className="settings_form_div">                
                 <label className="input_labels">Show Titles</label>
@@ -1011,6 +1022,9 @@ function WindowVerticalSplitPanels({id, type, sourceId, initialTopHeight, minTop
                   disabled={!activeGraph}>
                   <option value="default">Default</option>
                   <option value="hierarchical">hierarchical</option>
+                  <option value="circle">circle</option>
+                  <option value="star">star</option>
+                  <option value="radial">radial</option>
                 </select>                
               </div>
               <div className="settings_form_div">
@@ -3408,7 +3422,7 @@ function Root() {
     } else if (type === "graph") {
       iframeRefs.current[id] = React.createRef();
       setActiveWindowId(id);
-      const initialSettings = ["", "", 25, "", "", true, true, true, false, true, "default", "UD", "directed"];
+      const initialSettings = ["", "", 25, "", "", "default", true, true, false, true, "default", "UD", "directed"];
       const initialSearch = ["","",{},{"nodes":0,"edges":0}]
       // set iframe search and settings the Window parmas
       setIframeSearch(prev => ({
@@ -5191,7 +5205,7 @@ function Root() {
         }
         if (menuId === "reset_graph") {
           const iframe=payload;     
-          const newSettings=["","",25, "", "", "", "", true, "", true, "default", "UD", "directed"]
+          const newSettings=["","",25, "", "", "default", "", true, "", true, "default", "UD", "directed"]
           setIframeSettings(prev => ({
             ...prev,        // spread existing entries
             [id]: newSettings // update specific id
