@@ -625,7 +625,7 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
     </div>
   );
 }
-function WindowVerticalSplitPanels({id, type, sourceId, initialTopHeight, minTopHeight, maxTopHeight, graphStatus, activeGraph, graphAction, iframeRef, iframeSearch, iframeSettings, selectedPropertyTab, nodeProperties, filterPropertyKeys, filterResults}) {
+function WindowVerticalSplitPanels({id, type, sourceId, initialTopHeight, minTopHeight, maxTopHeight, graphStatus, activeGraph, graphAction, iframeRef, iframeSearch, iframeSettings, performanceMood, selectedPropertyTab, nodeProperties, filterPropertyKeys, filterResults}) {
   const containerRef = useRef(null);
   const [containerHeight, setContainerHeight] = useState(0);
   const [topHeightPx, setTopHeightPx] = useState(0);
@@ -833,6 +833,22 @@ function WindowVerticalSplitPanels({id, type, sourceId, initialTopHeight, minTop
           <div id={`${type}_window_${id}_${iframeRef}_graph_settings`} className="graph_settings_container">
             <form className="settings_form" onSubmit={(e) => { e.preventDefault();}}>
               <label className="setting_form_header_label">Settings <i><b>Note :</b> Analysis time settings are not stored.</i></label>
+              <div className="settings_form_div_performance_mood">
+                <label className="input_labels" htmlFor={`${type}_window_${id}_performance_mood`}>Performance mood</label>
+                <input
+                  id={`${type}_window_${id}_performance_mood`}
+                  type="checkbox"
+                  checked={!!performanceMood}
+                  onChange={(e) => {
+                    graphAction(id, "properties_tab", "settings", {
+                      iframe: iframeRef,
+                      settings: "performance_mode",
+                      state: e.target.checked,
+                    });
+                  }}
+                  disabled={!activeGraph}
+                />
+              </div>
               <div className="settings_form_div_firstChild">
                 <label>Limit Nodes</label>
                 {/* Key Selector */}
@@ -1022,20 +1038,24 @@ function WindowVerticalSplitPanels({id, type, sourceId, initialTopHeight, minTop
                   disabled={!activeGraph}>
                   <option value="default">Default</option>
                   <option value="hierarchical">hierarchical</option>
+                  <option value="layered">layered</option>
                   <option value="circle">circle</option>
                   <option value="star">star</option>
                   <option value="radial">radial</option>
+                  <option value="grid">grid</option>
+                  <option value="spiral">spiral</option>
+                  <option value="concentric">concentric</option>
                 </select>                
               </div>
               <div className="settings_form_div">
                 <label className="input_labels">Layout direction</label>
-                <select className="select_option" value={settings[10] === "hierarchical" && settings[11] ? settings[11]:"UD"} onChange={(e) => {graphAction(id, "properties_tab", "settings", 
+                <select className="select_option" value={(settings[10] === "hierarchical" || settings[10] === "layered") && settings[11] ? settings[11]:"UD"} onChange={(e) => {graphAction(id, "properties_tab", "settings", 
                   {
                     iframe: iframeRef,
                     settings: "layout_direction",
                     state: e.target.value,
                   })}}
-                  disabled={!activeGraph || settings[10] !== "hierarchical"}>
+                  disabled={!activeGraph || (settings[10] !== "hierarchical" && settings[10] !== "layered")}>
                   <option value="UD">Up-Down</option>
                   <option value="LR">Left-Right</option>
                 </select>                
@@ -1052,6 +1072,37 @@ function WindowVerticalSplitPanels({id, type, sourceId, initialTopHeight, minTop
                   <option value="directed">Directed</option>
                   <option value="hubsize">Hub-Size</option>
                 </select>                
+              </div>
+              <div className="settings_form_div">
+                <label className="input_labels">Layer mode</label>
+                <select className="select_option" value={settings[13] || "hop_distance"} onChange={(e) => {graphAction(id, "properties_tab", "settings",
+                  {
+                    iframe: iframeRef,
+                    settings: "layer_mode",
+                    state: e.target.value,
+                  })}}
+                  disabled={!activeGraph || settings[10] !== "layered"}>
+                  <option value="hop_distance">Hop Distance</option>
+                  <option value="node_identity">Node Identity</option>
+                  <option value="by_key">By Property Key</option>
+                </select>
+              </div>
+              <div className="settings_form_div">
+                <label className="input_labels">Layer key</label>
+                <select className="select_option" value={settings[14] || ""} onChange={(e) => {graphAction(id, "properties_tab", "settings",
+                  {
+                    iframe: iframeRef,
+                    settings: "layer_key",
+                    state: e.target.value,
+                  })}}
+                  disabled={!activeGraph || settings[10] !== "layered" || (settings[13] || "hop_distance") !== "by_key"}>
+                  <option value="">Auto</option>
+                  {filterPropertyKeys && filterPropertyKeys.map((key) => (
+                    <option key={`layer-key-${key}`} value={key}>
+                      {key}
+                    </option>
+                  ))}
+                </select>
               </div>             
             </form>
           </div>
@@ -1100,6 +1151,20 @@ function WindowVerticalSplitPanels({id, type, sourceId, initialTopHeight, minTop
 }
 function IframeEmbed({wId,id,fileName,title,activeGraph,graphAction,iframeRef,BASE_URL}) {
   const iframeBasePath = '/linkx/temp_placeholders';
+  const frameIdentity = String(activeGraph || id || "").toLowerCase();
+  const shouldShowFitGraphControl = frameIdentity.includes("graph");
+  const fitGraphControl = (
+    <span className="iframe_options_layer">
+      <i onClick={() => {graphAction(wId, "iframe_options", "settings",
+        {
+          iframe: iframeRef,
+          settings: "fit_graph",
+        })}}>
+        <Icons id="window_graph_option" type="fieldview" condition="True" />
+      </i>
+    </span>
+  );
+
   if (id === "source_placeholder"){
     return (
       <div className="iframe_graph">
@@ -1125,15 +1190,7 @@ function IframeEmbed({wId,id,fileName,title,activeGraph,graphAction,iframeRef,BA
           style={{ border: 'none' }}
           title={`${title}`}
         /> 
-        <span className="iframe_options_layer">
-          <i onClick={(e) => {graphAction(wId, "iframe_options", "settings", 
-            {
-              iframe: iframeRef,
-              settings: "fit_graph",
-            })}}>
-            <Icons id="window_graph_option" type="fieldview" condition="True" />
-          </i>
-        </span>        
+        {fitGraphControl}
       </div>
     );
   }
@@ -1162,6 +1219,7 @@ function IframeEmbed({wId,id,fileName,title,activeGraph,graphAction,iframeRef,BA
           style={{ border: 'none' }}
           title={`${title}`}
         />     
+        {shouldShowFitGraphControl ? fitGraphControl : null}
       </div>
     );
   }
@@ -1239,7 +1297,7 @@ function DraggableWindow({ children, initialPos = { top: 0, left: 0 }, orientati
     </div>
   );
 }
-function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText, loadscreenState, isSideBarMenuOpen, orientation, configurations, windowAction, graphAction, chartAction, selectedContent, selectedSubContent, selectedNodes, selectedEdges,windowResponseI,windowResponseII,formToolResponse,sourceAddressType,sourceAddressText,batchFilesSearchHybrid,batchFilesSearchHybridQuery,batchFilesSearchStrict,searchText,batchFilesSearchLimit,batchFilesSearchResults,batchFilesSearchMoreFiles,searchResultsVisible,searchPlaceholder,batchFilesCollection, batchFilesDataframeInfoI, batchFilesDataframeInfoII, batchFilesDataframeActionValue, batchFilesDataframeSourceValue, batchFilesDataframeTargetValue, batchFilesDataframeRelationshipValue, batchFilesDataframeRuleValue, sourceSessionLog, sourceStreams , sourceStreamListener, fileInputRef, textareaRefs, onClose, onMove, zIndex, onFocus, covered, graphLink, graphLinkId, graphLinkSource, graphStatus, activeGraph, chartLink, chartLinkId, activechart, iframeRef, iframeFilters, iframeSettings, iframeSearch, selectedPropertyTab, filterPropertyKeys, filterResults, nodeProperties, BASE_URL }) {
+function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText, loadscreenState, isSideBarMenuOpen, orientation, configurations, windowAction, graphAction, chartAction, selectedContent, selectedSubContent, selectedNodes, selectedEdges,windowResponseI,windowResponseII,formToolResponse,sourceAddressType,sourceAddressText,batchFilesSearchHybrid,batchFilesSearchHybridQuery,batchFilesSearchStrict,searchText,batchFilesSearchLimit,batchFilesSearchResults,batchFilesSearchMoreFiles,searchResultsVisible,searchPlaceholder,batchFilesCollection, batchFilesDataframeInfoI, batchFilesDataframeInfoII, batchFilesDataframeActionValue, batchFilesDataframeSourceValue, batchFilesDataframeTargetValue, batchFilesDataframeRelationshipValue, batchFilesDataframeRuleValue, sourceSessionLog, sourceStreams , sourceStreamListener, fileInputRef, textareaRefs, onClose, onMove, zIndex, onFocus, covered, graphLink, graphLinkId, graphLinkSource, graphStatus, activeGraph, chartLink, chartLinkId, activechart, iframeRef, iframeFilters, iframeSettings, iframeSearch, iframePerformanceMood, selectedPropertyTab, filterPropertyKeys, filterResults, nodeProperties, BASE_URL, searchButtonRef, resultContainerRef }) {
   if (type === "source") {
     return (
       <DraggableWindow initialPos={{ top: 0, left: 0}} zIndex={zIndex} orientation={orientation}>
@@ -1465,7 +1523,7 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
                                   }/>
                                 <label htmlFor="hadoop_address_radio">Hadoop Cluster</label>
                               </div>                            
-                                <input id="source_storage_address_text" placeholder="Enter HDFS Address" defaulValue={sourceAddressText} className="textinput" type="text"
+                                <input id="source_storage_address_text" placeholder="Enter HDFS Address" defaultValue={sourceAddressText} className="textinput" type="text"
                                 disabled={
                                   windowResponseI === "Connecting..." ? 'True' : 
                                   windowResponseI === "Connection established!" ? 'True': ''
@@ -1629,7 +1687,7 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
                                 <div id="batch_files_search_container" className="batch_files_search_container">
                                   <input id="batch_files_search_input" className="batch_files_search_text_input" type="text" placeholder="Type here to seach" required/>
                                   <input id="batch_files_search_date" className="batch_files_search_date_input" type="date"/>
-                                  <button id="batch_files_search_button" title="Search" onClick={() => windowAction(id,"batch_files_search_input","search",[document.getElementById("batch_files_search_input").value,document.getElementById("batch_files_search_date").value,batchFilesSearchHybrid,document.getElementById("batch_files_search_column").value,document.getElementById("batch_files_search_strict").checked])}>
+                                  <button ref={searchButtonRef} id="batch_files_search_button" title="Search" onClick={() => windowAction(id,"batch_files_search_input","search",[document.getElementById("batch_files_search_input").value,document.getElementById("batch_files_search_date").value,batchFilesSearchHybrid,document.getElementById("batch_files_search_column").value,document.getElementById("batch_files_search_strict").checked])}>
                                    <Icons id="window_live_source_option" type="search" condition="True"/>
                                   </button>
                                   <button title="Search"><Icons id="window_live_source_option" type="inbox-files" condition="True"/></button>
@@ -1651,7 +1709,7 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
                                     <input id='batch_files_search_strict' type='checkbox' checked={batchFilesSearchStrict ? true:false} style={{ opacity: !batchFilesSearchHybrid ? 0.5 : 1 }} disabled={!batchFilesSearchHybrid} onChange={() =>windowAction(id,"batch_files_search_strict","strict","")}/>
                                     <label htmlFor="batch_files_search_strict" title="Strict search">Strict mood</label>    
                                 </div>
-                                <div id="batch_files_search_result_container"
+                                <div ref={resultContainerRef} id="batch_files_search_result_container"
                                     className="batch_files_search_result_container"
                                     style={{
                                       '--searching-text': `'${searchPlaceholder}'`,
@@ -2555,6 +2613,7 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
                 iframeFilters={iframeFilters}
                 iframeSettings={iframeSettings}
                 iframeSearch={iframeSearch}
+                performanceMood={iframePerformanceMood?.[id] ?? true}
                 selectedPropertyTab={selectedPropertyTab}
                 nodeProperties={nodeProperties}
                 filterPropertyKeys={filterPropertyKeys}
@@ -2570,7 +2629,7 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
                 </span>
               </div>
             </div>
-          "</div>
+          </div>
         )}
       </DraggableWindow>
     )
@@ -2929,6 +2988,7 @@ function Root() {
   const [batchFilesSearchStrict, setBatchFilesSearchStrict] = useState(true);
   const [searchText, setSearchText] = useState(false);
   const searchButtonRef = useRef(null)
+  const resultContainerRef = useRef(null);
   const [batchFilesSearchOffset, setBatchFilesSearchOffset] = useState(0);
   const [batchFilesSearchLimit, setBatchFilesSearchLimit] = useState(50);
   const [batchFilesSearchResults, setBatchFilesSearchResults] = useState([]);
@@ -2961,6 +3021,7 @@ function Root() {
   const iframeRefs = useRef({}); //to communicate across the iframe boundary  
   const [iframeSettings, setIframeSettings] = useState({}); // object instead of array
   const [iframeSearch, setIframeSearch] = useState({}); // object instead of array
+  const [iframePerformanceMood, setIframePerformanceMood] = useState({});
   const [isCtrlHeld, setIsCtrlHeld] = useState(false);  
   const [userName, setUserName] = useState(null);
   const API_URL = import.meta.env.VITE_API_URL
@@ -3422,7 +3483,7 @@ function Root() {
     } else if (type === "graph") {
       iframeRefs.current[id] = React.createRef();
       setActiveWindowId(id);
-      const initialSettings = ["", "", 25, "", "", "default", true, true, false, true, "default", "UD", "directed"];
+      const initialSettings = ["", "", 25, "", "", "", false, false, false, false, "default", "UD", "directed", "hop_distance", ""];
       const initialSearch = ["","",{},{"nodes":0,"edges":0}]
       // set iframe search and settings the Window parmas
       setIframeSearch(prev => ({
@@ -3432,6 +3493,10 @@ function Root() {
       setIframeSettings(prev => ({
         ...prev,
         [id]: initialSettings,
+      }));
+      setIframePerformanceMood(prev => ({
+        ...prev,
+        [id]: true,
       }));
       setWindows(prev => {
         const maxZ = prev.length ? Math.max(...prev.map(w => w.zIndex)) : 0;
@@ -3552,6 +3617,12 @@ function Root() {
         socket.emit("graph_status_unsubscribe", { session_id: id });
       }
       return newWindows;
+    });
+    setIframePerformanceMood(prev => {
+      if (!(id in prev)) return prev;
+      const next = { ...prev };
+      delete next[id];
+      return next;
     });
   };
   const handleMoveWindow = (id, newPos) => {
@@ -3713,10 +3784,12 @@ function Root() {
                 );
 
                 if (data.message === "success!") {
+                  const settingsToApply = iframeSettings[id] || w.iframeSettings || ["", "", 25, "", "", "", false, false, false, false, "default", "UD", "directed", "hop_distance", ""];
                   sendToIframe(iframe, "new_graph", {
                     id,
                     nodes: data.results.nodes,
-                    edges: data.results.edges
+                    edges: data.results.edges,
+                    settings: settingsToApply
                   });
                 } else {
                   alert(data.message);
@@ -3741,6 +3814,32 @@ function Root() {
               updates.selectedPropertyTab = payload;
             }
             if (action === "settings") { // When Graph settings change
+              const performanceManagedSettings = new Set(["weight_edges", "show_title", "show_label", "graph_physics"]);
+
+              if (payload.settings === "performance_mode") {
+                const isEnabled = payload.state === true || payload.state === "true";
+                setIframePerformanceMood(prev => ({
+                  ...prev,
+                  [id]: isEnabled
+                }));
+
+                if (isEnabled) {
+                  const performanceUpdates = [
+                    { index: 5, setting: "weight_edges", value: "" },
+                    { index: 6, setting: "show_title", value: false },
+                    { index: 7, setting: "show_label", value: false },
+                    { index: 9, setting: "graph_physics", value: false },
+                  ];
+
+                  performanceUpdates.forEach(({ index, setting, value }) => {
+                    updateIframeSettings(id, index, value);
+                    sendToIframe(iframe, setting, value);
+                  });
+                }
+
+                return { ...w, ...updates };
+              }
+
               const settingsMap = {
                 limit_nodes_key: [0, "key"],
                 limit_nodes_sort: [1, "sort"],
@@ -3755,6 +3854,8 @@ function Root() {
                 layout_type: [10, null],
                 layout_direction: [11, null],
                 sort_method: [12, null],
+                layer_mode: [13, null],
+                layer_key: [14, null],
               };
               // Organizing settings (to have a concurent/ Multi settings for batch)
               const [index, key] = settingsMap[payload.settings] || [];
@@ -3771,7 +3872,19 @@ function Root() {
                 if (payload.settings === "layout_type" && payload.state === "hierarchical") {
                   updateIframeSettings(id, 11, "UD");
                   updateIframeSettings(id, 12, "directed");
-                }              
+                }
+                if (payload.settings === "layout_type" && payload.state === "layered") {
+                  const existingSettings = iframeSettings[id] || w.iframeSettings || [];
+                  updateIframeSettings(id, 11, existingSettings[11] || "UD");
+                  updateIframeSettings(id, 13, existingSettings[13] || "hop_distance");
+                  updateIframeSettings(id, 14, existingSettings[14] || "");
+                }
+              }
+              if (performanceManagedSettings.has(payload.settings)) {
+                setIframePerformanceMood(prev => ({
+                  ...prev,
+                  [id]: false
+                }));
               }
               //Pass the setting change to the child iframe
               sendToIframe(iframe, payload.settings, payload.state);              
@@ -4119,7 +4232,13 @@ function Root() {
         if (menuId === "batch_input_form_swap" && action === "page_II") {
           if (payload){ //For Broker and API jumps to dataframe creation
             if (payload["addressType"] === "broker"){ //For kafka broker
-              pass
+              newContent = "batch_input";
+              newSubContent = "batch_input_form_pageII";
+              setWindows(prev =>
+                prev.map(w =>
+                  w.id === id ? { ...w, batchFilesCollection: [] } : w
+                )
+              );
             }
             else if (payload["addressType"] === "api"){ //API is Expected                          
               //Request a dataframe creation from the api address           
@@ -4787,8 +4906,9 @@ function Root() {
           else{
             alert("message box: any unsaved progress is lost!")                
             if (iframe?.current && iframe.current.contentWindow) {
+              const settingsToApply = iframeSettings[id] || targetWindow?.iframeSettings || ["", "", 25, "", "", "", false, false, false, false, "default", "UD", "directed", "hop_distance", ""];
               iframe.current.contentWindow.postMessage(
-                { action: menuId, payload: "" },
+                { action: menuId, payload: { id, settings: settingsToApply } },
                 "*"
               );
               // Store the link in the target window
@@ -4980,6 +5100,8 @@ function Root() {
           const iframe=payload
           debounceRef.current = setTimeout(() => {
             const file = action;
+            const targetWindow = windows.find(w => w.id === id);
+            const settingsToApply = iframeSettings[id] || targetWindow?.iframeSettings || ["", "", 25, "", "", "", false, false, false, false, "default", "UD", "directed", "hop_distance", ""];
             if (!file || !(file instanceof File)) {
               alert("Selected file is not valid. Please choose a proper .json or .html file.");
               return;
@@ -5066,7 +5188,7 @@ function Root() {
                       iframe.current.contentWindow?.postMessage(
                         {
                           action: menuId,
-                          payload: { id, file },
+                          payload: { id, file, settings: settingsToApply },
                         },
                         "*"
                       );
@@ -5124,7 +5246,7 @@ function Root() {
                     iframe.current.contentWindow?.postMessage(
                       {
                         action: menuId,
-                        payload: { id, file },
+                        payload: { id, file, settings: settingsToApply },
                       },
                       "*"
                     );
@@ -5205,7 +5327,7 @@ function Root() {
         }
         if (menuId === "reset_graph") {
           const iframe=payload;     
-          const newSettings=["","",25, "", "", "default", "", true, "", true, "default", "UD", "directed"]
+          const newSettings=["", "", 25, "", "", "", false, false, false, false, "default", "UD", "directed", "hop_distance", ""]
           setIframeSettings(prev => ({
             ...prev,        // spread existing entries
             [id]: newSettings // update specific id
@@ -5361,32 +5483,16 @@ function Root() {
         .then((data) => {
           if (data.message === "success!") {
             alert("Configuration saved!")
-            //calling the tool integration
-            newContent = "batch_input";
-            newSubContent = "batch_input_form_pageI";
-            newBatchFilesCollection = validFiles.map(file => file.name);
-            setWindows(prev =>
-              prev.map(w =>
-                w.id === id ? { ...w,loadscreenState: false ,loadscreenText:null,selectedContent:newContent,selectedSubContent:newSubContent,windowResponseI:"Dataset uploaded!",batchFilesCollection:newBatchFilesCollection} : w
-              )
-            );
+            setloadscreenState(false);
           } 
           else {
             alert(data.message)
-            setWindows(prev =>
-              prev.map(w =>
-                w.id === id ? { ...w,loadscreenState: false ,loadscreenText:null} : w
-              )
-            );
+            setloadscreenState(false);
           }
         })
         .catch((err) => {
           console.error("err",err);
-          setWindows(prev =>
-            prev.map(w =>
-              w.id === id ? { ...w,loadscreenState: false ,loadscreenText:null} : w
-            )
-          );
+          setloadscreenState(false);
         });    
       }, 300);
     }
@@ -5542,11 +5648,14 @@ function Root() {
               iframeRef={iframeRefs.current[window.id]}
               iframeSettings={iframeSettings}
               iframeSearch={iframeSearch}
+              iframePerformanceMood={iframePerformanceMood}
               selectedPropertyTab={window.selectedPropertyTab}
               filterPropertyKeys={window.filterPropertyKeys}
               filterResults={window.filterResults}
               nodeProperties={window.nodeProperties}
               BASE_URL={BASE_URL}
+              searchButtonRef={searchButtonRef}
+              resultContainerRef={resultContainerRef}
             />
           ))}      
 

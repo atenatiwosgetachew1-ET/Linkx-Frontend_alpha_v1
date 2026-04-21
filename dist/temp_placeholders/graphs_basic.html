@@ -884,58 +884,78 @@
 								    let menuHTML = "";
 								    contextMenu.style.left = `${params.event.pageX}px`;
 								    contextMenu.style.top = `${params.event.pageY}px`;
+								    window.lastContextMenuPoint = {
+								    	pageX: params.event.pageX,
+								    	pageY: params.event.pageY,
+								    	domX: params.pointer.DOM.x,
+								    	domY: params.pointer.DOM.y
+								    };
 
-								    // Initialize edges only if nodeId exists
 								    let edges = [];
 								    if (nodeId) {
 								        edges = network.getConnectedEdges(nodeId);
 								    }
 
 								    if (!nodeId) {
-								        // Empty space is on left click
-								        if(localClipboard.length>0){
-								        	menuHTML += `<div class="menu_item" data-action="paste" data-id="${nodeId}">Paste</div>`;
+								        if (localClipboard.length > 0) {
+								        	menuHTML += `<div class="menu_item" data-action="paste">Paste</div>`;
 								        }
-								        menuHTML += `<div class="menu_item" data-action="add">Add Node</div>`;
-										menuHTML += `<div class="menu_item" data-action="add">Label</div>`;
-										menuHTML += `<div class="menu_item" data-action="add">Comment Box</div>`;
-								        menuHTML += `<div class="menu_item" data-action="add">Text Block</div>`;				       					
-								        menuHTML += `<div class="menu_item" data-action="add">Event Frame</div>`;										
-								        menuHTML += `<div class="menu_item" data-action="add">Theme Line</div>`;
-								        menuHTML += `<div class="menu_item" data-action="add">OLE Object</div>`;								        
-								    } else {// node or edge is on left click
+								        menuHTML += `<div class="menu_item" data-action="add_node">Add Node</div>`;
+										menuHTML += `<div class="menu_item" data-action="add_label">Label</div>`;
+										menuHTML += `<div class="menu_item" data-action="add_comment_box">Comment Box</div>`;
+								        menuHTML += `<div class="menu_item" data-action="add_text_block">Text Block</div>`;
+								        menuHTML += `<div class="menu_item" data-action="add_event_frame">Event Frame</div>`;
+								        menuHTML += `<div class="menu_item ${selectedNodes.length >= 2 ? "" : "menu_item_disabled"}" data-action="add_theme_line">Theme Line</div>`;
+								        menuHTML += `<div class="menu_item" data-action="add_ole_object">OLE Object</div>`;
+								        menuHTML += `<div class="menu_item" data-action="save_view">Save View</div>`;
+								        if ((window.SAVED_VIEWS || []).length > 0) {
+								        	menuHTML += `<div class="menu_item" data-action="load_view">Load View</div>`;
+								        }
+								        menuHTML += `<div class="menu_item" data-action="toggle_edge_bundling">${window.EDGE_BUNDLING_STATE?.enabled ? "Disable" : "Enable"} Edge Bundling</div>`;
+								        menuHTML += `<div class="menu_item" data-action="toggle_alert_rules">${window.ALERT_RULES_ENABLED ? "Disable" : "Enable"} Alert Rules</div>`;
+								        menuHTML += `<div class="menu_item" data-action="run_alert_scan">Run Alert Scan</div>`;
+								        menuHTML += `<div class="menu_item" data-action="clear_pinned_evidence">Clear Pinned Evidence</div>`;
+								        menuHTML += `<div class="menu_item" data-action="apply_community_detection">Detect Communities</div>`;
+								    } else {
 								        if (nodeId && !selectedNodes.includes(nodeId)) {
 											selectedNodes = [nodeId];
 											network.selectNodes(selectedNodes);
-										}								        
-											if (selectedNodes.length === 1) {
-									            // Show Copy Nodes
-												menuHTML += `<div class="menu_item" data-action="copy" data-id="${nodeId}">Copy</div>`;
-								            if (edges.length === 0) {
-								                menuHTML += `<div class="menu_item" data-action="delete" data-id="${nodeId}">Delete Node</div>`;
-								            }
+										}
+
+										if (selectedNodes.length === 1) {
+											menuHTML += `<div class="menu_item" data-action="copy" data-id="${nodeId}">Copy</div>`;
+								            menuHTML += `<div class="menu_item" data-action="delete" data-id="${nodeId}">Delete Node</div>`;
 											if (String(selectedNodes[0]).startsWith("Group")) {
 												menuHTML += `<div class="menu_item" data-action="ungroup" data-id="${nodeId}">Ungroup</div>`;
 											}
 								            if (edges.length > 0) {
 								                menuHTML += `<div class="menu_item" data-action="unlink" data-id="${nodeId}">Unlink Node</div>`;
-								            }								                
-								        }
-											else if (selectedNodes.length > 1) {
-												const fullyLinked = areAllSelectedNodesLinked(selectedNodes);
-												menuHTML += `aph <div class="menu_item" data-action="copy">Copy Nodes/Edges</div>`;
+								            }
+								            menuHTML += `<div class="menu_item" data-action="expand_neighborhood">Expand Neighborhood</div>`;
+								            menuHTML += `<div class="menu_item" data-action="collapse_neighborhood">Collapse Neighborhood</div>`;
+								            menuHTML += `<div class="menu_item" data-action="pin_evidence">Pin Evidence</div>`;
+										} else if (selectedNodes.length > 1) {
+											const fullyLinked = areAllSelectedNodesLinked(selectedNodes);
+											menuHTML += `<div class="menu_item" data-action="copy">Copy Nodes/Edges</div>`;
 											if (fullyLinked) {
 												menuHTML += `<div class="menu_item" data-action="unlinks">Unlink Nodes</div>`;
 											} else {
 												menuHTML += `<div class="menu_item" data-action="link">Link Nodes</div>`;
 											}
 											menuHTML += `<div class="menu_item" data-action="group">Group Nodes</div>`;
-										}else if (selectedNodes.length === 1 && String(selectedNodes[0]).startsWith("Group")) {
-											menuHTML += `<div class="menu_item" data-action="ungroup">Ungroup</div>`;
-											menuHTML += `<div class="menu_item" data-action="copy">Copy Group</div>`;
-											menuHTML += `<div class="menu_item" data-action="delete">Delete Group</div>`;
+											menuHTML += `<div class="menu_item" data-action="merge_nodes">Merge Nodes</div>`;
+											menuHTML += `<div class="menu_item" data-action="add_theme_line">Theme Line</div>`;
+											if (selectedNodes.length === 2) {
+												menuHTML += `<div class="menu_item" data-action="path_finder">Find Shortest Path</div>`;
+											}
+											menuHTML += `<div class="menu_item" data-action="pin_evidence">Pin Evidence</div>`;
 										}
 
+										menuHTML += `<div class="menu_item" data-action="visual_degree">Visualize by Degree</div>`;
+										menuHTML += `<div class="menu_item" data-action="visual_property">Visualize by Property</div>`;
+										if (window.PATH_HIGHLIGHT_STATE?.nodeIds?.size > 0) {
+											menuHTML += `<div class="menu_item" data-action="clear_path">Clear Path Highlight</div>`;
+										}
 								    }
 
 								    if (menuHTML) {
@@ -948,13 +968,34 @@
 								});
 	//------------------------------ Context menu options (actions) 
 								document.getElementById('customContextMenu').addEventListener('click', function (e) {
-								if (e.target.classList.contains('menu_item')) {
+								if (e.target.classList.contains('menu_item') && !e.target.classList.contains('menu_item_disabled')) {
 								    const action = e.target.dataset.action;
 								    const nodeId = e.target.dataset.id;
 								    const selectedNodes = network.getSelectedNodes();
+								    const contextPoint = window.lastContextMenuPoint || null;
+								    const contextPageX = contextPoint?.pageX ?? e.pageX;
+								    const contextPageY = contextPoint?.pageY ?? e.pageY;
 								    switch(action) {
-								      case 'add':
-								        handleAddNode(e.pageX, e.pageY);
+								      case 'add_node':
+								        handleAddNode(contextPageX, contextPageY);
+								        break;
+								      case 'add_label':
+								        handleAddLabelNode(contextPageX, contextPageY);
+								        break;
+								      case 'add_comment_box':
+								        handleAddCommentBox(contextPageX, contextPageY);
+								        break;
+								      case 'add_text_block':
+								        handleAddTextBlock(contextPageX, contextPageY);
+								        break;
+								      case 'add_event_frame':
+								        handleAddEventFrame(contextPageX, contextPageY);
+								        break;
+								      case 'add_theme_line':
+								        handleAddThemeLine(selectedNodes);
+								        break;
+								      case 'add_ole_object':
+								        handleAddOleObject(contextPageX, contextPageY);
 								        break;
 								      case 'delete':
 								        handleDeleteNode(nodeId);
@@ -980,11 +1021,84 @@
     									}
     									break;
 								      case 'paste':
-    									const rect = network.canvas.body.container.getBoundingClientRect();
-    									const domPosition = { x: e.pageX - rect.left, y: e.pageY - rect.top };
-    									const canvasPosition = network.DOMtoCanvas(domPosition);
-    									pasteNodes(canvasPosition);
-    									break;
+	    									const domPosition = contextPoint
+	    										? { x: contextPoint.domX, y: contextPoint.domY }
+	    										: (() => {
+	    											const rect = network.canvas.body.container.getBoundingClientRect();
+	    											return { x: e.pageX - rect.left, y: e.pageY - rect.top };
+	    										})();
+	    									const canvasPosition = network.DOMtoCanvas(domPosition);
+	    									pasteNodes(canvasPosition);
+	    									break;
+								      case 'expand_neighborhood':
+								      	expandNeighborhoodFromSelection(selectedNodes, 1);
+								      	break;
+								      case 'collapse_neighborhood':
+								      	collapseNeighborhoodFromSelection(selectedNodes, 1);
+								      	break;
+								      case 'merge_nodes':
+								      	mergeSelectedNodes(selectedNodes);
+								      	break;
+								      case 'visual_degree':
+								      	applyVisualEncodingByDegree();
+								      	break;
+								      case 'visual_property': {
+								      	const visibleNodes = getVisibleNodeSnapshots();
+								      	const dynamic = inferDynamicNodeKeys(visibleNodes);
+								      	const suggestedKeys = [...dynamic.numeric, ...dynamic.categorical].slice(0, 12);
+								      	const defaultKey = suggestedKeys[0] || "";
+								      	const message = suggestedKeys.length > 0
+								      		? `Property key (examples): ${suggestedKeys.join(", ")}`
+								      		: "Property key";
+								      	const chosenKey = prompt(message, defaultKey);
+								      	if (chosenKey != null && String(chosenKey).trim() !== "") {
+								      		applyVisualEncodingByProperty(chosenKey);
+								      	}
+								      	break;
+								      }
+								      case 'save_view': {
+								      	const suggestedName = `View ${new Date().toISOString().slice(0, 19).replace("T", " ")}`;
+								      	const viewName = prompt("View name", suggestedName);
+								      	if (viewName != null) {
+								      		saveCurrentView(viewName);
+								      	}
+								      	break;
+								      }
+								      case 'load_view': {
+								      	const saved = Array.isArray(window.SAVED_VIEWS) ? window.SAVED_VIEWS : [];
+								      	if (saved.length === 0) break;
+								      	const defaultName = saved[0]?.name || "";
+								      	const list = saved.slice(0, 12).map(v => v.name).join(", ");
+								      	const targetName = prompt(`Load view by name (${list})`, defaultName);
+								      	if (targetName != null && String(targetName).trim() !== "") {
+								      		loadSavedView(targetName);
+								      	}
+								      	break;
+								      }
+								      case 'path_finder':
+								      	runPathFinderForSelection(selectedNodes);
+								      	break;
+								      case 'clear_path':
+								      	clearPathHighlight();
+								      	break;
+								      case 'toggle_edge_bundling':
+								      	toggleEdgeBundlingLite();
+								      	break;
+								      case 'toggle_alert_rules':
+								      	toggleAlertRules();
+								      	break;
+								      case 'run_alert_scan':
+								      	runAlertScan(true);
+								      	break;
+								      case 'pin_evidence':
+								      	pinSelectedEvidence();
+								      	break;
+								      case 'clear_pinned_evidence':
+								      	clearPinnedEvidence();
+								      	break;
+								      case 'apply_community_detection':
+								      	applyCommunityDetection();
+								      	break;
 								    }
 								    // Hide menu after action
 								    document.getElementById('customContextMenu').style.display = 'none';
@@ -1333,20 +1447,24 @@
 								//---------------------------------- Graph options adjustments
 								//const settingsPanel = document.getElementById("graph_settings");							
 								// initial options that reflect before runtime changes
-								window.currentSettings = {
-									lableGroup : "Entity Node",
-									limit: 25,
-									sortKey: "",
-									sortOrder: "asc",
-									weightEdges: "default",
-									showTitles: true,
-									showLabels: true,
-									editInformations: false,
-									physics: true,
-									layoutType: "default",
-									layoutDirection: "UD",
-									sortMethod: "direct"
-								};
+										window.currentSettings = {
+											lableGroup : "Entity Node",
+											limit: 25,
+											sortKey: "",
+											sortOrder: "asc",
+										weightEdges: "",
+										showTitles: false,
+										showLabels: false,
+										editInformations: false,
+											physics: false,
+											layoutType: "default",
+											layoutDirection: "UD",
+											sortMethod: "direct",
+											layerMode: "hop_distance",
+											layerKey: "",
+											edgeBundling: false,
+											alertRules: true
+										};
 
 								// //------------------------------ Nodes Limits
 								// settingsPanel.querySelector('input[placeholder="Limit"]').addEventListener("input", (e) => {

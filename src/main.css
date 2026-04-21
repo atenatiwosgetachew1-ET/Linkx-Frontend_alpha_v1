@@ -3677,7 +3677,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 	text-align: left;
 	font-weight: bold;
 	padding-bottom: 3vh;
-	margin-bottom: 2vh;
+	margin-bottom: 0vh;
 }
 .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_settings_container .settings_form .setting_form_header_label i{
 	position: relative;
@@ -3715,6 +3715,26 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 	overflow: hidden;
 	text-align: center;
 	margin-bottom: 0.1vh;
+}
+.window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_settings_container .settings_form .settings_form_div_performance_mood{
+	position: relative;
+	display: block;
+	padding: 0.5vh 0;
+	margin: auto;
+	border: none;
+	width: 93%;
+	padding-left: 7%;
+	height: 2.8vh;
+	overflow: hidden;
+	text-align: center;
+	margin-bottom: 0.1vh;
+	border-bottom: 0.1vh dashed #DDD;
+	line-height: 3vh;
+	background-image: radial-gradient(#FFFFFF,#FAFAFA);
+}
+.window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_settings_container .settings_form .settings_form_div_performance_mood label{
+	background-color: inherit;
+	background-image: inherit;
 }
 .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_settings_container .settings_form .settings_form_div_firstChild{
 	position: relative;

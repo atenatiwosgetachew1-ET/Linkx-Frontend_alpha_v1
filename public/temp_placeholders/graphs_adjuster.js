@@ -63,6 +63,14 @@ window.addEventListener("message", (event) => {
       networkLayoutSort(sort);
       break;
 
+    case "layer_mode":
+      networkLayerMode(payload);
+      break;
+
+    case "layer_key":
+      networkLayerKey(payload);
+      break;
+
     case "new_graph":      
       createNewGraph(payload); // <-- payload should contain {nodes, edges}
       break;
@@ -70,7 +78,8 @@ window.addEventListener("message", (event) => {
     case "load_graph_url":
       const id = payload?.id || null;  
       const file = payload?.file || null;  
-      loadGraphFromFile(id,file);
+      const settings = payload?.settings || null;
+      loadGraphFromFile(id,file,settings);
       break;
 
     case "graph_snapshot":
@@ -211,6 +220,55 @@ function normalizeEdgeWeightMode(state) {
   if (state === false || state === "false" || state == null) return "";
   return String(state).trim();
 }
+
+function normalizeLayerMode(mode) {
+  const value = String(mode || "").trim().toLowerCase();
+  if (value === "node_identity" || value === "by_key") return value;
+  return "hop_distance";
+}
+
+const AUTO_PHYSICS_NODE_THRESHOLD = 300;
+let AUTO_PHYSICS_FORCED_OFF = false;
+let LAST_APPLIED_EFFECTIVE_PHYSICS = null;
+const SAVED_VIEWS_STORAGE_KEY = "linkx_saved_views_v1";
+const PINNED_EVIDENCE_STORAGE_KEY = "linkx_pinned_evidence_v1";
+const MAX_SAVED_VIEWS = 30;
+
+function readJsonStorage(key, fallbackValue) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return fallbackValue;
+    const parsed = JSON.parse(raw);
+    return parsed == null ? fallbackValue : parsed;
+  } catch (_err) {
+    return fallbackValue;
+  }
+}
+
+function writeJsonStorage(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch (_err) {
+    // ignore storage errors
+  }
+}
+
+window.SAVED_VIEWS = Array.isArray(window.SAVED_VIEWS)
+  ? window.SAVED_VIEWS
+  : readJsonStorage(SAVED_VIEWS_STORAGE_KEY, []);
+window.PINNED_EVIDENCE = Array.isArray(window.PINNED_EVIDENCE)
+  ? window.PINNED_EVIDENCE
+  : readJsonStorage(PINNED_EVIDENCE_STORAGE_KEY, []);
+window.ALERT_RULES_ENABLED = window.ALERT_RULES_ENABLED !== false;
+window.EDGE_BUNDLING_STATE = window.EDGE_BUNDLING_STATE || {
+  enabled: false,
+  originalByEdgeId: new Map(),
+  bundledPrimaryEdges: new Set()
+};
+window.PATH_HIGHLIGHT_STATE = window.PATH_HIGHLIGHT_STATE || {
+  nodeIds: new Set(),
+  edgeIds: new Set()
+};
 
 function getDefaultEdgeWidth(edgeId) {
   const base = FULL_GRAPH.edges.get(edgeId) || {};
@@ -389,22 +447,52 @@ function restoreSettings(settings) {
   }
 
   try {
+    const asBool = (value) => value === true || value === "true";
+    const limitAmount = Math.min(parseInt(settings[2], 10) || 25, 300);
+    const layoutType = settings[10] || "default";
+    const layoutDirection = settings[11] || "UD";
+    const layerMode = normalizeLayerMode(settings[13] || "hop_distance");
+    const layerKey = settings[14] == null ? "" : String(settings[14]);
+
+    if (settings[3]) {
+      window.currentSettings.lableGroup = settings[3];
+    }
+    window.currentSettings.layoutDirection = layoutDirection;
+    window.currentSettings.layerMode = layerMode;
+    window.currentSettings.layerKey = layerKey;
+
     applyLimit({
       key: settings[0],
       sort: settings[1] || "asc",
-      amount: Math.min(settings[2] || 25, 300)
+      amount: limitAmount
     });
+
+    if (settings[4]) {
+      labelNodesWith({
+        labelIdentity: settings[3] || window.currentSettings.lableGroup || "Entity Node",
+        labelkey: settings[4],
+        filterKey: settings[0] || "",
+        filterSort: settings[1] || "asc",
+        limitAmount
+      });
+    }
+
     weightEdges(settings[5]);
-    applyTitleToggle(settings[6]);
-    showNodelabels(settings[7]);
+    applyTitleToggle(asBool(settings[6]));
+    showNodelabels(asBool(settings[7]));
     console.log("Skipping edit infos at index 6.");
-    networkphysics(settings[9]);
-    networkLayoutType(settings[10]);
-    labelNodesWith(settings[11] || null);
-    if (settings[9] === "hierarchical") {
-      networkLayoutDirection(settings[11]);
+    networkphysics(asBool(settings[9]));
+    networkLayoutType(layoutType);
+
+    if (layoutType === "hierarchical") {
+      networkLayoutDirection(layoutDirection);
       networkLayoutSort(settings[12]);
     }
+
+    const alertRulesEnabled = window.currentSettings.alertRules !== false;
+    const bundlingEnabled = !!window.currentSettings.edgeBundling;
+    toggleAlertRules(alertRulesEnabled);
+    toggleEdgeBundlingLite(bundlingEnabled);
   } catch (err) {
     console.error("Error in restoreSettings:", err);
   }
@@ -775,11 +863,183 @@ function updateNodeNote(nodeId, text) {
 }
 
 
-//Context menu actions
-function handleAddNode(x, y) {
-  const id = Date.now();
-  const pos = network.DOMtoCanvas({ x, y });
+function normalizeGraphId(rawId) {
+  if (rawId == null) return rawId;
+  if (typeof rawId === "number") return rawId;
+  const trimmed = String(rawId).trim();
+  if (trimmed === "") return rawId;
+  const parsed = Number(trimmed);
+  if (Number.isFinite(parsed) && String(parsed) === trimmed) return parsed;
+  return trimmed;
+}
 
+function createUniqueNodeId(prefix = "node") {
+  let candidate = `${prefix}_${Date.now()}`;
+  while (FULL_GRAPH.nodes.has(candidate) || nodesData.get(candidate)) {
+    candidate = `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+  }
+  return candidate;
+}
+
+function createUniqueEdgeId(prefix = "edge") {
+  let candidate = `${prefix}_${Date.now()}`;
+  while (FULL_GRAPH.edges.has(candidate) || edgesData.get(candidate)) {
+    candidate = `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+  }
+  return candidate;
+}
+
+function getContextCanvasPosition(x, y) {
+  if (!network || !network.canvas || !network.canvas.body || !network.canvas.body.container) {
+    return { x: 0, y: 0 };
+  }
+  const rect = network.canvas.body.container.getBoundingClientRect();
+  const domX = Number.isFinite(x) ? x - rect.left : rect.width / 2;
+  const domY = Number.isFinite(y) ? y - rect.top : rect.height / 2;
+  return network.DOMtoCanvas({ x: domX, y: domY });
+}
+
+function ensureAdjacencyNode(nodeId) {
+  if (!FULL_GRAPH.adjacency.has(nodeId)) {
+    FULL_GRAPH.adjacency.set(nodeId, new Set());
+  }
+}
+
+function invalidateGraphEdgeIndexes() {
+  FULL_GRAPH.edgesByNode = null;
+}
+
+function upsertFullGraphNode(node) {
+  if (!node || node.id == null) return null;
+  FULL_GRAPH.nodes.set(node.id, node);
+  ensureAdjacencyNode(node.id);
+  return node;
+}
+
+function upsertFullGraphEdge(edge) {
+  if (!edge) return null;
+  const id = edge.id == null ? createUniqueEdgeId("edge") : edge.id;
+  const from = normalizeGraphId(edge.from);
+  const to = normalizeGraphId(edge.to);
+  if (from == null || to == null) return null;
+
+  const merged = { ...edge, id, from, to };
+  FULL_GRAPH.edges.set(id, merged);
+  ensureAdjacencyNode(from);
+  ensureAdjacencyNode(to);
+  FULL_GRAPH.adjacency.get(from).add(to);
+  FULL_GRAPH.adjacency.get(to).add(from);
+  invalidateGraphEdgeIndexes();
+  return merged;
+}
+
+function removeFullGraphEdge(edgeId) {
+  if (edgeId == null) return;
+  const edge = FULL_GRAPH.edges.get(edgeId) || edgesData.get(edgeId);
+  if (!edge) return;
+
+  FULL_GRAPH.edges.delete(edgeId);
+  const from = normalizeGraphId(edge.from);
+  const to = normalizeGraphId(edge.to);
+  if (FULL_GRAPH.adjacency.has(from)) FULL_GRAPH.adjacency.get(from).delete(to);
+  if (FULL_GRAPH.adjacency.has(to)) FULL_GRAPH.adjacency.get(to).delete(from);
+
+  MODIFIED_EDGES.delete(edgeId);
+  VISIBLE_STATE.edges.delete(edgeId);
+  invalidateGraphEdgeIndexes();
+  if (edgesData.get(edgeId)) edgesData.remove(edgeId);
+}
+
+function removeFullGraphNode(nodeId) {
+  const id = normalizeGraphId(nodeId);
+  if (id == null) return;
+  const incident = [];
+  FULL_GRAPH.edges.forEach((edge, edgeId) => {
+    if (edge.from === id || edge.to === id) incident.push(edgeId);
+  });
+  incident.forEach(removeFullGraphEdge);
+
+  FULL_GRAPH.nodes.delete(id);
+  FULL_GRAPH.adjacency.delete(id);
+  FULL_GRAPH.adjacency.forEach(neighbors => neighbors.delete(id));
+  MODIFIED_NODES.delete(id);
+  VISIBLE_STATE.nodes.delete(id);
+  if (nodesData.get(id)) nodesData.remove(id);
+}
+
+function rebuildAdjacencyFromFullGraph() {
+  FULL_GRAPH.adjacency.clear();
+  FULL_GRAPH.nodes.forEach((_node, nodeId) => {
+    FULL_GRAPH.adjacency.set(nodeId, new Set());
+  });
+  FULL_GRAPH.edges.forEach(edge => {
+    ensureAdjacencyNode(edge.from);
+    ensureAdjacencyNode(edge.to);
+    FULL_GRAPH.adjacency.get(edge.from).add(edge.to);
+    FULL_GRAPH.adjacency.get(edge.to).add(edge.from);
+  });
+  invalidateGraphEdgeIndexes();
+}
+
+function createGraphEdge(from, to, patch = {}) {
+  if (from == null || to == null || from === to) return null;
+  const edge = {
+    id: patch.id ?? createUniqueEdgeId("edge"),
+    from: normalizeGraphId(from),
+    to: normalizeGraphId(to),
+    label: patch.label ?? "",
+    width: patch.width ?? 1,
+    arrows: patch.arrows ?? "to",
+    dashes: patch.dashes ?? false,
+    color: patch.color ?? undefined
+  };
+  const stored = upsertFullGraphEdge(edge);
+  if (!stored) return null;
+
+  MODIFIED_EDGES.set(stored.id, { ...(MODIFIED_EDGES.get(stored.id) || {}), ...stored });
+  if (VISIBLE_STATE.nodes.has(stored.from) && VISIBLE_STATE.nodes.has(stored.to)) {
+    VISIBLE_STATE.edges.add(stored.id);
+  }
+  edgesData.update(stored);
+  return stored;
+}
+
+function createAnnotationNode({
+  label = "Annotation",
+  x = 0,
+  y = 0,
+  shape = "box",
+  color = { background: "#fffdf2", border: "#8b7d4f" },
+  font = { color: "#333333", size: 14 },
+  extra = {}
+} = {}) {
+  const id = createUniqueNodeId("anno");
+  const node = {
+    id,
+    label,
+    x,
+    y,
+    shape,
+    color,
+    font,
+    borderWidth: extra.borderWidth ?? 1.2,
+    margin: extra.margin ?? 8,
+    annotationType: extra.annotationType || "generic",
+    note: extra.note || "",
+    ...extra
+  };
+  upsertFullGraphNode(node);
+  MODIFIED_NODES.set(id, { ...(MODIFIED_NODES.get(id) || {}), ...node });
+  VISIBLE_STATE.nodes.add(id);
+  window.limitOverridden = true;
+  nodesData.update(node);
+  return node;
+}
+
+// Context menu actions
+function handleAddNode(x, y) {
+  const pos = getContextCanvasPosition(x, y);
+  const id = createUniqueNodeId("node");
   const node = {
     id,
     label: window.currentSettings.showLabels ? `Node ${id}` : "",
@@ -788,114 +1048,183 @@ function handleAddNode(x, y) {
     color: { background: "#FFFFFF", border: "#777777" }
   };
 
-  // Add to FULL_GRAPH too
-  FULL_GRAPH.nodes.set(id, node);
-
-  // Persist modifications
-  MODIFIED_NODES.set(id, node);
-
-  // Add to nodesData so it appears immediately
-  nodesData.add(node);
-
-  // Mark as visible
+  upsertFullGraphNode(node);
+  MODIFIED_NODES.set(id, { ...(MODIFIED_NODES.get(id) || {}), ...node });
   VISIBLE_STATE.nodes.add(id);
+  window.limitOverridden = true;
+  nodesData.update(node);
 }
 
+function handleAddLabelNode(x, y) {
+  const text = prompt("Label text", "Label");
+  if (text == null) return;
+  const pos = getContextCanvasPosition(x, y);
+  createAnnotationNode({
+    label: String(text),
+    x: pos.x,
+    y: pos.y,
+    shape: "text",
+    font: { color: "#1f2d3d", size: 18 },
+    extra: { annotationType: "label" }
+  });
+}
 
+function handleAddCommentBox(x, y) {
+  const text = prompt("Comment", "New comment");
+  if (text == null) return;
+  const pos = getContextCanvasPosition(x, y);
+  createAnnotationNode({
+    label: String(text),
+    x: pos.x,
+    y: pos.y,
+    shape: "box",
+    color: { background: "#fff9e6", border: "#b8860b" },
+    font: { color: "#4d3b00", size: 14 },
+    extra: { annotationType: "comment_box", note: String(text) }
+  });
+}
 
+function handleAddTextBlock(x, y) {
+  const text = prompt("Text block", "Analyst note");
+  if (text == null) return;
+  const pos = getContextCanvasPosition(x, y);
+  createAnnotationNode({
+    label: String(text),
+    x: pos.x,
+    y: pos.y,
+    shape: "box",
+    color: { background: "#f3f7ff", border: "#4a6fa5" },
+    font: { color: "#1b3558", size: 13 },
+    extra: { annotationType: "text_block", note: String(text) }
+  });
+}
 
+function handleAddEventFrame(x, y) {
+  const text = prompt("Event frame title", "Event Frame");
+  if (text == null) return;
+  const pos = getContextCanvasPosition(x, y);
+  createAnnotationNode({
+    label: String(text),
+    x: pos.x,
+    y: pos.y,
+    shape: "box",
+    color: { background: "#f8f8f8", border: "#555555" },
+    font: { color: "#333333", size: 13 },
+    extra: { annotationType: "event_frame", borderWidth: 2, dashes: [8, 4] }
+  });
+}
+
+function handleAddThemeLine(selectedNodes) {
+  const nodes = Array.isArray(selectedNodes) ? selectedNodes.map(normalizeGraphId) : [];
+  if (nodes.length < 2) {
+    alert("Select at least two nodes to create a Theme Line.");
+    return;
+  }
+  for (let i = 0; i < nodes.length - 1; i++) {
+    createGraphEdge(nodes[i], nodes[i + 1], {
+      label: "Theme",
+      width: 2,
+      dashes: [8, 6],
+      color: { color: "#6b7280", inherit: false }
+    });
+  }
+  renderVisibleGraphBatch();
+}
+
+function handleAddOleObject(x, y) {
+  const text = prompt("OLE object title", "External Object");
+  if (text == null) return;
+  const pos = getContextCanvasPosition(x, y);
+  createAnnotationNode({
+    label: String(text),
+    x: pos.x,
+    y: pos.y,
+    shape: "database",
+    color: { background: "#eef6ff", border: "#245c9a" },
+    font: { color: "#1a3f66", size: 13 },
+    extra: { annotationType: "ole_object" }
+  });
+}
 
 function handleDeleteNode(nodeId) {
-  if (!nodeId) return;
-  const id = isNaN(nodeId) ? nodeId : Number(nodeId);
-
-  nodesData.remove(id);
-  window.MODIFIED_NODES.delete(id);
+  removeFullGraphNode(nodeId);
+  renderVisibleGraphBatch();
 }
 
+function hasEdgeBetween(nodeA, nodeB) {
+  const a = normalizeGraphId(nodeA);
+  const b = normalizeGraphId(nodeB);
+  for (const edge of FULL_GRAPH.edges.values()) {
+    if ((edge.from === a && edge.to === b) || (edge.from === b && edge.to === a)) return true;
+  }
+  return false;
+}
 
 function handleLinkNodes(selectedNodes) {
-  if (selectedNodes.length < 2) return;
+  const nodes = Array.isArray(selectedNodes) ? selectedNodes.map(normalizeGraphId) : [];
+  if (nodes.length < 2) return;
 
-  for (let i = 0; i < selectedNodes.length; i++) {
-    for (let j = i + 1; j < selectedNodes.length; j++) {
-      const from = selectedNodes[i];
-      const to = selectedNodes[j];
-
-      const exists = network
-        .getConnectedEdges(from)
-        .map(id => edgesData.get(id))
-        .some(e => e?.from === to || e?.to === to);
-
-      if (!exists) {
-        const edge = { from, to };
-        const id = edgesData.add(edge)[0];
-        window.MODIFIED_EDGES.set(id, edge);
+  for (let i = 0; i < nodes.length; i++) {
+    for (let j = i + 1; j < nodes.length; j++) {
+      const from = nodes[i];
+      const to = nodes[j];
+      if (!hasEdgeBetween(from, to)) {
+        createGraphEdge(from, to);
       }
     }
   }
-
+  renderVisibleGraphBatch();
 }
 
-
-//Handle single node
+// Handle single node
 function handleUnlinkNode(nodeId) {
-  const edges = network
-    .getConnectedEdges(nodeId)
-    .filter(id => edgesData.get(id));
-
-  edgesData.remove(edges);
-  edges.forEach(id => window.MODIFIED_EDGES.delete(id));
+  const id = normalizeGraphId(nodeId);
+  const toRemove = [];
+  FULL_GRAPH.edges.forEach((edge, edgeId) => {
+    if (edge.from === id || edge.to === id) toRemove.push(edgeId);
+  });
+  toRemove.forEach(removeFullGraphEdge);
+  renderVisibleGraphBatch();
 }
 
-
-//Handle multiple nodes
+// Handle multiple nodes
 function handleUnlinkNodes(selectedNodes) {
-  if (selectedNodes.length < 2) return;
+  const nodeSet = new Set((selectedNodes || []).map(normalizeGraphId));
+  if (nodeSet.size < 2) return;
 
   const toRemove = [];
-
-  edgesData.forEach(edge => {
-    if (
-      selectedNodes.includes(edge.from) &&
-      selectedNodes.includes(edge.to)
-    ) {
-      toRemove.push(edge.id);
-    }
+  FULL_GRAPH.edges.forEach((edge, edgeId) => {
+    if (nodeSet.has(edge.from) && nodeSet.has(edge.to)) toRemove.push(edgeId);
   });
-
-  edgesData.remove(toRemove);
-  toRemove.forEach(id => window.MODIFIED_EDGES.delete(id));
-
+  toRemove.forEach(removeFullGraphEdge);
+  renderVisibleGraphBatch();
 }
 
-
 function handleGroupNodes(nodeIds) {
+  const ids = Array.isArray(nodeIds) ? nodeIds.map(normalizeGraphId) : [];
+  if (ids.length < 2) return;
+
   const groupId = `Group ${Date.now()}`;
-  const pos = network.getPositions(nodeIds);
-
-  let x = 0, y = 0;
-
-  // Capture full node data BEFORE removal
-  const memberNodes = nodesData.get(nodeIds);
-
-  // 🔑 Capture internal edges BEFORE removal
-  const memberEdges = edgesData.get({
-    filter: edge =>
-      nodeIds.includes(edge.from) &&
-      nodeIds.includes(edge.to)
-  });
-
-  nodeIds.forEach(id => {
+  const pos = network.getPositions(ids);
+  let x = 0;
+  let y = 0;
+  ids.forEach(id => {
     x += pos[id]?.x || 0;
     y += pos[id]?.y || 0;
   });
+  x /= ids.length;
+  y /= ids.length;
 
-  x /= nodeIds.length;
-  y /= nodeIds.length;
+  const memberSet = new Set(ids);
+  const memberNodes = ids
+    .map(id => ({ ...(FULL_GRAPH.nodes.get(id) || {}), ...(MODIFIED_NODES.get(id) || {}) }))
+    .filter(node => node.id != null);
+  const memberEdges = [];
+  FULL_GRAPH.edges.forEach(edge => {
+    if (memberSet.has(edge.from) && memberSet.has(edge.to)) memberEdges.push({ ...edge });
+  });
 
-  // Remove original nodes (edges auto-removed by vis)
-  nodesData.remove(nodeIds);
+  ids.forEach(removeFullGraphNode);
 
   const groupNode = {
     id: groupId,
@@ -903,82 +1232,772 @@ function handleGroupNodes(nodeIds) {
     size: 40,
     x,
     y,
-    color: {
-      background: "#FFFFFF",
-      border: "#777777"
-    },
+    color: { background: "#FFFFFF", border: "#777777" },
     isGroup: true,
-
-    // 🔒 serialized subgraph
     members: memberNodes,
     edges: memberEdges
   };
 
-  nodesData.add(groupNode);
-  window.MODIFIED_NODES.set(groupId, groupNode);
-
+  upsertFullGraphNode(groupNode);
+  MODIFIED_NODES.set(groupId, { ...(MODIFIED_NODES.get(groupId) || {}), ...groupNode });
+  VISIBLE_STATE.nodes.add(groupId);
+  renderVisibleGraphBatch();
 }
 
-
-
 function handleUngroupNode(groupId) {
-  const groupNode = nodesData.get(groupId);
+  const id = normalizeGraphId(groupId);
+  const groupNode = FULL_GRAPH.nodes.get(id) || nodesData.get(id);
   if (!groupNode || !groupNode.isGroup) {
     console.warn("Not a group node:", groupId);
     return;
   }
 
   const { members = [], edges = [] } = groupNode;
+  removeFullGraphNode(id);
 
-  // Remove the group node
-  nodesData.remove(groupId);
-  MODIFIED_NODES.delete(groupId);
-
-  const idMap = new Map(); // oldId -> new unique ID
-
-  // Restore member nodes, remap IDs if duplicate exists
-  const restoredNodes = members.map(node => {
+  const idMap = new Map();
+  members.forEach(node => {
     let newId = node.id;
-    if (nodesData.get(newId)) {
-      // Generate a unique ID
-      newId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    if (FULL_GRAPH.nodes.has(newId) || nodesData.get(newId)) {
+      newId = createUniqueNodeId("restored");
     }
     idMap.set(node.id, newId);
-
-    const patchedNode = { ...node, id: newId };
-    nodesData.add(patchedNode);
-
-    MODIFIED_NODES.set(newId, {
-      ...(MODIFIED_NODES.get(newId) || {}),
-      ...patchedNode
-    });
-
-    return patchedNode;
+    const restoredNode = { ...node, id: newId };
+    upsertFullGraphNode(restoredNode);
+    MODIFIED_NODES.set(newId, { ...(MODIFIED_NODES.get(newId) || {}), ...restoredNode });
+    VISIBLE_STATE.nodes.add(newId);
   });
 
-  // Restore edges with remapped IDs
-  const existingEdges = new Set(
-    edgesData.get().map(e => {
-      const a = String(e.from);
-      const b = String(e.to);
-      return a < b ? `${a}--${b}` : `${b}--${a}`;
-    })
-  );
+  const existingPairs = new Set();
+  FULL_GRAPH.edges.forEach(edge => {
+    existingPairs.add([String(edge.from), String(edge.to)].sort().join("--"));
+  });
 
-  const safeEdges = edges.map(edge => {
+  edges.forEach(edge => {
     const from = idMap.get(edge.from) || edge.from;
     const to = idMap.get(edge.to) || edge.to;
-    const key = from < to ? `${from}--${to}` : `${to}--${from}`;
+    if (from === to) return;
+    const pairKey = [String(from), String(to)].sort().join("--");
+    if (existingPairs.has(pairKey)) return;
+    existingPairs.add(pairKey);
 
-    if (!existingEdges.has(key)) {
-      existingEdges.add(key);
-      return { ...edge, from, to, id: `${from}-${to}` };
+    const restoredEdge = {
+      ...edge,
+      id: createUniqueEdgeId("restored_edge"),
+      from,
+      to
+    };
+    upsertFullGraphEdge(restoredEdge);
+    MODIFIED_EDGES.set(restoredEdge.id, { ...(MODIFIED_EDGES.get(restoredEdge.id) || {}), ...restoredEdge });
+    if (VISIBLE_STATE.nodes.has(from) && VISIBLE_STATE.nodes.has(to)) {
+      VISIBLE_STATE.edges.add(restoredEdge.id);
     }
-    return null; // skip duplicates
-  }).filter(Boolean);
+  });
 
-  edgesData.add(safeEdges);
+  renderVisibleGraphBatch();
+}
 
+function expandNeighborhoodFromSelection(selectedNodes, maxDepth = 1) {
+  const seeds = new Set((selectedNodes || []).map(normalizeGraphId).filter(id => FULL_GRAPH.nodes.has(id)));
+  if (seeds.size === 0) return;
+
+  const queue = [];
+  const visited = new Set();
+  seeds.forEach(nodeId => {
+    queue.push({ nodeId, depth: 0 });
+    visited.add(nodeId);
+    VISIBLE_STATE.nodes.add(nodeId);
+  });
+
+  while (queue.length > 0) {
+    const { nodeId, depth } = queue.shift();
+    if (depth >= maxDepth) continue;
+    const neighbors = FULL_GRAPH.adjacency.get(nodeId);
+    if (!neighbors) continue;
+    neighbors.forEach(neighborId => {
+      if (!FULL_GRAPH.nodes.has(neighborId)) return;
+      VISIBLE_STATE.nodes.add(neighborId);
+      if (visited.has(neighborId)) return;
+      visited.add(neighborId);
+      queue.push({ nodeId: neighborId, depth: depth + 1 });
+    });
+  }
+
+  recomputeVisibleEdges();
+  renderVisibleGraphBatch();
+}
+
+function collapseNeighborhoodFromSelection(selectedNodes, maxDepth = 1) {
+  const anchors = new Set((selectedNodes || []).map(normalizeGraphId).filter(id => VISIBLE_STATE.nodes.has(id)));
+  if (anchors.size === 0) return;
+
+  const toHide = new Set();
+  const queue = [];
+  const visited = new Set();
+
+  anchors.forEach(nodeId => {
+    queue.push({ nodeId, depth: 0 });
+    visited.add(nodeId);
+  });
+
+  while (queue.length > 0) {
+    const { nodeId, depth } = queue.shift();
+    if (depth >= maxDepth) continue;
+    const neighbors = FULL_GRAPH.adjacency.get(nodeId);
+    if (!neighbors) continue;
+    neighbors.forEach(neighborId => {
+      if (!VISIBLE_STATE.nodes.has(neighborId)) return;
+      if (!visited.has(neighborId)) {
+        visited.add(neighborId);
+        queue.push({ nodeId: neighborId, depth: depth + 1 });
+      }
+      if (!anchors.has(neighborId)) {
+        toHide.add(neighborId);
+      }
+    });
+  }
+
+  toHide.forEach(nodeId => VISIBLE_STATE.nodes.delete(nodeId));
+  recomputeVisibleEdges();
+  renderVisibleGraphBatch();
+}
+
+function mergeSelectedNodes(selectedNodes) {
+  const ids = Array.isArray(selectedNodes) ? selectedNodes.map(normalizeGraphId).filter(id => FULL_GRAPH.nodes.has(id)) : [];
+  if (ids.length < 2) return;
+
+  const canonicalId = ids[0];
+  const mergeSet = new Set(ids);
+  const canonicalBase = FULL_GRAPH.nodes.get(canonicalId) || {};
+  const canonicalMod = MODIFIED_NODES.get(canonicalId) || {};
+  const canonicalNode = { ...canonicalBase, ...canonicalMod };
+
+  const positions = network.getPositions(ids);
+  let cx = 0;
+  let cy = 0;
+  let count = 0;
+  ids.forEach(id => {
+    const pos = positions[id];
+    if (!pos) return;
+    cx += pos.x;
+    cy += pos.y;
+    count += 1;
+  });
+  if (count > 0) {
+    canonicalNode.x = cx / count;
+    canonicalNode.y = cy / count;
+  }
+
+  const mergedFrom = ids.filter(id => id !== canonicalId);
+  canonicalNode.merged_from = Array.from(new Set([...(canonicalNode.merged_from || []), ...mergedFrom]));
+  canonicalNode.merge_count = (canonicalNode.merge_count || 1) + mergedFrom.length;
+
+  const aggregated = new Map();
+  FULL_GRAPH.edges.forEach(edge => {
+    const from = mergeSet.has(edge.from) ? canonicalId : edge.from;
+    const to = mergeSet.has(edge.to) ? canonicalId : edge.to;
+    if (from === to) return;
+    const key = `${String(from)}-->${String(to)}`;
+    if (!aggregated.has(key)) {
+      aggregated.set(key, {
+        ...edge,
+        id: createUniqueEdgeId("merged_edge"),
+        from,
+        to,
+        merged_count: 1
+      });
+      return;
+    }
+
+    const acc = aggregated.get(key);
+    acc.merged_count += 1;
+    const accWeight = toFiniteNumber(acc.weight ?? acc.value ?? acc.width ?? 1) ?? 1;
+    const edgeWeight = toFiniteNumber(edge.weight ?? edge.value ?? edge.width ?? 1) ?? 1;
+    const totalWeight = accWeight + edgeWeight;
+    acc.weight = totalWeight;
+    acc.value = totalWeight;
+    acc.width = Math.max(1, Math.min(6, totalWeight));
+    if (!acc.label) acc.label = edge.label || "Merged";
+  });
+
+  ids.forEach(id => {
+    if (id !== canonicalId) removeFullGraphNode(id);
+  });
+
+  upsertFullGraphNode({ ...canonicalNode, id: canonicalId });
+  MODIFIED_NODES.set(canonicalId, { ...(MODIFIED_NODES.get(canonicalId) || {}), ...canonicalNode, id: canonicalId });
+  VISIBLE_STATE.nodes.add(canonicalId);
+
+  FULL_GRAPH.edges.clear();
+  MODIFIED_EDGES.clear();
+  aggregated.forEach(edge => {
+    const stored = upsertFullGraphEdge(edge);
+    if (!stored) return;
+    MODIFIED_EDGES.set(stored.id, { ...(MODIFIED_EDGES.get(stored.id) || {}), ...stored });
+  });
+
+  rebuildAdjacencyFromFullGraph();
+  recomputeVisibleEdges();
+  renderVisibleGraphBatch();
+}
+
+function generatePaletteColor(index, total) {
+  const safeTotal = Math.max(1, total);
+  const hue = Math.round((index % safeTotal) * (360 / safeTotal));
+  return `hsl(${hue}, 62%, 55%)`;
+}
+
+function getVisibleNodeSnapshots() {
+  return Array.from(VISIBLE_STATE.nodes)
+    .map(nodeId => {
+      const base = FULL_GRAPH.nodes.get(nodeId);
+      if (!base) return null;
+      const mod = MODIFIED_NODES.get(nodeId) || {};
+      return { id: nodeId, ...base, ...mod };
+    })
+    .filter(Boolean);
+}
+
+function inferDynamicNodeKeys(nodes) {
+  const numeric = new Set();
+  const categorical = new Set();
+  const counters = new Map();
+
+  (nodes || []).forEach(node => {
+    Object.entries(node).forEach(([key, value]) => {
+      if (["id", "x", "y", "vx", "vy", "title", "label", "color", "font", "shape", "image", "iconPath"].includes(key)) return;
+      if (value == null || value === "") return;
+      const num = toFiniteNumber(value);
+      if (num != null) {
+        numeric.add(key);
+      } else {
+        categorical.add(key);
+      }
+      counters.set(key, (counters.get(key) || 0) + 1);
+    });
+  });
+
+  const sortByCoverage = key => -(counters.get(key) || 0);
+  return {
+    numeric: Array.from(numeric).sort((a, b) => sortByCoverage(a) - sortByCoverage(b)),
+    categorical: Array.from(categorical).sort((a, b) => sortByCoverage(a) - sortByCoverage(b))
+  };
+}
+
+function applyVisualEncodingByDegree() {
+  const visibleSet = new Set(VISIBLE_STATE.nodes);
+  const nodes = getVisibleNodeSnapshots();
+  if (nodes.length === 0) return;
+
+  let maxDegree = 1;
+  const degreeMap = new Map();
+  nodes.forEach(node => {
+    const degree = getVisibleNeighborCount(node.id, visibleSet);
+    degreeMap.set(node.id, degree);
+    if (degree > maxDegree) maxDegree = degree;
+  });
+
+  const updates = nodes.map(node => {
+    const degree = degreeMap.get(node.id) || 0;
+    const ratio = degree / maxDegree;
+    const size = 14 + (ratio * 26);
+    const background = `hsl(${Math.round(220 - ratio * 180)}, 70%, 58%)`;
+    const patch = {
+      id: node.id,
+      size,
+      color: buildNodeColor(background)
+    };
+    persistNodeChange(node.id, patch);
+    return patch;
+  });
+  nodesData.update(updates);
+}
+
+function applyVisualEncodingByProperty(propertyKey) {
+  const key = String(propertyKey || "").trim();
+  if (!key) return;
+  const nodes = getVisibleNodeSnapshots();
+  if (nodes.length === 0) return;
+
+  const numericValues = [];
+  const categoricalMap = new Map();
+  nodes.forEach(node => {
+    const value = getNodeValue(node, key);
+    const num = toFiniteNumber(value);
+    if (num != null) numericValues.push(num);
+    else if (value != null && String(value).trim() !== "") categoricalMap.set(String(value), true);
+  });
+
+  const useNumeric = numericValues.length >= Math.max(4, Math.floor(nodes.length * 0.35));
+  const min = useNumeric ? Math.min(...numericValues) : 0;
+  const max = useNumeric ? Math.max(...numericValues) : 1;
+  const categories = Array.from(categoricalMap.keys()).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  const categoryColor = new Map();
+  categories.forEach((cat, index) => {
+    categoryColor.set(cat, generatePaletteColor(index, categories.length));
+  });
+
+  const updates = nodes.map(node => {
+    const value = getNodeValue(node, key);
+    const num = toFiniteNumber(value);
+    let ratio = 0.5;
+    let color = "#5a8ac6";
+
+    if (useNumeric && num != null && max > min) {
+      ratio = (num - min) / (max - min);
+      color = `hsl(${Math.round(220 - ratio * 180)}, 72%, 56%)`;
+    } else if (!useNumeric && value != null && categoryColor.has(String(value))) {
+      color = categoryColor.get(String(value));
+    }
+
+    const patch = {
+      id: node.id,
+      size: 13 + (ratio * 24),
+      color: buildNodeColor(color)
+    };
+    persistNodeChange(node.id, patch);
+    return patch;
+  });
+
+  nodesData.update(updates);
+}
+
+function saveCurrentView(name) {
+  const trimmedName = String(name || "").trim();
+  if (!trimmedName) return;
+
+  const snapshot = {
+    id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    name: trimmedName,
+    createdAt: new Date().toISOString(),
+    position: network.getViewPosition(),
+    scale: network.getScale(),
+    visibleNodes: Array.from(VISIBLE_STATE.nodes),
+    visibleEdges: Array.from(VISIBLE_STATE.edges),
+    selectedNodes: network.getSelectedNodes(),
+    selectedEdges: network.getSelectedEdges(),
+    settings: { ...window.currentSettings }
+  };
+
+  const next = Array.isArray(window.SAVED_VIEWS) ? window.SAVED_VIEWS.slice() : [];
+  const existingIndex = next.findIndex(item => item.name === trimmedName);
+  if (existingIndex >= 0) next.splice(existingIndex, 1);
+  next.unshift(snapshot);
+  window.SAVED_VIEWS = next.slice(0, MAX_SAVED_VIEWS);
+  writeJsonStorage(SAVED_VIEWS_STORAGE_KEY, window.SAVED_VIEWS);
+}
+
+function loadSavedView(name) {
+  const list = Array.isArray(window.SAVED_VIEWS) ? window.SAVED_VIEWS : [];
+  if (list.length === 0) return;
+  const target = list.find(item => item.name === name) || list[0];
+  if (!target) return;
+
+  const nodes = new Set((target.visibleNodes || []).filter(nodeId => FULL_GRAPH.nodes.has(nodeId)));
+  if (nodes.size > 0) {
+    VISIBLE_STATE.nodes = nodes;
+    recomputeVisibleEdges();
+    renderVisibleGraphBatch();
+  }
+
+  network.moveTo({
+    position: target.position || { x: 0, y: 0 },
+    scale: Number.isFinite(target.scale) ? target.scale : 1,
+    animation: { duration: 280, easingFunction: "easeInOutQuad" }
+  });
+
+  if (Array.isArray(target.selectedNodes) && target.selectedNodes.length > 0) {
+    network.selectNodes(target.selectedNodes.filter(nodeId => VISIBLE_STATE.nodes.has(nodeId)));
+  }
+}
+
+function clearPathHighlight() {
+  if (!window.PATH_HIGHLIGHT_STATE) return;
+  window.PATH_HIGHLIGHT_STATE.nodeIds.clear();
+  window.PATH_HIGHLIGHT_STATE.edgeIds.clear();
+  renderVisibleGraphBatch();
+}
+
+function findShortestPath(startId, endId) {
+  const start = normalizeGraphId(startId);
+  const end = normalizeGraphId(endId);
+  if (!FULL_GRAPH.nodes.has(start) || !FULL_GRAPH.nodes.has(end)) return [];
+  if (start === end) return [start];
+
+  const queue = [start];
+  const visited = new Set([start]);
+  const previous = new Map();
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+    const neighbors = FULL_GRAPH.adjacency.get(current);
+    if (!neighbors) continue;
+    for (const neighborId of neighbors) {
+      if (visited.has(neighborId)) continue;
+      visited.add(neighborId);
+      previous.set(neighborId, current);
+      if (neighborId === end) {
+        const path = [end];
+        let cursor = end;
+        while (previous.has(cursor)) {
+          cursor = previous.get(cursor);
+          path.push(cursor);
+        }
+        return path.reverse();
+      }
+      queue.push(neighborId);
+    }
+  }
+
+  return [];
+}
+
+function highlightPath(path) {
+  clearPathHighlight();
+  if (!Array.isArray(path) || path.length === 0) return;
+
+  const nodeUpdates = [];
+  const edgeUpdates = [];
+
+  for (let i = 0; i < path.length; i++) {
+    const nodeId = path[i];
+    if (!VISIBLE_STATE.nodes.has(nodeId)) continue;
+    window.PATH_HIGHLIGHT_STATE.nodeIds.add(nodeId);
+    nodeUpdates.push({
+      id: nodeId,
+      borderWidth: 3,
+      color: buildNodeColor("#f97316")
+    });
+    persistNodeChange(nodeId, {
+      borderWidth: 3,
+      color: buildNodeColor("#f97316")
+    });
+
+    if (i === path.length - 1) continue;
+    const from = path[i];
+    const to = path[i + 1];
+    for (const [edgeId, edge] of FULL_GRAPH.edges) {
+      if ((edge.from === from && edge.to === to) || (edge.from === to && edge.to === from)) {
+        window.PATH_HIGHLIGHT_STATE.edgeIds.add(edgeId);
+        edgeUpdates.push({
+          id: edgeId,
+          color: { color: "#f97316", inherit: false },
+          width: 3
+        });
+        MODIFIED_EDGES.set(edgeId, {
+          ...(MODIFIED_EDGES.get(edgeId) || {}),
+          color: { color: "#f97316", inherit: false },
+          width: 3
+        });
+        break;
+      }
+    }
+  }
+
+  if (nodeUpdates.length > 0) nodesData.update(nodeUpdates);
+  if (edgeUpdates.length > 0) edgesData.update(edgeUpdates);
+}
+
+function runPathFinderForSelection(selectedNodes) {
+  const ids = Array.isArray(selectedNodes) ? selectedNodes.map(normalizeGraphId) : [];
+  if (ids.length !== 2) {
+    alert("Select exactly two nodes to compute shortest path.");
+    return;
+  }
+  const path = findShortestPath(ids[0], ids[1]);
+  if (!path.length) {
+    alert("No path found between the selected nodes.");
+    return;
+  }
+  path.forEach(nodeId => VISIBLE_STATE.nodes.add(nodeId));
+  recomputeVisibleEdges();
+  renderVisibleGraphBatch();
+  highlightPath(path);
+}
+
+function clearEdgeBundlingLite() {
+  const state = window.EDGE_BUNDLING_STATE;
+  if (!state) return;
+  const restoreUpdates = [];
+  state.originalByEdgeId.forEach((original, edgeId) => {
+    if (edgesData.get(edgeId)) {
+      restoreUpdates.push({ id: edgeId, ...original });
+    }
+  });
+  if (restoreUpdates.length > 0) edgesData.update(restoreUpdates);
+  state.originalByEdgeId.clear();
+  state.bundledPrimaryEdges.clear();
+}
+
+function applyEdgeBundlingLite() {
+  const state = window.EDGE_BUNDLING_STATE;
+  if (!state || !state.enabled) return;
+
+  const groups = new Map();
+  Array.from(VISIBLE_STATE.edges).forEach(edgeId => {
+    const edge = edgesData.get(edgeId) || FULL_GRAPH.edges.get(edgeId);
+    if (!edge) return;
+    const key = `${String(edge.from)}-->${String(edge.to)}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(edge);
+  });
+
+  const updates = [];
+  groups.forEach(group => {
+    group.sort((a, b) => String(a.id).localeCompare(String(b.id), undefined, { numeric: true }));
+    if (group.length === 1) {
+      const solo = group[0];
+      updates.push({ id: solo.id, hidden: false });
+      return;
+    }
+    const primary = group[0];
+    const extraCount = group.length - 1;
+
+    group.forEach((edge, index) => {
+      if (!state.originalByEdgeId.has(edge.id)) {
+        state.originalByEdgeId.set(edge.id, {
+          label: edge.label,
+          width: edge.width,
+          color: edge.color,
+          hidden: edge.hidden
+        });
+      }
+      if (index === 0) {
+        state.bundledPrimaryEdges.add(edge.id);
+        updates.push({
+          id: edge.id,
+          hidden: false,
+          label: `${edge.label || "link"} x${group.length}`,
+          width: Math.max(1.5, Math.min(6, 1 + Math.log2(group.length + 1))),
+          color: { color: "#4b5563", inherit: false }
+        });
+      } else {
+        updates.push({ id: edge.id, hidden: true });
+      }
+    });
+  });
+
+  if (updates.length > 0) edgesData.update(updates);
+}
+
+function toggleEdgeBundlingLite(forceState = null) {
+  const state = window.EDGE_BUNDLING_STATE;
+  if (!state) return false;
+  const next = forceState == null ? !state.enabled : !!forceState;
+  state.enabled = next;
+  window.currentSettings.edgeBundling = next;
+  if (!next) {
+    clearEdgeBundlingLite();
+  } else {
+    applyEdgeBundlingLite();
+  }
+  network.redraw();
+  return next;
+}
+
+function generateGraphAlerts() {
+  if (!window.ALERT_RULES_ENABLED) return [];
+  const alerts = [];
+  const visibleNodes = Array.from(VISIBLE_STATE.nodes);
+  const visibleEdges = Array.from(VISIBLE_STATE.edges);
+  if (visibleNodes.length === 0) return alerts;
+
+  const degreeStats = visibleNodes
+    .map(nodeId => ({ nodeId, degree: getVisibleNeighborCount(nodeId, new Set(VISIBLE_STATE.nodes)) }))
+    .sort((a, b) => b.degree - a.degree);
+
+  const topDegree = degreeStats.slice(0, Math.min(5, degreeStats.length));
+  topDegree.forEach(item => {
+    if (item.degree >= 3) {
+      alerts.push({
+        type: "high_degree",
+        severity: item.degree >= 8 ? "high" : "medium",
+        nodeId: item.nodeId,
+        message: `Node ${item.nodeId} has degree ${item.degree}`
+      });
+    }
+  });
+
+  const numericEdgeValues = [];
+  visibleEdges.forEach(edgeId => {
+    const edge = FULL_GRAPH.edges.get(edgeId) || edgesData.get(edgeId);
+    if (!edge) return;
+    const value = toFiniteNumber(edge.weight ?? edge.value ?? edge.width);
+    if (value != null) numericEdgeValues.push({ edgeId, value });
+  });
+  if (numericEdgeValues.length >= 4) {
+    const sorted = numericEdgeValues.slice().sort((a, b) => a.value - b.value);
+    const p95 = getPercentile(sorted.map(item => item.value), 0.95);
+    sorted
+      .filter(item => item.value >= p95)
+      .slice(-5)
+      .forEach(item => {
+        alerts.push({
+          type: "heavy_edge",
+          severity: "medium",
+          edgeId: item.edgeId,
+          message: `Edge ${item.edgeId} has high weight ${item.value}`
+        });
+      });
+  }
+
+  return alerts;
+}
+
+function publishGraphAlerts(alerts) {
+  window.parent.postMessage({
+    type: "graph_alerts",
+    payload: {
+      count: alerts.length,
+      alerts
+    }
+  }, "*");
+}
+
+function runAlertScan(notify = true) {
+  const alerts = generateGraphAlerts();
+  publishGraphAlerts(alerts);
+  if (notify) {
+    if (alerts.length === 0) alert("Alert scan complete. No alerts triggered.");
+    else alert(`Alert scan complete. ${alerts.length} alert(s) found.`);
+  }
+  return alerts;
+}
+
+function scheduleAlertScan() {
+  if (!window.ALERT_RULES_ENABLED) return;
+  if (VISIBLE_STATE.nodes.size > 5000 || VISIBLE_STATE.edges.size > 25000) return;
+
+  if (window.__alertScanTimer) {
+    clearTimeout(window.__alertScanTimer);
+  }
+
+  window.__alertScanTimer = setTimeout(() => {
+    window.__alertScanTimer = null;
+    runAlertScan(false);
+  }, 180);
+}
+
+function toggleAlertRules(forceState = null) {
+  const next = forceState == null ? !window.ALERT_RULES_ENABLED : !!forceState;
+  window.ALERT_RULES_ENABLED = next;
+  window.currentSettings.alertRules = next;
+  if (next) {
+    runAlertScan(false);
+  } else {
+    if (window.__alertScanTimer) {
+      clearTimeout(window.__alertScanTimer);
+      window.__alertScanTimer = null;
+    }
+    publishGraphAlerts([]);
+  }
+  return next;
+}
+
+function pushPinnedEvidenceItem(item) {
+  const key = `${item.type}:${item.id}`;
+  const existing = new Set(window.PINNED_EVIDENCE.map(entry => `${entry.type}:${entry.id}`));
+  if (existing.has(key)) return;
+  window.PINNED_EVIDENCE.unshift({
+    ...item,
+    pinnedAt: new Date().toISOString()
+  });
+  window.PINNED_EVIDENCE = window.PINNED_EVIDENCE.slice(0, 300);
+  writeJsonStorage(PINNED_EVIDENCE_STORAGE_KEY, window.PINNED_EVIDENCE);
+  window.parent.postMessage({
+    type: "pinned_evidence_update",
+    payload: window.PINNED_EVIDENCE
+  }, "*");
+}
+
+function pinSelectedEvidence() {
+  const selectedNodes = network.getSelectedNodes();
+  const selectedEdges = network.getSelectedEdges();
+  selectedNodes.forEach(nodeId => {
+    const base = FULL_GRAPH.nodes.get(nodeId);
+    if (!base) return;
+    const mod = MODIFIED_NODES.get(nodeId) || {};
+    pushPinnedEvidenceItem({
+      type: "node",
+      id: nodeId,
+      data: { ...base, ...mod }
+    });
+  });
+  selectedEdges.forEach(edgeId => {
+    const base = FULL_GRAPH.edges.get(edgeId);
+    if (!base) return;
+    const mod = MODIFIED_EDGES.get(edgeId) || {};
+    pushPinnedEvidenceItem({
+      type: "edge",
+      id: edgeId,
+      data: { ...base, ...mod }
+    });
+  });
+}
+
+function clearPinnedEvidence() {
+  window.PINNED_EVIDENCE = [];
+  writeJsonStorage(PINNED_EVIDENCE_STORAGE_KEY, window.PINNED_EVIDENCE);
+  window.parent.postMessage({
+    type: "pinned_evidence_update",
+    payload: window.PINNED_EVIDENCE
+  }, "*");
+}
+
+function detectVisibleCommunities() {
+  const visibleSet = new Set(VISIBLE_STATE.nodes);
+  const visited = new Set();
+  const communities = [];
+
+  visibleSet.forEach(startNode => {
+    if (visited.has(startNode)) return;
+    const queue = [startNode];
+    const members = [];
+    visited.add(startNode);
+
+    while (queue.length > 0) {
+      const nodeId = queue.shift();
+      members.push(nodeId);
+      const neighbors = FULL_GRAPH.adjacency.get(nodeId);
+      if (!neighbors) continue;
+      neighbors.forEach(neighborId => {
+        if (!visibleSet.has(neighborId) || visited.has(neighborId)) return;
+        visited.add(neighborId);
+        queue.push(neighborId);
+      });
+    }
+    communities.push(members);
+  });
+
+  return communities.sort((a, b) => b.length - a.length);
+}
+
+function applyCommunityDetection() {
+  const communities = detectVisibleCommunities();
+  if (communities.length === 0) return;
+
+  const nodeUpdates = [];
+  communities.forEach((communityNodes, index) => {
+    const color = generatePaletteColor(index, communities.length);
+    communityNodes.forEach(nodeId => {
+      const patch = {
+        id: nodeId,
+        community_id: index + 1,
+        color: buildNodeColor(color)
+      };
+      persistNodeChange(nodeId, patch);
+      nodeUpdates.push(patch);
+    });
+  });
+  nodesData.update(nodeUpdates);
+
+  window.parent.postMessage({
+    type: "community_detection_result",
+    payload: {
+      communities: communities.length,
+      largest: communities[0]?.length || 0
+    }
+  }, "*");
 }
 
 
@@ -991,6 +2010,7 @@ function restoreNodeState(nodeId) {
 
 
 function applyLimit({ key = "", sort = "asc", amount = 25 }) {
+    const perfStart = performance.now();
       // Store in global settings
     window.currentSettings.limit = amount;
     window.currentSettings.sortKey = key;
@@ -1054,22 +2074,93 @@ function applyLimit({ key = "", sort = "asc", amount = 25 }) {
         }
     }
 
+    const selectionDone = performance.now();
     recomputeVisibleEdges();
+    const edgesDone = performance.now();
     renderVisibleGraphBatch();
+    const renderDone = performance.now();
+
+    if (VISIBLE_STATE.nodes.size >= 500 || VISIBLE_STATE.edges.size >= 1000) {
+      console.log(
+        `[applyLimit] nodes=${VISIBLE_STATE.nodes.size} edges=${VISIBLE_STATE.edges.size} ` +
+        `select=${(selectionDone - perfStart).toFixed(1)}ms ` +
+        `edgeRecompute=${(edgesDone - selectionDone).toFixed(1)}ms ` +
+        `render=${(renderDone - edgesDone).toFixed(1)}ms ` +
+        `total=${(renderDone - perfStart).toFixed(1)}ms`
+      );
+    }
 }
 
 
 function recomputeVisibleEdges() {
   VISIBLE_STATE.edges.clear();
 
-  for (const [id, e] of FULL_GRAPH.edges) {
-    if (
-      VISIBLE_STATE.nodes.has(e.from) &&
-      VISIBLE_STATE.nodes.has(e.to)
-    ) {
+  if (VISIBLE_STATE.nodes.size === 0) return;
+
+  const edgesByNode = ensureEdgesByNodeIndex();
+
+  // For partial views, iterating incident edges is much faster than scanning all edges.
+  const useIndexedPath = VISIBLE_STATE.nodes.size < (FULL_GRAPH.nodes.size * 0.65);
+  if (useIndexedPath) {
+    const candidateEdgeIds = new Set();
+    VISIBLE_STATE.nodes.forEach(nodeId => {
+      const edgeIds = edgesByNode.get(nodeId);
+      if (!edgeIds) return;
+      edgeIds.forEach(edgeId => candidateEdgeIds.add(edgeId));
+    });
+
+    candidateEdgeIds.forEach(edgeId => {
+      const edge = FULL_GRAPH.edges.get(edgeId);
+      if (!edge) return;
+      if (VISIBLE_STATE.nodes.has(edge.from) && VISIBLE_STATE.nodes.has(edge.to)) {
+        VISIBLE_STATE.edges.add(edgeId);
+      }
+    });
+    return;
+  }
+
+  // Fallback full scan for very large visible sets.
+  for (const [id, edge] of FULL_GRAPH.edges) {
+    if (VISIBLE_STATE.nodes.has(edge.from) && VISIBLE_STATE.nodes.has(edge.to)) {
       VISIBLE_STATE.edges.add(id);
     }
   }
+}
+
+function ensureEdgesByNodeIndex() {
+  const currentIndex = FULL_GRAPH.edgesByNode;
+  if (currentIndex instanceof Map && currentIndex.size > 0) {
+    return currentIndex;
+  }
+
+  const index = new Map();
+  for (const nodeId of FULL_GRAPH.nodes.keys()) {
+    index.set(nodeId, new Set());
+  }
+
+  for (const [edgeId, edge] of FULL_GRAPH.edges) {
+    if (!index.has(edge.from)) index.set(edge.from, new Set());
+    if (!index.has(edge.to)) index.set(edge.to, new Set());
+    index.get(edge.from).add(edgeId);
+    index.get(edge.to).add(edgeId);
+  }
+
+  FULL_GRAPH.edgesByNode = index;
+  return index;
+}
+
+function addVisibleEdgesForNode(nodeId) {
+  const edgesByNode = ensureEdgesByNodeIndex();
+  const edgeIds = edgesByNode.get(nodeId);
+  if (!edgeIds || edgeIds.size === 0) return;
+
+  edgeIds.forEach(edgeId => {
+    const edge = FULL_GRAPH.edges.get(edgeId);
+    if (!edge) return;
+    if (VISIBLE_STATE.nodes.has(edge.from) && VISIBLE_STATE.nodes.has(edge.to)) {
+      VISIBLE_STATE.edges.add(edgeId);
+    }
+  });
 }
 
 function expandNode(nodeId) {
@@ -1092,9 +2183,12 @@ function expandNode(nodeId) {
         // Optional: Store that we've overridden the limit
         window.limitOverridden = true;
         window.originalLimit = VISIBLE_STATE.limit;
+        // Only add newly affected edges for progressive extraction.
+        addVisibleEdgesForNode(neighborToExpand);
+    } else {
+        return;
     }
-    
-    recomputeVisibleEdges();
+
     renderVisibleGraphBatch();
     
     // Show indicator that limit is overridden
@@ -1300,23 +2394,30 @@ function pasteNodes(pos) {
 
   if (clipboardNodes.length === 0) return;
 
+  const basePosition = (pos && Number.isFinite(pos.x) && Number.isFinite(pos.y))
+    ? pos
+    : getContextCanvasPosition();
   const idMap = new Map();
+  const pastedNodeIds = [];
+  const pastedEdgeIds = [];
 
   clipboardNodes.forEach((n, i) => {
-    let id = Date.now() + i;
-    if(String(n.id).startsWith("Group")){
-      id = `Group ${id}`
-    }
+    const isGroupNode = String(n.id || "").startsWith("Group");
+    const id = createUniqueNodeId(isGroupNode ? "Group" : "node");
 
     idMap.set(String(n.id), id);
 
-    nodesData.add({
+    const node = {
       ...n,
       id,
-      x: pos.x + i * 20,
-      y: pos.y + i * 20
-    });
-    MODIFIED_NODES.set(id, { ...n, id });
+      x: basePosition.x + i * 20,
+      y: basePosition.y + i * 20
+    };
+
+    upsertFullGraphNode(node);
+    MODIFIED_NODES.set(id, { ...(MODIFIED_NODES.get(id) || {}), ...node });
+    VISIBLE_STATE.nodes.add(id);
+    pastedNodeIds.push(id);
   });
 
   const copiedEdges = Array.isArray(clipboardNodes.__edges)
@@ -1331,18 +2432,28 @@ function pasteNodes(pos) {
       const to = idMap.get(String(edge.to));
       if (!from || !to) return null;
 
-      const edgeId = `${Date.now()}_edge_${index}`;
+      const edgeId = createUniqueEdgeId(`paste_edge_${index}`);
       return { ...edge, id: edgeId, from, to };
     })
     .filter(Boolean);
 
-  if (remappedEdges.length > 0) {
-    edgesData.add(remappedEdges);
-    remappedEdges.forEach(edge => {
-      MODIFIED_EDGES.set(edge.id, { ...edge });
-    });
+  remappedEdges.forEach(edge => {
+    const stored = upsertFullGraphEdge(edge);
+    if (!stored) return;
+    MODIFIED_EDGES.set(stored.id, { ...(MODIFIED_EDGES.get(stored.id) || {}), ...stored });
+    pastedEdgeIds.push(stored.id);
+  });
+
+  if (pastedEdgeIds.length > 0) {
+    pastedEdgeIds.forEach(edgeId => VISIBLE_STATE.edges.add(edgeId));
   }
 
+  window.limitOverridden = true;
+  recomputeVisibleEdges();
+  renderVisibleGraphBatch();
+  if (pastedNodeIds.length > 0) {
+    network.selectNodes(pastedNodeIds);
+  }
   network?.redraw();
 }
 
@@ -1474,7 +2585,28 @@ function showNodeInfos(node, state) {
 }
 
 function networkphysics(state) {
-  const enabled = state === true || state === "true";
+  const requested = state === true || state === "true";
+  window.currentSettings.physics = requested;
+  updateGraphOption("graph_physics", requested);
+  syncPhysicsWithCurrentState({ forceRestart: true });
+}
+
+function isPhysicsEnabledState(state) {
+  return state === true || state === "true";
+}
+
+function getEffectivePhysicsEnabled() {
+  const requested = isPhysicsEnabledState(window.currentSettings.physics);
+  return requested && !AUTO_PHYSICS_FORCED_OFF;
+}
+
+function applyPhysicsRuntimeState(enabled, { forceRestart = false, forceApply = false } = {}) {
+  if (!network) return;
+
+  const changedState = LAST_APPLIED_EFFECTIVE_PHYSICS !== enabled;
+  const shouldApply = forceApply || forceRestart || changedState;
+  if (!shouldApply) return;
+
   if (enabled) {
     network.setOptions({
       physics: {
@@ -1482,24 +2614,62 @@ function networkphysics(state) {
         enabled: true
       }
     });
-    // always restart engine cleanly
-    network.startSimulation();
-    network.stabilize();
-
+    // Only restart/stabilize when explicitly requested or when effective state flips.
+    if (forceRestart || changedState) {
+      network.startSimulation();
+      network.stabilize();
+    }
   } else {
-    // stop engine cleanly
     network.stopSimulation();
     network.setOptions({
       physics: { enabled: false }
     });
   }
-  window.currentSettings.physics = state;
-  updateGraphOption("graph_physics", enabled);
+
+  LAST_APPLIED_EFFECTIVE_PHYSICS = enabled;
+}
+
+function syncPhysicsWithCurrentState({ forceRestart = false, forceApply = false } = {}) {
+  const enabled = getEffectivePhysicsEnabled();
+  applyPhysicsRuntimeState(enabled, { forceRestart, forceApply });
+  applyEdgeSmoothForCurrentPhysics();
+  return enabled;
+}
+
+function updatePerformancePhysicsGuard(visibleNodeCount) {
+  const shouldForceOff = Number(visibleNodeCount) >= AUTO_PHYSICS_NODE_THRESHOLD;
+  if (AUTO_PHYSICS_FORCED_OFF === shouldForceOff) return;
+
+  AUTO_PHYSICS_FORCED_OFF = shouldForceOff;
+  const effective = syncPhysicsWithCurrentState({ forceRestart: true });
+  console.log(
+    `[performancePhysics] visibleNodes=${visibleNodeCount} threshold=${AUTO_PHYSICS_NODE_THRESHOLD} ` +
+    `forcedOff=${AUTO_PHYSICS_FORCED_OFF} effectivePhysics=${effective}`
+  );
+}
+
+function enforceCurrentPhysicsState({ forceApply = false } = {}) {
+  return syncPhysicsWithCurrentState({ forceApply });
+}
+
+function applyEdgeSmoothForCurrentPhysics() {
+  const physicsEnabled = getEffectivePhysicsEnabled();
+  const smoothOptions = physicsEnabled
+    ? { enabled: true, type: "dynamic", roundness: 0.1 }
+    : { enabled: true, type: "continuous", roundness: 0.1 };
+
+  network.setOptions({
+    edges: { smooth: smoothOptions }
+  });
+
+  if (window.currentOptions && window.currentOptions.edges) {
+    window.currentOptions.edges.smooth = smoothOptions;
+  }
 }
 
 
 function isManualLayoutType(type) {
-  return type === "circle" || type === "star" || type === "radial";
+  return type === "circle" || type === "star" || type === "radial" || type === "grid" || type === "spiral" || type === "concentric" || type === "layered";
 }
 
 function getVisibleLayoutNodeIds() {
@@ -1535,6 +2705,232 @@ function getLayoutCenterNode(nodeIds, visibleSet) {
 
 function getLayoutRadius(nodeCount, baseRadius = 200, step = 16, maxRadius = 1800) {
   return Math.max(baseRadius, Math.min(maxRadius, nodeCount * step));
+}
+
+function getLayeredRootNode(nodeIds, visibleSet) {
+  const sourceCandidates = nodeIds.filter(nodeId => {
+    const node = FULL_GRAPH.nodes.get(nodeId);
+    const identity = String(node?.node_identity || "").toLowerCase();
+    return identity.includes("source");
+  });
+
+  if (sourceCandidates.length > 0) {
+    return sourceCandidates.sort((a, b) => {
+      const degreeDiff = getVisibleNeighborCount(b, visibleSet) - getVisibleNeighborCount(a, visibleSet);
+      if (degreeDiff !== 0) return degreeDiff;
+      return String(a).localeCompare(String(b), undefined, { numeric: true });
+    })[0];
+  }
+
+  return getLayoutCenterNode(nodeIds, visibleSet);
+}
+
+function sortLayerNodes(layerNodes, visibleSet, prevOrderMap = null) {
+  const list = Array.from(layerNodes || []);
+  const hasPrev = prevOrderMap instanceof Map && prevOrderMap.size > 0;
+
+  list.sort((a, b) => {
+    const degreeA = getVisibleNeighborCount(a, visibleSet);
+    const degreeB = getVisibleNeighborCount(b, visibleSet);
+    const neighborsA = FULL_GRAPH.adjacency.get(a);
+    const neighborsB = FULL_GRAPH.adjacency.get(b);
+
+    let baryA = Number.POSITIVE_INFINITY;
+    let baryB = Number.POSITIVE_INFINITY;
+
+    if (hasPrev) {
+      if (neighborsA) {
+        let total = 0;
+        let count = 0;
+        neighborsA.forEach(neighborId => {
+          if (prevOrderMap.has(neighborId)) {
+            total += prevOrderMap.get(neighborId);
+            count += 1;
+          }
+        });
+        if (count > 0) baryA = total / count;
+      }
+
+      if (neighborsB) {
+        let total = 0;
+        let count = 0;
+        neighborsB.forEach(neighborId => {
+          if (prevOrderMap.has(neighborId)) {
+            total += prevOrderMap.get(neighborId);
+            count += 1;
+          }
+        });
+        if (count > 0) baryB = total / count;
+      }
+    }
+
+    const aFinite = Number.isFinite(baryA);
+    const bFinite = Number.isFinite(baryB);
+    if (aFinite && bFinite && baryA !== baryB) return baryA - baryB;
+    if (aFinite !== bFinite) return aFinite ? -1 : 1;
+    if (degreeA !== degreeB) return degreeB - degreeA;
+    return String(a).localeCompare(String(b), undefined, { numeric: true });
+  });
+
+  return list;
+}
+
+function sequenceLayerOrdering(layers, visibleSet) {
+  const ordered = [];
+  let prevOrderMap = null;
+
+  layers.forEach(layerNodes => {
+    const sorted = sortLayerNodes(layerNodes, visibleSet, prevOrderMap);
+    ordered.push(sorted);
+    prevOrderMap = new Map();
+    sorted.forEach((nodeId, index) => prevOrderMap.set(nodeId, index));
+  });
+
+  return ordered;
+}
+
+function buildHopDistanceLayers(nodeIds, visibleSet) {
+  const rootId = getLayeredRootNode(nodeIds, visibleSet);
+  if (rootId == null) return [nodeIds];
+
+  const queue = [rootId];
+  const visited = new Set([rootId]);
+  const layerByNode = new Map([[rootId, 0]]);
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+    const currentLayer = layerByNode.get(current) || 0;
+    const neighbors = FULL_GRAPH.adjacency.get(current);
+    if (!neighbors) continue;
+
+    neighbors.forEach(neighborId => {
+      if (!visibleSet.has(neighborId) || visited.has(neighborId)) return;
+      visited.add(neighborId);
+      layerByNode.set(neighborId, currentLayer + 1);
+      queue.push(neighborId);
+    });
+  }
+
+  let maxLayer = 0;
+  layerByNode.forEach(layer => {
+    if (layer > maxLayer) maxLayer = layer;
+  });
+  const disconnectedLayer = maxLayer + 1;
+
+  nodeIds.forEach(nodeId => {
+    if (!layerByNode.has(nodeId)) layerByNode.set(nodeId, disconnectedLayer);
+  });
+
+  const nodesByLayer = new Map();
+  nodeIds.forEach(nodeId => {
+    const layer = layerByNode.get(nodeId) || 0;
+    if (!nodesByLayer.has(layer)) nodesByLayer.set(layer, []);
+    nodesByLayer.get(layer).push(nodeId);
+  });
+
+  const orderedLayerKeys = Array.from(nodesByLayer.keys()).sort((a, b) => a - b);
+  const rawLayers = orderedLayerKeys.map(layer => nodesByLayer.get(layer) || []);
+  return sequenceLayerOrdering(rawLayers, visibleSet);
+}
+
+function getIdentityLayerRank(identity) {
+  const value = String(identity || "").trim().toLowerCase();
+  if (value.includes("source")) return 0;
+  if (value.includes("entity")) return 1;
+  if (value.includes("target")) return 2;
+  return 3;
+}
+
+function buildIdentityLayers(nodeIds, visibleSet) {
+  const nodesByIdentity = new Map();
+
+  nodeIds.forEach(nodeId => {
+    const node = FULL_GRAPH.nodes.get(nodeId);
+    const identity = String(node?.node_identity || "Unspecified");
+    if (!nodesByIdentity.has(identity)) nodesByIdentity.set(identity, []);
+    nodesByIdentity.get(identity).push(nodeId);
+  });
+
+  const orderedEntries = Array.from(nodesByIdentity.entries()).sort((a, b) => {
+    const rankDiff = getIdentityLayerRank(a[0]) - getIdentityLayerRank(b[0]);
+    if (rankDiff !== 0) return rankDiff;
+    return String(a[0]).localeCompare(String(b[0]), undefined, { numeric: true });
+  });
+
+  return sequenceLayerOrdering(orderedEntries.map(([, ids]) => ids), visibleSet);
+}
+
+function buildPropertyLayers(nodeIds, visibleSet, layerKey) {
+  const key = String(layerKey || "").trim();
+  if (!key) return buildHopDistanceLayers(nodeIds, visibleSet);
+
+  const buckets = new Map();
+  nodeIds.forEach(nodeId => {
+    const node = FULL_GRAPH.nodes.get(nodeId) || {};
+    const rawValue = getNodeValue(node, key);
+    const isMissing = rawValue == null || String(rawValue).trim() === "";
+    const displayValue = isMissing ? "Unspecified" : String(rawValue);
+    const numericValue = isMissing ? null : toFiniteNumber(rawValue);
+    const bucketKey = displayValue;
+
+    if (!buckets.has(bucketKey)) {
+      buckets.set(bucketKey, {
+        displayValue,
+        numericValue,
+        ids: []
+      });
+    }
+    buckets.get(bucketKey).ids.push(nodeId);
+  });
+
+  const orderedBuckets = Array.from(buckets.values()).sort((a, b) => {
+    const aNumeric = Number.isFinite(a.numericValue);
+    const bNumeric = Number.isFinite(b.numericValue);
+    if (aNumeric && bNumeric && a.numericValue !== b.numericValue) {
+      return a.numericValue - b.numericValue;
+    }
+    if (aNumeric !== bNumeric) return aNumeric ? -1 : 1;
+    return String(a.displayValue).localeCompare(String(b.displayValue), undefined, { numeric: true });
+  });
+
+  return sequenceLayerOrdering(orderedBuckets.map(bucket => bucket.ids), visibleSet);
+}
+
+function applyLayeredLayout(nodeIds, visibleSet, updates) {
+  const mode = normalizeLayerMode(window.currentSettings.layerMode);
+  const layerKey = String(window.currentSettings.layerKey || "").trim();
+  let layers = [];
+
+  if (mode === "node_identity") {
+    layers = buildIdentityLayers(nodeIds, visibleSet);
+  } else if (mode === "by_key") {
+    layers = buildPropertyLayers(nodeIds, visibleSet, layerKey);
+  } else {
+    layers = buildHopDistanceLayers(nodeIds, visibleSet);
+  }
+
+  const cleanedLayers = layers.filter(layer => Array.isArray(layer) && layer.length > 0);
+  if (cleanedLayers.length === 0) return;
+
+  const direction = window.currentSettings.layoutDirection === "LR" ? "LR" : "UD";
+  const maxLayerSize = Math.max(...cleanedLayers.map(layer => layer.length), 1);
+  const layerGap = Math.max(140, Math.min(320, Math.round(getLayoutRadius(nodeIds.length, 180, 2, 320))));
+  const slotGap = Math.max(70, Math.min(200, Math.round(1700 / Math.max(3, maxLayerSize + 1))));
+  const primaryStart = -((cleanedLayers.length - 1) * layerGap) / 2;
+
+  cleanedLayers.forEach((layerNodes, layerIndex) => {
+    const primaryPosition = primaryStart + (layerIndex * layerGap);
+    const secondaryStart = -((layerNodes.length - 1) * slotGap) / 2;
+
+    layerNodes.forEach((nodeId, index) => {
+      const secondaryPosition = secondaryStart + (index * slotGap);
+      updates.push({
+        id: nodeId,
+        x: direction === "LR" ? primaryPosition : secondaryPosition,
+        y: direction === "LR" ? secondaryPosition : primaryPosition
+      });
+    });
+  });
 }
 
 function applyManualLayout(type, { fitToView = true, redraw = true } = {}) {
@@ -1648,6 +3044,89 @@ function applyManualLayout(type, { fitToView = true, redraw = true } = {}) {
     }
   }
 
+  if (type === "grid") {
+    const total = nodeIds.length;
+    const columns = Math.max(1, Math.ceil(Math.sqrt(total)));
+    const rows = Math.max(1, Math.ceil(total / columns));
+    const spacingX = Math.max(90, Math.min(260, Math.round(2000 / columns)));
+    const spacingY = Math.max(90, Math.min(240, Math.round(1800 / rows)));
+    const originX = -((columns - 1) * spacingX) / 2;
+    const originY = -((rows - 1) * spacingY) / 2;
+
+    nodeIds.forEach((nodeId, index) => {
+      const row = Math.floor(index / columns);
+      const col = index % columns;
+      updates.push({
+        id: nodeId,
+        x: originX + (col * spacingX),
+        y: originY + (row * spacingY)
+      });
+    });
+  }
+
+  if (type === "spiral") {
+    if (nodeIds.length === 1) {
+      updates.push({ id: nodeIds[0], x: 0, y: 0 });
+    } else {
+      const angleStep = Math.PI / 3.2;
+      const baseRadius = 14;
+      const radiusStep = 9;
+
+      nodeIds.forEach((nodeId, index) => {
+        const radius = baseRadius + (index * radiusStep);
+        const angle = (-Math.PI / 2) + (index * angleStep);
+        updates.push({
+          id: nodeId,
+          x: radius * Math.cos(angle),
+          y: radius * Math.sin(angle)
+        });
+      });
+    }
+  }
+
+  if (type === "concentric") {
+    const rankedNodes = nodeIds
+      .map(nodeId => ({ id: nodeId, degree: getVisibleNeighborCount(nodeId, visibleSet) }))
+      .sort((a, b) => {
+        if (b.degree !== a.degree) return b.degree - a.degree;
+        return String(a.id).localeCompare(String(b.id), undefined, { numeric: true });
+      });
+
+    const ringGap = Math.max(90, Math.min(220, Math.round(getLayoutRadius(nodeIds.length, 180, 2, 320))));
+    let cursor = 0;
+    let ringIndex = 0;
+
+    while (cursor < rankedNodes.length) {
+      const ringCapacity = ringIndex === 0 ? 1 : Math.max(6, ringIndex * 10);
+      const ringNodes = rankedNodes.slice(cursor, cursor + ringCapacity);
+      if (ringNodes.length === 0) break;
+
+      if (ringIndex === 0) {
+        updates.push({ id: ringNodes[0].id, x: 0, y: 0 });
+      } else {
+        const radius = ringIndex * ringGap;
+        const angleStep = (Math.PI * 2) / ringNodes.length;
+        const angleOffset = ringIndex % 2 ? 0 : angleStep / 2;
+
+        ringNodes.forEach((entry, index) => {
+          const angle = (-Math.PI / 2) + angleOffset + (index * angleStep);
+          updates.push({
+            id: entry.id,
+            x: radius * Math.cos(angle),
+            y: radius * Math.sin(angle)
+          });
+        });
+      }
+
+      cursor += ringNodes.length;
+      ringIndex += 1;
+    }
+  }
+
+  if (type === "layered") {
+    applyLayeredLayout(nodeIds, visibleSet, updates);
+  }
+
   if (updates.length > 0) {
     nodesData.update(updates);
   }
@@ -1681,6 +3160,9 @@ function networkLayoutType(type) {
     });
   }
 
+  const physicsEnabled = enforceCurrentPhysicsState({ forceApply: true });
+  applyEdgeSmoothForCurrentPhysics();
+
   window.currentSettings.layoutType = layoutType;
   updateGraphOption("layout_type", layoutType);
 
@@ -1691,7 +3173,7 @@ function networkLayoutType(type) {
     return;
   }
 
-  if (network.physics) {
+  if (physicsEnabled) {
     network.stabilize();
   }
 
@@ -1700,15 +3182,24 @@ function networkLayoutType(type) {
 
 function networkLayoutDirection(direction) {
   if (!network) return;
+  window.currentSettings.layoutDirection = direction;
+  updateGraphOption("layout_direction", direction);
+
+  if (window.currentSettings.layoutType === "layered") {
+    network.stopSimulation();
+    applyManualLayout("layered", { fitToView: true, redraw: true });
+    return;
+  }
+
   network.setOptions({
     layout: { hierarchical: { direction: direction } }
   });
 
-  if (network.physics) {
+  const physicsEnabled = enforceCurrentPhysicsState({ forceApply: true });
+  applyEdgeSmoothForCurrentPhysics();
+  if (physicsEnabled) {
     network.stabilize();
   }
-  window.currentSettings.layoutDirection = direction;
-  updateGraphOption("layout_direction", direction);
 }
 
 function networkLayoutSort(sort) {
@@ -1717,11 +3208,33 @@ function networkLayoutSort(sort) {
     layout: { hierarchical: { sortMethod: sort } }
   });
 
-  if (network.physics) {
+  const physicsEnabled = enforceCurrentPhysicsState({ forceApply: true });
+  applyEdgeSmoothForCurrentPhysics();
+  if (physicsEnabled) {
     network.stabilize();
   }
   window.currentSettings.sortMethod = sort;
   updateGraphOption("layout_sort", sort);
+}
+
+function networkLayerMode(mode) {
+  const normalizedMode = normalizeLayerMode(mode);
+  window.currentSettings.layerMode = normalizedMode;
+
+  if (window.currentSettings.layoutType === "layered") {
+    network.stopSimulation();
+    applyManualLayout("layered", { fitToView: true, redraw: true });
+  }
+}
+
+function networkLayerKey(key) {
+  const normalizedKey = key == null ? "" : String(key);
+  window.currentSettings.layerKey = normalizedKey;
+
+  if (window.currentSettings.layoutType === "layered" && normalizeLayerMode(window.currentSettings.layerMode) === "by_key") {
+    network.stopSimulation();
+    applyManualLayout("layered", { fitToView: true, redraw: true });
+  }
 }
 
 function graphSearch({ id, keyword, option, keys, settings }) {
@@ -1942,7 +3455,7 @@ async function exportGraph(type) {
   }
 }
 
-async function loadGraphFromFile(id,file) {
+async function loadGraphFromFile(id,file,settings = null) {
   try {
     if (!file || !(file instanceof Blob)) {
       alert("Please select a valid graph file (JSON or HTML).");
@@ -1999,9 +3512,11 @@ async function loadGraphFromFile(id,file) {
 
     // Apply the graph
     createNewGraph({
+      id,
       nodes: graphData.nodes,
       edges: graphData.edges,
-      options: networkOptions
+      options: networkOptions,
+      settings: Array.isArray(settings) ? settings : null
     });
     //Passing property keys
     getAllNodeKeys(id);
@@ -2086,9 +3601,13 @@ function printGraph() {
   printWindow.document.close();
 }
 
-function resetGraph() {
+function resetGraph(settings) {
   MODIFIED_NODES.clear();
   MODIFIED_EDGES.clear();
+  if (Array.isArray(settings)) {
+    restoreSettings(settings);
+    return;
+  }
   applyLimit({ amount: 25 });
 }
 
@@ -2919,11 +4438,24 @@ function initializer(id){
   network.redraw();
 }
 
-function createNewGraph({ id, nodes = [], edges = [] }) {
+function createNewGraph({ id, nodes = [], edges = [], settings = null }) {
   console.log("yooo")
   // Reset visible graph
   nodesData.clear();
   edgesData.clear();
+
+  if (window.__alertScanTimer) {
+    clearTimeout(window.__alertScanTimer);
+    window.__alertScanTimer = null;
+  }
+  if (window.PATH_HIGHLIGHT_STATE) {
+    window.PATH_HIGHLIGHT_STATE.nodeIds.clear();
+    window.PATH_HIGHLIGHT_STATE.edgeIds.clear();
+  }
+  if (window.EDGE_BUNDLING_STATE) {
+    clearEdgeBundlingLite();
+    window.EDGE_BUNDLING_STATE.enabled = !!window.currentSettings?.edgeBundling;
+  }
 
   // Reset modification state
   MODIFIED_NODES.clear();
@@ -2931,13 +4463,19 @@ function createNewGraph({ id, nodes = [], edges = [] }) {
 
   // Build FULL_GRAPH from the provided data
   console.log("Initializing FullGraph...");
+  FULL_GRAPH.edgesByNode = null;
   initializeFullGraph({ nodes, edges });
 
   // Optional: any iframe / parent init logic
   initializer?.(id);
+
+  if (Array.isArray(settings)) {
+    restoreSettings(settings);
+  }
 }
 
 function renderVisibleGraphBatch() {
+    const renderStart = performance.now();
     if (!window.limitOverridden && VISIBLE_STATE.nodes.size > window.currentSettings.limit) {
       // Trim to limit
       const nodesArray = Array.from(VISIBLE_STATE.nodes);
@@ -2947,71 +4485,81 @@ function renderVisibleGraphBatch() {
       }
       recomputeVisibleEdges();
     }
-    // Don't clear and re-add one by one
+
+    const desiredNodeIds = new Set(VISIBLE_STATE.nodes);
+    const desiredEdgeIds = new Set(VISIBLE_STATE.edges);
+    updatePerformancePhysicsGuard(desiredNodeIds.size);
+
+    const currentNodeIds = new Set(nodesData.getIds());
+    const currentEdgeIds = new Set(edgesData.getIds());
+
+    // Remove elements that are no longer visible.
+    const edgesToRemove = [];
+    currentEdgeIds.forEach(id => {
+      if (!desiredEdgeIds.has(id)) edgesToRemove.push(id);
+    });
+    if (edgesToRemove.length > 0) {
+      edgesData.remove(edgesToRemove);
+    }
+
+    const nodesToRemove = [];
+    currentNodeIds.forEach(id => {
+      if (!desiredNodeIds.has(id)) nodesToRemove.push(id);
+    });
+    if (nodesToRemove.length > 0) {
+      nodesData.remove(nodesToRemove);
+    }
+
+    // Add/update visible nodes progressively.
     const nodeBatch = [];
-    const edgeBatch = [];
-    
-    // Process in chunks to avoid UI freeze
-    const BATCH_SIZE = 1000;
-    
-    let nodeCount = 0;
-    for (const id of VISIBLE_STATE.nodes) {
-        const base = FULL_GRAPH.nodes.get(id);
-        if (!base) continue;
-        
-        const mod = MODIFIED_NODES.get(id) || {};
-        const merged = { ...base, ...mod };
-        
-        // Only add title if explicitly enabled AND graph is small
-        if (window.currentSettings.showTitles && FULL_GRAPH.nodes.size < 5000) {
-            merged.title = generateNodeTitleSafely(merged);
-        }
-        
-        merged.label = window.currentSettings.showLabels ? (merged.label ?? base.label ?? "") : "";
-        nodeBatch.push(merged);
-        
-        nodeCount++;
-        
-        // Periodic yield
-        if (nodeCount % BATCH_SIZE === 0) {
-            setTimeout(() => {}, 0);
-        }
+    for (const id of desiredNodeIds) {
+      const base = FULL_GRAPH.nodes.get(id);
+      if (!base) continue;
+
+      const mod = MODIFIED_NODES.get(id) || {};
+      const merged = { ...base, ...mod };
+
+      if (window.currentSettings.showTitles && FULL_GRAPH.nodes.size < 5000) {
+        merged.title = generateNodeTitleSafely(merged);
+      } else {
+        merged.title = undefined;
+      }
+
+      merged.label = window.currentSettings.showLabels ? (merged.label ?? base.label ?? "") : "";
+
+      // Keep analyst focus stable: do not reset already-rendered node coordinates.
+      if (currentNodeIds.has(id)) {
+        delete merged.x;
+        delete merged.y;
+        delete merged.vx;
+        delete merged.vy;
+      }
+
+      nodeBatch.push(merged);
     }
-    
-    // Single update for nodes
     if (nodeBatch.length > 0) {
-        nodesData.clear();
-        nodesData.add(nodeBatch);
-    }
-    
-    // Similar for edges...
-    let edgeCount = 0;
-    for (const id of VISIBLE_STATE.edges) {
-        const base = FULL_GRAPH.edges.get(id);
-        if (!base) continue;
-
-        const mod = MODIFIED_EDGES.get(id) || {};
-        const merged = { ...base, ...mod };
-
-        // Add edge titles if titles are enabled
-        if (window.currentSettings.showTitles) {
-            merged.title = generateEdgeTitleSafely(merged);
-        }
-
-        edgeBatch.push(merged);
-
-        edgeCount++;
-        // Periodic yield to avoid UI freeze
-        if (edgeCount % BATCH_SIZE === 0) {
-            setTimeout(() => {}, 0);
-        }
+      nodesData.update(nodeBatch);
     }
 
+    // Add/update visible edges progressively.
+    const edgeBatch = [];
+    for (const id of desiredEdgeIds) {
+      const base = FULL_GRAPH.edges.get(id);
+      if (!base) continue;
+
+      const mod = MODIFIED_EDGES.get(id) || {};
+      const merged = { ...base, ...mod };
+
+      if (window.currentSettings.showTitles) {
+        merged.title = generateEdgeTitleSafely(merged);
+      } else {
+        merged.title = undefined;
+      }
+
+      edgeBatch.push(merged);
+    }
     if (edgeBatch.length > 0) {
-        edgesData.clear();
-        edgesData.add(edgeBatch);
-    } else {
-        edgesData.clear();
+      edgesData.update(edgeBatch);
     }
 
     const activeLayoutType = window.currentSettings.layoutType;
@@ -3019,10 +4567,31 @@ function renderVisibleGraphBatch() {
         applyManualLayout(activeLayoutType, { fitToView: false, redraw: false });
     }
 
-    weightEdges(window.currentSettings.weightEdges);
+    const weightMode = normalizeEdgeWeightMode(window.currentSettings.weightEdges);
+    if (weightMode !== "") {
+      weightEdges(window.currentSettings.weightEdges);
+    }
+
+    if (window.EDGE_BUNDLING_STATE?.enabled) {
+      applyEdgeBundlingLite();
+    }
     
     if (network) {
         network.redraw();
+    }
+
+    if (window.ALERT_RULES_ENABLED) {
+      scheduleAlertScan();
+    }
+
+    const renderDone = performance.now();
+    if (desiredNodeIds.size >= 500 || desiredEdgeIds.size >= 1000) {
+      console.log(
+        `[renderVisibleGraphBatch] nodes=${desiredNodeIds.size} edges=${desiredEdgeIds.size} ` +
+        `nodeBatch=${nodeBatch.length} edgeBatch=${edgeBatch.length} ` +
+        `removedNodes=${nodesToRemove.length} removedEdges=${edgesToRemove.length} ` +
+        `weightMode=${weightMode || "off"} total=${(renderDone - renderStart).toFixed(1)}ms`
+      );
     }
 }
 
@@ -3089,6 +4658,8 @@ function renderVisibleGraph() {
         .filter(([_, v]) => v != null)
         .map(([k, v]) => `${k}: ${v}`)
         .join("\n");
+    } else {
+      merged.title = undefined;
     }
 
     // build label ALWAYS correctly
@@ -3104,7 +4675,11 @@ function renderVisibleGraph() {
     if (!base) continue;
 
     const mod = MODIFIED_EDGES.get(id) || {};
-    edgeBatch.push({ ...base, ...mod });
+    const merged = { ...base, ...mod };
+    if (!window.currentSettings.showTitles) {
+      merged.title = undefined;
+    }
+    edgeBatch.push(merged);
   }
 
   nodesData.clear();
