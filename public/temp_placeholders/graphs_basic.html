@@ -912,8 +912,11 @@
 								        	menuHTML += `<div class="menu_item" data-action="load_view">Load View</div>`;
 								        }
 								        menuHTML += `<div class="menu_item" data-action="toggle_edge_bundling">${window.EDGE_BUNDLING_STATE?.enabled ? "Disable" : "Enable"} Edge Bundling</div>`;
+								        menuHTML += `<div class="menu_item" data-action="configure_edge_bundling">Configure Edge Bundling</div>`;
 								        menuHTML += `<div class="menu_item" data-action="toggle_alert_rules">${window.ALERT_RULES_ENABLED ? "Disable" : "Enable"} Alert Rules</div>`;
+								        menuHTML += `<div class="menu_item" data-action="configure_alert_rules">Configure Alert Rules</div>`;
 								        menuHTML += `<div class="menu_item" data-action="run_alert_scan">Run Alert Scan</div>`;
+								        menuHTML += `<div class="menu_item" data-action="show_pinned_evidence">Show Pinned Evidence</div>`;
 								        menuHTML += `<div class="menu_item" data-action="clear_pinned_evidence">Clear Pinned Evidence</div>`;
 								        menuHTML += `<div class="menu_item" data-action="apply_community_detection">Detect Communities</div>`;
 								    } else {
@@ -934,6 +937,7 @@
 								            menuHTML += `<div class="menu_item" data-action="expand_neighborhood">Expand Neighborhood</div>`;
 								            menuHTML += `<div class="menu_item" data-action="collapse_neighborhood">Collapse Neighborhood</div>`;
 								            menuHTML += `<div class="menu_item" data-action="pin_evidence">Pin Evidence</div>`;
+								            menuHTML += `<div class="menu_item" data-action="unpin_evidence">Unpin Evidence</div>`;
 										} else if (selectedNodes.length > 1) {
 											const fullyLinked = areAllSelectedNodesLinked(selectedNodes);
 											menuHTML += `<div class="menu_item" data-action="copy">Copy Nodes/Edges</div>`;
@@ -949,6 +953,7 @@
 												menuHTML += `<div class="menu_item" data-action="path_finder">Find Shortest Path</div>`;
 											}
 											menuHTML += `<div class="menu_item" data-action="pin_evidence">Pin Evidence</div>`;
+											menuHTML += `<div class="menu_item" data-action="unpin_evidence">Unpin Evidence</div>`;
 										}
 
 										menuHTML += `<div class="menu_item" data-action="visual_degree">Visualize by Degree</div>`;
@@ -1084,14 +1089,26 @@
 								      case 'toggle_edge_bundling':
 								      	toggleEdgeBundlingLite();
 								      	break;
+								      case 'configure_edge_bundling':
+								      	configureEdgeBundlingLite();
+								      	break;
 								      case 'toggle_alert_rules':
 								      	toggleAlertRules();
+								      	break;
+								      case 'configure_alert_rules':
+								      	configureAlertRules();
 								      	break;
 								      case 'run_alert_scan':
 								      	runAlertScan(true);
 								      	break;
 								      case 'pin_evidence':
 								      	pinSelectedEvidence();
+								      	break;
+								      case 'unpin_evidence':
+								      	unpinSelectedEvidence();
+								      	break;
+								      case 'show_pinned_evidence':
+								      	showPinnedEvidenceSummary();
 								      	break;
 								      case 'clear_pinned_evidence':
 								      	clearPinnedEvidence();

@@ -232,7 +232,66 @@ let AUTO_PHYSICS_FORCED_OFF = false;
 let LAST_APPLIED_EFFECTIVE_PHYSICS = null;
 const SAVED_VIEWS_STORAGE_KEY = "linkx_saved_views_v1";
 const PINNED_EVIDENCE_STORAGE_KEY = "linkx_pinned_evidence_v1";
+const ALERT_RULES_STORAGE_KEY = "linkx_alert_rules_v1";
+const PATH_OPTIONS_STORAGE_KEY = "linkx_path_options_v1";
 const MAX_SAVED_VIEWS = 30;
+const DEFAULT_ALERT_RULES_CONFIG = {
+  enableHighDegree: true,
+  highDegreeMin: 3,
+  highSeverityDegree: 8,
+  maxHighDegreeAlerts: 5,
+  enableHeavyEdge: true,
+  heavyEdgePercentile: 95,
+  heavyEdgeMinSamples: 4,
+  maxHeavyEdgeAlerts: 5,
+  heavyEdgeMinValue: 0
+};
+const DEFAULT_PATH_OPTIONS = {
+  directed: false,
+  weighted: false,
+  includeThemeLines: false
+};
+
+function normalizeAlertRulesConfig(config) {
+  const source = config && typeof config === "object" ? config : {};
+  const intOr = (value, fallback, min, max) => {
+    const numeric = parseInt(value, 10);
+    if (!Number.isFinite(numeric)) return fallback;
+    return Math.max(min, Math.min(max, numeric));
+  };
+  const numOr = (value, fallback, min, max) => {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return fallback;
+    return Math.max(min, Math.min(max, numeric));
+  };
+  const boolOr = (value, fallback) => {
+    if (value === true || value === false) return value;
+    if (value === "true") return true;
+    if (value === "false") return false;
+    return fallback;
+  };
+
+  return {
+    enableHighDegree: boolOr(source.enableHighDegree, DEFAULT_ALERT_RULES_CONFIG.enableHighDegree),
+    highDegreeMin: intOr(source.highDegreeMin, DEFAULT_ALERT_RULES_CONFIG.highDegreeMin, 1, 100000),
+    highSeverityDegree: intOr(source.highSeverityDegree, DEFAULT_ALERT_RULES_CONFIG.highSeverityDegree, 1, 100000),
+    maxHighDegreeAlerts: intOr(source.maxHighDegreeAlerts, DEFAULT_ALERT_RULES_CONFIG.maxHighDegreeAlerts, 1, 1000),
+    enableHeavyEdge: boolOr(source.enableHeavyEdge, DEFAULT_ALERT_RULES_CONFIG.enableHeavyEdge),
+    heavyEdgePercentile: numOr(source.heavyEdgePercentile, DEFAULT_ALERT_RULES_CONFIG.heavyEdgePercentile, 50, 99.99),
+    heavyEdgeMinSamples: intOr(source.heavyEdgeMinSamples, DEFAULT_ALERT_RULES_CONFIG.heavyEdgeMinSamples, 2, 100000),
+    maxHeavyEdgeAlerts: intOr(source.maxHeavyEdgeAlerts, DEFAULT_ALERT_RULES_CONFIG.maxHeavyEdgeAlerts, 1, 1000),
+    heavyEdgeMinValue: numOr(source.heavyEdgeMinValue, DEFAULT_ALERT_RULES_CONFIG.heavyEdgeMinValue, 0, Number.MAX_SAFE_INTEGER)
+  };
+}
+
+function normalizePathOptions(options) {
+  const source = options && typeof options === "object" ? options : {};
+  return {
+    directed: source.directed === true || source.directed === "true",
+    weighted: source.weighted === true || source.weighted === "true",
+    includeThemeLines: source.includeThemeLines === true || source.includeThemeLines === "true"
+  };
+}
 
 function readJsonStorage(key, fallbackValue) {
   try {
@@ -259,13 +318,24 @@ window.SAVED_VIEWS = Array.isArray(window.SAVED_VIEWS)
 window.PINNED_EVIDENCE = Array.isArray(window.PINNED_EVIDENCE)
   ? window.PINNED_EVIDENCE
   : readJsonStorage(PINNED_EVIDENCE_STORAGE_KEY, []);
+window.ALERT_RULES_CONFIG = normalizeAlertRulesConfig(
+  window.ALERT_RULES_CONFIG || readJsonStorage(ALERT_RULES_STORAGE_KEY, DEFAULT_ALERT_RULES_CONFIG)
+);
+window.PATH_OPTIONS = normalizePathOptions(
+  window.PATH_OPTIONS || readJsonStorage(PATH_OPTIONS_STORAGE_KEY, DEFAULT_PATH_OPTIONS)
+);
 window.ALERT_RULES_ENABLED = window.ALERT_RULES_ENABLED !== false;
 window.EDGE_BUNDLING_STATE = window.EDGE_BUNDLING_STATE || {
   enabled: false,
   originalByEdgeId: new Map(),
-  bundledPrimaryEdges: new Set()
+  bundledPrimaryEdges: new Set(),
+  minGroupSize: 2
 };
 window.PATH_HIGHLIGHT_STATE = window.PATH_HIGHLIGHT_STATE || {
+  nodeIds: new Set(),
+  edgeIds: new Set()
+};
+window.ALERT_HIGHLIGHT_STATE = window.ALERT_HIGHLIGHT_STATE || {
   nodeIds: new Set(),
   edgeIds: new Set()
 };
@@ -862,6 +932,148 @@ function updateNodeNote(nodeId, text) {
   persistNodeChange(nodeId, { note: text });
 }
 
+function shouldKeepNodeLabelVisible(node) {
+  if (!node || typeof node !== "object") return false;
+  if (node.annotationType) return true;
+  const shape = String(node.shape || "").toLowerCase();
+  return shape === "text";
+}
+
+function getNodeRenderLabel(baseNode, modNode, showLabelsState) {
+  const merged = { ...(baseNode || {}), ...(modNode || {}) };
+  const candidate = merged.label ?? baseNode?.label ?? "";
+  if (showLabelsState || shouldKeepNodeLabelVisible(merged)) {
+    return candidate;
+  }
+  return "";
+}
+
+function buildNodeColorWithBorder(baseColor, borderColor) {
+  const normalizedBase = typeof baseColor === "string" && baseColor.trim() !== ""
+    ? normalizeHex(baseColor.trim())
+    : "#ffffff";
+  return {
+    background: normalizedBase,
+    border: borderColor,
+    highlight: { background: normalizedBase, border: borderColor },
+    hover: { background: normalizedBase, border: borderColor }
+  };
+}
+
+function getNodeBackgroundColor(node) {
+  if (!node || !node.color) return "#ffffff";
+  if (typeof node.color === "string") return node.color;
+  if (typeof node.color.background === "string") return node.color.background;
+  return "#ffffff";
+}
+
+function applyNodeStateDecorations(mergedNode, nodeId, markerSets) {
+  const isPath = markerSets.pathNodeIds.has(nodeId);
+  const isAlert = markerSets.alertNodeIds.has(nodeId);
+  const isPinned = markerSets.pinnedNodeIds.has(nodeId);
+  if (!isPath && !isAlert && !isPinned) return;
+
+  const baseBg = getNodeBackgroundColor(mergedNode);
+  if (isPath) {
+    mergedNode.borderWidth = Math.max(3.5, Number(mergedNode.borderWidth) || 1);
+    mergedNode.color = buildNodeColorWithBorder(baseBg, "#f97316");
+    mergedNode.shadow = { enabled: true, color: "rgba(249,115,22,0.45)", size: 18, x: 0, y: 0 };
+    return;
+  }
+  if (isAlert) {
+    mergedNode.borderWidth = Math.max(3.2, Number(mergedNode.borderWidth) || 1);
+    mergedNode.color = buildNodeColorWithBorder(baseBg, "#dc2626");
+    mergedNode.shadow = { enabled: true, color: "rgba(220,38,38,0.35)", size: 16, x: 0, y: 0 };
+    return;
+  }
+  if (isPinned) {
+    mergedNode.borderWidth = Math.max(3.2, Number(mergedNode.borderWidth) || 1);
+    mergedNode.color = buildNodeColorWithBorder(baseBg, "#f59e0b");
+    mergedNode.shadow = { enabled: true, color: "rgba(245,158,11,0.40)", size: 16, x: 0, y: 0 };
+  }
+}
+
+function getEdgeBaseColor(edge) {
+  if (!edge || !edge.color) return "#6b7280";
+  if (typeof edge.color === "string") return edge.color;
+  if (typeof edge.color.color === "string") return edge.color.color;
+  return "#6b7280";
+}
+
+function applyEdgeStateDecorations(mergedEdge, edgeId, markerSets) {
+  const isPath = markerSets.pathEdgeIds.has(edgeId);
+  const isAlert = markerSets.alertEdgeIds.has(edgeId);
+  const isPinned = markerSets.pinnedEdgeIds.has(edgeId);
+  if (!isPath && !isAlert && !isPinned) return;
+
+  const baseWidth = Number(mergedEdge.width) || 1;
+  if (isPath) {
+    mergedEdge.width = Math.max(baseWidth, 3.4);
+    mergedEdge.color = { color: "#f97316", inherit: false };
+    return;
+  }
+  if (isAlert) {
+    mergedEdge.width = Math.max(baseWidth, 3.1);
+    mergedEdge.color = { color: "#dc2626", inherit: false };
+    return;
+  }
+  if (isPinned) {
+    mergedEdge.width = Math.max(baseWidth, 3.1);
+    mergedEdge.color = { color: "#f59e0b", inherit: false };
+  }
+}
+
+function getMarkerSets() {
+  const pinnedSets = getPinnedEvidenceSets();
+  return {
+    pinnedNodeIds: pinnedSets.nodeIds,
+    pinnedEdgeIds: pinnedSets.edgeIds,
+    pathNodeIds: window.PATH_HIGHLIGHT_STATE?.nodeIds || new Set(),
+    pathEdgeIds: window.PATH_HIGHLIGHT_STATE?.edgeIds || new Set(),
+    alertNodeIds: window.ALERT_HIGHLIGHT_STATE?.nodeIds || new Set(),
+    alertEdgeIds: window.ALERT_HIGHLIGHT_STATE?.edgeIds || new Set()
+  };
+}
+
+function applyMarkerOverlays(nodeIds, edgeIds) {
+  const markerSets = getMarkerSets();
+  const nodeUpdates = [];
+  const edgeUpdates = [];
+
+  (nodeIds || []).forEach(nodeId => {
+    if (
+      !markerSets.pathNodeIds.has(nodeId) &&
+      !markerSets.alertNodeIds.has(nodeId) &&
+      !markerSets.pinnedNodeIds.has(nodeId)
+    ) {
+      return;
+    }
+    const node = nodesData.get(nodeId);
+    if (!node) return;
+    const decorated = { ...node, id: nodeId };
+    applyNodeStateDecorations(decorated, nodeId, markerSets);
+    nodeUpdates.push(decorated);
+  });
+
+  (edgeIds || []).forEach(edgeId => {
+    if (
+      !markerSets.pathEdgeIds.has(edgeId) &&
+      !markerSets.alertEdgeIds.has(edgeId) &&
+      !markerSets.pinnedEdgeIds.has(edgeId)
+    ) {
+      return;
+    }
+    const edge = edgesData.get(edgeId);
+    if (!edge) return;
+    const decorated = { ...edge, id: edgeId };
+    applyEdgeStateDecorations(decorated, edgeId, markerSets);
+    edgeUpdates.push(decorated);
+  });
+
+  if (nodeUpdates.length > 0) nodesData.update(nodeUpdates);
+  if (edgeUpdates.length > 0) edgesData.update(edgeUpdates);
+}
+
 
 function normalizeGraphId(rawId) {
   if (rawId == null) return rawId;
@@ -984,6 +1196,7 @@ function rebuildAdjacencyFromFullGraph() {
 function createGraphEdge(from, to, patch = {}) {
   if (from == null || to == null || from === to) return null;
   const edge = {
+    ...patch,
     id: patch.id ?? createUniqueEdgeId("edge"),
     from: normalizeGraphId(from),
     to: normalizeGraphId(to),
@@ -1120,12 +1333,28 @@ function handleAddThemeLine(selectedNodes) {
     alert("Select at least two nodes to create a Theme Line.");
     return;
   }
-  for (let i = 0; i < nodes.length - 1; i++) {
-    createGraphEdge(nodes[i], nodes[i + 1], {
+
+  const positions = network.getPositions(nodes);
+  const orderedNodes = nodes
+    .slice()
+    .sort((a, b) => {
+      const aPos = positions[a] || { x: 0, y: 0 };
+      const bPos = positions[b] || { x: 0, y: 0 };
+      if (aPos.x !== bPos.x) return aPos.x - bPos.x;
+      if (aPos.y !== bPos.y) return aPos.y - bPos.y;
+      return String(a).localeCompare(String(b), undefined, { numeric: true });
+    });
+
+  for (let i = 0; i < orderedNodes.length - 1; i++) {
+    createGraphEdge(orderedNodes[i], orderedNodes[i + 1], {
       label: "Theme",
       width: 2,
       dashes: [8, 6],
-      color: { color: "#6b7280", inherit: false }
+      color: { color: "#6b7280", inherit: false },
+      arrows: "",
+      smooth: { type: "curvedCW", roundness: 0.18 },
+      physics: false,
+      edge_kind: "theme_line"
     });
   }
   renderVisibleGraphBatch();
@@ -1611,6 +1840,100 @@ function loadSavedView(name) {
   }
 }
 
+function isThemeLineEdge(edge) {
+  if (!edge || typeof edge !== "object") return false;
+  return String(edge.edge_kind || "").toLowerCase() === "theme_line";
+}
+
+function getPinnedEvidenceSets() {
+  const nodeIds = new Set();
+  const edgeIds = new Set();
+  const list = Array.isArray(window.PINNED_EVIDENCE) ? window.PINNED_EVIDENCE : [];
+  list.forEach(item => {
+    if (!item || item.id == null) return;
+    if (item.type === "node") nodeIds.add(normalizeGraphId(item.id));
+    if (item.type === "edge") edgeIds.add(item.id);
+  });
+  return { nodeIds, edgeIds };
+}
+
+function getEdgeTraversalWeight(edge) {
+  const numeric = toFiniteNumber(edge?.weight ?? edge?.value ?? edge?.width);
+  if (numeric == null || numeric <= 0) return 1;
+  return numeric;
+}
+
+function getTraversableEdges(nodeId, options = {}) {
+  const directed = options.directed === true;
+  const includeThemeLines = options.includeThemeLines === true;
+  const edgeIds = ensureEdgesByNodeIndex().get(nodeId);
+  const traversable = [];
+  if (!edgeIds || edgeIds.size === 0) return traversable;
+
+  edgeIds.forEach(edgeId => {
+    const edge = FULL_GRAPH.edges.get(edgeId);
+    if (!edge) return;
+    if (!includeThemeLines && isThemeLineEdge(edge)) return;
+
+    const from = normalizeGraphId(edge.from);
+    const to = normalizeGraphId(edge.to);
+
+    if (directed) {
+      if (from !== nodeId) return;
+      traversable.push({
+        edgeId,
+        to: normalizeGraphId(to),
+        cost: getEdgeTraversalWeight(edge)
+      });
+      return;
+    }
+
+    if (from === nodeId) {
+      traversable.push({ edgeId, to: normalizeGraphId(to), cost: getEdgeTraversalWeight(edge) });
+      return;
+    }
+    if (to === nodeId) {
+      traversable.push({ edgeId, to: normalizeGraphId(from), cost: getEdgeTraversalWeight(edge) });
+    }
+  });
+
+  return traversable;
+}
+
+function reconstructPathResult(start, end, previousNode, previousEdge, totalCost, options) {
+  if (start !== end && !previousNode.has(end)) {
+    return {
+      path: [],
+      edgeIds: [],
+      totalCost: Number.POSITIVE_INFINITY,
+      directed: !!options.directed,
+      weighted: !!options.weighted
+    };
+  }
+
+  const path = [end];
+  const edgeIds = [];
+  let cursor = end;
+  while (cursor !== start) {
+    const edgeId = previousEdge.get(cursor);
+    const prev = previousNode.get(cursor);
+    if (prev == null) break;
+    if (edgeId != null) edgeIds.push(edgeId);
+    path.push(prev);
+    cursor = prev;
+  }
+
+  path.reverse();
+  edgeIds.reverse();
+  return {
+    path,
+    edgeIds,
+    totalCost,
+    directed: !!options.directed,
+    weighted: !!options.weighted
+  };
+}
+
 function clearPathHighlight() {
   if (!window.PATH_HIGHLIGHT_STATE) return;
   window.PATH_HIGHLIGHT_STATE.nodeIds.clear();
@@ -1618,84 +1941,109 @@ function clearPathHighlight() {
   renderVisibleGraphBatch();
 }
 
-function findShortestPath(startId, endId) {
+function findShortestPath(startId, endId, options = {}) {
+  const normalizedOptions = {
+    directed: options.directed === true,
+    weighted: options.weighted === true,
+    includeThemeLines: options.includeThemeLines === true
+  };
   const start = normalizeGraphId(startId);
   const end = normalizeGraphId(endId);
-  if (!FULL_GRAPH.nodes.has(start) || !FULL_GRAPH.nodes.has(end)) return [];
-  if (start === end) return [start];
-
-  const queue = [start];
-  const visited = new Set([start]);
-  const previous = new Map();
-
-  while (queue.length > 0) {
-    const current = queue.shift();
-    const neighbors = FULL_GRAPH.adjacency.get(current);
-    if (!neighbors) continue;
-    for (const neighborId of neighbors) {
-      if (visited.has(neighborId)) continue;
-      visited.add(neighborId);
-      previous.set(neighborId, current);
-      if (neighborId === end) {
-        const path = [end];
-        let cursor = end;
-        while (previous.has(cursor)) {
-          cursor = previous.get(cursor);
-          path.push(cursor);
-        }
-        return path.reverse();
-      }
-      queue.push(neighborId);
-    }
+  if (!FULL_GRAPH.nodes.has(start) || !FULL_GRAPH.nodes.has(end)) {
+    return { path: [], edgeIds: [], totalCost: Number.POSITIVE_INFINITY, ...normalizedOptions };
+  }
+  if (start === end) {
+    return { path: [start], edgeIds: [], totalCost: 0, ...normalizedOptions };
   }
 
-  return [];
+  const previous = new Map();
+  const previousEdge = new Map();
+
+  if (!normalizedOptions.weighted) {
+    const queue = [start];
+    const visited = new Set([start]);
+
+    while (queue.length > 0) {
+      const current = queue.shift();
+      const traversable = getTraversableEdges(current, normalizedOptions);
+      for (const next of traversable) {
+        if (visited.has(next.to)) continue;
+        visited.add(next.to);
+        previous.set(next.to, current);
+        previousEdge.set(next.to, next.edgeId);
+        if (next.to === end) {
+          const result = reconstructPathResult(start, end, previous, previousEdge, 0, normalizedOptions);
+          result.totalCost = Math.max(0, result.path.length - 1);
+          return result;
+        }
+        queue.push(next.to);
+      }
+    }
+    return { path: [], edgeIds: [], totalCost: Number.POSITIVE_INFINITY, ...normalizedOptions };
+  }
+
+  const distances = new Map();
+  const visited = new Set();
+  distances.set(start, 0);
+
+  while (visited.size < FULL_GRAPH.nodes.size) {
+    let currentNode = null;
+    let currentDistance = Number.POSITIVE_INFINITY;
+    distances.forEach((distance, nodeId) => {
+      if (visited.has(nodeId)) return;
+      if (distance < currentDistance) {
+        currentDistance = distance;
+        currentNode = nodeId;
+      }
+    });
+
+    if (currentNode == null) break;
+    if (currentNode === end) break;
+    visited.add(currentNode);
+
+    const traversable = getTraversableEdges(currentNode, normalizedOptions);
+    traversable.forEach(next => {
+      const newDistance = currentDistance + next.cost;
+      if (newDistance < (distances.get(next.to) ?? Number.POSITIVE_INFINITY)) {
+        distances.set(next.to, newDistance);
+        previous.set(next.to, currentNode);
+        previousEdge.set(next.to, next.edgeId);
+      }
+    });
+  }
+
+  const finalCost = distances.get(end);
+  return reconstructPathResult(
+    start,
+    end,
+    previous,
+    previousEdge,
+    Number.isFinite(finalCost) ? finalCost : Number.POSITIVE_INFINITY,
+    normalizedOptions
+  );
 }
 
-function highlightPath(path) {
-  clearPathHighlight();
-  if (!Array.isArray(path) || path.length === 0) return;
-
-  const nodeUpdates = [];
-  const edgeUpdates = [];
-
-  for (let i = 0; i < path.length; i++) {
-    const nodeId = path[i];
-    if (!VISIBLE_STATE.nodes.has(nodeId)) continue;
-    window.PATH_HIGHLIGHT_STATE.nodeIds.add(nodeId);
-    nodeUpdates.push({
-      id: nodeId,
-      borderWidth: 3,
-      color: buildNodeColor("#f97316")
-    });
-    persistNodeChange(nodeId, {
-      borderWidth: 3,
-      color: buildNodeColor("#f97316")
-    });
-
-    if (i === path.length - 1) continue;
-    const from = path[i];
-    const to = path[i + 1];
-    for (const [edgeId, edge] of FULL_GRAPH.edges) {
-      if ((edge.from === from && edge.to === to) || (edge.from === to && edge.to === from)) {
-        window.PATH_HIGHLIGHT_STATE.edgeIds.add(edgeId);
-        edgeUpdates.push({
-          id: edgeId,
-          color: { color: "#f97316", inherit: false },
-          width: 3
-        });
-        MODIFIED_EDGES.set(edgeId, {
-          ...(MODIFIED_EDGES.get(edgeId) || {}),
-          color: { color: "#f97316", inherit: false },
-          width: 3
-        });
-        break;
-      }
-    }
+function highlightPath(pathResult) {
+  if (!window.PATH_HIGHLIGHT_STATE) return;
+  window.PATH_HIGHLIGHT_STATE.nodeIds.clear();
+  window.PATH_HIGHLIGHT_STATE.edgeIds.clear();
+  if (!pathResult || !Array.isArray(pathResult.path) || pathResult.path.length === 0) {
+    renderVisibleGraphBatch();
+    return;
   }
 
-  if (nodeUpdates.length > 0) nodesData.update(nodeUpdates);
-  if (edgeUpdates.length > 0) edgesData.update(edgeUpdates);
+  pathResult.path.forEach(nodeId => {
+    if (VISIBLE_STATE.nodes.has(nodeId)) {
+      window.PATH_HIGHLIGHT_STATE.nodeIds.add(nodeId);
+    }
+  });
+  (pathResult.edgeIds || []).forEach(edgeId => {
+    if (VISIBLE_STATE.edges.has(edgeId)) {
+      window.PATH_HIGHLIGHT_STATE.edgeIds.add(edgeId);
+    }
+  });
+
+  renderVisibleGraphBatch();
 }
 
 function runPathFinderForSelection(selectedNodes) {
@@ -1704,15 +2052,49 @@ function runPathFinderForSelection(selectedNodes) {
     alert("Select exactly two nodes to compute shortest path.");
     return;
   }
-  const path = findShortestPath(ids[0], ids[1]);
-  if (!path.length) {
+
+  const current = normalizePathOptions(window.PATH_OPTIONS);
+  const modeDefault = current.weighted
+    ? (current.directed ? "directed_weighted" : "weighted")
+    : (current.directed ? "directed_hops" : "hops");
+  const modeInput = prompt(
+    "Path mode: hops | directed_hops | weighted | directed_weighted",
+    modeDefault
+  );
+  if (modeInput == null) return;
+
+  const mode = String(modeInput || "").trim().toLowerCase();
+  const nextOptions = {
+    directed: mode === "directed_hops" || mode === "directed_weighted",
+    weighted: mode === "weighted" || mode === "directed_weighted",
+    includeThemeLines: current.includeThemeLines
+  };
+
+  const includeThemeInput = prompt(
+    "Include Theme Lines in path? (yes/no)",
+    nextOptions.includeThemeLines ? "yes" : "no"
+  );
+  if (includeThemeInput != null) {
+    const normalized = String(includeThemeInput).trim().toLowerCase();
+    nextOptions.includeThemeLines = normalized === "yes" || normalized === "y" || normalized === "true";
+  }
+
+  window.PATH_OPTIONS = normalizePathOptions(nextOptions);
+  writeJsonStorage(PATH_OPTIONS_STORAGE_KEY, window.PATH_OPTIONS);
+
+  const pathResult = findShortestPath(ids[0], ids[1], window.PATH_OPTIONS);
+  if (!pathResult.path.length) {
     alert("No path found between the selected nodes.");
     return;
   }
-  path.forEach(nodeId => VISIBLE_STATE.nodes.add(nodeId));
+  pathResult.path.forEach(nodeId => VISIBLE_STATE.nodes.add(nodeId));
   recomputeVisibleEdges();
-  renderVisibleGraphBatch();
-  highlightPath(path);
+  highlightPath(pathResult);
+
+  const distanceText = pathResult.weighted
+    ? `Total cost: ${Number(pathResult.totalCost).toFixed(3)}`
+    : `Hops: ${Math.max(0, pathResult.path.length - 1)}`;
+  alert(`Path found. Nodes: ${pathResult.path.length}. ${distanceText}.`);
 }
 
 function clearEdgeBundlingLite() {
@@ -1732,12 +2114,15 @@ function clearEdgeBundlingLite() {
 function applyEdgeBundlingLite() {
   const state = window.EDGE_BUNDLING_STATE;
   if (!state || !state.enabled) return;
+  clearEdgeBundlingLite();
+
+  const minGroupSize = Math.max(2, parseInt(state.minGroupSize, 10) || 2);
 
   const groups = new Map();
   Array.from(VISIBLE_STATE.edges).forEach(edgeId => {
     const edge = edgesData.get(edgeId) || FULL_GRAPH.edges.get(edgeId);
     if (!edge) return;
-    const key = `${String(edge.from)}-->${String(edge.to)}`;
+    const key = isThemeLineEdge(edge) ? `theme::${edge.id}` : `${String(edge.from)}-->${String(edge.to)}`;
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(edge);
   });
@@ -1745,13 +2130,14 @@ function applyEdgeBundlingLite() {
   const updates = [];
   groups.forEach(group => {
     group.sort((a, b) => String(a.id).localeCompare(String(b.id), undefined, { numeric: true }));
-    if (group.length === 1) {
+    if (group.length < minGroupSize) {
       const solo = group[0];
-      updates.push({ id: solo.id, hidden: false });
+      if (solo) updates.push({ id: solo.id, hidden: false });
+      if (group.length > 1) {
+        group.slice(1).forEach(edge => updates.push({ id: edge.id, hidden: false }));
+      }
       return;
     }
-    const primary = group[0];
-    const extraCount = group.length - 1;
 
     group.forEach((edge, index) => {
       if (!state.originalByEdgeId.has(edge.id)) {
@@ -1795,50 +2181,91 @@ function toggleEdgeBundlingLite(forceState = null) {
   return next;
 }
 
+function configureEdgeBundlingLite() {
+  const state = window.EDGE_BUNDLING_STATE || {};
+  const currentMin = Math.max(2, parseInt(state.minGroupSize, 10) || 2);
+  const answer = prompt("Minimum parallel edges to bundle (>=2)", String(currentMin));
+  if (answer == null) return;
+  const nextMin = Math.max(2, parseInt(answer, 10) || currentMin);
+  state.minGroupSize = nextMin;
+  window.EDGE_BUNDLING_STATE = state;
+
+  if (state.enabled) {
+    applyEdgeBundlingLite();
+    network.redraw();
+  }
+}
+
+function clearAlertHighlight() {
+  if (!window.ALERT_HIGHLIGHT_STATE) return;
+  window.ALERT_HIGHLIGHT_STATE.nodeIds.clear();
+  window.ALERT_HIGHLIGHT_STATE.edgeIds.clear();
+}
+
+function applyAlertHighlight(alerts) {
+  if (!window.ALERT_HIGHLIGHT_STATE) {
+    window.ALERT_HIGHLIGHT_STATE = { nodeIds: new Set(), edgeIds: new Set() };
+  }
+  clearAlertHighlight();
+  (alerts || []).forEach(item => {
+    if (item.nodeId != null) window.ALERT_HIGHLIGHT_STATE.nodeIds.add(normalizeGraphId(item.nodeId));
+    if (item.edgeId != null) window.ALERT_HIGHLIGHT_STATE.edgeIds.add(item.edgeId);
+  });
+}
+
 function generateGraphAlerts() {
   if (!window.ALERT_RULES_ENABLED) return [];
+  const rules = normalizeAlertRulesConfig(window.ALERT_RULES_CONFIG);
+  window.ALERT_RULES_CONFIG = rules;
+
   const alerts = [];
   const visibleNodes = Array.from(VISIBLE_STATE.nodes);
   const visibleEdges = Array.from(VISIBLE_STATE.edges);
   if (visibleNodes.length === 0) return alerts;
 
-  const degreeStats = visibleNodes
-    .map(nodeId => ({ nodeId, degree: getVisibleNeighborCount(nodeId, new Set(VISIBLE_STATE.nodes)) }))
-    .sort((a, b) => b.degree - a.degree);
+  if (rules.enableHighDegree) {
+    const visibleNodeSet = new Set(VISIBLE_STATE.nodes);
+    const degreeStats = visibleNodes
+      .map(nodeId => ({ nodeId, degree: getVisibleNeighborCount(nodeId, visibleNodeSet) }))
+      .sort((a, b) => b.degree - a.degree);
 
-  const topDegree = degreeStats.slice(0, Math.min(5, degreeStats.length));
-  topDegree.forEach(item => {
-    if (item.degree >= 3) {
-      alerts.push({
-        type: "high_degree",
-        severity: item.degree >= 8 ? "high" : "medium",
-        nodeId: item.nodeId,
-        message: `Node ${item.nodeId} has degree ${item.degree}`
-      });
-    }
-  });
-
-  const numericEdgeValues = [];
-  visibleEdges.forEach(edgeId => {
-    const edge = FULL_GRAPH.edges.get(edgeId) || edgesData.get(edgeId);
-    if (!edge) return;
-    const value = toFiniteNumber(edge.weight ?? edge.value ?? edge.width);
-    if (value != null) numericEdgeValues.push({ edgeId, value });
-  });
-  if (numericEdgeValues.length >= 4) {
-    const sorted = numericEdgeValues.slice().sort((a, b) => a.value - b.value);
-    const p95 = getPercentile(sorted.map(item => item.value), 0.95);
-    sorted
-      .filter(item => item.value >= p95)
-      .slice(-5)
+    degreeStats
+      .slice(0, Math.min(rules.maxHighDegreeAlerts, degreeStats.length))
       .forEach(item => {
+        if (item.degree < rules.highDegreeMin) return;
         alerts.push({
-          type: "heavy_edge",
-          severity: "medium",
-          edgeId: item.edgeId,
-          message: `Edge ${item.edgeId} has high weight ${item.value}`
+          type: "high_degree",
+          severity: item.degree >= rules.highSeverityDegree ? "high" : "medium",
+          nodeId: item.nodeId,
+          message: `Node ${item.nodeId} has degree ${item.degree}`
         });
       });
+  }
+
+  if (rules.enableHeavyEdge) {
+    const numericEdgeValues = [];
+    visibleEdges.forEach(edgeId => {
+      const edge = FULL_GRAPH.edges.get(edgeId) || edgesData.get(edgeId);
+      if (!edge || isThemeLineEdge(edge)) return;
+      const value = toFiniteNumber(edge.weight ?? edge.value ?? edge.width);
+      if (value != null) numericEdgeValues.push({ edgeId, value });
+    });
+
+    if (numericEdgeValues.length >= rules.heavyEdgeMinSamples) {
+      const sorted = numericEdgeValues.slice().sort((a, b) => a.value - b.value);
+      const threshold = getPercentile(sorted.map(item => item.value), rules.heavyEdgePercentile / 100);
+      sorted
+        .filter(item => item.value >= threshold && item.value >= rules.heavyEdgeMinValue)
+        .slice(-rules.maxHeavyEdgeAlerts)
+        .forEach(item => {
+          alerts.push({
+            type: "heavy_edge",
+            severity: "medium",
+            edgeId: item.edgeId,
+            message: `Edge ${item.edgeId} has high weight ${item.value}`
+          });
+        });
+    }
   }
 
   return alerts;
@@ -1856,8 +2283,10 @@ function publishGraphAlerts(alerts) {
 
 function runAlertScan(notify = true) {
   const alerts = generateGraphAlerts();
+  applyAlertHighlight(alerts);
   publishGraphAlerts(alerts);
   if (notify) {
+    renderVisibleGraphBatch();
     if (alerts.length === 0) alert("Alert scan complete. No alerts triggered.");
     else alert(`Alert scan complete. ${alerts.length} alert(s) found.`);
   }
@@ -1884,14 +2313,40 @@ function toggleAlertRules(forceState = null) {
   window.currentSettings.alertRules = next;
   if (next) {
     runAlertScan(false);
+    renderVisibleGraphBatch();
   } else {
     if (window.__alertScanTimer) {
       clearTimeout(window.__alertScanTimer);
       window.__alertScanTimer = null;
     }
+    clearAlertHighlight();
     publishGraphAlerts([]);
+    renderVisibleGraphBatch();
   }
   return next;
+}
+
+function configureAlertRules() {
+  const current = normalizeAlertRulesConfig(window.ALERT_RULES_CONFIG);
+  const raw = prompt(
+    "Set alert rules JSON",
+    JSON.stringify(current)
+  );
+  if (raw == null) return;
+
+  try {
+    const parsed = JSON.parse(raw);
+    const normalized = normalizeAlertRulesConfig(parsed);
+    window.ALERT_RULES_CONFIG = normalized;
+    writeJsonStorage(ALERT_RULES_STORAGE_KEY, normalized);
+    if (window.ALERT_RULES_ENABLED) {
+      runAlertScan(false);
+      renderVisibleGraphBatch();
+    }
+    alert("Alert rules updated.");
+  } catch (_err) {
+    alert("Invalid JSON. Alert rules were not changed.");
+  }
 }
 
 function pushPinnedEvidenceItem(item) {
@@ -1933,6 +2388,7 @@ function pinSelectedEvidence() {
       data: { ...base, ...mod }
     });
   });
+  renderVisibleGraphBatch();
 }
 
 function clearPinnedEvidence() {
@@ -1942,6 +2398,43 @@ function clearPinnedEvidence() {
     type: "pinned_evidence_update",
     payload: window.PINNED_EVIDENCE
   }, "*");
+  renderVisibleGraphBatch();
+}
+
+function unpinSelectedEvidence() {
+  const selectedNodeIds = new Set(network.getSelectedNodes().map(normalizeGraphId));
+  const selectedEdgeIds = new Set(network.getSelectedEdges());
+  const list = Array.isArray(window.PINNED_EVIDENCE) ? window.PINNED_EVIDENCE : [];
+
+  const next = list.filter(item => {
+    if (!item) return false;
+    if (item.type === "node") return !selectedNodeIds.has(normalizeGraphId(item.id));
+    if (item.type === "edge") return !selectedEdgeIds.has(item.id);
+    return false;
+  });
+
+  window.PINNED_EVIDENCE = next;
+  writeJsonStorage(PINNED_EVIDENCE_STORAGE_KEY, window.PINNED_EVIDENCE);
+  window.parent.postMessage({
+    type: "pinned_evidence_update",
+    payload: window.PINNED_EVIDENCE
+  }, "*");
+  renderVisibleGraphBatch();
+}
+
+function showPinnedEvidenceSummary() {
+  const list = Array.isArray(window.PINNED_EVIDENCE) ? window.PINNED_EVIDENCE : [];
+  if (list.length === 0) {
+    alert("No pinned evidence.");
+    return;
+  }
+
+  const preview = list
+    .slice(0, 20)
+    .map(item => `${item.type}:${item.id}`)
+    .join("\n");
+  const suffix = list.length > 20 ? `\n... (${list.length - 20} more)` : "";
+  alert(`Pinned evidence (${list.length}):\n${preview}${suffix}`);
 }
 
 function detectVisibleCommunities() {
@@ -2331,7 +2824,7 @@ function applyLabelToggle(state) {
     const mod  = MODIFIED_NODES.get(node.id) || {};
     nodesData.update({
       id: node.id,
-      label: state ? (mod.label ?? base.label ?? "") : ""
+      label: getNodeRenderLabel(base, mod, state)
     });
   });
   window.currentSettings.showLabels = state;
@@ -2530,7 +3023,7 @@ function filterNodes(predicate, limit = 300) {
     nodesData.add({
       ...base,
       ...mod,
-      label: window.currentSettings.showLabels ? (mod.label ?? base.label ?? "") : ""
+      label: getNodeRenderLabel(base, mod, window.currentSettings.showLabels)
     });
   }
 
@@ -2553,7 +3046,7 @@ function showNodelabels(state) {
     const mod  = MODIFIED_NODES.get(node.id) || {};
     nodesData.update({
       id: node.id,
-      label: state ? (mod.label ?? base?.label ?? "") : ""
+      label: getNodeRenderLabel(base, mod, state)
     });
   });
 
@@ -4452,6 +4945,10 @@ function createNewGraph({ id, nodes = [], edges = [], settings = null }) {
     window.PATH_HIGHLIGHT_STATE.nodeIds.clear();
     window.PATH_HIGHLIGHT_STATE.edgeIds.clear();
   }
+  if (window.ALERT_HIGHLIGHT_STATE) {
+    window.ALERT_HIGHLIGHT_STATE.nodeIds.clear();
+    window.ALERT_HIGHLIGHT_STATE.edgeIds.clear();
+  }
   if (window.EDGE_BUNDLING_STATE) {
     clearEdgeBundlingLite();
     window.EDGE_BUNDLING_STATE.enabled = !!window.currentSettings?.edgeBundling;
@@ -4489,6 +4986,7 @@ function renderVisibleGraphBatch() {
     const desiredNodeIds = new Set(VISIBLE_STATE.nodes);
     const desiredEdgeIds = new Set(VISIBLE_STATE.edges);
     updatePerformancePhysicsGuard(desiredNodeIds.size);
+    const markerSets = getMarkerSets();
 
     const currentNodeIds = new Set(nodesData.getIds());
     const currentEdgeIds = new Set(edgesData.getIds());
@@ -4525,7 +5023,8 @@ function renderVisibleGraphBatch() {
         merged.title = undefined;
       }
 
-      merged.label = window.currentSettings.showLabels ? (merged.label ?? base.label ?? "") : "";
+      merged.label = getNodeRenderLabel(base, mod, window.currentSettings.showLabels);
+      applyNodeStateDecorations(merged, id, markerSets);
 
       // Keep analyst focus stable: do not reset already-rendered node coordinates.
       if (currentNodeIds.has(id)) {
@@ -4555,7 +5054,6 @@ function renderVisibleGraphBatch() {
       } else {
         merged.title = undefined;
       }
-
       edgeBatch.push(merged);
     }
     if (edgeBatch.length > 0) {
@@ -4575,6 +5073,8 @@ function renderVisibleGraphBatch() {
     if (window.EDGE_BUNDLING_STATE?.enabled) {
       applyEdgeBundlingLite();
     }
+
+    applyMarkerOverlays(desiredNodeIds, desiredEdgeIds);
     
     if (network) {
         network.redraw();
@@ -4644,6 +5144,7 @@ function updateAllEdgeTitles() {
 function renderVisibleGraph() {
   const nodeBatch = [];
   const edgeBatch = [];
+  const markerSets = getMarkerSets();
 
   for (const id of VISIBLE_STATE.nodes) {
     const base = FULL_GRAPH.nodes.get(id);
@@ -4663,9 +5164,8 @@ function renderVisibleGraph() {
     }
 
     // build label ALWAYS correctly
-    merged.label = window.currentSettings.showLabels
-      ? (merged.label ?? base.label ?? "")
-      : "";
+    merged.label = getNodeRenderLabel(base, mod, window.currentSettings.showLabels);
+    applyNodeStateDecorations(merged, id, markerSets);
 
     nodeBatch.push(merged);
   }
@@ -4687,6 +5187,7 @@ function renderVisibleGraph() {
 
   nodesData.add(nodeBatch);
   edgesData.add(edgeBatch);
+  applyMarkerOverlays(VISIBLE_STATE.nodes, VISIBLE_STATE.edges);
 
   network.redraw();
 }
