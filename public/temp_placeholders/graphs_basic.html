@@ -217,16 +217,126 @@
                                  box-shadow: rgba(0, 0, 0, 0.4) 0px 2px 0.4vh;
                                   filter: saturate(150%);
                                 }
-                                .sizeCircle:hover {
-                                  transform: scale(1.2);
-                                  transition: all 0.2s;
-                                  opacity: 1 !important;
-                                  box-shadow: rgba(0, 0, 0, 0.4) 0px 2px 0.4vh;
-                                  border: 0.2vh solid #000;
-                                }
-                                .select_options{
-                                    border: 0.1vh solid #CCC;
-                                    height: 3vh;
+	                                .sizeCircle:hover {
+	                                  transform: scale(1.2);
+	                                  transition: all 0.2s;
+	                                  opacity: 1 !important;
+	                                  box-shadow: rgba(0, 0, 0, 0.4) 0px 2px 0.4vh;
+	                                  border: 0.2vh solid #000;
+	                                }
+	                                .annotationAdjustBox {
+	                                	width: 320px;
+	                                	padding: 0.6vw;
+	                                }
+	                                .annotationAdjustBox .annotation_title {
+	                                	font-size: 12px;
+	                                	color: #2f3a45;
+	                                	margin-bottom: 0.8vh;
+	                                	padding-bottom: 0.6vh;
+	                                	border-bottom: 0.1vh solid #e6eaee;
+	                                }
+	                                .annotationAdjustBox .annotation_row {
+	                                	display: block;
+	                                	margin-bottom: 0.7vh;
+	                                }
+	                                .annotationAdjustBox label {
+	                                	display: block;
+	                                	font-size: 10px;
+	                                	color: #4b5563;
+	                                	margin-bottom: 0.25vh;
+	                                }
+	                                .annotationAdjustBox input[type="text"],
+	                                .annotationAdjustBox input[type="number"],
+	                                .annotationAdjustBox input[type="datetime-local"],
+	                                .annotationAdjustBox select,
+	                                .annotationAdjustBox textarea {
+	                                	width: 100%;
+	                                	box-sizing: border-box;
+	                                	border: 0.1vh solid #cfd8df;
+	                                	background-color: rgba(255, 255, 255, 0.75);
+	                                	color: #1f2937;
+	                                	border-radius: 0.2vh;
+	                                	padding: 0.5vh 0.5vw;
+	                                	outline: none;
+	                                }
+	                                .annotationAdjustBox textarea {
+	                                	height: 92px;
+	                                	resize: none;
+	                                }
+	                                .annotation_inline_3 {
+	                                	display: grid;
+	                                	grid-template-columns: 1fr 0.7fr auto;
+	                                	gap: 0.4vw;
+	                                }
+	                                .annotation_events {
+	                                	display: grid;
+	                                	grid-template-columns: repeat(2, minmax(0, 1fr));
+	                                	gap: 0.4vh 0.6vw;
+	                                	padding: 0.4vh 0;
+	                                }
+	                                .annotation_events label {
+	                                	display: flex;
+	                                	align-items: center;
+	                                	gap: 0.35vw;
+	                                	margin: 0;
+	                                }
+		                                .annotation_btn_row {
+		                                	display: flex;
+		                                	gap: 0.5vw;
+		                                }
+		                                .annotation_input_with_btn {
+		                                	display: grid;
+		                                	grid-template-columns: 1fr auto;
+		                                	gap: 0.4vw;
+		                                }
+		                                .annotation_input_with_btn button {
+		                                	height: 100%;
+		                                	min-width: 3.2vw;
+		                                	border: 0.1vh solid #cad5df;
+		                                	background-color: rgba(238, 242, 247, 0.8);
+		                                	color: #2f3a45;
+		                                	cursor: pointer;
+		                                	padding: 0 0.5vw;
+		                                }
+		                                .annotation_btn_row button {
+		                                	flex: 1;
+		                                	height: 3.2vh;
+		                                	border: 0.1vh solid #cad5df;
+		                                	background-color: rgba(238, 242, 247, 0.8);
+		                                	color: #2f3a45;
+		                                	cursor: pointer;
+		                                }
+		                                .obj_media_preview {
+		                                	display: none;
+		                                	padding: 0.45vh 0.4vw;
+		                                	border: 0.1vh solid #dbe3ea;
+		                                	background: rgba(255, 255, 255, 0.72);
+		                                	border-radius: 0.2vh;
+		                                }
+		                                .obj_media_preview img {
+		                                	display: block;
+		                                	max-height: 96px;
+		                                	max-width: 100%;
+		                                	width: auto;
+		                                	height: auto;
+		                                	margin: 0 auto;
+		                                }
+		                                .obj_media_preview audio,
+		                                .obj_media_preview video {
+		                                	display: block;
+		                                	width: 100%;
+		                                }
+		                                .obj_media_preview video {
+		                                	max-height: 180px;
+		                                }
+		                                .obj_media_preview_note {
+		                                	font-size: 10px;
+		                                	color: #6b7280;
+		                                	line-height: 1.2;
+		                                }
+	                                .select_options{
+	                                    border: 0.1vh solid #CCC;
+	                                    height: 3vh;
                                     width: 100%;
                                     font-size: 10px;
                                     margin: 0;
@@ -552,6 +662,88 @@
 								    </div>
 								</div>
 								</div>
+								<div id="labelAdjustBox" class="adjustBox annotationAdjustBox">
+									<div class="annotation_title">Label Adjustment</div>
+									<div class="annotation_row">
+										<label>Label</label>
+										<input id="labelAdjustBox_label" type="text" placeholder="Label text"/>
+									</div>
+									<div class="annotation_row">
+										<label>Font</label>
+										<div class="annotation_inline_3">
+											<select id="labelAdjustBox_font_family">
+												<option value="Georgia">Georgia</option>
+												<option value="Times New Roman">Times New Roman</option>
+												<option value="Arial">Arial</option>
+												<option value="Verdana">Verdana</option>
+												<option value="Courier New">Courier New</option>
+												<option value="Tahoma">Tahoma</option>
+											</select>
+											<input id="labelAdjustBox_font_size" type="number" min="8" max="96" value="18" />
+											<input id="labelAdjustBox_font_color" type="color" value="#1f2d3d" />
+										</div>
+									</div>
+								</div>
+								<div id="noteAdjustBox" class="adjustBox annotationAdjustBox">
+									<div id="noteAdjustBox_title" class="annotation_title">Comment / Analyst Note</div>
+									<div class="annotation_row">
+										<label>Label</label>
+										<input id="noteAdjustBox_label" type="text" placeholder="Label"/>
+									</div>
+									<div class="annotation_row">
+										<label>Text</label>
+										<textarea id="noteAdjustBox_text" placeholder="Write note details..."></textarea>
+									</div>
+								</div>
+								<div id="eventFrameAdjustBox" class="adjustBox annotationAdjustBox">
+									<div class="annotation_title">Event Frame</div>
+									<div class="annotation_row">
+										<label>Label</label>
+										<input id="eventFrameAdjustBox_label" type="text" placeholder="Event frame label"/>
+									</div>
+									<div class="annotation_row">
+										<label>Date & Time</label>
+										<input id="eventFrameAdjustBox_datetime" type="datetime-local" />
+									</div>
+									<div class="annotation_row">
+										<label>Event Types</label>
+										<div class="annotation_events">
+											<label><input type="checkbox" class="eventFrameAdjustBox_event_type" value="meeting"/>Meeting</label>
+											<label><input type="checkbox" class="eventFrameAdjustBox_event_type" value="calling"/>Calling</label>
+											<label><input type="checkbox" class="eventFrameAdjustBox_event_type" value="email"/>Email</label>
+											<label><input type="checkbox" class="eventFrameAdjustBox_event_type" value="payment"/>Payment</label>
+											<label><input type="checkbox" class="eventFrameAdjustBox_event_type" value="travel"/>Travel</label>
+											<label><input type="checkbox" class="eventFrameAdjustBox_event_type" value="surveillance"/>Surveillance</label>
+										</div>
+									</div>
+								</div>
+									<div id="objAdjustBox" class="adjustBox annotationAdjustBox">
+										<div class="annotation_title">Object Attachment</div>
+									<div class="annotation_row">
+										<label>Label</label>
+										<input id="objAdjustBox_label" type="text" placeholder="Object label"/>
+									</div>
+										<div class="annotation_row">
+											<label>Attached Link</label>
+											<div class="annotation_input_with_btn">
+												<input id="objAdjustBox_attachment_link" type="text" placeholder="https://example.com or www.example.com"/>
+												<button id="objAdjustBox_open_link_btn" type="button">></button>
+											</div>
+										</div>
+									<div class="annotation_row">
+										<label>Attach File</label>
+										<input id="objAdjustBox_attachment_file" type="file" />
+									</div>
+										<div class="annotation_row">
+											<label>Attached Name</label>
+											<input id="objAdjustBox_attachment_name" type="text" placeholder="No attachment" readonly />
+										</div>
+										<div id="objAdjustBox_media_preview" class="annotation_row obj_media_preview"></div>
+										<div class="annotation_btn_row">
+											<button id="objAdjustBox_open_file_btn" type="button">Open / Download File</button>
+											<button id="objAdjustBox_clear_btn" type="button">Clear</button>
+										</div>
+									</div>
 								<div id="customContextMenu" class="customContextMenu"></div>
 								<div id="graph_options" class="graph_options">
 							  	<div id="graph_filters" class="graph_options_filters">asas</div>
@@ -873,6 +1065,147 @@
 								// Track current node
 							    let currentEntityId = null;
 							    const groupMap = {}; // Stores grouped data { groupId: { nodes: [], edges: [] } }
+								const nodeAdjustBox = document.getElementById('nodeAdjustBox');
+								const edgeAdjustBox = document.getElementById('edgeAdjustBox');
+								const labelAdjustBox = document.getElementById('labelAdjustBox');
+								const noteAdjustBox = document.getElementById('noteAdjustBox');
+								const eventFrameAdjustBox = document.getElementById('eventFrameAdjustBox');
+								const objAdjustBox = document.getElementById('objAdjustBox');
+
+								function hideSpecialAdjustBoxes() {
+									labelAdjustBox.style.display = "none";
+									noteAdjustBox.style.display = "none";
+									eventFrameAdjustBox.style.display = "none";
+									objAdjustBox.style.display = "none";
+								}
+
+								function hideAllAdjustBoxes() {
+									nodeAdjustBox.style.display = "none";
+									edgeAdjustBox.style.display = "none";
+									hideSpecialAdjustBoxes();
+								}
+
+								function positionAdjustBox(box, domPosition) {
+									const offsetX = 20;
+									const offsetY = 20;
+									box.style.top = `${domPosition.y + offsetY}px`;
+									box.style.left = `${domPosition.x + offsetX}px`;
+
+									const boxRect = box.getBoundingClientRect();
+									if (boxRect.right > window.innerWidth) {
+										box.style.left = `${window.innerWidth - boxRect.width - 10}px`;
+									}
+									if (boxRect.bottom > window.innerHeight) {
+										box.style.top = `${window.innerHeight - boxRect.height - 10}px`;
+									}
+								}
+
+								function toDateTimeLocalValue(rawValue) {
+									if (!rawValue) return "";
+									const date = new Date(rawValue);
+									if (Number.isNaN(date.getTime())) return "";
+									const year = date.getFullYear();
+									const month = String(date.getMonth() + 1).padStart(2, "0");
+									const day = String(date.getDate()).padStart(2, "0");
+									const hours = String(date.getHours()).padStart(2, "0");
+									const minutes = String(date.getMinutes()).padStart(2, "0");
+									return `${year}-${month}-${day}T${hours}:${minutes}`;
+								}
+
+								function getCheckedEventTypes() {
+									return Array.from(document.querySelectorAll('.eventFrameAdjustBox_event_type:checked'))
+										.map(el => el.value);
+								}
+
+								function setCheckedEventTypes(values) {
+									const selected = new Set(Array.isArray(values) ? values.map(item => String(item)) : []);
+									document.querySelectorAll('.eventFrameAdjustBox_event_type').forEach(check => {
+										check.checked = selected.has(check.value);
+									});
+								}
+
+								function safeNormalizeAttachmentLink(rawLink) {
+									if (typeof normalizeExternalLink === "function") {
+										return normalizeExternalLink(rawLink);
+									}
+									const trimmed = String(rawLink || "").trim();
+									if (!trimmed) return "";
+									if (/^[a-zA-Z][a-zA-Z\d+\-.]*:/.test(trimmed)) return trimmed;
+									if (trimmed.startsWith("//")) return `https:${trimmed}`;
+									return `https://${trimmed.replace(/^\/+/, "")}`;
+								}
+
+								function inferAttachmentPreviewKind(mimeValue, referenceValue) {
+									const mime = String(mimeValue || "").toLowerCase();
+									if (mime.startsWith("image/")) return "image";
+									if (mime.startsWith("audio/")) return "audio";
+									if (mime.startsWith("video/")) return "video";
+
+									const ref = String(referenceValue || "").toLowerCase().split(/[?#]/)[0];
+									const ext = ref.includes(".") ? ref.split(".").pop() : "";
+									if (["png", "jpg", "jpeg", "gif", "bmp", "webp", "svg", "avif"].includes(ext)) return "image";
+									if (["mp3", "wav", "ogg", "m4a", "aac", "flac", "opus"].includes(ext)) return "audio";
+									if (["mp4", "webm", "mov", "m4v", "ogv", "avi", "mkv"].includes(ext)) return "video";
+									return "";
+								}
+
+								function renderObjAttachmentPreview(nodeLike = {}) {
+									const previewBox = document.getElementById("objAdjustBox_media_preview");
+									if (!previewBox) return;
+
+									const attachmentDataUrl = String(nodeLike?.attachmentDataUrl || "").trim();
+									const attachmentLinkRaw = String(nodeLike?.attachmentLink || "").trim();
+									const attachmentMime = String(nodeLike?.attachmentMime || "").trim().toLowerCase();
+									const attachmentName = String(nodeLike?.attachmentName || "").trim();
+
+									let source = "";
+									let previewKind = "";
+									if (attachmentDataUrl) {
+										source = attachmentDataUrl;
+										previewKind = inferAttachmentPreviewKind(attachmentMime, attachmentName || attachmentDataUrl);
+									} else if (attachmentLinkRaw) {
+										source = safeNormalizeAttachmentLink(attachmentLinkRaw);
+										previewKind = inferAttachmentPreviewKind(attachmentMime, source);
+									}
+
+									if (!source || !previewKind) {
+										previewBox.innerHTML = "";
+										previewBox.style.display = "none";
+										return;
+									}
+
+									previewBox.innerHTML = "";
+									previewBox.style.display = "block";
+
+									let mediaEl = null;
+									if (previewKind === "image") {
+										mediaEl = document.createElement("img");
+										mediaEl.src = source;
+										mediaEl.alt = attachmentName || "Image preview";
+									} else if (previewKind === "audio") {
+										mediaEl = document.createElement("audio");
+										mediaEl.controls = true;
+										mediaEl.preload = "metadata";
+										mediaEl.src = source;
+									} else if (previewKind === "video") {
+										mediaEl = document.createElement("video");
+										mediaEl.controls = true;
+										mediaEl.preload = "metadata";
+										mediaEl.src = source;
+									}
+
+									if (!mediaEl) {
+										previewBox.innerHTML = "";
+										previewBox.style.display = "none";
+										return;
+									}
+
+									mediaEl.addEventListener("error", () => {
+										previewBox.innerHTML = `<div class="obj_media_preview_note">Preview is not available for this source.</div>`;
+										previewBox.style.display = "block";
+									});
+									previewBox.appendChild(mediaEl);
+								}
 
 //---------------------------------- Graph Right clicks
 							    network.on("oncontext", function (params) {
@@ -880,7 +1213,6 @@
 								    const nodeId = network.getNodeAt(params.pointer.DOM);
 								    let selectedNodes = network.getSelectedNodes();
 								    const contextMenu = document.getElementById('customContextMenu');
-								    const box = document.getElementById('nodeAdjustBox');
 								    let menuHTML = "";
 								    contextMenu.style.left = `${params.event.pageX}px`;
 								    contextMenu.style.top = `${params.event.pageY}px`;
@@ -969,7 +1301,7 @@
 								    } else {
 								        contextMenu.style.display = 'none';
 								    }
-								    box.style.display = 'none';
+									hideAllAdjustBoxes();
 								});
 	//------------------------------ Context menu options (actions) 
 								document.getElementById('customContextMenu').addEventListener('click', function (e) {
@@ -1124,139 +1456,135 @@
 
 //---------------------------------- Graph Left clicks
 							    network.on("click", function(params) {
-								    const nodeBox = document.getElementById('nodeAdjustBox');
-									const edgeBox = document.getElementById('edgeAdjustBox');
 								    const albumBox = document.getElementById('albumBox');
 								    const contextMenu = document.getElementById('customContextMenu');
 								    const selects = document.querySelectorAll('.select_options');
 								    selects.forEach(select => select.selectedIndex = 0);
-								    //if (params.nodes.length > 0 || params.edges.length > 0 ) { Uncomment this to work on edges customizations
+
 								    if (params.nodes.length > 0) {
-								        currentEntityId = params.nodes[0];								      
-								        // Handle cluster nodes safely
+								        currentEntityId = params.nodes[0];
 										if (network.isCluster(currentEntityId)) {
 											network.openCluster(currentEntityId);
 											return;
 										}
-										// Normal node (may or may not be in FULL_GRAPH yet)
+
 										const base = FULL_GRAPH.nodes.get(currentEntityId);
 										if (!base) {
 											console.error("Node data not found:", currentEntityId);
 											return;
 										}
-										const mod  = MODIFIED_NODES.get(currentEntityId) || {};
+										const mod = MODIFIED_NODES.get(currentEntityId) || {};
 										const node = { ...base, ...mod };
+										const nodePosition = network.getPositions([currentEntityId])[currentEntityId];
+										const domPosition = network.canvasToDOM(nodePosition);
+										const annotationType = String(node?.annotationType || "").toLowerCase();
 
-								        if (node) {
-								            // Normal node
-								            document.getElementById('nodeColorPicker').value = node.color?.background || "#000000";
-								        } else {
-								            // Cluster node (or dynamically generated node)
-								            document.getElementById('nodeColorPicker').value = "#97C2FC"; // default for clusters
-								        }
+										hideAllAdjustBoxes();
+										contextMenu.style.display = "none";
+										albumBox.style.display = "none";
 
-								        // Position adjustment box near the node
-								        const nodePosition = network.getPositions([currentEntityId])[currentEntityId];
-								        const domPosition = network.canvasToDOM(nodePosition);
+										if (annotationType === "label") {
+											document.getElementById("labelAdjustBox_label").value = node?.label || "";
+											document.getElementById("labelAdjustBox_font_family").value = node?.font?.face || "Georgia";
+											document.getElementById("labelAdjustBox_font_size").value = node?.font?.size || 18;
+											document.getElementById("labelAdjustBox_font_color").value = node?.font?.color || "#1f2d3d";
+											positionAdjustBox(labelAdjustBox, domPosition);
+											labelAdjustBox.style.display = "block";
+										} else if (annotationType === "comment_box" || annotationType === "text_block") {
+											document.getElementById("noteAdjustBox_title").textContent = annotationType === "comment_box"
+												? "Comment Box"
+												: "Analyst Note";
+											document.getElementById("noteAdjustBox_label").value = node?.label || "";
+											document.getElementById("noteAdjustBox_text").value = node?.note || "";
+											positionAdjustBox(noteAdjustBox, domPosition);
+											noteAdjustBox.style.display = "block";
+										} else if (annotationType === "event_frame") {
+											document.getElementById("eventFrameAdjustBox_label").value = node?.label || "";
+											document.getElementById("eventFrameAdjustBox_datetime").value = toDateTimeLocalValue(node?.eventDateTime);
+											setCheckedEventTypes(node?.eventTypes || []);
+											positionAdjustBox(eventFrameAdjustBox, domPosition);
+											eventFrameAdjustBox.style.display = "block";
+										} else if (annotationType === "ole_object") {
+											if (node.shape !== "image" || !node.image) {
+												const oleObjIconPath = window.OLE_OBJECT_ICON_PATH || "../graph_icons/Document 1.svg";
+												const docPatch = {
+													shape: "image",
+													image: oleObjIconPath,
+													size: node?.size || 34,
+													borderWidth: 0,
+													borderWidthSelected: 0
+												};
+												nodesData.update({ id: currentEntityId, ...docPatch });
+												persistNodeChange(currentEntityId, docPatch);
+											}
+											document.getElementById("objAdjustBox_label").value = node?.label || "";
+											document.getElementById("objAdjustBox_attachment_link").value = node?.attachmentLink || "";
+											document.getElementById("objAdjustBox_attachment_name").value = node?.attachmentName || "";
+											renderObjAttachmentPreview(node);
+											positionAdjustBox(objAdjustBox, domPosition);
+											objAdjustBox.style.display = "block";
 
-								        const offsetX = 20, offsetY = 20;
-								        nodeBox.style.top = (domPosition.y + offsetY) + "px";
-								        nodeBox.style.left = (domPosition.x + offsetX) + "px";
+											} else {
+											document.getElementById('nodeColorPicker').value = node?.color?.background || "#000000";
+											const nodelabel = document.getElementById("nodeAdjustBox_node_label_field");
+											nodelabel.value = node?.label || "";
+											const nodeImage = document.getElementById("nodeAdjustBox_node_image");
+											nodeImage.innerHTML = node?.image ? `<img src="${node.image}" style="width:100%; height:auto;">` : "";
+											const nodeNote = document.getElementById("nodeAdjustBox_node_note_text");
+											nodeNote.value = node?.note || "";
+											const nodeShapeSelect = document.getElementById("nodeAdjustBox_node_shape");
+											const prev_shape = {dot: "dot",circularImage: "dot",box: "rectangle",diamond: "diamond"};
+											nodeShapeSelect.value = prev_shape[node?.shape] || "dot";
+											const nodeColorEffect = document.getElementById("nodeAdjustBox_node_color_effect");
+											nodeColorEffect.value = node?.colorBehavior || "individual";
+											positionAdjustBox(nodeAdjustBox, domPosition);
+											nodeAdjustBox.style.display = "block";
+										}
 
-								        // Keep it inside window
-								        const boxRect = nodeBox.getBoundingClientRect();
-								        if (boxRect.right > window.innerWidth) nodeBox.style.left = (window.innerWidth - boxRect.width - 10) + "px";
-								        if (boxRect.bottom > window.innerHeight) nodeBox.style.top = (window.innerHeight - boxRect.height - 10) + "px";
-										
-										// Retrieving styling options
-										// Retrieving node label 
-										const nodelabel = document.getElementById("nodeAdjustBox_node_label_field");
-										nodelabel.value = node?.label || "";
-								        // Retrieving node icon
-								        const nodeImage = document.getElementById("nodeAdjustBox_node_image");
-								        nodeImage.innerHTML = node?.image ? `<img src="${node.image}" style="width:100%; height:auto;">` : "";
-								        // Retrieving note
-								        const nodeNote = document.getElementById("nodeAdjustBox_node_note_text");
-								        nodeNote.value = node?.note || "";
-										// Retrieving shape
-										const nodeShapeSelect = document.getElementById("nodeAdjustBox_node_shape");
-										// Map internal shapes to dropdown values
-										const prev_shape = {dot: "dot",circularImage: "dot",box: "rectangle",diamond: "diamond"};
-								        nodeShapeSelect.value = prev_shape[node?.shape] || "dot";
-										// Retrieving color effect
-										const nodeColorEffect = document.getElementById("nodeAdjustBox_node_color_effect");
-								        nodeColorEffect.value = node?.colorBehavior || "individual";
-								        nodeBox.style.display = "block"; 
-								        contextMenu.style.display = "none"; 
-										edgeBox.style.display = "none"; 
-								        albumBox.style.display = "none"; 
-								        //Show node infos (property keys)
-								        showNodeInfos(node, "state");
+										showNodeInfos(node, "state");
 								        const allSelectedNodes = {};
 										params.nodes.forEach(id => {
-										const base = FULL_GRAPH.nodes.get(id);
-										if (!base) return;
-
-										const mod = MODIFIED_NODES.get(id) || {};
-										allSelectedNodes[id] = { ...base, ...mod };
+											const selectedBase = FULL_GRAPH.nodes.get(id);
+											if (!selectedBase) return;
+											const selectedMod = MODIFIED_NODES.get(id) || {};
+											allSelectedNodes[id] = { ...selectedBase, ...selectedMod };
 										});
-								        messageParent({id:"entity_selection",selectedNodes:allSelectedNodes,selectedEdges:params.edges});							       
-								    } 
-									else if (params.edges.length > 0) {
+								        messageParent({id:"entity_selection",selectedNodes:allSelectedNodes,selectedEdges:params.edges});
+								    } else if (params.edges.length > 0) {
 										currentEdgeId = params.edges[0];
-										// Get edge data
 										const base = FULL_GRAPH.edges.get(currentEdgeId);
 										if (!base) {
 											console.error("Edge data not found:", currentEdgeId);
 											return;
 										}
 										const mod  = MODIFIED_EDGES.get(currentEdgeId) || {};
-										const edgeData = { ...base, ...mod };																			
+										const edgeData = { ...base, ...mod };
 
-										// Calculate midpoint of the edge
 										const sourcePos = network.getPositions([edgeData.from])[edgeData.from];
 										const targetPos = network.getPositions([edgeData.to])[edgeData.to];
-
 										const midpoint = {
 											x: (sourcePos.x + targetPos.x) / 2,
 											y: (sourcePos.y + targetPos.y) / 2
 										};
-
 										const domPosition = network.canvasToDOM(midpoint);
 
-										// Position overlay
-										const offsetX = 20, offsetY = 20;
-										edgeBox.style.top = (domPosition.y + offsetY) + "px";
-										edgeBox.style.left = (domPosition.x + offsetX) + "px";
-
-										// Keep inside window
-										const boxRect = edgeBox.getBoundingClientRect();
-										if (boxRect.right > window.innerWidth) edgeBox.style.left = (window.innerWidth - boxRect.width - 10) + "px";
-										if (boxRect.bottom > window.innerHeight) edgeBox.style.top = (window.innerHeight - boxRect.height - 10) + "px";
-										// Populate edge label
 										const edgelabel = document.getElementById("edgeAdjustBox_edge_label_field");
 										edgelabel.value = edgeData?.label || "";
-										// populate color picker
 										const edgeColorPicker = document.getElementById("edgeColorPicker");
 										edgeColorPicker.value = edgeData?.color?.color || "#000000";
-										// Populate style select
 										const edgeStyleSelect = document.getElementById("edgestyleOption");
-										// Default to 'solid' if no edge style
 										edgeStyleSelect.value = edgeData?.edgeStyle || "solid";
-										// Populate weight input
 										const edgeWeightInput = document.getElementById("edgeWeightInput");
 										edgeWeightInput.value = edgeData?.width || 1;
 
-										// Show overlay
-										edgeBox.style.display = "block"; 
-										contextMenu.style.display = "none"; 
-										nodeBox.style.display = "none";
-										}
-									else {
-								        // Clicked background
-								        nodeBox.style.display = "none"; 
-										edgeBox.style.display = "none"; 
-								        albumBox.style.display = "none"; 
+										hideAllAdjustBoxes();
+										positionAdjustBox(edgeAdjustBox, domPosition);
+										edgeAdjustBox.style.display = "block";
+										albumBox.style.display = "none";
+										contextMenu.style.display = "none";
+									} else {
+										hideAllAdjustBoxes();
+								        albumBox.style.display = "none";
 								        contextMenu.style.display = 'none';
 								        currentEntityId = null;
 								        selects.forEach(select => select.selectedIndex = 0);
@@ -1269,7 +1597,18 @@
 //---------------------------------- Graph souble clicks (expanding nodes)
 								network.on("doubleClick", e => {
 									if (!FULL_GRAPH.nodes.size) return;
-									if (e.nodes.length === 1) expandNode(e.nodes[0]);
+									if (e.nodes.length === 1) {
+										const nodeId = e.nodes[0];
+										const base = FULL_GRAPH.nodes.get(nodeId) || {};
+										const mod = MODIFIED_NODES.get(nodeId) || {};
+										const merged = { ...base, ...mod };
+										const annotationType = String(merged.annotationType || "").toLowerCase();
+										if (annotationType === "ole_object" && nodeHasAttachment(nodeId)) {
+											openNodeAttachment(nodeId);
+											return;
+										}
+										expandNode(nodeId);
+									}
 								});					
 //----------------------------------------------------------------------------------------------------------------------------------- Listeners for adjustment options
 								// -------------------------------------------------------------------------------------------- Labels								
@@ -1293,6 +1632,152 @@
 								      });
 								    }
 								});	
+								//------------------------------ Label annotation options
+								const labelAdjustLabelField = document.getElementById("labelAdjustBox_label");
+								const labelAdjustFontFamily = document.getElementById("labelAdjustBox_font_family");
+								const labelAdjustFontSize = document.getElementById("labelAdjustBox_font_size");
+								const labelAdjustFontColor = document.getElementById("labelAdjustBox_font_color");
+
+								function applyLabelAnnotationFont() {
+									if (currentEntityId == null) return;
+									updateNodeFont(currentEntityId, {
+										face: labelAdjustFontFamily.value || "Georgia",
+										size: Math.max(8, parseInt(labelAdjustFontSize.value, 10) || 18),
+										color: labelAdjustFontColor.value || "#1f2d3d"
+									});
+								}
+
+								labelAdjustLabelField.addEventListener("change", () => {
+									if (currentEntityId == null) return;
+									updateNodeLabel(currentEntityId, labelAdjustLabelField.value);
+								});
+								labelAdjustFontFamily.addEventListener("change", applyLabelAnnotationFont);
+								labelAdjustFontSize.addEventListener("change", applyLabelAnnotationFont);
+								labelAdjustFontColor.addEventListener("input", applyLabelAnnotationFont);
+
+								//------------------------------ Comment / Analyst note options
+								const noteAdjustLabelField = document.getElementById("noteAdjustBox_label");
+								const noteAdjustTextField = document.getElementById("noteAdjustBox_text");
+								noteAdjustLabelField.addEventListener("change", () => {
+									if (currentEntityId == null) return;
+									updateNodeLabel(currentEntityId, noteAdjustLabelField.value);
+								});
+								noteAdjustTextField.addEventListener("change", () => {
+									if (currentEntityId == null) return;
+									updateNodeNote(currentEntityId, noteAdjustTextField.value);
+								});
+
+								//------------------------------ Event frame options
+								const eventFrameLabelField = document.getElementById("eventFrameAdjustBox_label");
+								const eventFrameDateTimeField = document.getElementById("eventFrameAdjustBox_datetime");
+								eventFrameLabelField.addEventListener("change", () => {
+									if (currentEntityId == null) return;
+									updateNodeLabel(currentEntityId, eventFrameLabelField.value);
+								});
+								eventFrameDateTimeField.addEventListener("change", () => {
+									if (currentEntityId == null) return;
+									const value = eventFrameDateTimeField.value ? new Date(eventFrameDateTimeField.value).toISOString() : "";
+									updateNodeEventFrame(currentEntityId, { eventDateTime: value });
+								});
+								document.querySelectorAll(".eventFrameAdjustBox_event_type").forEach(check => {
+									check.addEventListener("change", () => {
+										if (currentEntityId == null) return;
+										updateNodeEventFrame(currentEntityId, { eventTypes: getCheckedEventTypes() });
+									});
+								});
+
+								//------------------------------ Object attachment options
+								const objLabelField = document.getElementById("objAdjustBox_label");
+								const objAttachmentLinkField = document.getElementById("objAdjustBox_attachment_link");
+								const objAttachmentFileField = document.getElementById("objAdjustBox_attachment_file");
+								const objAttachmentNameField = document.getElementById("objAdjustBox_attachment_name");
+								const objOpenFileBtn = document.getElementById("objAdjustBox_open_file_btn");
+								const objOpenLinkBtn = document.getElementById("objAdjustBox_open_link_btn");
+								const objClearBtn = document.getElementById("objAdjustBox_clear_btn");
+
+								objLabelField.addEventListener("change", () => {
+									if (currentEntityId == null) return;
+									updateNodeLabel(currentEntityId, objLabelField.value);
+								});
+
+									objAttachmentLinkField.addEventListener("change", () => {
+										if (currentEntityId == null) return;
+										const linkValue = objAttachmentLinkField.value.trim();
+										const linkedName = linkValue ? linkValue.split("/").pop() : "";
+										if (!objAttachmentNameField.value && linkedName) {
+										objAttachmentNameField.value = linkedName;
+									}
+										updateNodeAttachment(currentEntityId, {
+											attachmentLink: linkValue,
+											attachmentName: objAttachmentNameField.value || linkedName || ""
+										});
+										if (typeof getMergedNodeById === "function") {
+											renderObjAttachmentPreview(getMergedNodeById(currentEntityId));
+										} else {
+											renderObjAttachmentPreview({
+												attachmentLink: linkValue,
+												attachmentName: objAttachmentNameField.value || linkedName || ""
+											});
+										}
+									});
+
+								objAttachmentFileField.addEventListener("change", () => {
+									if (currentEntityId == null) return;
+									const file = objAttachmentFileField.files && objAttachmentFileField.files[0];
+									if (!file) return;
+									const reader = new FileReader();
+									reader.onload = () => {
+										const fileDataUrl = typeof reader.result === "string" ? reader.result : "";
+										objAttachmentNameField.value = file.name || "attachment";
+											updateNodeAttachment(currentEntityId, {
+												attachmentDataUrl: fileDataUrl,
+												attachmentName: file.name || "attachment",
+												attachmentMime: file.type || ""
+											});
+											renderObjAttachmentPreview({
+												attachmentDataUrl: fileDataUrl,
+												attachmentName: file.name || "attachment",
+												attachmentMime: file.type || ""
+											});
+										};
+										reader.readAsDataURL(file);
+									});
+
+								objOpenFileBtn.addEventListener("click", () => {
+									if (currentEntityId == null) return;
+									openNodeAttachmentFile(currentEntityId);
+								});
+
+									objOpenLinkBtn.addEventListener("click", () => {
+										if (currentEntityId == null) return;
+										const linkValue = objAttachmentLinkField.value.trim();
+										if (linkValue) {
+											const linkedName = linkValue.split("/").pop() || "";
+											if (!objAttachmentNameField.value && linkedName) {
+												objAttachmentNameField.value = linkedName;
+											}
+											updateNodeAttachment(currentEntityId, {
+												attachmentLink: linkValue,
+												attachmentName: objAttachmentNameField.value || linkedName || ""
+											});
+										}
+										openNodeAttachmentLink(currentEntityId);
+									});
+
+								objClearBtn.addEventListener("click", () => {
+									if (currentEntityId == null) return;
+									objAttachmentLinkField.value = "";
+									objAttachmentNameField.value = "";
+									objAttachmentFileField.value = "";
+										updateNodeAttachment(currentEntityId, {
+											attachmentLink: "",
+											attachmentName: "",
+											attachmentDataUrl: "",
+											attachmentMime: ""
+										});
+										renderObjAttachmentPreview({});
+									});
+
 								// -------------------------------------------------------------------------------------------- colors
 								//------------------------------ Node Color options (Singular/multi-selection)
 							    // Color picker

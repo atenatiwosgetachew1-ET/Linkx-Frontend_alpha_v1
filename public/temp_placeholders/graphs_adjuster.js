@@ -141,6 +141,14 @@ function clearVisibleGraph() {
   VISIBLE_STATE.edges.clear();
 }
 
+if (!window.OLE_OBJECT_ICON_PATH) {
+  window.OLE_OBJECT_ICON_PATH = "../graph_icons/Document 1.svg";
+}
+
+function getOleObjectIconPath() {
+  return window.OLE_OBJECT_ICON_PATH || "../graph_icons/Document 1.svg";
+}
+
 function persistNodeChange(id, patch) {
   window.MODIFIED_NODES.set(id, {
     ...(window.MODIFIED_NODES.get(id) || {}),
@@ -932,6 +940,116 @@ function updateNodeNote(nodeId, text) {
   persistNodeChange(nodeId, { note: text });
 }
 
+function updateNodeFont(nodeId, fontPatch = {}) {
+  if (nodeId == null) return;
+  const id = normalizeGraphId(nodeId);
+  const base = FULL_GRAPH.nodes.get(id) || {};
+  const mod = MODIFIED_NODES.get(id) || {};
+  const current = nodesData.get(id) || {};
+  const mergedFont = {
+    ...(base.font || {}),
+    ...(mod.font || {}),
+    ...(current.font || {}),
+    ...(fontPatch || {})
+  };
+  nodesData.update({ id, font: mergedFont });
+  persistNodeChange(id, { font: mergedFont });
+}
+
+function updateNodeEventFrame(nodeId, patch = {}) {
+  if (nodeId == null) return;
+  const id = normalizeGraphId(nodeId);
+  const normalizedPatch = { ...patch };
+  if (Array.isArray(normalizedPatch.eventTypes)) {
+    normalizedPatch.eventTypes = normalizedPatch.eventTypes.map(item => String(item));
+  }
+  nodesData.update({ id, ...normalizedPatch });
+  persistNodeChange(id, normalizedPatch);
+}
+
+function updateNodeAttachment(nodeId, patch = {}) {
+  if (nodeId == null) return;
+  const id = normalizeGraphId(nodeId);
+  const attachmentPatch = { ...patch };
+  nodesData.update({ id, ...attachmentPatch });
+  persistNodeChange(id, attachmentPatch);
+}
+
+function getMergedNodeById(nodeId) {
+  const id = normalizeGraphId(nodeId);
+  const base = FULL_GRAPH.nodes.get(id) || {};
+  const mod = MODIFIED_NODES.get(id) || {};
+  const current = nodesData.get(id) || {};
+  return { ...base, ...current, ...mod };
+}
+
+function nodeHasAttachment(nodeId) {
+  const merged = getMergedNodeById(nodeId);
+  const link = String(merged.attachmentLink || "").trim();
+  const dataUrl = String(merged.attachmentDataUrl || "").trim();
+  return link !== "" || dataUrl !== "";
+}
+
+function normalizeExternalLink(rawLink) {
+  const trimmed = String(rawLink || "").trim();
+  if (!trimmed) return "";
+  if (/^[a-zA-Z][a-zA-Z\d+\-.]*:/.test(trimmed)) return trimmed;
+  if (trimmed.startsWith("//")) return `https:${trimmed}`;
+  return `https://${trimmed.replace(/^\/+/, "")}`;
+}
+
+function openNodeAttachmentFile(nodeId) {
+  if (nodeId == null) return false;
+  const merged = getMergedNodeById(nodeId);
+  const attachmentDataUrl = String(merged.attachmentDataUrl || "").trim();
+  const attachmentName = String(merged.attachmentName || "attachment");
+
+  if (!attachmentDataUrl) return false;
+  const anchor = document.createElement("a");
+  anchor.href = attachmentDataUrl;
+  anchor.download = attachmentName;
+  anchor.target = "_blank";
+  anchor.rel = "noopener";
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  return true;
+}
+
+function openNodeAttachmentLink(nodeId) {
+  if (nodeId == null) return false;
+  const merged = getMergedNodeById(nodeId);
+  const normalizedLink = normalizeExternalLink(merged.attachmentLink);
+  if (!normalizedLink) return false;
+  const anchor = document.createElement("a");
+  anchor.href = normalizedLink;
+  anchor.target = "_blank";
+  anchor.rel = "noopener";
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  return true;
+}
+
+function openNodeAttachment(nodeId) {
+  if (nodeId == null) return false;
+  if (openNodeAttachmentFile(nodeId)) return true;
+  if (openNodeAttachmentLink(nodeId)) return true;
+
+  return false;
+}
+
+function getDocumentOutlineIconDataUri(strokeColor = "#4b5563", fillColor = "#ffffff") {
+  const stroke = String(strokeColor || "#4b5563");
+  const fill = String(fillColor || "#ffffff");
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <path d="M20 8H52V56H12V16L20 8Z" fill="${fill}" stroke="${stroke}" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M12 16H20V8" fill="none" stroke="${stroke}" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M22 26H46M22 34H46M22 42H40" stroke="${stroke}" stroke-width="2.4" stroke-linecap="round"/>
+</svg>`;
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+}
+
 function shouldKeepNodeLabelVisible(node) {
   if (!node || typeof node !== "object") return false;
   if (node.annotationType) return true;
@@ -1222,20 +1340,28 @@ function createAnnotationNode({
   x = 0,
   y = 0,
   shape = "box",
+  image = "",
   color = { background: "#fffdf2", border: "#8b7d4f" },
   font = { color: "#333333", size: 14 },
   extra = {}
 } = {}) {
   const id = createUniqueNodeId("anno");
+  const normalizedShape = String(shape || "box");
+  const normalizedImage = typeof image === "string" ? image.trim() : "";
+  const resolvedImage = normalizedShape === "image"
+    ? (normalizedImage || getOleObjectIconPath())
+    : normalizedImage;
   const node = {
     id,
     label,
     x,
     y,
-    shape,
+    shape: normalizedShape,
+    ...(normalizedShape === "image" ? { image: resolvedImage } : {}),
     color,
     font,
-    borderWidth: extra.borderWidth ?? 1.2,
+    borderWidth: extra.borderWidth ?? (normalizedShape === "image" ? 0 : 1.2),
+    borderWidthSelected: extra.borderWidthSelected ?? (normalizedShape === "image" ? 0 : 2),
     margin: extra.margin ?? 8,
     annotationType: extra.annotationType || "generic",
     note: extra.note || "",
@@ -1277,7 +1403,7 @@ function handleAddLabelNode(x, y) {
     x: pos.x,
     y: pos.y,
     shape: "text",
-    font: { color: "#1f2d3d", size: 18 },
+    font: { color: "#1f2d3d", size: 18, face: "Georgia" },
     extra: { annotationType: "label" }
   });
 }
@@ -1323,7 +1449,13 @@ function handleAddEventFrame(x, y) {
     shape: "box",
     color: { background: "#f8f8f8", border: "#555555" },
     font: { color: "#333333", size: 13 },
-    extra: { annotationType: "event_frame", borderWidth: 2, dashes: [8, 4] }
+    extra: {
+      annotationType: "event_frame",
+      borderWidth: 2,
+      dashes: [8, 4],
+      eventDateTime: "",
+      eventTypes: []
+    }
   });
 }
 
@@ -1368,10 +1500,20 @@ function handleAddOleObject(x, y) {
     label: String(text),
     x: pos.x,
     y: pos.y,
-    shape: "database",
-    color: { background: "#eef6ff", border: "#245c9a" },
-    font: { color: "#1a3f66", size: 13 },
-    extra: { annotationType: "ole_object" }
+    shape: "image",
+    image: getOleObjectIconPath(),
+    size: 34,
+    borderWidth: 0,
+    borderWidthSelected: 0,
+    font: { color: "#334155", size: 13, face: "Georgia" },
+    extra: {
+      annotationType: "ole_object",
+      attachmentLink: "",
+      attachmentDataUrl: "",
+      attachmentName: "",
+      attachmentMime: "",
+      attachmentAutoOpen: true
+    }
   });
 }
 
@@ -5016,6 +5158,18 @@ function renderVisibleGraphBatch() {
 
       const mod = MODIFIED_NODES.get(id) || {};
       const merged = { ...base, ...mod };
+
+      const annotationType = String(merged.annotationType || "").toLowerCase();
+      if (annotationType === "ole_object") {
+        merged.shape = "image";
+        if (!merged.image || String(merged.image).trim() === "") {
+          merged.image = getOleObjectIconPath();
+        }
+        merged.borderWidth = 0;
+        merged.borderWidthSelected = 0;
+      } else if (merged.shape === "image" && (!merged.image || String(merged.image).trim() === "")) {
+        merged.image = getOleObjectIconPath();
+      }
 
       if (window.currentSettings.showTitles && FULL_GRAPH.nodes.size < 5000) {
         merged.title = generateNodeTitleSafely(merged);
