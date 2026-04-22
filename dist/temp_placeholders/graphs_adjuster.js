@@ -141,12 +141,19 @@ function clearVisibleGraph() {
   VISIBLE_STATE.edges.clear();
 }
 
+function getDocumentOneIconDataUri(fillColor = "#7c3aed") {
+  const fill = String(fillColor || "#7c3aed");
+  const pathData = "M19.5 3h0.5l6 7v18.009c0 1.093-0.894 1.991-1.997 1.991h-15.005c-1.107 0-1.997-0.899-1.997-2.007v-22.985c0-1.109 0.897-2.007 2.003-2.007h10.497zM19 4h-10.004c-0.55 0-0.996 0.455-0.996 0.995v23.009c0 0.55 0.455 0.995 1 0.995h15c0.552 0 1-0.445 1-0.993v-17.007h-4.002c-1.103 0-1.998-0.887-1.998-2.006v-4.994zM20 4.5v4.491c0 0.557 0.451 1.009 0.997 1.009h3.703l-4.7-5.5z";
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><path fill="${fill}" d="${pathData}"/></svg>`;
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+}
+
 if (!window.OLE_OBJECT_ICON_PATH) {
-  window.OLE_OBJECT_ICON_PATH = "../graph_icons/Document 1.svg";
+  window.OLE_OBJECT_ICON_PATH = getDocumentOneIconDataUri("#7c3aed");
 }
 
 function getOleObjectIconPath() {
-  return window.OLE_OBJECT_ICON_PATH || "../graph_icons/Document 1.svg";
+  return window.OLE_OBJECT_ICON_PATH || getDocumentOneIconDataUri("#7c3aed");
 }
 
 function persistNodeChange(id, patch) {
@@ -1505,9 +1512,11 @@ function handleAddOleObject(x, y) {
     size: 34,
     borderWidth: 0,
     borderWidthSelected: 0,
-    font: { color: "#334155", size: 13, face: "Georgia" },
+    font: { color: "#6d28d9", size: 13, face: "Georgia" },
+    shadow: { enabled: true, color: "rgba(124,58,237,0.32)", size: 10, x: 0, y: 0 },
     extra: {
       annotationType: "ole_object",
+      accentColor: "#7c3aed",
       attachmentLink: "",
       attachmentDataUrl: "",
       attachmentName: "",
@@ -5162,11 +5171,26 @@ function renderVisibleGraphBatch() {
       const annotationType = String(merged.annotationType || "").toLowerCase();
       if (annotationType === "ole_object") {
         merged.shape = "image";
-        if (!merged.image || String(merged.image).trim() === "") {
+        const currentImage = String(merged.image || "").trim();
+        const isLegacyDocIcon =
+          currentImage.includes("Document 1.svg") ||
+          currentImage.includes("Document%201.svg");
+        if (!currentImage || isLegacyDocIcon) {
           merged.image = getOleObjectIconPath();
         }
         merged.borderWidth = 0;
         merged.borderWidthSelected = 0;
+        merged.font = {
+          ...(merged.font || {}),
+          color: (merged.font && merged.font.color) ? merged.font.color : "#6d28d9"
+        };
+        merged.shadow = merged.shadow || {
+          enabled: true,
+          color: `rgba(124,58,237,0.32)`,
+          size: 10,
+          x: 0,
+          y: 0
+        };
       } else if (merged.shape === "image" && (!merged.image || String(merged.image).trim() === "")) {
         merged.image = getOleObjectIconPath();
       }
