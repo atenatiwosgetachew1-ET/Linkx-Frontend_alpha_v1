@@ -1290,7 +1290,10 @@
 
 										menuHTML += `<div class="menu_item" data-action="visual_degree">Visualize by Degree</div>`;
 										menuHTML += `<div class="menu_item" data-action="visual_property">Visualize by Property</div>`;
-										if (window.PATH_HIGHLIGHT_STATE?.nodeIds?.size > 0) {
+										if (
+											(window.PATH_HIGHLIGHT_STATE?.nodeIds?.size || 0) > 0 ||
+											(window.PATH_HIGHLIGHT_STATE?.edgeIds?.size || 0) > 0
+										) {
 											menuHTML += `<div class="menu_item" data-action="clear_path">Clear Path Highlight</div>`;
 										}
 								    }
@@ -1304,7 +1307,7 @@
 									hideAllAdjustBoxes();
 								});
 	//------------------------------ Context menu options (actions) 
-								document.getElementById('customContextMenu').addEventListener('click', function (e) {
+								document.getElementById('customContextMenu').addEventListener('click', async function (e) {
 								if (e.target.classList.contains('menu_item') && !e.target.classList.contains('menu_item_disabled')) {
 								    const action = e.target.dataset.action;
 								    const nodeId = e.target.dataset.id;
@@ -1317,22 +1320,22 @@
 								        handleAddNode(contextPageX, contextPageY);
 								        break;
 								      case 'add_label':
-								        handleAddLabelNode(contextPageX, contextPageY);
+								        await handleAddLabelNode(contextPageX, contextPageY);
 								        break;
 								      case 'add_comment_box':
-								        handleAddCommentBox(contextPageX, contextPageY);
+								        await handleAddCommentBox(contextPageX, contextPageY);
 								        break;
 								      case 'add_text_block':
-								        handleAddTextBlock(contextPageX, contextPageY);
+								        await handleAddTextBlock(contextPageX, contextPageY);
 								        break;
 								      case 'add_event_frame':
-								        handleAddEventFrame(contextPageX, contextPageY);
+								        await handleAddEventFrame(contextPageX, contextPageY);
 								        break;
 								      case 'add_theme_line':
 								        handleAddThemeLine(selectedNodes);
 								        break;
 								      case 'add_ole_object':
-								        handleAddOleObject(contextPageX, contextPageY);
+								        await handleAddOleObject(contextPageX, contextPageY);
 								        break;
 								      case 'delete':
 								        handleDeleteNode(nodeId);
@@ -1374,7 +1377,7 @@
 								      	collapseNeighborhoodFromSelection(selectedNodes, 1);
 								      	break;
 								      case 'merge_nodes':
-								      	mergeSelectedNodes(selectedNodes);
+								      	await mergeSelectedNodes(selectedNodes);
 								      	break;
 								      case 'visual_degree':
 								      	applyVisualEncodingByDegree();
@@ -1387,7 +1390,7 @@
 								      	const message = suggestedKeys.length > 0
 								      		? `Property key (examples): ${suggestedKeys.join(", ")}`
 								      		: "Property key";
-								      	const chosenKey = prompt(message, defaultKey);
+								      	const chosenKey = await requestUserInput(message, defaultKey, { title: "Visualize by Property" });
 								      	if (chosenKey != null && String(chosenKey).trim() !== "") {
 								      		applyVisualEncodingByProperty(chosenKey);
 								      	}
@@ -1395,7 +1398,7 @@
 								      }
 								      case 'save_view': {
 								      	const suggestedName = `View ${new Date().toISOString().slice(0, 19).replace("T", " ")}`;
-								      	const viewName = prompt("View name", suggestedName);
+								      	const viewName = await requestUserInput("View name", suggestedName, { title: "Save View" });
 								      	if (viewName != null) {
 								      		saveCurrentView(viewName);
 								      	}
@@ -1406,14 +1409,14 @@
 								      	if (saved.length === 0) break;
 								      	const defaultName = saved[0]?.name || "";
 								      	const list = saved.slice(0, 12).map(v => v.name).join(", ");
-								      	const targetName = prompt(`Load view by name (${list})`, defaultName);
+								      	const targetName = await requestUserInput(`Load view by name (${list})`, defaultName, { title: "Load View" });
 								      	if (targetName != null && String(targetName).trim() !== "") {
 								      		loadSavedView(targetName);
 								      	}
 								      	break;
 								      }
 								      case 'path_finder':
-								      	runPathFinderForSelection(selectedNodes);
+								      	await runPathFinderForSelection(selectedNodes);
 								      	break;
 								      case 'clear_path':
 								      	clearPathHighlight();
@@ -1422,13 +1425,13 @@
 								      	toggleEdgeBundlingLite();
 								      	break;
 								      case 'configure_edge_bundling':
-								      	configureEdgeBundlingLite();
+								      	await configureEdgeBundlingLite();
 								      	break;
 								      case 'toggle_alert_rules':
 								      	toggleAlertRules();
 								      	break;
 								      case 'configure_alert_rules':
-								      	configureAlertRules();
+								      	await configureAlertRules();
 								      	break;
 								      case 'run_alert_scan':
 								      	runAlertScan(true);
@@ -1447,6 +1450,9 @@
 								      	break;
 								      case 'apply_community_detection':
 								      	applyCommunityDetection();
+								      	break;
+								      default:
+								      	console.warn("Unhandled context action:", action);
 								      	break;
 								    }
 								    // Hide menu after action

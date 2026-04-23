@@ -134,6 +134,275 @@ function messageParent(payload){
   );
 }
 
+function ensureInteractionPopupUi() {
+  if (window.__linkxInteractionPopupUi) return window.__linkxInteractionPopupUi;
+
+  if (!document.getElementById("linkx_interaction_popup_styles")) {
+    const style = document.createElement("style");
+    style.id = "linkx_interaction_popup_styles";
+    style.textContent = `
+      #linkx_interaction_overlay {
+        position: fixed;
+        inset: 0;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 2vh 2vw;
+        background: rgba(10, 18, 24, 0.26);
+        backdrop-filter: blur(1px);
+        z-index: 2147483647;
+      }
+      #linkx_interaction_panel {
+        width: min(520px, 94vw);
+        min-height: 16vh;
+        border: 0.1vh solid rgb(179, 179, 179);
+        box-shadow: rgba(0, 0, 0, 0.2) 0px 0px 10px;
+        background-color: rgba(255, 255, 255, 0.94);
+        border-radius: 0.5vh;
+        padding: 0.8vw;
+        color: #333;
+        font-family: "Segoe UI", Roboto, Arial, sans-serif;
+      }
+      #linkx_interaction_title {
+        font-size: 14px;
+        font-weight: 600;
+        border-bottom: 0.1vh solid rgba(179, 179, 179, 0.45);
+        padding-bottom: 0.5vh;
+        margin-bottom: 0.9vh;
+      }
+      #linkx_interaction_message {
+        font-size: 13px;
+        line-height: 1.5;
+        white-space: pre-wrap;
+        margin-bottom: 0.9vh;
+        max-height: 32vh;
+        overflow-y: auto;
+      }
+      #linkx_interaction_input,
+      #linkx_interaction_textarea {
+        width: 100%;
+        box-sizing: border-box;
+        border: 0.1vh solid rgba(179, 179, 179, 0.55);
+        border-radius: 0.35vh;
+        background: rgba(255, 255, 255, 0.85);
+        color: #333;
+        font-size: 13px;
+        outline: none;
+      }
+      #linkx_interaction_input {
+        height: 3.8vh;
+        padding: 0 0.6vw;
+        margin-bottom: 0.9vh;
+      }
+      #linkx_interaction_textarea {
+        min-height: 18vh;
+        padding: 0.6vh 0.6vw;
+        resize: vertical;
+        margin-bottom: 0.9vh;
+      }
+      #linkx_interaction_input:focus,
+      #linkx_interaction_textarea:focus {
+        border-color: rgba(86, 132, 172, 0.8);
+        box-shadow: rgba(86, 132, 172, 0.2) 0px 0px 0.6vh;
+      }
+      #linkx_interaction_actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 0.45vw;
+      }
+      .linkx_interaction_btn {
+        min-width: 82px;
+        height: 3.5vh;
+        border-radius: 0.3vh;
+        border: 0.1vh solid rgba(160, 160, 160, 0.75);
+        background: rgba(246, 246, 246, 0.96);
+        color: #333;
+        font-size: 12px;
+        cursor: pointer;
+      }
+      .linkx_interaction_btn:hover {
+        background: rgba(235, 235, 235, 1);
+      }
+      #linkx_interaction_ok {
+        border-color: rgba(70, 122, 166, 0.75);
+        background: rgba(223, 236, 247, 0.98);
+      }
+      #linkx_interaction_ok:hover {
+        background: rgba(208, 227, 244, 1);
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  const overlay = document.createElement("div");
+  overlay.id = "linkx_interaction_overlay";
+
+  const panel = document.createElement("div");
+  panel.id = "linkx_interaction_panel";
+
+  const titleEl = document.createElement("div");
+  titleEl.id = "linkx_interaction_title";
+
+  const messageEl = document.createElement("div");
+  messageEl.id = "linkx_interaction_message";
+
+  const inputEl = document.createElement("input");
+  inputEl.id = "linkx_interaction_input";
+  inputEl.type = "text";
+
+  const textareaEl = document.createElement("textarea");
+  textareaEl.id = "linkx_interaction_textarea";
+
+  const actions = document.createElement("div");
+  actions.id = "linkx_interaction_actions";
+
+  const cancelBtn = document.createElement("button");
+  cancelBtn.id = "linkx_interaction_cancel";
+  cancelBtn.className = "linkx_interaction_btn";
+  cancelBtn.type = "button";
+  cancelBtn.textContent = "Cancel";
+
+  const okBtn = document.createElement("button");
+  okBtn.id = "linkx_interaction_ok";
+  okBtn.className = "linkx_interaction_btn";
+  okBtn.type = "button";
+  okBtn.textContent = "OK";
+
+  actions.appendChild(cancelBtn);
+  actions.appendChild(okBtn);
+
+  panel.appendChild(titleEl);
+  panel.appendChild(messageEl);
+  panel.appendChild(inputEl);
+  panel.appendChild(textareaEl);
+  panel.appendChild(actions);
+  overlay.appendChild(panel);
+  document.body.appendChild(overlay);
+
+  window.__linkxInteractionPopupUi = {
+    overlay,
+    panel,
+    titleEl,
+    messageEl,
+    inputEl,
+    textareaEl,
+    cancelBtn,
+    okBtn
+  };
+  return window.__linkxInteractionPopupUi;
+}
+
+function showInteractionPopup({
+  title = "Confirmation",
+  message = "",
+  mode = "confirm",
+  defaultValue = "",
+  placeholder = "",
+  okText = "OK",
+  cancelText = "Cancel",
+  multiline = false
+} = {}) {
+  return new Promise(resolve => {
+    const ui = ensureInteractionPopupUi();
+    const { overlay, panel, titleEl, messageEl, inputEl, textareaEl, cancelBtn, okBtn } = ui;
+    const isPrompt = mode === "prompt";
+    const useTextarea = isPrompt && multiline;
+    let finished = false;
+
+    titleEl.textContent = title;
+    messageEl.textContent = String(message ?? "");
+    okBtn.textContent = okText;
+    cancelBtn.textContent = cancelText;
+    cancelBtn.style.display = "inline-block";
+
+    inputEl.style.display = useTextarea ? "none" : (isPrompt ? "block" : "none");
+    textareaEl.style.display = useTextarea ? "block" : "none";
+    inputEl.value = isPrompt && !useTextarea ? String(defaultValue ?? "") : "";
+    textareaEl.value = isPrompt && useTextarea ? String(defaultValue ?? "") : "";
+    inputEl.placeholder = placeholder;
+    textareaEl.placeholder = placeholder;
+
+    const cleanup = () => {
+      document.removeEventListener("keydown", onKeyDown, true);
+      overlay.removeEventListener("click", onBackdropClick, true);
+      cancelBtn.removeEventListener("click", onCancel, true);
+      okBtn.removeEventListener("click", onConfirm, true);
+      overlay.style.display = "none";
+    };
+
+    const finish = (confirmed) => {
+      if (finished) return;
+      finished = true;
+      const value = useTextarea ? textareaEl.value : inputEl.value;
+      cleanup();
+      resolve({
+        confirmed: !!confirmed,
+        value
+      });
+    };
+
+    const onCancel = () => finish(false);
+    const onConfirm = () => finish(true);
+    const onBackdropClick = (event) => {
+      if (event.target === overlay) finish(false);
+    };
+    const onKeyDown = (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        finish(false);
+        return;
+      }
+      if (event.key !== "Enter") return;
+      if (useTextarea && !event.ctrlKey && !event.metaKey) return;
+      if (panel.contains(event.target)) {
+        event.preventDefault();
+        finish(true);
+      }
+    };
+
+    document.addEventListener("keydown", onKeyDown, true);
+    overlay.addEventListener("click", onBackdropClick, true);
+    cancelBtn.addEventListener("click", onCancel, true);
+    okBtn.addEventListener("click", onConfirm, true);
+
+    overlay.style.display = "flex";
+    requestAnimationFrame(() => {
+      const target = useTextarea ? textareaEl : inputEl;
+      if (isPrompt) {
+        target.focus();
+        target.select?.();
+      } else {
+        okBtn.focus();
+      }
+    });
+  });
+}
+
+async function requestUserInput(message, defaultValue = "", options = {}) {
+  const result = await showInteractionPopup({
+    title: options.title || "Input Required",
+    message,
+    mode: "prompt",
+    defaultValue,
+    placeholder: options.placeholder || "",
+    okText: options.okText || "OK",
+    cancelText: options.cancelText || "Cancel",
+    multiline: options.multiline === true
+  });
+  return result.confirmed ? result.value : null;
+}
+
+async function requestUserConfirmation(message, options = {}) {
+  const result = await showInteractionPopup({
+    title: options.title || "Confirm",
+    message,
+    mode: "confirm",
+    okText: options.okText || "Confirm",
+    cancelText: options.cancelText || "Cancel"
+  });
+  return result.confirmed;
+}
+
 function clearVisibleGraph() {
   nodesData.clear();
   edgesData.clear();
@@ -1401,8 +1670,8 @@ function handleAddNode(x, y) {
   nodesData.update(node);
 }
 
-function handleAddLabelNode(x, y) {
-  const text = prompt("Label text", "Label");
+async function handleAddLabelNode(x, y) {
+  const text = await requestUserInput("Label text", "Label", { title: "Add Label" });
   if (text == null) return;
   const pos = getContextCanvasPosition(x, y);
   createAnnotationNode({
@@ -1415,8 +1684,8 @@ function handleAddLabelNode(x, y) {
   });
 }
 
-function handleAddCommentBox(x, y) {
-  const text = prompt("Comment", "New comment");
+async function handleAddCommentBox(x, y) {
+  const text = await requestUserInput("Comment", "New comment", { title: "Add Comment Box" });
   if (text == null) return;
   const pos = getContextCanvasPosition(x, y);
   createAnnotationNode({
@@ -1430,8 +1699,8 @@ function handleAddCommentBox(x, y) {
   });
 }
 
-function handleAddTextBlock(x, y) {
-  const text = prompt("Text block", "Analyst note");
+async function handleAddTextBlock(x, y) {
+  const text = await requestUserInput("Text block", "Analyst note", { title: "Add Text Block" });
   if (text == null) return;
   const pos = getContextCanvasPosition(x, y);
   createAnnotationNode({
@@ -1445,8 +1714,8 @@ function handleAddTextBlock(x, y) {
   });
 }
 
-function handleAddEventFrame(x, y) {
-  const text = prompt("Event frame title", "Event Frame");
+async function handleAddEventFrame(x, y) {
+  const text = await requestUserInput("Event frame title", "Event Frame", { title: "Add Event Frame" });
   if (text == null) return;
   const pos = getContextCanvasPosition(x, y);
   createAnnotationNode({
@@ -1499,8 +1768,8 @@ function handleAddThemeLine(selectedNodes) {
   renderVisibleGraphBatch();
 }
 
-function handleAddOleObject(x, y) {
-  const text = prompt("OLE object title", "External Object");
+async function handleAddOleObject(x, y) {
+  const text = await requestUserInput("OLE object title", "External Object", { title: "Add OLE Object" });
   if (text == null) return;
   const pos = getContextCanvasPosition(x, y);
   createAnnotationNode({
@@ -1742,7 +2011,74 @@ function collapseNeighborhoodFromSelection(selectedNodes, maxDepth = 1) {
   renderVisibleGraphBatch();
 }
 
-function mergeSelectedNodes(selectedNodes) {
+function collectMergeTransferableKeys(nodeIds, skipKeys) {
+  const keys = new Set();
+  (nodeIds || []).forEach(nodeId => {
+    const sourceBase = FULL_GRAPH.nodes.get(nodeId) || {};
+    const sourceMod = MODIFIED_NODES.get(nodeId) || {};
+    const sourceNode = { ...sourceBase, ...sourceMod };
+    Object.entries(sourceNode).forEach(([key, value]) => {
+      if (skipKeys.has(key)) return;
+      if (value === undefined || value === null || value === "") return;
+      keys.add(String(key));
+    });
+  });
+  return Array.from(keys).sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }));
+}
+
+async function promptMergePropertyCarryOptions(nodeIds, skipKeys) {
+  const availableKeys = collectMergeTransferableKeys(nodeIds, skipKeys);
+  const previewMax = 28;
+  const previewList = availableKeys.slice(0, previewMax).join(", ");
+  const extraCount = Math.max(0, availableKeys.length - previewMax);
+  const keySelectionMessage = availableKeys.length > 0
+    ? `Merge property transfer keys:\n${previewList}${extraCount > 0 ? ` ... (+${extraCount} more)` : ""}\n\nEnter comma-separated keys, or type "all" (or "*").`
+    : "No transferable custom keys found in selected source nodes.\nType \"all\" to continue.";
+
+  const selectedKeysRaw = await requestUserInput(keySelectionMessage, "all", {
+    title: "Merge Property Keys"
+  });
+  if (selectedKeysRaw == null) return null;
+
+  let selectedKeys = null;
+  const selectedKeysValue = String(selectedKeysRaw).trim();
+  if (
+    selectedKeysValue !== "" &&
+    selectedKeysValue.toLowerCase() !== "all" &&
+    selectedKeysValue !== "*"
+  ) {
+    const availableSet = new Set(availableKeys);
+    const requested = selectedKeysValue
+      .split(",")
+      .map(key => key.trim())
+      .filter(Boolean);
+    const valid = requested.filter(key => availableSet.has(key));
+    if (valid.length > 0) {
+      selectedKeys = new Set(valid);
+    } else if (availableKeys.length > 0) {
+      alert("No valid property keys matched. Using all keys.");
+    }
+  }
+
+  const variableRaw = await requestUserInput(
+    "Derived property variable name.\nResult format: <variable>_<propertyKey>\nExample: merged",
+    "merged",
+    { title: "Derived Property Variable" }
+  );
+  if (variableRaw == null) return null;
+  const variablePrefix = String(variableRaw).trim();
+  if (variablePrefix === "") {
+    alert("Variable name is required. Expected format: <variable>_<propertyKey>");
+    return null;
+  }
+
+  return {
+    selectedKeys,
+    variablePrefix
+  };
+}
+
+async function mergeSelectedNodes(selectedNodes) {
   const ids = Array.isArray(selectedNodes) ? selectedNodes.map(normalizeGraphId).filter(id => FULL_GRAPH.nodes.has(id)) : [];
   if (ids.length < 2) return;
 
@@ -1750,7 +2086,7 @@ function mergeSelectedNodes(selectedNodes) {
   const mergeSet = new Set(ids);
   const canonicalBase = FULL_GRAPH.nodes.get(canonicalId) || {};
   const canonicalMod = MODIFIED_NODES.get(canonicalId) || {};
-  const canonicalNode = { ...canonicalBase, ...canonicalMod };
+  const canonicalNode = { ...canonicalBase, ...canonicalMod, id: canonicalId };
 
   const positions = network.getPositions(ids);
   let cx = 0;
@@ -1772,32 +2108,62 @@ function mergeSelectedNodes(selectedNodes) {
   canonicalNode.merged_from = Array.from(new Set([...(canonicalNode.merged_from || []), ...mergedFrom]));
   canonicalNode.merge_count = (canonicalNode.merge_count || 1) + mergedFrom.length;
 
-  const aggregated = new Map();
-  FULL_GRAPH.edges.forEach(edge => {
-    const from = mergeSet.has(edge.from) ? canonicalId : edge.from;
-    const to = mergeSet.has(edge.to) ? canonicalId : edge.to;
-    if (from === to) return;
-    const key = `${String(from)}-->${String(to)}`;
-    if (!aggregated.has(key)) {
-      aggregated.set(key, {
-        ...edge,
-        id: createUniqueEdgeId("merged_edge"),
-        from,
-        to,
-        merged_count: 1
-      });
-      return;
-    }
+  const sourcePropertySkipKeys = new Set([
+    "id", "label", "title", "x", "y", "vx", "vy", "fx", "fy",
+    "size", "shape", "image", "icon", "iconPath",
+    "color", "font", "borderWidth", "borderWidthSelected",
+    "shadow", "hidden", "physics", "fixed", "chosen",
+    "group", "level", "mass"
+  ]);
 
-    const acc = aggregated.get(key);
-    acc.merged_count += 1;
-    const accWeight = toFiniteNumber(acc.weight ?? acc.value ?? acc.width ?? 1) ?? 1;
-    const edgeWeight = toFiniteNumber(edge.weight ?? edge.value ?? edge.width ?? 1) ?? 1;
-    const totalWeight = accWeight + edgeWeight;
-    acc.weight = totalWeight;
-    acc.value = totalWeight;
-    acc.width = Math.max(1, Math.min(6, totalWeight));
-    if (!acc.label) acc.label = edge.label || "Merged";
+  const carryOptions = await promptMergePropertyCarryOptions(mergedFrom, sourcePropertySkipKeys);
+  if (!carryOptions) return;
+  const allowedKeys = carryOptions.selectedKeys;
+  const variablePrefix = carryOptions.variablePrefix;
+
+  mergedFrom.forEach(sourceId => {
+    const sourceBase = FULL_GRAPH.nodes.get(sourceId) || {};
+    const sourceMod = MODIFIED_NODES.get(sourceId) || {};
+    const sourceNode = { ...sourceBase, ...sourceMod };
+
+    Object.entries(sourceNode).forEach(([key, value]) => {
+      if (sourcePropertySkipKeys.has(key)) return;
+      if (allowedKeys && !allowedKeys.has(key)) return;
+      if (value === undefined) return;
+      const baseDerivedKey = `${String(variablePrefix)}_${String(key)}`;
+      let derivedKey = baseDerivedKey;
+      let suffixCounter = 2;
+      while (Object.prototype.hasOwnProperty.call(canonicalNode, derivedKey)) {
+        derivedKey = `${baseDerivedKey}_${suffixCounter}`;
+        suffixCounter += 1;
+      }
+      canonicalNode[derivedKey] = value;
+    });
+  });
+
+  const rewrittenEdges = [];
+  const usedEdgeIds = new Set();
+
+  FULL_GRAPH.edges.forEach((baseEdge, edgeId) => {
+    const modEdge = MODIFIED_EDGES.get(edgeId) || {};
+    const mergedEdge = { ...baseEdge, ...modEdge };
+
+    const from = mergeSet.has(normalizeGraphId(mergedEdge.from)) ? canonicalId : normalizeGraphId(mergedEdge.from);
+    const to = mergeSet.has(normalizeGraphId(mergedEdge.to)) ? canonicalId : normalizeGraphId(mergedEdge.to);
+    if (from == null || to == null || from === to) return;
+
+    let nextEdgeId = mergedEdge.id ?? edgeId ?? createUniqueEdgeId("merged_edge");
+    if (usedEdgeIds.has(nextEdgeId)) {
+      nextEdgeId = createUniqueEdgeId("merged_edge");
+    }
+    usedEdgeIds.add(nextEdgeId);
+
+    rewrittenEdges.push({
+      ...mergedEdge,
+      id: nextEdgeId,
+      from,
+      to
+    });
   });
 
   ids.forEach(id => {
@@ -1810,7 +2176,7 @@ function mergeSelectedNodes(selectedNodes) {
 
   FULL_GRAPH.edges.clear();
   MODIFIED_EDGES.clear();
-  aggregated.forEach(edge => {
+  rewrittenEdges.forEach(edge => {
     const stored = upsertFullGraphEdge(edge);
     if (!stored) return;
     MODIFIED_EDGES.set(stored.id, { ...(MODIFIED_EDGES.get(stored.id) || {}), ...stored });
@@ -1819,6 +2185,7 @@ function mergeSelectedNodes(selectedNodes) {
   rebuildAdjacencyFromFullGraph();
   recomputeVisibleEdges();
   renderVisibleGraphBatch();
+  network.selectNodes([canonicalId]);
 }
 
 function generatePaletteColor(index, total) {
@@ -1967,16 +2334,71 @@ function saveCurrentView(name) {
   writeJsonStorage(SAVED_VIEWS_STORAGE_KEY, window.SAVED_VIEWS);
 }
 
+function applySavedViewSettings(settings) {
+  if (!settings || typeof settings !== "object") return;
+
+  const asBool = (value) => value === true || value === "true";
+  const merged = {
+    ...window.currentSettings,
+    ...settings
+  };
+
+  window.currentSettings = merged;
+
+  const limitAmount = Math.min(parseInt(merged.limit, 10) || 25, 300);
+  applyLimit({
+    key: merged.sortKey || "",
+    sort: merged.sortOrder || "asc",
+    amount: limitAmount
+  });
+
+  weightEdges(merged.weightEdges ?? "");
+  applyTitleToggle(asBool(merged.showTitles));
+  showNodelabels(asBool(merged.showLabels));
+  networkphysics(asBool(merged.physics));
+
+  const layoutType = merged.layoutType || "default";
+  networkLayoutType(layoutType);
+  if (layoutType === "hierarchical" || layoutType === "layered") {
+    networkLayoutDirection(merged.layoutDirection || "UD");
+    networkLayoutSort(merged.sortMethod || "directed");
+  }
+  networkLayerMode(merged.layerMode || "hop_distance");
+  networkLayerKey(merged.layerKey == null ? "" : merged.layerKey);
+
+  toggleAlertRules(merged.alertRules !== false);
+  toggleEdgeBundlingLite(!!merged.edgeBundling);
+}
+
 function loadSavedView(name) {
   const list = Array.isArray(window.SAVED_VIEWS) ? window.SAVED_VIEWS : [];
   if (list.length === 0) return;
   const target = list.find(item => item.name === name) || list[0];
   if (!target) return;
 
-  const nodes = new Set((target.visibleNodes || []).filter(nodeId => FULL_GRAPH.nodes.has(nodeId)));
+  applySavedViewSettings(target.settings);
+
+  const nodes = new Set((target.visibleNodes || [])
+    .map(normalizeGraphId)
+    .filter(nodeId => FULL_GRAPH.nodes.has(nodeId)));
   if (nodes.size > 0) {
     VISIBLE_STATE.nodes = nodes;
-    recomputeVisibleEdges();
+    const savedVisibleEdges = Array.isArray(target.visibleEdges) ? target.visibleEdges : [];
+    if (savedVisibleEdges.length > 0) {
+      const edges = new Set(
+        savedVisibleEdges.filter(edgeId => {
+          const edge = FULL_GRAPH.edges.get(edgeId);
+          return !!edge && nodes.has(edge.from) && nodes.has(edge.to);
+        })
+      );
+      if (edges.size > 0) {
+        VISIBLE_STATE.edges = edges;
+      } else {
+        recomputeVisibleEdges();
+      }
+    } else {
+      recomputeVisibleEdges();
+    }
     renderVisibleGraphBatch();
   }
 
@@ -1986,8 +2408,22 @@ function loadSavedView(name) {
     animation: { duration: 280, easingFunction: "easeInOutQuad" }
   });
 
+  if (typeof network.unselectAll === "function") {
+    network.unselectAll();
+  }
   if (Array.isArray(target.selectedNodes) && target.selectedNodes.length > 0) {
-    network.selectNodes(target.selectedNodes.filter(nodeId => VISIBLE_STATE.nodes.has(nodeId)));
+    const selectedNodeIds = target.selectedNodes
+      .map(normalizeGraphId)
+      .filter(nodeId => VISIBLE_STATE.nodes.has(nodeId));
+    if (selectedNodeIds.length > 0) {
+      network.selectNodes(selectedNodeIds, false);
+    }
+  }
+  if (Array.isArray(target.selectedEdges) && target.selectedEdges.length > 0 && typeof network.selectEdges === "function") {
+    const selectedEdgeIds = target.selectedEdges.filter(edgeId => VISIBLE_STATE.edges.has(edgeId));
+    if (selectedEdgeIds.length > 0) {
+      network.selectEdges(selectedEdgeIds);
+    }
   }
 }
 
@@ -2197,7 +2633,7 @@ function highlightPath(pathResult) {
   renderVisibleGraphBatch();
 }
 
-function runPathFinderForSelection(selectedNodes) {
+async function runPathFinderForSelection(selectedNodes) {
   const ids = Array.isArray(selectedNodes) ? selectedNodes.map(normalizeGraphId) : [];
   if (ids.length !== 2) {
     alert("Select exactly two nodes to compute shortest path.");
@@ -2208,9 +2644,10 @@ function runPathFinderForSelection(selectedNodes) {
   const modeDefault = current.weighted
     ? (current.directed ? "directed_weighted" : "weighted")
     : (current.directed ? "directed_hops" : "hops");
-  const modeInput = prompt(
+  const modeInput = await requestUserInput(
     "Path mode: hops | directed_hops | weighted | directed_weighted",
-    modeDefault
+    modeDefault,
+    { title: "Path Finder Mode" }
   );
   if (modeInput == null) return;
 
@@ -2221,9 +2658,10 @@ function runPathFinderForSelection(selectedNodes) {
     includeThemeLines: current.includeThemeLines
   };
 
-  const includeThemeInput = prompt(
+  const includeThemeInput = await requestUserInput(
     "Include Theme Lines in path? (yes/no)",
-    nextOptions.includeThemeLines ? "yes" : "no"
+    nextOptions.includeThemeLines ? "yes" : "no",
+    { title: "Path Finder Scope" }
   );
   if (includeThemeInput != null) {
     const normalized = String(includeThemeInput).trim().toLowerCase();
@@ -2332,10 +2770,14 @@ function toggleEdgeBundlingLite(forceState = null) {
   return next;
 }
 
-function configureEdgeBundlingLite() {
+async function configureEdgeBundlingLite() {
   const state = window.EDGE_BUNDLING_STATE || {};
   const currentMin = Math.max(2, parseInt(state.minGroupSize, 10) || 2);
-  const answer = prompt("Minimum parallel edges to bundle (>=2)", String(currentMin));
+  const answer = await requestUserInput(
+    "Minimum parallel edges to bundle (>=2)",
+    String(currentMin),
+    { title: "Configure Edge Bundling" }
+  );
   if (answer == null) return;
   const nextMin = Math.max(2, parseInt(answer, 10) || currentMin);
   state.minGroupSize = nextMin;
@@ -2477,11 +2919,12 @@ function toggleAlertRules(forceState = null) {
   return next;
 }
 
-function configureAlertRules() {
+async function configureAlertRules() {
   const current = normalizeAlertRulesConfig(window.ALERT_RULES_CONFIG);
-  const raw = prompt(
+  const raw = await requestUserInput(
     "Set alert rules JSON",
-    JSON.stringify(current)
+    JSON.stringify(current),
+    { title: "Configure Alert Rules", multiline: true }
   );
   if (raw == null) return;
 
