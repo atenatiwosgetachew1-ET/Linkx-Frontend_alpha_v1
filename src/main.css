@@ -4240,6 +4240,166 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   width: 100%;
   line-height: 3.5vh;
 }
+.linkx_notice_stack {
+  position: fixed;
+  right: 1.1vw;
+  bottom: 1.3vh;
+  width: min(30vw, 420px);
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 0.7vh;
+  z-index: 2147483000;
+  pointer-events: none;
+}
+.linkx_notice {
+  pointer-events: auto;
+  border: 0.1vh solid rgba(152, 179, 186, 0.55);
+  border-left: 0.35vw solid #314961;
+  border-radius: 0.35vh;
+  background: rgba(252, 254, 253, 0.92);
+  backdrop-filter: blur(2px);
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.18);
+  padding: 0.7vh 0.65vw;
+}
+.linkx_notice.linkx_notice_success {
+  border-left-color: #0f766e;
+}
+.linkx_notice.linkx_notice_warning {
+  border-left-color: #b8860b;
+}
+.linkx_notice.linkx_notice_error {
+  border-left-color: #b91c1c;
+}
+.linkx_notice.linkx_notice_info {
+  border-left-color: #314961;
+}
+.linkx_notice_head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.3vh;
+}
+.linkx_notice_title {
+  color: #133a54;
+  font-size: calc(0.45vh + 0.42vw);
+  font-weight: 600;
+  line-height: 1.1;
+}
+.linkx_notice_close {
+  border: 0.1vh solid #d6e3e8;
+  background-color: rgba(236, 244, 246, 0.95);
+  color: #3f4f56;
+  width: 1.25vw;
+  //min-width: 18px;
+  height: 1.25vw;
+  min-height: 18px;
+  line-height: 0.20vw;
+  font-size: calc(0.45vh + 0.4vw);
+  border-radius: 0.2vh;
+  cursor: pointer;
+  text-align: center;
+  padding: 0;
+}
+.linkx_notice_close:hover {
+  background-color: rgba(223, 239, 245, 0.98);
+}
+.linkx_notice_body {
+  color: #243e51;
+  font-size: calc(0.43vh + 0.4vw);
+  line-height: 1.25;
+  word-break: break-word;
+}
+.linkx_notice_meta {
+  margin-top: 0.35vh;
+  color: #5b7484;
+  font-size: calc(0.34vh + 0.3vw);
+}
+.linkx_interaction_overlay_react {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2vh 2vw;
+  background: rgba(10, 18, 24, 0.26);
+  backdrop-filter: blur(1px);
+  z-index: 2147483500;
+}
+.linkx_interaction_panel_react {
+  width: min(520px, 94vw);
+  min-height: 6vh;
+  border: 0.1vh solid rgb(179, 179, 179);
+  box-shadow: rgba(0, 0, 0, 0.2) 0px 0px 10px;
+  background-color: rgba(255, 255, 255, 0.94);
+  border-radius: 0.5vh;
+  padding: 0.8vw;
+  color: #333;
+  font-family: "Segoe UI", Roboto, Arial, sans-serif;
+}
+.linkx_interaction_panel_react .linkx_interaction_title {
+  font-size: 14px;
+  font-weight: 600;
+  border-bottom: 0.1vh solid rgba(179, 179, 179, 0.45);
+  padding-bottom: 0.5vh;
+  margin-bottom: 0.9vh;
+}
+.linkx_interaction_panel_react .linkx_interaction_message {
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  margin-bottom: 0.9vh;
+  max-height: 32vh;
+  overflow-y: auto;
+}
+.linkx_interaction_panel_react .linkx_interaction_actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.45vw;
+}
+.linkx_interaction_panel_react .linkx_interaction_btn {
+  min-width: 82px;
+  height: 3.5vh;
+  margin: 0;
+  padding: 0;
+  border-radius: 0.3vh;
+  border: 0.1vh solid rgba(160, 160, 160, 0.75);
+  background: rgba(246, 246, 246, 0.96);
+  color: #333;
+  font-weight: 420;
+  font-size: 12px;
+  font-family: "Segoe UI", Roboto, Arial, sans-serif;
+  line-height: normal;
+  text-shadow: none;
+  cursor: pointer;
+  outline: none;
+  box-shadow: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.linkx_interaction_panel_react .linkx_interaction_btn:hover {
+  background: rgba(235, 235, 235, 1);
+  border: 0.1vh solid rgba(160, 160, 160, 0.75);
+  color: #333;
+  box-shadow: none;
+}
+.linkx_interaction_panel_react #linkx_interaction_ok {
+  border-color: rgba(70, 122, 166, 0.75);
+  background: rgba(223, 236, 247, 0.98);
+  color: #333;
+}
+.linkx_interaction_panel_react #linkx_interaction_ok:hover {
+  background: rgba(208, 227, 244, 1);
+  border-color: rgba(70, 122, 166, 0.75);
+  color: #333;
+  box-shadow: none;
+}
+.linkx_interaction_panel_react .linkx_interaction_btn:focus,
+.linkx_interaction_panel_react .linkx_interaction_btn:focus-visible,
+.linkx_interaction_panel_react #linkx_interaction_ok:focus,
+.linkx_interaction_panel_react #linkx_interaction_ok:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
 #bottom_slider{
 	position: fixed;
 	margin: auto;
@@ -4250,4 +4410,3 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 	background-color: rgba(220,220,220,1);
 	z-index: 300; 
 }
-

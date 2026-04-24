@@ -1,3 +1,41 @@
+(() => {
+  const SOURCE_LABEL = "Graph Iframe";
+
+  function postNotificationToParent(message, options = {}) {
+    const text = String(message ?? "").trim();
+    if (!text) return false;
+    try {
+      window.parent?.postMessage(
+        {
+          type: "app_notification",
+          payload: {
+            title: options.title || "Notification",
+            message: text,
+            level: options.level || "info",
+            source: options.source || SOURCE_LABEL,
+            durationMs: options.durationMs
+          }
+        },
+        "*"
+      );
+      return true;
+    } catch (_err) {
+      return false;
+    }
+  }
+
+  window.linkxNotify = (message, options = {}) => postNotificationToParent(message, options);
+
+  if (!window.__linkxAlertBridgeInstalled) {
+    window.__linkxAlertBridgeInstalled = true;
+    const nativeAlert = typeof window.alert === "function" ? window.alert.bind(window) : null;
+    window.alert = (message) => {
+      const sent = postNotificationToParent(message, { title: "Alert", level: "warning" });
+      if (!sent && nativeAlert) nativeAlert(message);
+    };
+  }
+})();
+
 window.addEventListener("message", (event) => {
   const { action, payload } = event.data;
   switch (action) {

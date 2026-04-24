@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, createContext, useContext, useCallback } from 'react';
 import { io } from 'socket.io-client';
+import { createPortal } from 'react-dom';
 
 import './main.css'
 import NetworkBackground from './networkAnimation.jsx'
@@ -1297,7 +1298,7 @@ function DraggableWindow({ children, initialPos = { top: 0, left: 0 }, orientati
     </div>
   );
 }
-function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText, loadscreenState, isSideBarMenuOpen, orientation, configurations, windowAction, graphAction, chartAction, selectedContent, selectedSubContent, selectedNodes, selectedEdges,windowResponseI,windowResponseII,formToolResponse,sourceAddressType,sourceAddressText,batchFilesSearchHybrid,batchFilesSearchHybridQuery,batchFilesSearchStrict,searchText,batchFilesSearchLimit,batchFilesSearchResults,batchFilesSearchMoreFiles,searchResultsVisible,searchPlaceholder,batchFilesCollection, batchFilesDataframeInfoI, batchFilesDataframeInfoII, batchFilesDataframeActionValue, batchFilesDataframeSourceValue, batchFilesDataframeTargetValue, batchFilesDataframeRelationshipValue, batchFilesDataframeRuleValue, sourceSessionLog, sourceStreams , sourceStreamListener, fileInputRef, textareaRefs, onClose, onMove, zIndex, onFocus, covered, graphLink, graphLinkId, graphLinkSource, graphStatus, activeGraph, chartLink, chartLinkId, activechart, iframeRef, iframeFilters, iframeSettings, iframeSearch, iframePerformanceMood, selectedPropertyTab, filterPropertyKeys, filterResults, nodeProperties, BASE_URL, searchButtonRef, resultContainerRef }) {
+function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText, loadscreenState, isSideBarMenuOpen, orientation, configurations, windowAction, graphAction, chartAction, selectedContent, selectedSubContent, selectedNodes, selectedEdges,windowResponseI,windowResponseII,formToolResponse,sourceAddressType,sourceAddressText,batchFilesSearchHybrid,batchFilesSearchHybridQuery,batchFilesSearchStrict,searchText,batchFilesSearchLimit,batchFilesSearchResults,batchFilesSearchMoreFiles,searchResultsVisible,searchPlaceholder,batchFilesCollection, batchFilesDataframeInfoI, batchFilesDataframeInfoII, batchFilesDataframeActionValue, batchFilesDataframeSourceValue, batchFilesDataframeTargetValue, batchFilesDataframeRelationshipValue, batchFilesDataframeRuleValue, sourceSessionLog, sourceStreams , sourceStreamListener, fileInputRef, textareaRefs, onClose, onMove, zIndex, onFocus, covered, graphLink, graphLinkId, graphLinkSource, graphStatus, activeGraph, chartLink, chartLinkId, activechart, iframeRef, iframeFilters, iframeSettings, iframeSearch, iframePerformanceMood, selectedPropertyTab, filterPropertyKeys, filterResults, nodeProperties, BASE_URL, searchButtonRef, resultContainerRef, requestConfirmation }) {
   if (type === "source") {
     return (
       <DraggableWindow initialPos={{ top: 0, left: 0}} zIndex={zIndex} orientation={orientation}>
@@ -2403,11 +2404,25 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
                             input.accept = ".json,.html";
 
                             input.onchange = (e) => {
-                              alert("Any unsaved progress will be replaced!");
                               const file = e.target.files[0];
-                              if (file) {
-                                windowAction(id, "load_graph_url", file, iframeRef);
+                              if (!file) return;
+                              const applyUpload = () => windowAction(id, "load_graph_url", file, iframeRef);
+                              if (typeof requestConfirmation === "function") {
+                                requestConfirmation({
+                                  title: "Confirm Replace",
+                                  message: "Any unsaved progress will be lost. Continue?",
+                                  source: "Graph",
+                                  level: "warning",
+                                  confirmText: "Continue",
+                                  cancelText: "Cancel"
+                                }).then((shouldProceed) => {
+                                  if (shouldProceed) applyUpload();
+                                });
+                                return;
                               }
+                              const shouldProceed = window.confirm("Any unsaved progress will be lost. Continue?");
+                              if (!shouldProceed) return;
+                              applyUpload();
                             };
 
                             input.click();
@@ -2962,7 +2977,90 @@ const Loadscreen = ({ loadingText }) => {
         {loadingText}
         {'.'.repeat(dotCount)}
       </div>
-    );
+	    );
+}
+function NotificationStack({ items, onDismiss }) {
+  if (!Array.isArray(items) || items.length === 0) return null;
+  if (typeof document === "undefined" || !document.body) return null;
+
+  return createPortal(
+    (
+      <div className="linkx_notice_stack">
+        {items.map((item) => (
+          <div key={item.id} className={`linkx_notice linkx_notice_${item.level || "info"}`}>
+            <div className="linkx_notice_head">
+              <span className="linkx_notice_title">{item.title || "Notification"}</span>
+              <button className="linkx_notice_close" onClick={() => onDismiss(item.id)} title="Dismiss">
+                x
+              </button>
+            </div>
+            <div className="linkx_notice_body">{item.message}</div>
+            <div className="linkx_notice_meta">{item.source || "Linkx"}</div>
+          </div>
+        ))}
+      </div>
+    ),
+    document.body
+  );
+}
+function ConfirmationDialog({ items, onResolve }) {
+  if (!Array.isArray(items) || items.length === 0) return null;
+  if (typeof document === "undefined" || !document.body) return null;
+
+  const active = items[0];
+  if (!active) return null;
+
+  useEffect(() => {
+    const onKeyDown = (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onResolve(active.id, false);
+        return;
+      }
+      if (event.key === "Enter") {
+        event.preventDefault();
+        onResolve(active.id, true);
+      }
+    };
+
+    document.addEventListener("keydown", onKeyDown, true);
+    return () => document.removeEventListener("keydown", onKeyDown, true);
+  }, [active.id, onResolve]);
+
+  return createPortal(
+    (
+      <div
+        className="linkx_interaction_overlay_react"
+        onClick={(event) => {
+          if (event.target === event.currentTarget) onResolve(active.id, false);
+        }}
+      >
+        <div className="linkx_interaction_panel_react">
+          <div className="linkx_interaction_title">{active.title || "Confirm Action"}</div>
+          <div className="linkx_interaction_message">{active.message}</div>
+          <div className="linkx_interaction_actions">
+            <button
+              className="linkx_interaction_btn"
+              type="button"
+              onClick={() => onResolve(active.id, false)}
+            >
+              {active.cancelText || "Cancel"}
+            </button>
+            <button
+              id="linkx_interaction_ok"
+              className="linkx_interaction_btn"
+              type="button"
+              autoFocus
+              onClick={() => onResolve(active.id, true)}
+            >
+              {active.confirmText || "Continue"}
+            </button>
+          </div>
+        </div>
+      </div>
+    ),
+    document.body
+  );
 }
 function Root() {
   const [windows, setWindows] = useState([]);
@@ -3024,6 +3122,12 @@ function Root() {
   const [iframePerformanceMood, setIframePerformanceMood] = useState({});
   const [isCtrlHeld, setIsCtrlHeld] = useState(false);  
   const [userName, setUserName] = useState(null);
+  const [notifications, setNotifications] = useState([]);
+  const [confirmations, setConfirmations] = useState([]);
+  const noticeSeqRef = useRef(1);
+  const confirmSeqRef = useRef(1);
+  const noticeTimersRef = useRef({});
+  const confirmationsRef = useRef([]);
   const API_URL = import.meta.env.VITE_API_URL
   const BASE_URL = import.meta.env.VITE_BASE_URL
   //const BASE_URL = "http://localhost:5173"
@@ -3032,6 +3136,117 @@ function Root() {
   // useEffect(() => {  // Sync windowsRef on every update
   //   console.log("orientation:",orientation)
   // }, [orientation]);
+
+  const removeNotification = useCallback((id) => {
+    setNotifications((prev) => prev.filter((item) => item.id !== id));
+    if (noticeTimersRef.current[id]) {
+      clearTimeout(noticeTimersRef.current[id]);
+      delete noticeTimersRef.current[id];
+    }
+  }, []);
+
+  const sanitizeNotificationMessage = useCallback((value) => {
+    let text = String(value ?? "").trim();
+    if (!text) return "";
+    text = text.replace(/\s+/g, " ");
+    text = text.replace(/^\s*(message(?:\s+alert)?|alert|warning|notice|message\s*box)\s*[:\-]\s*/i, "");
+    text = text.replace(/^\s*message\s*box\s*/i, "");
+    return text.trim();
+  }, []);
+
+  const pushNotification = useCallback((payload = {}) => {
+    const rawLevel = String(payload.level || payload.severity || "info").toLowerCase();
+    const level = ["success", "warning", "error", "info"].includes(rawLevel) ? rawLevel : "info";
+    const rawMessage = payload.message ?? payload.text ?? payload.detail ?? "";
+    const baseMessage = typeof rawMessage === "string" ? rawMessage : JSON.stringify(rawMessage);
+    const message = sanitizeNotificationMessage(baseMessage);
+    if (!message || !String(message).trim()) return null;
+
+    const id = `notice_${Date.now()}_${noticeSeqRef.current++}`;
+    const rawTitle = String(payload.title || "").trim();
+    const title = rawTitle && !/^(alert|message|message alert)$/i.test(rawTitle)
+      ? rawTitle
+      : (level === "error" ? "Error" : level === "warning" ? "Warning" : level === "success" ? "Success" : "Notice");
+    const source = payload.source || "Linkx";
+    const durationMs = Number.isFinite(payload.durationMs) ? Number(payload.durationMs) : 5400;
+
+    setNotifications((prev) => [
+      ...prev,
+      { id, title, message: String(message), source: String(source), level }
+    ]);
+
+    if (durationMs > 0) {
+      noticeTimersRef.current[id] = setTimeout(() => removeNotification(id), durationMs);
+    }
+    return id;
+  }, [removeNotification, sanitizeNotificationMessage]);
+
+  const resolveConfirmation = useCallback((id, accepted) => {
+    setConfirmations((prev) => {
+      const target = prev.find((item) => item.id === id);
+      if (target && typeof target.resolve === "function") {
+        target.resolve(Boolean(accepted));
+      }
+      if (target && accepted) {
+        pushNotification({
+          title: "Confirmed",
+          message: "Action confirmed.",
+          source: target.source || "Linkx",
+          level: "success",
+          durationMs: 2600
+        });
+      }
+      return prev.filter((item) => item.id !== id);
+    });
+  }, [pushNotification]);
+
+  const requestConfirmation = useCallback((payload = {}) => (
+    new Promise((resolve) => {
+      const id = `confirm_${Date.now()}_${confirmSeqRef.current++}`;
+      const rawMessage = payload.message ?? payload.text ?? payload.detail ?? "";
+      const message = sanitizeNotificationMessage(rawMessage) || "Are you sure you want to continue?";
+      const rawTitle = String(payload.title || "").trim();
+      const title = rawTitle && !/^(alert|message|message alert)$/i.test(rawTitle) ? rawTitle : "Confirm Action";
+      const source = payload.source || "Linkx";
+      const rawLevel = String(payload.level || payload.severity || "warning").toLowerCase();
+      const level = ["success", "warning", "error", "info"].includes(rawLevel) ? rawLevel : "warning";
+      setConfirmations((prev) => ([
+        ...prev,
+        {
+          id,
+          title,
+          message: String(message),
+          source: String(source),
+          level,
+          confirmText: payload.confirmText || "Continue",
+          cancelText: payload.cancelText || "Cancel",
+          resolve
+        }
+      ]));
+    })
+  ), [sanitizeNotificationMessage]);
+
+  useEffect(() => {
+    return () => {
+      Object.values(noticeTimersRef.current).forEach((timerId) => clearTimeout(timerId));
+      noticeTimersRef.current = {};
+    };
+  }, []);
+
+  useEffect(() => {
+    confirmationsRef.current = confirmations;
+  }, [confirmations]);
+
+  useEffect(() => {
+    return () => {
+      confirmationsRef.current.forEach((item) => {
+        if (typeof item.resolve === "function") {
+          item.resolve(false);
+        }
+      });
+      confirmationsRef.current = [];
+    };
+  }, []);
   // ---------------------------------------------------------------------------- Basic useEffects ---
   // ---------------------------------------------------------------------------- Main session initializer ---
   useEffect(() => {
@@ -3069,6 +3284,20 @@ function Root() {
           .catch(console.error);
       }, 300);
   }, []);
+  useEffect(() => {
+    const nativeAlert = window.alert;
+    window.alert = (message) => {
+      pushNotification({
+        title: "Notice",
+        message: String(message ?? ""),
+        source: "App",
+        level: "warning"
+      });
+    };
+    return () => {
+      window.alert = nativeAlert;
+    };
+  }, [pushNotification]);
   // ---------------------------------------------------------------------------- sockets ---
   console.log("API_URL:",API_URL)
 
@@ -3286,6 +3515,21 @@ function Root() {
   useEffect(() => {
     const handleIframeMessage = (event) => {
       console.log("event detected:",event)
+      if (
+        event.data?.type === "app_notification" ||
+        event.data?.type === "notification" ||
+        event.data?.action === "notify"
+      ) {
+        const payload = event.data?.payload || event.data || {};
+        pushNotification({
+          title: payload.title || "Notification",
+          message: payload.message || payload.text || "",
+          source: payload.source || "Iframe",
+          level: payload.level || payload.severity || "info",
+          durationMs: payload.durationMs
+        });
+        return;
+      }
       // --- JWT authentication message with no verification---
       if (event.data?.action === "authenticate") {
         // check origin for security
@@ -3401,7 +3645,7 @@ function Root() {
 
       window.addEventListener("message", handleIframeMessage);
       return () => window.removeEventListener("message", handleIframeMessage);
-  }, []);
+  }, [pushNotification]);
 
   // ---------------------------------------------------------------------------- Windows management ---
   const handleFocusWindow = (id) => {
@@ -3964,10 +4208,12 @@ function Root() {
   };
 
   // --- Basic Windows actions ---
-  const handleWindowActions = (id, menuId, action, payload) => {
+  const handleWindowActions = (id, menuId, action, payload, options = {}) => {
     //console.log("id:",id," Menuid:", menuId," action:", action," payload:", payload)
     // --- Handling sidebar menus
-    setIsSideBarMenuOpen(prev => prev === menuId ? null : menuId); // Toggle open/close
+    if (!options?.skipSideBarToggle) {
+      setIsSideBarMenuOpen(prev => prev === menuId ? null : menuId); // Toggle open/close
+    }
     // --------------------------
     setWindows(prev =>
       prev.map(w => {
@@ -4904,7 +5150,20 @@ function Root() {
           }
 
           else{
-            alert("message box: any unsaved progress is lost!")                
+            if (action !== "__confirmed") {
+              requestConfirmation({
+                title: "Confirm Replace",
+                message: "Any unsaved progress will be lost. Continue?",
+                source: "Graph",
+                level: "warning",
+                confirmText: "Continue",
+                cancelText: "Cancel"
+              }).then((shouldProceed) => {
+                if (!shouldProceed) return;
+                handleWindowActions(id, menuId, "__confirmed", payload, { skipSideBarToggle: true });
+              });
+              return w;
+            }
             if (iframe?.current && iframe.current.contentWindow) {
               const settingsToApply = iframeSettings[id] || targetWindow?.iframeSettings || ["", "", 25, "", "", "", false, false, false, false, "default", "UD", "directed", "hop_distance", ""];
               iframe.current.contentWindow.postMessage(
@@ -5400,7 +5659,23 @@ function Root() {
           }
         }
         if (menuId === "chart_link_form" && action === "unlink") {            
-            alert("message box: any unsaved progress is lost!")                
+            if (!payload || payload.__confirmed !== true) {
+              requestConfirmation({
+                title: "Confirm Unlink",
+                message: "Any unsaved progress will be lost. Continue?",
+                source: "Chart",
+                level: "warning",
+                confirmText: "Continue",
+                cancelText: "Cancel"
+              }).then((shouldProceed) => {
+                if (!shouldProceed) return;
+                const confirmedPayload = payload && typeof payload === "object"
+                  ? { ...payload, __confirmed: true }
+                  : { __confirmed: true };
+                handleWindowActions(id, menuId, action, confirmedPayload, { skipSideBarToggle: true });
+              });
+              return w;
+            }
             setWindows(prev =>
               prev.map(w =>
                w.id === id ? { ...w, selectedContent:null,chartLink:false,loadscreenState: false} : w
@@ -5656,6 +5931,7 @@ function Root() {
               BASE_URL={BASE_URL}
               searchButtonRef={searchButtonRef}
               resultContainerRef={resultContainerRef}
+              requestConfirmation={requestConfirmation}
             />
           ))}      
 
@@ -5690,6 +5966,8 @@ function Root() {
             </div>          
           </div>
         )}
+        <ConfirmationDialog items={confirmations} onResolve={resolveConfirmation} />
+        <NotificationStack items={notifications} onDismiss={removeNotification} />
       </div>
     </div>
   );
