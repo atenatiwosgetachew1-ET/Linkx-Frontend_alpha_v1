@@ -3419,6 +3419,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 	padding: 0.3vh 0.5vw;
 	height: 2.2vh;
 	min-width: 2.8vw;
+	line-height: 2vh;
 	border: 0.1vh solid #b9b9b9;
 	border-radius: 0.25vh;
 	background-color: #f6f6f6;
