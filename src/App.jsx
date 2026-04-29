@@ -117,9 +117,9 @@ window.addEventListener("message", e => {
     broadcastClipboard();
   }
 });
-function ToggleMenu({ onToggle, isToggleMenuOpen, toggleAction, isMaximized, windows, orientation}){
+function ToggleMenu({ onToggle, isToggleMenuOpen, toggleAction, isMaximized, windows, orientation, menuRef}){
   return(
-  <div id='toggle_menu' style={{width: isToggleMenuOpen ? '15vw' : '0vw', zIndex: isToggleMenuOpen ? '99999':'', visibility: orientation === "windows" || windows.length == 0 || isToggleMenuOpen ? 'visible':'hidden'}}>
+  <div ref={menuRef} id='toggle_menu' style={{width: isToggleMenuOpen ? '15vw' : '0vw', zIndex: isToggleMenuOpen ? '99999':'', visibility: orientation === "windows" || windows.length == 0 || isToggleMenuOpen ? 'visible':'hidden'}}>
       <div id="toggle_main_list">
         <div className="animated_logo">
           <span onClick={onToggle}>
@@ -207,6 +207,7 @@ function NavBar({ onNavAction }) {
   );
 }
 function Taskbar({ windows, isTaskBarOpen, activeWindowId, focusWindow, toggleAction, isCtrlHeld}) {
+  const thumbnailBaseUrl = `${import.meta.env.BASE_URL}thumbnails`;
   return (
     <div id="windows_taskbar_container" style={{ display: isTaskBarOpen || isCtrlHeld ? 'block' : 'none' }} onClick={() => toggleAction("windows_taskbar")}>       
       <div className="windows_taskbar_lists">
@@ -217,7 +218,7 @@ function Taskbar({ windows, isTaskBarOpen, activeWindowId, focusWindow, toggleAc
         {windows.map(w => (
           <span
             key={w.id}
-            style={{backgroundImage: activeWindowId === w.id ? 'url(/thumbnails/windows_thumbnail_active.png)' : 'url(/thumbnails/windows_thumbnail_passive.png)'}}
+            style={{backgroundImage: activeWindowId === w.id ? `url(${thumbnailBaseUrl}/windows_thumbnail_active.png)` : `url(${thumbnailBaseUrl}/windows_thumbnail_passive.png)`}}
             onMouseEnter={() => focusWindow(w.id)}>
             <label>{`${w.type.charAt(0).toUpperCase()}${w.type.slice(1)} Window`}</label>
             <b>{` ${w.id}`}</b>
@@ -231,6 +232,7 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
   const [remote, setRemote] = useState(false);
   const [automation, setAutomation] = useState(false);
   const [parsedConfig, setParsedConfig] = useState(null);
+  const [activeConfigTab, setActiveConfigTab] = useState("system");
 
   useEffect(() => {
     console.log("configurations_window:",configurations)
@@ -271,7 +273,16 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
             <Loadscreen loadingText="Loading" />
           </div>
 
+          <div className="configurations_tabs">
+            <button type="button" className={activeConfigTab === "system" ? "active" : ""} onClick={() => setActiveConfigTab("system")}>System</button>
+            <button type="button" className={activeConfigTab === "connections" ? "active" : ""} onClick={() => setActiveConfigTab("connections")}>Connections</button>
+            <button type="button" className={activeConfigTab === "tools" ? "active" : ""} onClick={() => setActiveConfigTab("tools")}>Tools</button>
+            <button type="button" className={activeConfigTab === "rules" ? "active" : ""} onClick={() => setActiveConfigTab("rules")}>Rules</button>
+          </div>
+
           <form
+            id="configurations_form"
+            className="configurations_tab_form"
             onSubmit={(e) => {
               e.preventDefault();
               const formData = new FormData(e.target);
@@ -279,9 +290,9 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
             }}
           >
             {/* ───────── Left Panel ───────── */}
-            <div className="configurations_options_panel">
+            <div className="configurations_options_panel" style={{ display: activeConfigTab === "connections" || activeConfigTab === "system" ? "block" : "none" }}>
               {/* Broker Configuration */}
-              <fieldset>
+              <fieldset style={{ display: activeConfigTab === "connections" ? "block" : "none" }}>
                 <legend>Broker configuration</legend>
 
                 <label>IP address</label>
@@ -308,7 +319,7 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
               </fieldset>
 
               {/* Storage Configuration */}
-              <fieldset>
+              <fieldset style={{ display: activeConfigTab === "connections" ? "block" : "none" }}>
                 <legend>Storage configuration</legend>
 
                 <label>IP address</label>
@@ -450,7 +461,7 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
               </fieldset>
 
               {/* Notes */}
-              <fieldset>
+              <fieldset style={{ display: activeConfigTab === "system" ? "block" : "none" }}>
                 <legend>Note</legend>
                 <label>* Any modifications apply only to next instances.</label>
                 <label>* Removing a rule will delete it permanently.</label>
@@ -460,9 +471,9 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
             </div>
 
             {/* ───────── Right Panel ───────── */}
-            <div className="configurations_options_panel">
+            <div className="configurations_options_panel" style={{ display: activeConfigTab !== "connections" ? "block" : "none" }}>
               {/* Tool Configuration */}
-              <fieldset>
+              <fieldset style={{ display: activeConfigTab === "tools" ? "block" : "none" }}>
                 <legend>Tool configuration</legend>
 
                 <label>Tool</label>
@@ -569,7 +580,7 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
               </fieldset>
 
               {/* Analysis Rules */}
-              <fieldset>
+              <fieldset style={{ display: activeConfigTab === "rules" ? "block" : "none" }}>
                 <legend>Analysis Rules</legend>
                 <label>Active rule</label>
                 <select
@@ -613,7 +624,7 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
               </fieldset>
 
               {/* Miscellaneous */}
-              <fieldset>
+              <fieldset style={{ display: activeConfigTab === "system" ? "block" : "none" }}>
                 <legend>Miscellaneous</legend>
                 <input
                   type="checkbox"
@@ -635,34 +646,32 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
                 />
                 <label htmlFor="remote_requests" className="sublabel">Remote requests</label>
               </fieldset>
-
-              {/* Buttons */}
-              <fieldset>
-                <span className="action_btns" onClick={() => actions("load_default")} title="Reset">⟳ Reset</span>
-                <a
-                  className="action_btns"
-                  href={`public/temp_config/${sessionId}_temp_config.JSON`}
-                  download
-                  title="Download"
-                >⭳ Export</a>
-                <button className="action_btns" type="submit" title="Save Configurations">🖫 Save</button>
-
-                <input
-                  type="file"
-                  id="import_config_file"
-                  name="import_config_file"
-                  style={{ display: "none" }}
-                  onChange={() => actions("upload")}
-                  accept=".json"
-                />
-                <span
-                  className="action_btns"
-                  onClick={() => document.getElementById("import_config_file").click()}
-                  title="Upload Configuration file"
-                >&#128448;  Import</span>
-              </fieldset>
             </div>
           </form>
+          <div className="configurations_actions_bar">
+            <button className="action_btns" type="button" onClick={() => actions("load_default")} title="Reset">⟳ Reset</button>
+            <a
+              className="action_btns"
+              href={`public/temp_config/${sessionId}_temp_config.JSON`}
+              download
+              title="Download"
+            >⭳ Export</a>
+            <button className="action_btns" type="submit" form="configurations_form" title="Save Configurations">🖫 Save</button>
+            <input
+              type="file"
+              id="import_config_file"
+              name="import_config_file"
+              style={{ display: "none" }}
+              onChange={() => actions("upload")}
+              accept=".json"
+            />
+            <button
+              className="action_btns"
+              type="button"
+              onClick={() => document.getElementById("import_config_file").click()}
+              title="Upload Configuration file"
+            >&#128448; Import</button>
+          </div>
         </div>
       </div>
     </div>
@@ -3269,6 +3278,8 @@ function Root() {
   const confirmSeqRef = useRef(1);
   const noticeTimersRef = useRef({});
   const confirmationsRef = useRef([]);
+  const toggleMenuRef = useRef(null);
+  const tabsToggleButtonRef = useRef(null);
   const API_URL = import.meta.env.VITE_API_URL
   const BASE_URL = import.meta.env.VITE_BASE_URL
   //const BASE_URL = "http://localhost:5173"
@@ -3277,6 +3288,23 @@ function Root() {
   // useEffect(() => {  // Sync windowsRef on every update
   //   console.log("orientation:",orientation)
   // }, [orientation]);
+
+  useEffect(() => {
+    if (!isToggleMenuOpen) return;
+
+    const handleOutsideToggleClick = (event) => {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (toggleMenuRef.current?.contains(target)) return;
+      if (tabsToggleButtonRef.current?.contains(target)) return;
+      setIsToggleMenuOpen(false);
+    };
+
+    document.addEventListener("pointerdown", handleOutsideToggleClick);
+    return () => {
+      document.removeEventListener("pointerdown", handleOutsideToggleClick);
+    };
+  }, [isToggleMenuOpen]);
 
   const removeNotification = useCallback((id) => {
     setNotifications((prev) => prev.filter((item) => item.id !== id));
@@ -6044,6 +6072,7 @@ function Root() {
           isMaximized={isMaximized}
           windows={windows}
           orientation={orientation}
+          menuRef={toggleMenuRef}
         />
         <Taskbar windows={windows} isTaskBarOpen={isTaskBarOpen} activeWindowId={activeWindowId} focusWindow={handleFocusWindow} toggleAction={handleToggleMenu} isCtrlHeld={isCtrlHeld}/>
         <Configurations sessionId={sessionId} actions={handleConfigurationActions} loadscreenState={loadscreenState} setloadscreenState={setloadscreenState} toggleAction={handleToggleMenu} configurations={configurations} isConfigurationsOpen={isConfigurationsOpen}/>
@@ -6129,7 +6158,7 @@ function Root() {
             <div id="window_parent_bar" className="window_parent_bar">
               <div className="window_parent_bar_toggle_menu">
                 <div className="toggle_menu_btn">
-                  <span onClick={handleToggleMenu}>
+                  <span ref={tabsToggleButtonRef} onClick={handleToggleMenu}>
                     <i><a></a></i>
                   </span>
                   <label style={{display : isToggleMenuOpen ? 'none':''}}>Linkx | <i>Web Analyzer</i></label>

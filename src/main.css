@@ -421,7 +421,7 @@ body{
   display: inline-flex;
   width: 10vw;
   height: 5.25vw;
-  background-image: url("public/thumbnails/windows_thumbnail_passive.png");
+  background-image: url("/thumbnails/windows_thumbnail_passive.png");
   background-size: contain;
   background-repeat: no-repeat;
   background-position: center;
@@ -468,360 +468,480 @@ body{
   left: 0;
   width: 100vw;
   height: 100vh;
-  background-color: rgba(20,46,71,0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3vh 2vw;
+  background-color: rgba(15, 30, 45, 0.35);
+  backdrop-filter: blur(2px);
   z-index: 9999999;
-  display: block;
 }
 #configurations_container .configurations_options_container {
-  position: relative;
+  position: absolute;
   margin: auto;
-  top: 2%;
-  right: 0vw;
   left: 0;
-  min-height: 20vh;
-  width: 80vh;
-  padding: 2vh;
-  background-image: linear-gradient(90deg,rgba(20,46,71,0.4),rgba(20,46,71,0.4),rgba(20,46,71,0.4));  
-  font-weight: bold;
-  text-align: center;
-  border-radius: 0.7vh;
-  align-items: center;
-  font-size: calc(0.4vh + 0.5vw);
-  justify-content: center;  
-  color: #FFF;
-  user-select: none;
+  right: 0;
+  width: 50vw;
+  height: 86vh;
+  max-height: 86vh;
+  background-color: #fcfefd;
+  border-radius: 4px;
+  box-shadow: 0 12px 30px rgba(8, 21, 35, 0.35);
+  outline: 1px solid #98b3ba;
   overflow: hidden;
-  backdrop-filter: blur(2px);
+  text-align: left;
+  font-size: calc(0.4vh + 0.5vw);
+  color: #142e47;
+  user-select: none;
+}
+#configurations_container .configurations_options_container *{
+  box-sizing: border-box;
 }
 #configurations_container .configurations_options_container .configurations_options_container_bar{
-  position: relative;
-  height: 3vh;
-  padding: 0.5vh;
+  position: sticky;
+  top: 0;
+  height: 4.3vh;
+  min-height: 40px;
+  padding: 0.5vh 0.8vw;
   width: 100%;
-  background-image: linear-gradient(90deg,rgba(20,46,71,0.3),rgba(20,46,71,0.2),rgba(20,46,71,0));    
+  background-image: linear-gradient(90deg,#314961,#2e465d);
+  border-bottom: 1px solid #ecf4f6;
+  color: #FFF;
+  z-index: 2;
 }
 #configurations_container .configurations_options_container .configurations_options_container_bar span{
   position: relative;
   float: right;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 2.5vh;
-  height: 2.5vh;
-  padding: 0.2vh 0.5vw;
-  background-color: rgba(20,46,71,0.3);
-  overflow: hidden;
-  border-radius: 0vh;
-  line-height: 2.5vh;
-  cursor: default;
-  opacity: 0.9;
-  margin: 0 0vw;
-  background-image: none;
-  outline: none;
-  border: none;
-  font-weight: normal;
-}
-#configurations_container .configurations_options_container .configurations_options_container_bar span:hover{
-  background-color: rgba(20,46,71,0.5);
-}
-#configurations_container .configurations_options_container .configurations_options_container_bar span:active{
-  background-color: rgba(20,46,71,0.7);
-}
-
-#configurations_container .configurations_options_container .configurations_options_container_bar span:first-child{
-  position: relative;
-  float: right;
-  align-items: center;
-  justify-content: center;
-  width: 2.5vh;
-  height: 2.5vh;
-  padding: 0.2vh;
-  background-color: #900;
-  overflow: hidden;
-  border-radius: 0.2vh;
-  line-height: 2.3vh;
-  cursor: default;
-  opacity: 0.9;
-  margin: 0;
-  background-image: none;
-  outline: none;
-  border: none;
+  width: 3vh;
+  height: 3vh;
+  min-width: 28px;
+  min-height: 28px;
+  margin-top: 0.2vh;
+  background-color: #900000;
+  border-radius: 3px;
+  line-height: 1;
+  cursor: pointer;
+  color: #EEE;
   font-weight: bold;
+  transition: background-color 0.2s ease;
 }
 #configurations_container .configurations_options_container .configurations_options_container_bar span:first-child:hover{
-  background-color: #B00;
-  opacity: 1;
-  outline: none;
-  border: none;
+  background-color: #bb0000;
+  color: #FFF;
 }
 #configurations_container .configurations_options_container .configurations_options_container_bar span:first-child:active{
   background-color: #770000;
 }
 #configurations_container .configurations_options_container .configurations_options_container_bar label{
   position: relative;
-  float: left;
-  left: 1vw;
-  //background-color: #090;
-  margin-top: 0.5vh;
-  font-weight: normal;
+  display: inline-block;
+  line-height: 3.2vh;
+  margin-left: 0.6vw;
+  margin-top: 0.2vh;
+  font-weight: 500;
+  color: #FFF;
 }
 #configurations_container .configurations_options_container .configurations_options{
   position: relative;
-  background-color: transparent;
+  display: flex;
+  flex-direction: column;
   width: 100%;
-  min-height: 20vh;
-  padding: 0.2vh 0vw;
-  font-weight: normal;
+  height: calc(100% - 4.3vh);
+  max-height: none;
+  padding: 1.2vh 3vw 0 3vw;
   overflow: hidden;
+  font-weight: normal;
+}
+#configurations_container .configurations_options_container .configurations_options .configurations_tabs{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.1vw;
+  padding: 0.2vh 0 1vh;
+}
+#configurations_container .configurations_options_container .configurations_options .configurations_tabs button{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 110px;
+  height: 3.2vh;
+  min-height: 32px;
+  padding: 0 0.8vw;
+  border: 1px solid #a9c3d8;
+  border-radius: 1px;
+  background-color: #e8f2f8;
+  color: #1f3f5c;
+  font-size: calc(0.42vh + 0.5vw);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+#configurations_container .configurations_options_container .configurations_options .configurations_tabs button:hover{
+  background-color: #d6e9f5;
+  border-color: #8fb5d1;
+}
+#configurations_container .configurations_options_container .configurations_options .configurations_tabs button.active{
+  background-color: #314961;
+  border-color: #314961;
+  color: #FFF;
+}
+#configurations_container .configurations_options_container .configurations_options .configurations_tabs button:focus,
+#configurations_container .configurations_options_container .configurations_options .configurations_tabs button:focus-visible{
+  outline: none;
+  box-shadow: none;
+}
+#configurations_container .configurations_options_container .configurations_options .configurations_tab_form{
+  display: block;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding-top: 2vh;
+  padding-bottom: 0.5vh;
+}
+#configurations_container .configurations_options_container .configurations_options form{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1vw;
+  align-items: flex-start;
 }
 #configurations_container .configurations_options_container .configurations_options .configurations_options_panel{
   position: relative;
-  float: left;
-  overflow: hidden;
-  width: 50%;
-  height: auto;
-  overflow: hidden;
+  flex: 1 1 100%;
+  width: 100%;
+  min-width: 0;
 }
 #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset{
   position: relative;
-  display: inline-block;
-  min-height: 2vh;
-  min-width: 90%;
-  max-width: 50%;
-  overflow: hidden;
-  padding: 1vh 0.5vw;
-  border: 0.1vh solid rgba(20,46,71,0.1);
-  margin: auto;
-  margin: 1vh 0.5vw;
-  text-align: left;
-}
-#configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset legend{
-  position: relative;
-  left: 0%;
-  height: 1.5vh;
-  background-color: rgba(20,46,71,0.3);
-  color: #FFF;
-  font-weight: normal;
-  padding: 0.5vh 1vw;
-  border-radius: 0.2vw;
-  line-height: 1.5vh;
-}
-#configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset label{
-  position: relative;
-  display: block;
-  min-width: 90%;
-  font-size: calc(0.4vh + 0.5vw);
-  font-weight: normal;
-  padding: 0.4vh 0;
-  overflow: hidden;
-}
-#configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset select{
-  position: relative;
-  display: flex;
-  float: left;
-  width: 45%;
-  height: 3vh;
-  background-color: rgba(255,255,255,1);
-  border: none;
-  margin: 0.1vh 0.3vw;
-  border-radius: 0.2vh;
-  font-size: calc(0.4vh + 0.5vw);
-  color: #142e47;
-  padding: 0.2vh 0.1vw;
-}
-#configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset select:focus{
-  outline: 0.2vh solid rgba(20,46,71,0.3);
-}
-#configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset table{
-  position: relative;
   display: block;
   width: 100%;
-  padding: 0.2vh 1%;
-  line-height: 3vh;
+  padding: 1vh 0.8vw 1.2vh;
+  border: 1px solid #d6e4ef;
+  border-radius: 4px;
+  margin: 0 0 1vh;
+  text-align: left;
+  background-color: rgba(255,255,255,0.85);
+  box-shadow: 0 1px 6px rgba(20, 46, 71, 0.08);
 }
-#configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .subinput{
-  position: relative;
+#configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset::after{
+  content: "";
+  display: table;
+  clear: both;
+}
+#configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset legend{
+  padding: 0.35vh 0.7vw;
+  margin-left: 0.2vw;
+  background-color: #2f4a63;
+  color: #FFF;
+  font-weight: 500;
+  border-radius: 3px;
+  line-height: 1.8vh;
+}
+#configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset label{
   display: block;
-  float: right;
-  width: 35%;
-  height: 2.6vh;
-  background-color: rgba(255,255,255,1);
-  border: none;
-  margin: 0.1vh 0.5vw;
-  border-radius: 0.2vh;
+  width: 100%;
+  font-size: calc(0.45vh + 0.5vw);
+  font-weight: 500;
+  color: #20405c;
+  padding: 0.45vh 0 0.15vh;
+}
+#configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset select{
+  display: inline-block;
+  float: none;
+  vertical-align: top;
+  width: calc(50% - 0.45vw);
+  height: 3.2vh;
+  min-height: 30px;
+  background-color: #f8fcff;
+  border: 1px solid #c2d8eb;
+  margin: 0.2vh 0.35vw 0.6vh 0;
+  border-radius: 3px;
   font-size: calc(0.4vh + 0.5vw);
   color: #142e47;
-  padding: 0.2vh 3%;
+  padding: 0.2vh 0.45vw;
+}
+#configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset select:focus{
+  outline: 1px solid #8fc8ef;
+  border-color: #8fc8ef;
+  background-color: #FFF;
+}
+#configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset table{
+  display: table;
+  width: 100%;
+  margin: 0.4vh 0 0.5vh;
+  border-collapse: collapse;
+  line-height: 2.4vh;
+}
+#configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset table td{
+  width: 50%;
+  vertical-align: top;
+  color: #20405c;
+  font-size: calc(0.4vh + 0.47vw);
+  padding: 0.2vh 0.35vw 0.45vh 0;
+}
+#configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .subinput{
+  display: block;
+  float: none;
+  width: 100%;
+  height: 2.9vh;
+  min-height: 28px;
+  background-color: #f8fcff;
+  border: 1px solid #c2d8eb;
+  margin: 0.25vh 0 0;
+  border-radius: 3px;
+  font-size: calc(0.4vh + 0.5vw);
+  color: #142e47;
+  padding: 0.2vh 0.45vw;
   min-height: 0;
 }
 #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset input{
-  position: relative;
-  display: flex;
-  float: left;
-  width: 43%;
-  height: 2.6vh;
-  background-color: rgba(255,255,255,1);
-  border: none;
-  margin: 0.1vh 0.3vw;
-  border-radius: 0.2vh;
+  display: inline-block;
+  float: none;
+  vertical-align: top;
+  width: calc(50% - 0.45vw);
+  height: 3.2vh;
+  min-height: 30px;
+  background-color: #f8fcff;
+  border: 1px solid #c2d8eb;
+  margin: 0.2vh 0.35vw 0.6vh 0;
+  border-radius: 3px;
   font-size: calc(0.4vh + 0.5vw);
   color: #142e47;
-  padding: 0.2vh 1%;
+  padding: 0.2vh 0.45vw;
   min-height: 0;
 }
 #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset input:focus{
-  outline: 0.2vh solid rgba(20,46,71,0.3);
+  outline: 1px solid #8fc8ef;
+  border-color: #8fc8ef;
+  background-color: #FFF;
 }
 #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset textarea{
-  position: relative;
   display: block;
-  float: left;
-  height: 5vh;
-  margin: 0.1vh 0.3vw;
-  left: 0;
-  right: 0;
-  width: 94%;
-  background-color: #FFF;
+  width: 100%;
+  min-height: 64px;
+  height: 8vh;
+  margin: 0.2vh 0 0.7vh;
+  background-color: #f8fcff;
   color: #142e47;
   font-family: inherit;
   font-size: calc(0.4vh + 0.5vw);
-  border-radius: 0.2vh;
-  resize: none;
+  border: 1px solid #c2d8eb;
+  border-radius: 3px;
+  padding: 0.4vh 0.5vw;
+  resize: vertical;
 }
 #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset textarea:focus{
-  outline: 0.1vh solid rgba(20,46,71,0.3);
+  outline: 1px solid #8fc8ef;
+  border-color: #8fc8ef;
+  background-color: #FFF;
 }
 #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .input_checkbox{
-  position: relative;
-  display: block;
   float: left;
-  width: calc(0.7vh + 0.5vw);
-  height: calc(0.7vh + 0.5vw);
-  line-height: 2vh;
+  width: auto;
+  height: auto;
+  margin: 0.65vh 0.4vw 0.2vh 0;
+  accent-color: #2f4a63;
 }
 #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .sublabel{
-  position: relative;
   float: left;
-  min-width: 10%;
-  line-height: 0.9vh;
-  margin-right: 0.5vw;
+  width: auto;
+  min-width: 0;
+  line-height: 2.2vh;
+  margin-right: 1vw;
+  font-weight: 500;
 }
 #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset button *{
   position: relative;
   height: 100%;
 }
-#configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .action_btns{
+#configurations_container .configurations_options_container .configurations_options .configurations_actions_bar{
   position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  flex-shrink: 0;
+  gap: 0.35vw;
+  padding: 3vh 0.7vw;
+  margin-top: 0.55vh;
+  border-top: 1px solid #d6e4ef;
+  z-index: 4;
+}
+#configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .action_btns,
+#configurations_container .configurations_options_container .configurations_options .configurations_actions_bar .action_btns{
   display: inline-flex;
-  float: right;
+  float: none;
   align-items: center;
   justify-content: center;
-  width: 3.63vw;
-  height: 3vh;
-  max-height: 3vh;
-  min-height: 3vh;
-  background-color: rgba(20,46,71,0.6);
-  overflow: hidden;
-  border-radius: 0.2vh;
-  line-height: 2.5vh;
-  cursor: default;
-  opacity: 0.9;
-  margin: 0 0.05vw;
-  background-image: none;
-  outline: none;
-  border: none;
-  font-weight: normal;
-  background-image: none;
-  padding: 0vh 0.5vw;
+  min-width: 96px;
+  height: 3.2vh;
+  min-height: 30px;
+  padding: 0 0.7vw;
+  border-radius: 3px;
+  border: 1px solid #6f91ac;
+  background-color: #3a5873;
+  color: #FFF;
+  line-height: 1;
+  cursor: pointer;
+  margin: 0.25vh 0.3vw 0.2vh 0;
+  font-weight: 500;
+  text-decoration: none;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+#configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .action_btns:hover,
+#configurations_container .configurations_options_container .configurations_options .configurations_actions_bar .action_btns:hover{
+  background-color: #314961;
+  border-color: #314961;
   text-decoration: none;
 }
-#configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .action_btns:hover{
-  background-color: rgba(20,46,71,0.8);
-  background-image: none;
-  text-decoration: none;
-}
-#configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .action_btns:active{
-  background-color: rgba(20,46,71,0.3);
+#configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .action_btns:active,
+#configurations_container .configurations_options_container .configurations_options .configurations_actions_bar .action_btns:active{
+  background-color: #22384f;
+  border-color: #22384f;
 }
 #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .critical_btns{
-  position: relative;
   display: inline-flex;
-  float: left;
+  float: none;
   align-items: center;
   justify-content: center;
-  width: 3.6vw;
-  height: 3vh;
-  padding: 0.2vh 0.5vw;
-  background-color: inherit;
-  background-image: linear-gradient(rgba(220,26,51,0.7),rgba(220,26,51,0.7));
-  overflow: hidden;
-  border-radius: 0.2vh;
-  border: none;
-  line-height: 2.3vh;
-  cursor: default;
-  opacity: 0.9;
-  margin: 0 0.05vw;
-  outline: none;
-  border: none;
-  font-weight: normal;
+  min-width: 96px;
+  height: 3.2vh;
+  min-height: 30px;
+  padding: 0 0.7vw;
+  border: 1px solid #9b1e2f;
+  background-color: #b6283d;
+  border-radius: 3px;
+  line-height: 1;
+  cursor: pointer;
+  margin: 0.25vh 0 0.2vh 0.3vw;
+  font-weight: 500;
   color: #FFF;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
 }
 #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .critical_btns:hover{
-  background-image: linear-gradient(rgba(220,26,51,0.9),rgba(220,26,51,0.9));
+  background-color: #c7354a;
+  border-color: #b6283d;
 }
 #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .critical_btns:active{
-  background-image: linear-gradient(rgba(220,46,71,0.4),rgba(220,46,71,0.4));
+  background-color: #8f1e2d;
 }
 #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .critical_btns:focus{
-  outline: 0.1vh solid rgba(220,26,51,1);
+  outline: 1px solid #cf4055;
 }
 #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .input_file{
   position: relative;
-  float: right;
-  //display: block;
-  width: 47%;
-  height: 2.4vh;
+  float: none;
+  display: inline-block;
+  vertical-align: top;
+  width: calc(50% - 0.45vw);
+  height: 3.2vh;
+  min-height: 30px;
   font-size: calc(0.4vh + 0.5vw);
   overflow: hidden;
+  margin: 0.2vh 0.35vw 0.6vh 0;
 }
 #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset input[type="file"]{
-  padding: 0vh 0;
-  height: 3vh;
-  padding-left: 0.3vw;
+  padding: 0;
+  height: 100%;
   line-height: 3vh;
   font-size: calc(0.4vh + 0.5vw);
+  background-color: #f8fcff;
 }
 #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset input[type="file"]::-webkit-file-upload-button {
   position: relative;
-  float: right;
-  height: 3vh;
-  top: 0vh;
-  border: 0.1vh solid rgba(20,46,71,0.1);
-  border-radius: 0vh;
+  height: 100%;
+  border: 1px solid #6f91ac;
+  border-radius: 0;
   margin: 0;
   font-size: calc(0.4vh + 0.4vw);
-  font-weight: normal;
+  font-weight: 500;
   line-height: 2.8vh;
-  background-color: rgba(100,126,151,1);
-  box-shadow: 0 0 4px rgba(0, 0, 0, 0.6);
+  background-color: #3a5873;
+  color: #FFF;
 }
 #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset input[type="file"]::-webkit-file-upload-button:hover{
-  background-color: rgba(110,136,161,1);
+  background-color: #314961;
 }
 #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset input[type="file"]::-webkit-file-upload-button:active{
-  background-color: rgba(90,116,141,1);
+  background-color: #22384f;
 }
 #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset a{
-  color: #EEE;
-  font-style: italic;
-  font-weight: normal;
-  text-decoration: underline;
+  color: #2e5f87;
+  font-style: normal;
+  font-weight: 500;
+  text-decoration: none;
 }
 #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset a:hover{
-  color: #FFF;
+  color: #20405c;
   text-decoration: underline;
 }
 #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset a:active{
-  color: #DDD;
+  color: #142e47;
+}
+@media (max-width: 1100px){
+  #configurations_container .configurations_options_container .configurations_options{
+    padding: 1vh 0.8vw 1.2vh;
+  }
+  #configurations_container .configurations_options_container .configurations_options form{
+    gap: 0.8vw;
+  }
+  #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset select,
+  #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset input,
+  #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .input_file{
+    width: 100%;
+    float: none;
+    margin-right: 0;
+  }
+  #configurations_container .configurations_options_container .configurations_options .configurations_options_panel{
+    min-width: 0;
+  }
+  #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset table td{
+    width: 100%;
+    display: block;
+    padding-right: 0;
+  }
+}
+@media (max-width: 860px){
+  #configurations_container .configurations_options_container{
+    width: min(96vw, 1180px);
+    height: 86vh;
+    max-height: 86vh;
+  }
+  #configurations_container .configurations_options_container .configurations_options{
+    height: calc(100% - 4.3vh);
+    max-height: none;
+  }
+  #configurations_container .configurations_options_container .configurations_options form{
+    display: block;
+  }
+  #configurations_container .configurations_options_container .configurations_options .configurations_options_panel{
+    width: 100%;
+    min-width: 0;
+  }
+  #configurations_container .configurations_options_container .configurations_options .configurations_tabs{
+    gap: 0.35vw;
+  }
+  #configurations_container .configurations_options_container .configurations_options .configurations_tabs button{
+    min-width: 48%;
+    flex: 1 1 48%;
+  }
+  #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .subinput{
+    width: 100%;
+    float: none;
+  }
+  #configurations_container .configurations_options_container .configurations_options .configurations_actions_bar{
+    justify-content: stretch;
+    padding: 0.7vh 0.5vw;
+  }
+  #configurations_container .configurations_options_container .configurations_options .configurations_actions_bar .action_btns{
+    flex: 1 1 calc(50% - 0.4vw);
+    min-width: 0;
+  }
+  #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .action_btns,
+  #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .critical_btns{
+    float: left;
+  }
 }
 #toggle_menu #toggle_side_list .toggle_side_list_container {
   display: block;
