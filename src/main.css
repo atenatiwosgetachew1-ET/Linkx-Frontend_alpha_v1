@@ -3391,11 +3391,54 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 	font-size: calc(0.4vh + 0.5vw); 
 	border: none;
 }
+.window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_filters_container .filter_form .filter_form_search_container .filter_form_search_condition{
+	position: relative;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.6vw;
+	width: 97%;
+	padding: 0;
+	margin: 0;
+	margin-left: 0;
+	border: none;
+}
+.window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_filters_container .filter_form .filter_form_search_container .filter_form_search_condition span{
+	position: relative;
+	width: auto;
+	margin: 0;
+	padding-left: 1vw;
+	height: auto;
+	font-size: calc(0.38vh + 0.5vw);
+	line-height: 1.8vh;
+	color: #666;
+	text-align: left;
+}
+.window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_filters_container .filter_form .filter_form_search_container .filter_form_search_condition .search_condition_reset_btn{
+	position: relative;
+	padding: 0.3vh 0.5vw;
+	height: 2.2vh;
+	min-width: 2.8vw;
+	border: 0.1vh solid #b9b9b9;
+	border-radius: 0.25vh;
+	background-color: #f6f6f6;
+	font-size: calc(0.35vh + 0.48vw);
+	color: #555;
+	cursor: pointer;
+}
+.window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_filters_container .filter_form .filter_form_search_container .filter_form_search_condition .search_condition_reset_btn:hover:enabled{
+	border-color: #8c8c8c;
+	background-color: #efefef;
+}
+.window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_filters_container .filter_form .filter_form_search_container .filter_form_search_condition .search_condition_reset_btn:disabled{
+	opacity: 0.45;
+	cursor: not-allowed;
+}
 .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_filters_container .filter_form .filter_form_search_container div{
 	position: relative;
 	width: 97%;	
   height: auto;
-  padding: 2vh 0.4vw;
+  padding: 0.3vh 0.5vw;
   overflow: hidden;
   border: none;
   border-radius: 0;
@@ -3745,7 +3788,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 	border-bottom: 0.1vh dashed #DDD;
 	width: 93%;
 	padding-left: 9%;
-	height: 5.8vh;
+	height: 9vh;
 	overflow: hidden;
 	text-align: center;
 	margin-bottom: 1vh;
@@ -3753,7 +3796,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 }
 .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_settings_container .settings_form .settings_form_div_firstChild label{
 	display: block;
-	min-width: 3vw;
+	min-width: 2.5vw;
 	padding: 0 0.5vw 0 0vw;
 	margin: 0;
 	height: 2vh;
@@ -3764,7 +3807,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 	margin-bottom: 1vh;
 }	
 .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_settings_container .settings_form .settings_form_div_firstChild select{
-	width: 6vw;
+	width: 93%;
 }
 .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_settings_container .settings_form .settings_form_div_firstChild select{
 	outline: none;
@@ -3785,7 +3828,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_settings_container .settings_form .input_labels{
 	position: relative;
 	float: left;
-	min-width: 3vw;
+	min-width: auto;
 	padding: 0 0.5vw 0 0vw;
 	margin: 0;
 	height: 2vh;
@@ -3814,6 +3857,21 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 	outline: none;
 	border-color: #666;
 }
+.window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_settings_container .settings_form .limit_range_separator{
+	position: relative;
+	float: left;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 0.8vw;
+	height: 2.5vh;
+	padding: 0;
+	margin: 0 0.15vw 0 0;
+	background-color: rgba(0, 0, 0, 0);
+	border: none;
+	font-size: calc(0.5vh + 0.5vw);
+	color: #777;
+}
 .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_settings_container .settings_form .input_checkbox{
 	position: relative;
 	padding: 0;
@@ -3829,13 +3887,14 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 	float: left;
 	width: 6.5vw;
 	background-color: #FAFAFA;
-	padding: 0 0 0 0.5vw;
+	padding: 0 0 0.1vh 0.5vw;
 	margin: 0;
 	height: 2.7vh;
 	border: 0.1vh solid #CCC;
 	border-radius: 0.2vh;
 	font-size: calc(0.4vh + 0.5vw);
 	margin-right: 0.5vw;
+	margin-bottom: 1vh;
 }
 .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_settings_container .settings_form .select_option:focus{
 		outline: none;
@@ -3980,6 +4039,9 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 	text-align: right;
 	line-height: 4.3vh;
 	user-select: auto;
+}
+.window .window_footer span b{
+	user-select: all;
 }
 .window .window_footer span b{
 	user-select: none;

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, createContext, useContext, useCallback } from 'react';
+import React, { useState, useRef, useEffect, createContext, useContext, useCallback, useMemo } from 'react';
 import { io } from 'socket.io-client';
 import { createPortal } from 'react-dom';
 
@@ -13,6 +13,48 @@ import Icons from './Icons.jsx'
 
 //window.clipboardBuffer = [];
 let clipboard = { nodes: [], edges: [] };
+const GRAPH_LIMIT_WARNING_THRESHOLD = 300;
+const GRAPH_LIMIT_HARD_MAX = 100000;
+const DEFAULT_GRAPH_IFRAME_SETTINGS = ["", "", { min: 0, max: 25 }, "", "", "", false, false, false, false, "default", "UD", "directed", "hop_distance", ""];
+
+const normalizeGraphLimitRange = (value, fallbackMax = 25) => {
+  const clampInt = (num, min, max) => Math.max(min, Math.min(max, Math.floor(Number(num) || 0)));
+
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    const rawMin = value.min ?? 0;
+    const rawMax = value.max ?? fallbackMax;
+    const min = clampInt(rawMin, 0, GRAPH_LIMIT_HARD_MAX - 1);
+    const max = clampInt(rawMax, 1, GRAPH_LIMIT_HARD_MAX);
+    return { min, max: Math.max(min + 1, max) };
+  }
+
+  if (Array.isArray(value) && value.length >= 2) {
+    const min = clampInt(value[0], 0, GRAPH_LIMIT_HARD_MAX - 1);
+    const max = clampInt(value[1], 1, GRAPH_LIMIT_HARD_MAX);
+    return { min, max: Math.max(min + 1, max) };
+  }
+
+  const numeric = clampInt(value, 1, GRAPH_LIMIT_HARD_MAX) || clampInt(fallbackMax, 1, GRAPH_LIMIT_HARD_MAX);
+  return { min: 0, max: numeric };
+};
+
+const normalizeGraphIframeSettings = (value) => {
+  const normalized = [...DEFAULT_GRAPH_IFRAME_SETTINGS];
+  if (Array.isArray(value)) {
+    for (let i = 0; i < normalized.length; i += 1) {
+      if (value[i] !== undefined) normalized[i] = value[i];
+    }
+  } else if (value && typeof value === "object") {
+    Object.keys(value).forEach((rawKey) => {
+      const idx = Number(rawKey);
+      if (!Number.isInteger(idx)) return;
+      if (idx < 0 || idx >= normalized.length) return;
+      if (value[rawKey] !== undefined) normalized[idx] = value[rawKey];
+    });
+  }
+  normalized[2] = normalizeGraphLimitRange(normalized[2], 25);
+  return normalized;
+};
 
 const normalizeClipboardPayload = (payload) => {
   if (Array.isArray(payload)) {
@@ -634,9 +676,49 @@ function WindowVerticalSplitPanels({id, type, sourceId, initialTopHeight, minTop
   const minHeightPx = useRef(0);
   const maxHeightPx = useRef(0);
 
-  const settings = iframeSettings[id];
-  const search = iframeSearch[id]
+  const settings = normalizeGraphIframeSettings(iframeSettings[id]);
+  const search = Array.isArray(iframeSearch[id]) ? iframeSearch[id] : ["", false, {}, { nodes: 0, edges: 0 }];
+  const selectedSearchKeysCount = Object.values(search[2] || {}).filter(Boolean).length;
   console.log("search:",search,"activeGraph:",activeGraph)
+
+  const limitRange = normalizeGraphLimitRange(settings?.[2], 25);
+  const [limitMinDraft, setLimitMinDraft] = useState(String(limitRange.min));
+  const [limitMaxDraft, setLimitMaxDraft] = useState(String(limitRange.max));
+  const isEditingLimitMin = useRef(false);
+  const isEditingLimitMax = useRef(false);
+
+  useEffect(() => {
+    if (!isEditingLimitMin.current) setLimitMinDraft(String(limitRange.min));
+    if (!isEditingLimitMax.current) setLimitMaxDraft(String(limitRange.max));
+  }, [limitRange.min, limitRange.max]);
+
+  const commitLimitRange = (rawMin, rawMax, options = {}) => {
+    const syncDraft = options.syncDraft !== false;
+    const parsedMin = Number.parseInt(String(rawMin ?? "").trim(), 10);
+    const parsedMax = Number.parseInt(String(rawMax ?? "").trim(), 10);
+    const nextMin = Number.isFinite(parsedMin) ? parsedMin : limitRange.min;
+    const nextMax = Number.isFinite(parsedMax) ? parsedMax : limitRange.max;
+    const normalized = normalizeGraphLimitRange({ min: nextMin, max: nextMax }, limitRange.max);
+
+    if (normalized.max > GRAPH_LIMIT_WARNING_THRESHOLD && limitRange.max <= GRAPH_LIMIT_WARNING_THRESHOLD) {
+      window.alert("Setting Limit > 300 Might be unstable.");
+    }
+
+    if (syncDraft) {
+      setLimitMinDraft(String(normalized.min));
+      setLimitMaxDraft(String(normalized.max));
+    }
+
+    graphAction(id, "properties_tab", "settings", {
+      iframe: iframeRef,
+      settings: "limit_nodes_amount",
+      state: {
+        key: String(settings[0]) || "",
+        sort: String(settings[1]) || "asc",
+        amount: normalized
+      },
+    });
+  };
 
   // Update container height
   useEffect(() => {
@@ -765,13 +847,28 @@ function WindowVerticalSplitPanels({id, type, sourceId, initialTopHeight, minTop
                   }}
                 >
               <label className="filter_form_header_label">Search <i><b>Note :</b> Make sure an attribute name is selected for more specific results.</i></label>
-              <div className="filter_form_search_container">
-                <input id={`${type}_window_${id}_${iframeRef}_graph_filters_input`} type="text" placeholder="Type here to seach" disabled={!activeGraph}/>
-                <button title="Search" disabled={!activeGraph}><Icons id="properties_container" type="search" condition="True"/></button>
-                <div className="filter_form_search_options_container">
-                  <input id={`${type}_window_${id}_${iframeRef}_graph_filters_linked_option_input`} type="checkbox" title='Return the linked neighbours' checked={search[1] ? search[1] : ""} onChange={(e) => graphAction(id, "properties_tab", "search_change", {componentId:1,value: e.target.checked})} disabled={!activeGraph}/>
+                <div className="filter_form_search_container">
+                  <input id={`${type}_window_${id}_${iframeRef}_graph_filters_input`} type="text" placeholder="Type here to seach" disabled={!activeGraph}/>
+                  <button title="Search" disabled={!activeGraph}><Icons id="properties_container" type="search" condition="True"/></button>
+                  <div className="filter_form_search_options_container">
+                  <input id={`${type}_window_${id}_${iframeRef}_graph_filters_linked_option_input`} type="checkbox" title='Return the linked neighbours' checked={!!search[1]} onChange={(e) => graphAction(id, "properties_tab", "search_change", {componentId:1,value: e.target.checked})} disabled={!activeGraph}/>
                   <label htmlFor={`${type}_window_${id}_${iframeRef}_graph_filters_linked_option_input`} title='Return the linked neighbours'>Include linked nodes</label>
                 </div>
+                  <div className="filter_form_search_condition">
+                    <span>
+                      {selectedSearchKeysCount > 0
+                        ? `Search from ${selectedSearchKeysCount} property key${selectedSearchKeysCount === 1 ? "" : "s"}.`
+                        : "Search from all property keys."}
+                    </span>
+                    <button
+                      type="button"
+                      className="search_condition_reset_btn"
+                      onClick={() => graphAction(id, "properties_tab", "search_change", { componentId: 2, value: "__reset__" })}
+                      disabled={!activeGraph || selectedSearchKeysCount === 0}
+                    >
+                      Reset
+                    </button>
+                  </div>
                   <div className="filterPropertyKeys">       
                   {filterPropertyKeys && (
                     <div>
@@ -858,7 +955,11 @@ function WindowVerticalSplitPanels({id, type, sourceId, initialTopHeight, minTop
                     className="select_option"
                     value={settings[0] || ""}
                     onChange={(e) => {
-                      const payload = { key: e.target.value, sort: String(settings[1]) || "asc", amount: parseInt(settings[2]) || 25 };
+                      const payload = {
+                        key: e.target.value,
+                        sort: String(settings[1]) || "asc",
+                        amount: { min: limitRange.min, max: limitRange.max }
+                      };
                       graphAction(id, "properties_tab", "settings", {
                         iframe: iframeRef,
                         settings: "limit_nodes_key",
@@ -880,7 +981,11 @@ function WindowVerticalSplitPanels({id, type, sourceId, initialTopHeight, minTop
                   style={{ width: "4vw" }}
                   value={settings[1] || "asc"}
                   onChange={(e) => {
-                    const payload = { key: String(settings[0]) || "", sort: e.target.value, amount: parseInt(settings[2]) || 25 };
+                    const payload = {
+                      key: String(settings[0]) || "",
+                      sort: e.target.value,
+                      amount: { min: limitRange.min, max: limitRange.max }
+                    };
                     graphAction(id, "properties_tab", "settings", {
                       iframe: iframeRef,
                       settings: "limit_nodes_sort",
@@ -892,22 +997,52 @@ function WindowVerticalSplitPanels({id, type, sourceId, initialTopHeight, minTop
                   <option value="asc">Asc</option>
                   <option value="desc">Desc</option>
                 </select>
-                {/* Amount Input */}
+                {/* Min/Max Inputs */}
+                <label className='input_labels' style={{ padding: "0.2vw 0 0 0.5vw"}}>Range</label>
                 <input
                   className="input_text"
-                  id="graph_settings_limit"
+                  id="graph_settings_limit_min"
+                  type="number"
+                  min="0"
+                  max={String(GRAPH_LIMIT_HARD_MAX - 1)}
+                  placeholder="Min"
+                  value={limitMinDraft}
+                  onChange={(e) => {
+                    const rawMin = e.target.value;
+                    setLimitMinDraft(rawMin);
+                    commitLimitRange(rawMin, limitMaxDraft, { syncDraft: false });
+                  }}
+                  onFocus={() => { isEditingLimitMin.current = true; }}
+                  onBlur={() => {
+                    isEditingLimitMin.current = false;
+                    commitLimitRange(limitMinDraft, limitMaxDraft);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") e.currentTarget.blur();
+                  }}
+                  disabled={!activeGraph}
+                />
+                <span className="limit_range_separator">-</span>
+                <input
+                  className="input_text"
+                  id="graph_settings_limit_max"
                   type="number"
                   min="1"
-                  max="300"
-                  placeholder="Limit"
-                  value={settings[2] || 25}                
+                  max={String(GRAPH_LIMIT_HARD_MAX)}
+                  placeholder="Max"
+                  value={limitMaxDraft}
                   onChange={(e) => {
-                    const payload = { key: String(settings[0]) || "", sort: String(settings[1]) || "asc", amount: e.target.value };
-                    graphAction(id, "properties_tab", "settings", {
-                      iframe: iframeRef,
-                      settings: "limit_nodes_amount",
-                      state: payload,
-                    });
+                    const rawMax = e.target.value;
+                    setLimitMaxDraft(rawMax);
+                    commitLimitRange(limitMinDraft, rawMax, { syncDraft: false });
+                  }}
+                  onFocus={() => { isEditingLimitMax.current = true; }}
+                  onBlur={() => {
+                    isEditingLimitMax.current = false;
+                    commitLimitRange(limitMinDraft, limitMaxDraft);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") e.currentTarget.blur();
                   }}
                   disabled={!activeGraph}
                 />
@@ -940,7 +1075,13 @@ function WindowVerticalSplitPanels({id, type, sourceId, initialTopHeight, minTop
                       graphAction(id, "properties_tab", "settings", {
                         iframe: iframeRef,
                         settings: "label_nodes_by",
-                        state: { labelIdentity: settings[3], labelkey: e.target.value, filterKey: settings[0],filterSort: settings[1], limitAmount: settings[2]},
+                        state: {
+                          labelIdentity: settings[3],
+                          labelkey: e.target.value,
+                          filterKey: settings[0],
+                          filterSort: settings[1],
+                          limitAmount: { min: limitRange.min, max: limitRange.max }
+                        },
                       });
                     }}
                     disabled={!activeGraph}
@@ -3290,7 +3431,7 @@ function Root() {
       pushNotification({
         title: "Notice",
         message: String(message ?? ""),
-        source: "App",
+        source: "Linkx",
         level: "warning"
       });
     };
@@ -3312,6 +3453,70 @@ function Root() {
       }
     };
   }, []);
+  // ------------------------------------------------------- backend notifications socket ---
+  const sourceNotificationIds = useMemo(() => {
+    return windows
+      .filter((w) => w.type === "source" && w.id != null)
+      .map((w) => String(w.id))
+      .sort();
+  }, [windows]);
+  const sourceNotificationKey = useMemo(
+    () => sourceNotificationIds.join("|"),
+    [sourceNotificationIds]
+  );
+
+  useEffect(() => {
+    const socket = socketRef.current;
+    if (!socket || !sourceNotificationKey) return;
+
+    const sourceIds = sourceNotificationKey.split("|").filter(Boolean);
+    if (sourceIds.length === 0) return;
+
+    const subscribedIds = new Set(sourceIds);
+    sourceIds.forEach((sid) => {
+      socket.emit("notification_subscribe", { session_id: sid });
+    });
+
+    const formatBackendNotificationMessage = (payload = {}) => {
+      const base = sanitizeNotificationMessage(payload.message || payload.text || "");
+      const code = String(payload.code || "").trim();
+      if (code && base) return `[${code}] ${base}`;
+      return base || (code ? `[${code}]` : "Notification received.");
+    };
+
+    const handleNotification = (payload = {}) => {
+      const sid = String(payload.session_id ?? "");
+      if (!sid || !subscribedIds.has(sid)) return;
+
+      setWindows((prev) =>
+        prev.map((w) =>
+          String(w.id) === sid
+            ? {
+                ...w,
+                notifications: [...(Array.isArray(w.notifications) ? w.notifications : []), payload]
+              }
+            : w
+        )
+      );
+
+      pushNotification({
+        title: payload.code ? String(payload.code) : "Backend Notice",
+        message: formatBackendNotificationMessage(payload),
+        source: payload.source || `Session ${sid}`,
+        level: payload.level || "info",
+        durationMs: 7000
+      });
+    };
+
+    socket.on("notification", handleNotification);
+
+    return () => {
+      sourceIds.forEach((sid) => {
+        socket.emit("notification_unsubscribe", { session_id: sid });
+      });
+      socket.off("notification", handleNotification);
+    };
+  }, [sourceNotificationKey, pushNotification, sanitizeNotificationMessage]);
   // ------------------------------------------------------------------ logger ---
   useEffect(() => {
     if (!sourceSessionLogFile) return;
@@ -3599,29 +3804,31 @@ function Root() {
       }    
       if (event.data?.type === "graph_search_results") {        
         const { id, nodes, edges } = event.data.payload; // unpack the payload
-        let newSearch
         console.log("graph_search_results:",id,nodes, edges)
-          setWindows(prev =>
-            prev.map(w => {
-              if (w.type === "graph" && w.id === id) {
-                const oldSearch = w.iframeSearch || ['', '', {}, { nodes: 0, edges: 0 }]; // default structure
-                console.log("oldSearch:",oldSearch)
-                newSearch = [...oldSearch]; // clone array
-                // Separate the results into nodes and edges counts
-                newSearch[3] = {
-                  nodes: nodes ?? 0,   // count of nodes
-                  edges: edges ?? 0    // count of edges
-                };
-                console.log("newsearch:",newSearch)
-                return { ...w, iframeSearch: newSearch };
-              }
-              return w;
-            })
-          );
-          setIframeSearch(prev => ({
+        setWindows(prev =>
+          prev.map(w => {
+            if (w.type !== "graph" || w.id !== id) return w;
+            const oldSearch = Array.isArray(w.iframeSearch) ? w.iframeSearch : ["", false, {}, { nodes: 0, edges: 0 }];
+            const newSearch = [...oldSearch];
+            newSearch[3] = {
+              nodes: nodes ?? 0,
+              edges: edges ?? 0
+            };
+            return { ...w, iframeSearch: newSearch };
+          })
+        );
+        setIframeSearch(prev => {
+          const oldSearch = Array.isArray(prev[id]) ? prev[id] : ["", false, {}, { nodes: 0, edges: 0 }];
+          const newSearch = [...oldSearch];
+          newSearch[3] = {
+            nodes: nodes ?? 0,
+            edges: edges ?? 0
+          };
+          return {
             ...prev,
             [id]: newSearch
-          }));
+          };
+        });
       }
       if (event.data?.type === "network_components") {
         console.log(5)
@@ -3727,7 +3934,7 @@ function Root() {
     } else if (type === "graph") {
       iframeRefs.current[id] = React.createRef();
       setActiveWindowId(id);
-      const initialSettings = ["", "", 25, "", "", "", false, false, false, false, "default", "UD", "directed", "hop_distance", ""];
+      const initialSettings = normalizeGraphIframeSettings(DEFAULT_GRAPH_IFRAME_SETTINGS);
       const initialSearch = ["","",{},{"nodes":0,"edges":0}]
       // set iframe search and settings the Window parmas
       setIframeSearch(prev => ({
@@ -3878,13 +4085,15 @@ function Root() {
   // --- Basic Graph actions ---
   const updateIframeSettings = (windowId, key, value) => {
     console.log("settings to update:",windowId, key, value)
-    setIframeSettings(prev => ({
-      ...prev,
-      [windowId]: {
-        ...prev[windowId],
-        [key]: value
-      }
-    }));    
+    setIframeSettings(prev => {
+      const current = normalizeGraphIframeSettings(prev[windowId]);
+      const next = [...current];
+      next[key] = key === 2 ? normalizeGraphLimitRange(value, current[2]?.max || 25) : value;
+      return {
+        ...prev,
+        [windowId]: next
+      };
+    });
   }
   const handleChartActions = (id, menuId, action, payload) => {
     console.log(6,id, menuId, action, payload)
@@ -4028,7 +4237,7 @@ function Root() {
                 );
 
                 if (data.message === "success!") {
-                  const settingsToApply = iframeSettings[id] || w.iframeSettings || ["", "", 25, "", "", "", false, false, false, false, "default", "UD", "directed", "hop_distance", ""];
+                  const settingsToApply = normalizeGraphIframeSettings(iframeSettings[id] || w.iframeSettings);
                   sendToIframe(iframe, "new_graph", {
                     id,
                     nodes: data.results.nodes,
@@ -4118,7 +4327,7 @@ function Root() {
                   updateIframeSettings(id, 12, "directed");
                 }
                 if (payload.settings === "layout_type" && payload.state === "layered") {
-                  const existingSettings = iframeSettings[id] || w.iframeSettings || [];
+                  const existingSettings = normalizeGraphIframeSettings(iframeSettings[id] || w.iframeSettings);
                   updateIframeSettings(id, 11, existingSettings[11] || "UD");
                   updateIframeSettings(id, 13, existingSettings[13] || "hop_distance");
                   updateIframeSettings(id, 14, existingSettings[14] || "");
@@ -4141,55 +4350,31 @@ function Root() {
               const { componentId, value } = payload;   
               console.log("here1:",componentId,value)           
               console.log("here2:",id,componentId,value)
-              // key 2 = object
-              // if (componentId === 0) { // Stoped (not functional) for now (Because it has a delay to show the input change, as its value )
-              //   setIframeSearch(prev => ({
-              //     ...prev,
-              //     [id]: {
-              //       ...prev[componentId],
-              //       componentId: value,   // FULL replace, always
-              //     },
-              //   }));
-              // }
-              if (componentId === 2) {
-                setIframeSearch(prev => {
-                  const prevSearch = prev[id] || ['', '', {}, {}];
-                  const prevObj = prevSearch[2] || {};
-
-                  const newObj = { ...prevObj };
-
-                  if (newObj[value]) {
-                    delete newObj[value];        // toggle off
-                  } else {
-                    newObj[value] = true;        // insert
-                  }
-
-                  return {
-                    ...prev,
-                    [id]: [
-                      prevSearch[0],
-                      prevSearch[1],
-                      newObj,        // preserved object
-                      prevSearch[3],
-                    ],
-                  };
-                });
-              }
-
-              // default behavior for other keys
               setIframeSearch(prev => {
-              const prevSearch = prev[id] || ['', '', {}, {}];
+                const prevSearch = Array.isArray(prev[id]) ? prev[id] : ["", false, {}, { nodes: 0, edges: 0 }];
+                const nextSearch = [...prevSearch];
 
-              return {
-                ...prev,
-                [id]: [
-                  componentId === 0 ? value : prevSearch[0],
-                  componentId === 1 ? value : prevSearch[1],
-                  prevSearch[2],
-                  componentId === 3 ? value : prevSearch[3],
-                ],
-              };
-            });     
+                if (componentId === 2) {
+                  const prevObj = prevSearch[2] && typeof prevSearch[2] === "object" ? prevSearch[2] : {};
+                  const nextObj = value === "__reset__" ? {} : { ...prevObj };
+                  if (value !== "__reset__") {
+                    if (nextObj[value]) delete nextObj[value];
+                    else nextObj[value] = true;
+                  }
+                  nextSearch[2] = nextObj;
+                } else if (componentId === 1) {
+                  nextSearch[1] = !!value;
+                } else if (componentId === 0) {
+                  nextSearch[0] = value;
+                } else if (componentId === 3) {
+                  nextSearch[3] = value;
+                }
+
+                return {
+                  ...prev,
+                  [id]: nextSearch
+                };
+              });
             }
             if (action === "filter_keys" && payload.filter === "all_property_keys") {
               sendToIframe(iframe, "all_property_keys", { id });
@@ -5165,7 +5350,7 @@ function Root() {
               return w;
             }
             if (iframe?.current && iframe.current.contentWindow) {
-              const settingsToApply = iframeSettings[id] || targetWindow?.iframeSettings || ["", "", 25, "", "", "", false, false, false, false, "default", "UD", "directed", "hop_distance", ""];
+              const settingsToApply = normalizeGraphIframeSettings(iframeSettings[id] || targetWindow?.iframeSettings);
               iframe.current.contentWindow.postMessage(
                 { action: menuId, payload: { id, settings: settingsToApply } },
                 "*"
@@ -5360,7 +5545,7 @@ function Root() {
           debounceRef.current = setTimeout(() => {
             const file = action;
             const targetWindow = windows.find(w => w.id === id);
-            const settingsToApply = iframeSettings[id] || targetWindow?.iframeSettings || ["", "", 25, "", "", "", false, false, false, false, "default", "UD", "directed", "hop_distance", ""];
+            const settingsToApply = normalizeGraphIframeSettings(iframeSettings[id] || targetWindow?.iframeSettings);
             if (!file || !(file instanceof File)) {
               alert("Selected file is not valid. Please choose a proper .json or .html file.");
               return;
@@ -5586,7 +5771,7 @@ function Root() {
         }
         if (menuId === "reset_graph") {
           const iframe=payload;     
-          const newSettings=["", "", 25, "", "", "", false, false, false, false, "default", "UD", "directed", "hop_distance", ""]
+          const newSettings = normalizeGraphIframeSettings(DEFAULT_GRAPH_IFRAME_SETTINGS);
           setIframeSettings(prev => ({
             ...prev,        // spread existing entries
             [id]: newSettings // update specific id

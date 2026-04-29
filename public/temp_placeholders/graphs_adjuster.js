@@ -1,5 +1,5 @@
 (() => {
-  const SOURCE_LABEL = "Graph Iframe";
+  const SOURCE_LABEL = "Graph";
 
   function postNotificationToParent(message, options = {}) {
     const text = String(message ?? "").trim();
@@ -550,6 +550,7 @@ function normalizeLayerMode(mode) {
 }
 
 const AUTO_PHYSICS_NODE_THRESHOLD = 300;
+const GRAPH_LIMIT_HARD_MAX = 100000;
 let AUTO_PHYSICS_FORCED_OFF = false;
 let LAST_APPLIED_EFFECTIVE_PHYSICS = null;
 const SAVED_VIEWS_STORAGE_KEY = "linkx_saved_views_v1";
@@ -832,6 +833,27 @@ function getAllNodeKeys(id) {
   }, "*");
 }
 
+function normalizeLimitRange(value, fallbackMax = 25) {
+  const clampInt = (num, min, max) => Math.max(min, Math.min(max, Math.floor(Number(num) || 0)));
+
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    const minRaw = value.min ?? 0;
+    const maxRaw = value.max ?? fallbackMax;
+    const min = clampInt(minRaw, 0, GRAPH_LIMIT_HARD_MAX - 1);
+    const max = clampInt(maxRaw, 1, GRAPH_LIMIT_HARD_MAX);
+    return { min, max: Math.max(min + 1, max) };
+  }
+
+  if (Array.isArray(value) && value.length >= 2) {
+    const min = clampInt(value[0], 0, GRAPH_LIMIT_HARD_MAX - 1);
+    const max = clampInt(value[1], 1, GRAPH_LIMIT_HARD_MAX);
+    return { min, max: Math.max(min + 1, max) };
+  }
+
+  const max = clampInt(value, 1, GRAPH_LIMIT_HARD_MAX) || clampInt(fallbackMax, 1, GRAPH_LIMIT_HARD_MAX);
+  return { min: 0, max };
+}
+
 function restoreSettings(settings) {
   if (!settings || !Array.isArray(settings)) {
     console.warn("Invalid settings array, skipping restore.");
@@ -840,7 +862,7 @@ function restoreSettings(settings) {
 
   try {
     const asBool = (value) => value === true || value === "true";
-    const limitAmount = Math.min(parseInt(settings[2], 10) || 25, 300);
+    const limitAmount = normalizeLimitRange(settings[2], 25);
     const layoutType = settings[10] || "default";
     const layoutDirection = settings[11] || "UD";
     const layerMode = normalizeLayerMode(settings[13] || "hop_distance");
@@ -2383,7 +2405,10 @@ function applySavedViewSettings(settings) {
 
   window.currentSettings = merged;
 
-  const limitAmount = Math.min(parseInt(merged.limit, 10) || 25, 300);
+  const limitAmount = normalizeLimitRange({
+    min: merged.limitMin ?? merged.limitRangeMin ?? 0,
+    max: merged.limitMax ?? merged.limitRangeMax ?? merged.limit ?? 25
+  }, 25);
   applyLimit({
     key: merged.sortKey || "",
     sort: merged.sortOrder || "asc",
@@ -3134,25 +3159,45 @@ function restoreNodeState(nodeId) {
 }
 
 
-function applyLimit({ key = "", sort = "asc", amount = 25 }) {
+function applyLimit({ key = "", sort = "asc", amount = 25, min = null, max = null }) {
     const perfStart = performance.now();
+    const baseRange = normalizeLimitRange(amount, 25);
+    const resolvedRange = normalizeLimitRange({
+      min: min == null ? baseRange.min : min,
+      max: max == null ? baseRange.max : max
+    }, baseRange.max);
+    const rangeMin = resolvedRange.min;
+    const rangeMax = resolvedRange.max;
+    const rangeCount = Math.max(1, rangeMax - rangeMin);
+
       // Store in global settings
-    window.currentSettings.limit = amount;
+    window.currentSettings.limit = rangeCount;
+    window.currentSettings.limitMin = rangeMin;
+    window.currentSettings.limitMax = rangeMax;
     window.currentSettings.sortKey = key;
     window.currentSettings.sortOrder = sort;
+    window.currentSortKey = key;
+    window.currentSortOrder = sort;
 
     VISIBLE_STATE.nodes.clear();
     VISIBLE_STATE.edges.clear();
-    VISIBLE_STATE.limit = amount;
+    VISIBLE_STATE.limit = rangeCount;
+    VISIBLE_STATE.limitMin = rangeMin;
+    VISIBLE_STATE.limitMax = rangeMax;
 
     // For large graphs, skip sorting if no key
     if (!key || FULL_GRAPH.nodes.size > 10000) {
-        // Fast path: just take first N nodes
+        // Fast path: apply offset and range without sorting
         const iterator = FULL_GRAPH.nodes.keys();
-        for (let i = 0; i < amount; i++) {
+        let idx = 0;
+        for (;;) {
             const { value, done } = iterator.next();
             if (done) break;
-            VISIBLE_STATE.nodes.add(value);
+            if (idx >= rangeMin && idx < rangeMax) {
+              VISIBLE_STATE.nodes.add(value);
+            }
+            if (idx >= rangeMax) break;
+            idx += 1;
         }
     } else {
         // Original sorting logic for smaller graphs
@@ -3194,7 +3239,8 @@ function applyLimit({ key = "", sort = "asc", amount = 25 }) {
                 : bStr.localeCompare(aStr, undefined, { numeric: true });
         });
         
-        for (let i = 0; i < Math.min(amount, nodes.length); i++) {
+        const end = Math.min(rangeMax, nodes.length);
+        for (let i = rangeMin; i < end; i++) {
             VISIBLE_STATE.nodes.add(nodes[i].id);
         }
     }
@@ -4362,157 +4408,187 @@ function networkLayerKey(key) {
   }
 }
 
+function parseSearchExpression(rawKeyword) {
+  const raw = rawKeyword == null ? "" : String(rawKeyword).trim();
+  if (!raw) {
+    return { mode: "text", textLower: "" };
+  }
+
+  const parseNumericLiteral = (value) => {
+    const normalized = String(value).trim().replace(/,/g, "");
+    if (!normalized) return null;
+    const numeric = Number(normalized);
+    return Number.isFinite(numeric) ? numeric : null;
+  };
+
+  const rangeMatch = raw.match(/^(-?\d+(?:[.,]\d+)?)\s*-\s*(-?\d+(?:[.,]\d+)?)$/);
+  if (rangeMatch) {
+    const left = parseNumericLiteral(rangeMatch[1]);
+    const right = parseNumericLiteral(rangeMatch[2]);
+    if (left != null && right != null) {
+      return {
+        mode: "range",
+        min: Math.min(left, right),
+        max: Math.max(left, right)
+      };
+    }
+  }
+
+  const cmpMatch = raw.match(/^(>=|<=|>|<|=|==)\s*(-?\d+(?:[.,]\d+)?)$/);
+  if (cmpMatch) {
+    const op = cmpMatch[1] === "==" ? "=" : cmpMatch[1];
+    const target = parseNumericLiteral(cmpMatch[2]);
+    if (target != null) {
+      return { mode: "compare", op, target };
+    }
+  }
+
+  return { mode: "text", textLower: raw.toLowerCase() };
+}
+
+function valueMatchesSearchExpression(value, expression) {
+  if (value == null || !expression) return false;
+
+  if (expression.mode === "text") {
+    return String(value).toLowerCase().includes(expression.textLower);
+  }
+
+  const numeric = typeof value === "number"
+    ? (Number.isFinite(value) ? value : null)
+    : toFiniteNumber(value);
+
+  if (numeric == null) return false;
+
+  if (expression.mode === "range") {
+    return numeric >= expression.min && numeric <= expression.max;
+  }
+
+  if (expression.mode === "compare") {
+    if (expression.op === ">") return numeric > expression.target;
+    if (expression.op === ">=") return numeric >= expression.target;
+    if (expression.op === "<") return numeric < expression.target;
+    if (expression.op === "<=") return numeric <= expression.target;
+    return numeric === expression.target;
+  }
+
+  return false;
+}
+
 function graphSearch({ id, keyword, option, keys, settings }) {
-    // --- EMPTY SEARCH: Restore to limit settings ---
-    if (!keyword || keyword.trim() === "") {
-        // Reset to current limit settings, not just first 25
-        const currentLimit = VISIBLE_STATE.limit || 25;
-        
-        VISIBLE_STATE.nodes.clear();
-        VISIBLE_STATE.edges.clear();
-        
-        // Apply current sort/filter settings
-        const sortKey = window.currentSortKey || "";
-        const sortOrder = window.currentSortOrder || "asc";
-        
-        // Get nodes based on current limit settings
-        const nodes = [];
-        for (const [id, node] of FULL_GRAPH.nodes) {
-            let value = null;
-            if (sortKey) {
-                value = getNodeValue(node, sortKey);
-                if (value == null) continue;
-            }
-            nodes.push({ id, value });
-        }
-        
-        // Sort if needed
-        if (sortKey) {
-            nodes.sort((a, b) => {
-                // ... sorting logic ...
-            });
-        }
-        
-        // Take top N based on limit
-        for (let i = 0; i < Math.min(currentLimit, nodes.length); i++) {
-            VISIBLE_STATE.nodes.add(nodes[i].id);
-        }
-        
-        recomputeVisibleEdges();
-        renderVisibleGraphBatch();
-        
-        window.parent.postMessage({
-            type: "graph_search_results",
-            payload: { id, nodes: VISIBLE_STATE.nodes.size, edges: VISIBLE_STATE.edges.size }
-        }, "*");
-        return;
-    }
-// --- SEARCH WITH KEYWORD ---
-    const limit = Math.min(settings?.[2] || 25, 300);
-    const keywordLower = keyword.toLowerCase();
-    const matched = new Set();
-    const searchKeys = keys?.length ? keys : [];
-    
-    // First pass: find matching nodes
-    for (const [id, base] of FULL_GRAPH.nodes) {
-        const mod = MODIFIED_NODES.get(id) || {};
-        const node = { ...base, ...mod };
-        
-        // If specific keys provided, ONLY search those keys
-        if (searchKeys.length > 0) {
-            for (const key of searchKeys) {
-                const value = node[key];
-                if (value != null && String(value).toLowerCase().includes(keywordLower)) {
-                    matched.add(id);
-                    break;
-                }
-            }
-        } else {
-            // No keys specified - search all properties (but limit scope)
-            let found = false;
-            for (const [key, value] of Object.entries(node)) {
-                // Skip vis.js internal properties
-                if (key.startsWith('_') || ['x','y','vx','vy','index'].includes(key)) continue;
-                if (value != null && String(value).toLowerCase().includes(keywordLower)) {
-                    matched.add(id);
-                    found = true;
-                    break;
-                }
-                if (found) break;
-            }
-        }
-        
-        if (matched.size >= limit * 2) break; // Collect more than needed for neighbor expansion
-    }
-    
-    // --- FIXED NEIGHBOR EXPANSION ---
-    if (option) {
-        const visited = new Set(matched);
-        const queue = Array.from(matched);
-        
-        // BFS with depth limit to prevent explosion
-        const MAX_DEPTH = 300;
-        const depth = new Map();
-        queue.forEach(id => depth.set(id, 0));
-        
-        while (queue.length > 0) {
-            const nodeId = queue.shift();
-            const currentDepth = depth.get(nodeId) || 0;
-            
-            if (currentDepth >= MAX_DEPTH) continue;
-            
-            const neighbors = FULL_GRAPH.adjacency.get(nodeId);
-            if (neighbors) {
-                for (const neighbor of neighbors) {
-                    if (!visited.has(neighbor)) {
-                        visited.add(neighbor);
-                        depth.set(neighbor, currentDepth + 1);
-                        queue.push(neighbor);
-                    }
-                }
-            }
-        }
-        
-        // Replace matched with full reachable set, but respect limit
-        matched.clear();
-        let count = 0;
-        for (const id of visited) {
-            matched.add(id);
-            count++;
-            if (count >= limit * 2) break; // Don't exceed 2x limit
-        }
-    }
-    
-    // --- APPLY SEARCH RESULTS WHILE RESPECTING LIMIT ---
-    VISIBLE_STATE.nodes.clear();
-    VISIBLE_STATE.edges.clear();
-    
-    // Only show up to the limit
-    let nodeCount = 0;
-    for (const id of matched) {
-        if (nodeCount >= limit) break;
-        VISIBLE_STATE.nodes.add(id);
-        nodeCount++;
-    }
-    
-    // Store search context for limit adjustments
-    window.lastSearchContext = {
-        keyword,
-        option,
-        keys: searchKeys,
-        matchedNodes: Array.from(matched) // Store full match set
-    };
-    
-    recomputeVisibleEdges();
-    renderVisibleGraphBatch();
-    // If No node is found
-    if(VISIBLE_STATE.nodes.size == 0){
-      alert("No Result Found!")
-    }
+  const postResults = () => {
     window.parent.postMessage({
-        type: "graph_search_results",
-        payload: { id, nodes: VISIBLE_STATE.nodes.size, edges: VISIBLE_STATE.edges.size }
+      type: "graph_search_results",
+      payload: { id, nodes: VISIBLE_STATE.nodes.size, edges: VISIBLE_STATE.edges.size }
     }, "*");
+  };
+
+  const limitRange = normalizeLimitRange(
+    settings?.[2] ?? {
+      min: window.currentSettings.limitMin ?? 0,
+      max: window.currentSettings.limitMax ?? window.currentSettings.limit ?? 25
+    },
+    25
+  );
+  const rangeMin = limitRange.min;
+  const rangeMax = limitRange.max;
+  const rangeCount = Math.max(1, rangeMax - rangeMin);
+
+  const rawKeyword = keyword == null ? "" : String(keyword).trim();
+  const searchExpr = parseSearchExpression(rawKeyword);
+  const includeLinked = option === true || option === "true";
+  const isNumericExpression = searchExpr.mode === "compare" || searchExpr.mode === "range";
+  const allowLinkedExpansion = includeLinked && !isNumericExpression;
+  const selectedKeys = Array.isArray(keys)
+    ? Array.from(new Set(keys.map(k => String(k || "").trim()).filter(Boolean)))
+    : [];
+
+  // Empty search resets back to current limit/sort settings deterministically.
+  if (!rawKeyword) {
+    applyLimit({
+      key: window.currentSettings.sortKey || window.currentSortKey || "",
+      sort: window.currentSettings.sortOrder || window.currentSortOrder || "asc",
+      amount: { min: rangeMin, max: rangeMax }
+    });
+    postResults();
+    return;
+  }
+
+  const matchCap = Math.max(rangeMax, 25) * (allowLinkedExpansion ? 4 : 2);
+  const matched = [];
+  const skipKeys = new Set(["x", "y", "vx", "vy", "index"]);
+
+  for (const [nodeId, base] of FULL_GRAPH.nodes) {
+    const mod = MODIFIED_NODES.get(nodeId) || {};
+    const node = { ...base, ...mod };
+    let isMatch = false;
+
+    if (selectedKeys.length > 0) {
+      for (const key of selectedKeys) {
+        const value = node[key];
+        if (valueMatchesSearchExpression(value, searchExpr)) {
+          isMatch = true;
+          break;
+        }
+      }
+    } else {
+      for (const [key, value] of Object.entries(node)) {
+        if (key.startsWith("_") || skipKeys.has(key)) continue;
+        if (valueMatchesSearchExpression(value, searchExpr)) {
+          isMatch = true;
+          break;
+        }
+      }
+    }
+
+    if (isMatch) {
+      matched.push(nodeId);
+      if (matched.length >= matchCap) break;
+    }
+  }
+
+  let resultIds = matched;
+  if (allowLinkedExpansion && matched.length > 0) {
+    const expanded = new Set(matched);
+    for (const nodeId of matched) {
+      const neighbors = FULL_GRAPH.adjacency.get(nodeId);
+      if (!neighbors) continue;
+      for (const neighborId of neighbors) {
+        expanded.add(neighborId);
+        if (expanded.size >= matchCap) break;
+      }
+      if (expanded.size >= matchCap) break;
+    }
+    resultIds = Array.from(expanded);
+  }
+
+  window.currentSettings.limit = rangeCount;
+  window.currentSettings.limitMin = rangeMin;
+  window.currentSettings.limitMax = rangeMax;
+  VISIBLE_STATE.limit = rangeCount;
+  VISIBLE_STATE.limitMin = rangeMin;
+  VISIBLE_STATE.limitMax = rangeMax;
+
+  VISIBLE_STATE.nodes.clear();
+  VISIBLE_STATE.edges.clear();
+  const end = Math.min(rangeMax, resultIds.length);
+  for (let i = rangeMin; i < end; i++) {
+    VISIBLE_STATE.nodes.add(resultIds[i]);
+  }
+
+  window.lastSearchContext = {
+    keyword: rawKeyword,
+    option: allowLinkedExpansion,
+    keys: selectedKeys,
+    matchedNodes: resultIds
+  };
+
+  recomputeVisibleEdges();
+  renderVisibleGraphBatch();
+
+  if (VISIBLE_STATE.nodes.size === 0) {
+    alert("No Result Found!");
+  }
+  postResults();
 }
 
 async function exportGraph(type) {
@@ -5546,11 +5622,12 @@ function labelNodesWith({ labelIdentity, labelkey, filterKey, filterSort = "asc"
     }
   }
   window.currentSettings.showLabels = true;
+  const limitRange = normalizeLimitRange(limitAmount, 25);
 
   applyLimit({
     key: filterKey || "",
     sort: filterSort,
-    amount: Math.min(limitAmount, 300)
+    amount: limitRange
   });
 }
 
