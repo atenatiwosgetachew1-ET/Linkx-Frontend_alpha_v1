@@ -4443,6 +4443,14 @@ function parseSearchExpression(rawKeyword) {
     }
   }
 
+  const exactNumericMatch = raw.match(/^-?\d+(?:[.,]\d+)?$/);
+  if (exactNumericMatch) {
+    const target = parseNumericLiteral(exactNumericMatch[0]);
+    if (target != null) {
+      return { mode: "number_exact", target };
+    }
+  }
+
   return { mode: "text", textLower: raw.toLowerCase() };
 }
 
@@ -4468,6 +4476,10 @@ function valueMatchesSearchExpression(value, expression) {
     if (expression.op === ">=") return numeric >= expression.target;
     if (expression.op === "<") return numeric < expression.target;
     if (expression.op === "<=") return numeric <= expression.target;
+    return numeric === expression.target;
+  }
+
+  if (expression.mode === "number_exact") {
     return numeric === expression.target;
   }
 
