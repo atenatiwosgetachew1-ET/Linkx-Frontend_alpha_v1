@@ -1247,18 +1247,20 @@
 								        menuHTML += `<div class="menu_item" data-action="configure_edge_bundling">Configure Edge Bundling</div>`;
 								        menuHTML += `<div class="menu_item" data-action="toggle_alert_rules">${window.ALERT_RULES_ENABLED ? "Disable" : "Enable"} Alert Rules</div>`;
 								        menuHTML += `<div class="menu_item" data-action="configure_alert_rules">Configure Alert Rules</div>`;
-								        menuHTML += `<div class="menu_item" data-action="run_alert_scan">Run Alert Scan</div>`;
-								        menuHTML += `<div class="menu_item" data-action="show_pinned_evidence">Show Pinned Evidence</div>`;
-								        menuHTML += `<div class="menu_item" data-action="clear_pinned_evidence">Clear Pinned Evidence</div>`;
-								        menuHTML += `<div class="menu_item" data-action="apply_community_detection">Detect Communities</div>`;
-								    } else {
+									        menuHTML += `<div class="menu_item" data-action="run_alert_scan">Run Alert Scan</div>`;
+									        menuHTML += `<div class="menu_item" data-action="show_pinned_evidence">Show Pinned Evidence</div>`;
+									        menuHTML += `<div class="menu_item" data-action="clear_pinned_evidence">Clear Pinned Evidence</div>`;
+									        menuHTML += `<div class="menu_item" data-action="apply_community_detection">Detect Communities</div>`;
+									        menuHTML += `<div class="menu_item ${selectedNodes.length > 0 ? "" : "menu_item_disabled"}" data-action="link_traversal">Link Traversal (4 degrees)</div>`;
+									        menuHTML += `<div class="menu_item" data-action="cut_points">Cut Points</div>`;
+									    } else {
 								        if (nodeId && !selectedNodes.includes(nodeId)) {
 											selectedNodes = [nodeId];
 											network.selectNodes(selectedNodes);
 										}
 
-										if (selectedNodes.length === 1) {
-											menuHTML += `<div class="menu_item" data-action="copy" data-id="${nodeId}">Copy</div>`;
+											if (selectedNodes.length === 1) {
+												menuHTML += `<div class="menu_item" data-action="copy" data-id="${nodeId}">Copy</div>`;
 								            menuHTML += `<div class="menu_item" data-action="delete" data-id="${nodeId}">Delete Node</div>`;
 											if (String(selectedNodes[0]).startsWith("Group")) {
 												menuHTML += `<div class="menu_item" data-action="ungroup" data-id="${nodeId}">Ungroup</div>`;
@@ -1268,9 +1270,10 @@
 								            }
 								            menuHTML += `<div class="menu_item" data-action="expand_neighborhood">Expand Neighborhood</div>`;
 								            menuHTML += `<div class="menu_item" data-action="collapse_neighborhood">Collapse Neighborhood</div>`;
+								            menuHTML += `<div class="menu_item" data-action="bring_to_front" data-id="${nodeId}">Bring to Front</div>`;
 								            menuHTML += `<div class="menu_item" data-action="pin_evidence">Pin Evidence</div>`;
 								            menuHTML += `<div class="menu_item" data-action="unpin_evidence">Unpin Evidence</div>`;
-										} else if (selectedNodes.length > 1) {
+											} else if (selectedNodes.length > 1) {
 											const fullyLinked = areAllSelectedNodesLinked(selectedNodes);
 											menuHTML += `<div class="menu_item" data-action="copy">Copy Nodes/Edges</div>`;
 											if (fullyLinked) {
@@ -1281,16 +1284,19 @@
 											menuHTML += `<div class="menu_item" data-action="group">Group Nodes</div>`;
 											menuHTML += `<div class="menu_item" data-action="merge_nodes">Merge Nodes</div>`;
 											menuHTML += `<div class="menu_item" data-action="add_theme_line">Theme Line</div>`;
-											if (selectedNodes.length === 2) {
-												menuHTML += `<div class="menu_item" data-action="path_finder">Find Shortest Path</div>`;
+												if (selectedNodes.length === 2) {
+													menuHTML += `<div class="menu_item" data-action="path_finder">Find Shortest Path</div>`;
+												}
+												menuHTML += `<div class="menu_item ${selectedNodes.length === 2 ? "" : "menu_item_disabled"}" data-action="find_all_paths">Find All Paths</div>`;
+												menuHTML += `<div class="menu_item" data-action="pin_evidence">Pin Evidence</div>`;
+												menuHTML += `<div class="menu_item" data-action="unpin_evidence">Unpin Evidence</div>`;
 											}
-											menuHTML += `<div class="menu_item" data-action="pin_evidence">Pin Evidence</div>`;
-											menuHTML += `<div class="menu_item" data-action="unpin_evidence">Unpin Evidence</div>`;
-										}
 
-										menuHTML += `<div class="menu_item" data-action="visual_degree">Visualize by Degree</div>`;
-										menuHTML += `<div class="menu_item" data-action="visual_property">Visualize by Property</div>`;
-										if (
+											menuHTML += `<div class="menu_item" data-action="visual_degree">Visualize by Degree</div>`;
+											menuHTML += `<div class="menu_item" data-action="visual_property">Visualize by Property</div>`;
+											menuHTML += `<div class="menu_item ${selectedNodes.length > 0 ? "" : "menu_item_disabled"}" data-action="link_traversal">Link Traversal (4 degrees)</div>`;
+											menuHTML += `<div class="menu_item" data-action="cut_points">Cut Points</div>`;
+											if (
 											(window.PATH_HIGHLIGHT_STATE?.nodeIds?.size || 0) > 0 ||
 											(window.PATH_HIGHLIGHT_STATE?.edgeIds?.size || 0) > 0
 										) {
@@ -1415,11 +1421,23 @@
 								      	}
 								      	break;
 								      }
-								      case 'path_finder':
-								      	await runPathFinderForSelection(selectedNodes);
-								      	break;
-								      case 'clear_path':
-								      	clearPathHighlight();
+									      case 'path_finder':
+									      	await runPathFinderForSelection(selectedNodes);
+									      	break;
+									      case 'find_all_paths':
+									      	await runFindAllPathsForSelection(selectedNodes);
+									      	break;
+									      case 'bring_to_front':
+									      	bringNodeToFront(nodeId || selectedNodes[0]);
+									      	break;
+									      case 'link_traversal':
+									      	runLinkTraversal(selectedNodes, 4);
+									      	break;
+									      case 'cut_points':
+									      	runCutPointDetection();
+									      	break;
+									      case 'clear_path':
+									      	clearPathHighlight();
 								      	break;
 								      case 'toggle_edge_bundling':
 								      	toggleEdgeBundlingLite();

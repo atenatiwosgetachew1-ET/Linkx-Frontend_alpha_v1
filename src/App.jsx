@@ -233,6 +233,18 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
   const [automation, setAutomation] = useState(false);
   const [parsedConfig, setParsedConfig] = useState(null);
   const [activeConfigTab, setActiveConfigTab] = useState("system");
+  const [removeRuleArmed, setRemoveRuleArmed] = useState(false);
+  const [selectedRuleForRemoval, setSelectedRuleForRemoval] = useState("");
+
+  const normalizeActiveRuleValue = useCallback((value) => {
+    if (Array.isArray(value)) return String(value[0] || "");
+    if (typeof value === "string") return value;
+    return "";
+  }, []);
+
+  const activeRuleValue = normalizeActiveRuleValue(parsedConfig?.active_rule);
+  const ruleNames = Array.isArray(parsedConfig?.rule_names) ? parsedConfig.rule_names : [];
+  const canRemoveRule = ruleNames.length > 0 && selectedRuleForRemoval !== "";
 
   useEffect(() => {
     console.log("configurations_window:",configurations)
@@ -250,6 +262,38 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
       setloadscreenState(false);
     }
   }, [configurations]);
+
+  useEffect(() => {
+    const nextRule = activeRuleValue || (ruleNames[0] || "");
+    setSelectedRuleForRemoval(nextRule);
+    setRemoveRuleArmed(false);
+  }, [activeRuleValue, ruleNames]);
+
+  useEffect(() => {
+    if (!removeRuleArmed) return;
+    const timeoutId = setTimeout(() => setRemoveRuleArmed(false), 6000);
+    return () => clearTimeout(timeoutId);
+  }, [removeRuleArmed]);
+
+  const handleActiveRuleChange = (event) => {
+    const nextRule = event.target.value;
+    setSelectedRuleForRemoval(nextRule);
+    setRemoveRuleArmed(false);
+    actions("change", { name: event.target.name, value: nextRule });
+  };
+
+  const handleRemoveRule = () => {
+    if (!canRemoveRule) {
+      alert("Select a rule before removing.");
+      return;
+    }
+    if (!removeRuleArmed) {
+      setRemoveRuleArmed(true);
+      return;
+    }
+    setRemoveRuleArmed(false);
+    actions("remove", { rule: selectedRuleForRemoval });
+  };
 
 
 
@@ -586,10 +630,10 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
                 <select
                   name="active_rule"
                   className="input_text"
-                  value={parsedConfig?.active_rule?.[0] || ""}
-                  onChange={(e) => actions("change", { name: e.target.name, value: e.target.value })}
+                  value={activeRuleValue}
+                  onChange={handleActiveRuleChange}
                 >
-                  {parsedConfig?.rule_names?.map((rule, idx) => (
+                  {ruleNames.map((rule, idx) => (
                     <option key={idx} value={rule}>{rule}</option>
                   ))}
                 </select>
@@ -597,9 +641,15 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
                 <input
                   type="button"
                   className="critical_btns"
-                  value="Remove"
-                  onClick={(e) => actions("remove", { name: e.target.name, value: e.target.value })}
+                  value={removeRuleArmed ? "Confirm Remove" : "Remove"}
+                  disabled={!canRemoveRule}
+                  onClick={handleRemoveRule}
                 />
+                <label>
+                  {removeRuleArmed
+                    ? `Click "Confirm Remove" to remove "${selectedRuleForRemoval}".`
+                    : `Loaded rules: ${ruleNames.length}`}
+                </label>
 
                 <label>Upload rules (JSON)</label>
                 <input
@@ -656,7 +706,16 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
               download
               title="Download"
             >⭳ Export</a>
-            <button className="action_btns" type="submit" form="configurations_form" title="Save Configurations">🖫 Save</button>
+            <button
+              className="action_btns"
+              type="button"
+              onClick={() => {
+                const form = document.getElementById("configurations_form");
+                if (!form) return;
+                actions("save", new FormData(form));
+              }}
+              title="Save Configurations"
+            >🖫 Save</button>
             <input
               type="file"
               id="import_config_file"
@@ -1301,18 +1360,28 @@ function WindowVerticalSplitPanels({id, type, sourceId, initialTopHeight, minTop
   );
 }
 function IframeEmbed({wId,id,fileName,title,activeGraph,graphAction,iframeRef,BASE_URL}) {
-  const iframeBasePath = '/linkx/temp_placeholders';
+  const iframeBasePath = '/linkxDS2026/temp_placeholders';
   const frameIdentity = String(activeGraph || id || "").toLowerCase();
-  const shouldShowFitGraphControl = frameIdentity.includes("graph");
-  const fitGraphControl = (
-    <span className="iframe_options_layer">
-      <i onClick={() => {graphAction(wId, "iframe_options", "settings",
+  const isPlaceholderFrame = frameIdentity.includes("placeholder");
+  const shouldShowFitGraphControl = frameIdentity.includes("graph") && !isPlaceholderFrame;
+  const graphOptionControl = (setting, iconType, titleText, extraClass = "") => (
+    <i
+      className={`iframe_option_icon ${extraClass}`.trim()}
+      title={titleText}
+      onClick={() => {graphAction(wId, "iframe_options", "settings",
         {
           iframe: iframeRef,
-          settings: "fit_graph",
-        })}}>
-        <Icons id="window_graph_option" type="fieldview" condition="True" />
-      </i>
+          settings: setting,
+        })}}
+    >
+      <Icons id="window_graph_option" type={iconType} condition="True" />
+    </i>
+  );
+  const fitGraphControl = (
+    <span className="iframe_options_layer">
+      {graphOptionControl("undo_graph", "undo", "Undo", "iframe_option_undo")}
+      {graphOptionControl("fit_graph", "fieldview", "Fit Graph")}
+      {graphOptionControl("redo_graph", "redo", "Redo", "iframe_option_redo")}
     </span>
   );
 
@@ -1341,7 +1410,6 @@ function IframeEmbed({wId,id,fileName,title,activeGraph,graphAction,iframeRef,BA
           style={{ border: 'none' }}
           title={`${title}`}
         /> 
-        {fitGraphControl}
       </div>
     );
   }
@@ -1449,6 +1517,7 @@ function DraggableWindow({ children, initialPos = { top: 0, left: 0 }, orientati
   );
 }
 function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText, loadscreenState, isSideBarMenuOpen, orientation, configurations, windowAction, graphAction, chartAction, selectedContent, selectedSubContent, selectedNodes, selectedEdges,windowResponseI,windowResponseII,formToolResponse,sourceAddressType,sourceAddressText,batchFilesSearchHybrid,batchFilesSearchHybridQuery,batchFilesSearchStrict,searchText,batchFilesSearchLimit,batchFilesSearchResults,batchFilesSearchMoreFiles,searchResultsVisible,searchPlaceholder,batchFilesCollection, batchFilesDataframeInfoI, batchFilesDataframeInfoII, batchFilesDataframeActionValue, batchFilesDataframeSourceValue, batchFilesDataframeTargetValue, batchFilesDataframeRelationshipValue, batchFilesDataframeRuleValue, sourceSessionLog, sourceStreams , sourceStreamListener, fileInputRef, textareaRefs, onClose, onMove, zIndex, onFocus, covered, graphLink, graphLinkId, graphLinkSource, graphStatus, activeGraph, chartLink, chartLinkId, activechart, iframeRef, iframeFilters, iframeSettings, iframeSearch, iframePerformanceMood, selectedPropertyTab, filterPropertyKeys, filterResults, nodeProperties, BASE_URL, searchButtonRef, resultContainerRef, requestConfirmation }) {
+  const canCancelGraphStaging = type === "graph" && typeof loadscreenText === "string" && loadscreenText.toLowerCase().startsWith("staging graph");
   if (type === "source") {
     return (
       <DraggableWindow initialPos={{ top: 0, left: 0}} zIndex={zIndex} orientation={orientation}>
@@ -2423,7 +2492,7 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
             }
             onMouseDown={() => onFocus(id)}>
             <div id={`window_loadscreen_${type}_${id}`} className="windows_loadscreen" style={{ display: loadscreenState ? "block" : "none" }}>
-              <Loadscreen loadingText={loadscreenText} />
+              <Loadscreen loadingText={loadscreenText} showCancel={canCancelGraphStaging} onCancel={() => windowAction(id, "cancel_graph_staging")} />
             </div>
             {(covered || dragProps.isDragging) && <div className="window_cover" />}  
             <div id={`window_bar_${type}_${id}`} className="window_bar"
@@ -3112,7 +3181,7 @@ function Main({userName,setSessionId, API_URL,debounceRef,setConfigurations, con
     </main>
   );
 }
-const Loadscreen = ({ loadingText }) => {
+const Loadscreen = ({ loadingText, showCancel = false, onCancel = null }) => {
     const [dotCount, setDotCount] = useState(0);
 
     useEffect(() => {
@@ -3124,8 +3193,12 @@ const Loadscreen = ({ loadingText }) => {
 
     return (
       <div className="loadscreen">
-        {loadingText}
-        {'.'.repeat(dotCount)}
+        <div className="loadscreen_text">{loadingText}{'.'.repeat(dotCount)}</div>
+        {showCancel && typeof onCancel === "function" && (
+          <button className="loadscreen_cancel_btn" type="button" onClick={onCancel}>
+            Cancel
+          </button>
+        )}
       </div>
 	    );
 }
@@ -3278,6 +3351,7 @@ function Root() {
   const confirmSeqRef = useRef(1);
   const noticeTimersRef = useRef({});
   const confirmationsRef = useRef([]);
+  const graphFetchAbortControllersRef = useRef({});
   const toggleMenuRef = useRef(null);
   const tabsToggleButtonRef = useRef(null);
   const API_URL = import.meta.env.VITE_API_URL
@@ -3624,7 +3698,7 @@ function Root() {
           const iframe = iframeRefs.current[w.id];
           if (iframe?.current?.contentWindow) {
             console.log("contentWindow:",iframe?.current?.contentWindow)
-            if (iframe?.current?.contentWindow.location.pathname == "/linkx/temp_placeholders/graph_info_placeholder.html"){
+            if (iframe?.current?.contentWindow.location.pathname == "/linkxDS2026/temp_placeholders/graph_info_placeholder.html"){
               iframe.current.contentWindow.postMessage(
                 { action: "informations", payload: data },
                 "*"
@@ -4245,17 +4319,25 @@ function Root() {
               source_id: payload.sourceId,
               relationship: payload.relationship
             };
+            if (graphFetchAbortControllersRef.current[id]) {
+              graphFetchAbortControllersRef.current[id].abort();
+              delete graphFetchAbortControllersRef.current[id];
+            }
+            const controller = new AbortController();
+            graphFetchAbortControllersRef.current[id] = controller;
 
             updates.loadscreenState = true;
-            updates.loadscreenText = "Staging Graph";
+            updates.loadscreenText = "Staging graph";
 
             fetch(`${API_URL}/get_graph`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(newPayload)
+              body: JSON.stringify(newPayload),
+              signal: controller.signal
             })
               .then(res => res.json())
               .then(data => {
+                if (!graphFetchAbortControllersRef.current[id] || graphFetchAbortControllersRef.current[id] !== controller) return;
                 setWindows(prev =>
                   prev.map(win =>
                     win.id === id
@@ -4266,6 +4348,8 @@ function Root() {
 
                 if (data.message === "success!") {
                   const settingsToApply = normalizeGraphIframeSettings(iframeSettings[id] || w.iframeSettings);
+                  settingsToApply[2] = normalizeGraphLimitRange({ min: 0, max: 25 }, 25);
+                  updateIframeSettings(id, 2, { min: 0, max: 25 });
                   sendToIframe(iframe, "new_graph", {
                     id,
                     nodes: data.results.nodes,
@@ -4277,6 +4361,7 @@ function Root() {
                 }
               })
               .catch(err => {
+                if (err?.name === "AbortError") return;
                 console.error(err);
                 setWindows(prev =>
                   prev.map(win =>
@@ -4286,6 +4371,11 @@ function Root() {
                   )
                 );
                 alert(err);
+              })
+              .finally(() => {
+                if (graphFetchAbortControllersRef.current[id] === controller) {
+                  delete graphFetchAbortControllersRef.current[id];
+                }
               });
           }
 
@@ -4411,7 +4501,11 @@ function Root() {
 
           // ------------------ Iframe options ------------------
           if (menuId === "iframe_options" && action === "settings") {
-            sendToIframe(iframe, "fit_graph", "fit_graph");
+            const nextAction = payload?.settings || "fit_graph";
+            const allowedActions = new Set(["fit_graph", "undo_graph", "redo_graph"]);
+            if (allowedActions.has(nextAction)) {
+              sendToIframe(iframe, nextAction, nextAction);
+            }
           }
 
           return { ...w, ...updates };
@@ -4424,7 +4518,7 @@ function Root() {
   const handleWindowActions = (id, menuId, action, payload, options = {}) => {
     //console.log("id:",id," Menuid:", menuId," action:", action," payload:", payload)
     // --- Handling sidebar menus
-    if (!options?.skipSideBarToggle) {
+    if (!options?.skipSideBarToggle && menuId !== "cancel_graph_staging") {
       setIsSideBarMenuOpen(prev => prev === menuId ? null : menuId); // Toggle open/close
     }
     // --------------------------
@@ -4437,6 +4531,14 @@ function Root() {
         let newBatchSearchResult = w.batchFilesSearchResults;
         let newBatchFilesCollection = w.batchFilesCollection || []; // Makes Ensure selectedFiles is initialized
         let windowResponseI = w.windowResponseI 
+        if (menuId === "cancel_graph_staging") {
+          const controller = graphFetchAbortControllersRef.current[id];
+          if (controller) {
+            controller.abort();
+            delete graphFetchAbortControllersRef.current[id];
+          }
+          return { ...w, loadscreenState: false, loadscreenText: null };
+        }
         // ------------------------------------------------------------------- Source window contents handling
         if (menuId === "live_source_options") {
           newContent = "live_source_options"; // This will show live source UI
@@ -5949,6 +6051,7 @@ function Root() {
   };
     // --- Configuration Actions ---
   const handleConfigurationActions = (id,payload) => {
+    const resolvedSessionId = sessionId || localStorage.getItem('session') || "";
     if (id === "change"){
       const { name, value } = payload;
       setConfigurations(prev => ({
@@ -5958,11 +6061,15 @@ function Root() {
           : value
       }));
     }
-    if (id === "save"){
+    else if (id === "save"){
+      if (debounceRef.current) clearTimeout(debounceRef.current);
       debounceRef.current = setTimeout(() => {
-        let formData=payload;
-        formData.append("id","save")
-        formData.append("session_id",sessionId)
+        const formData = payload instanceof FormData
+          ? payload
+          : new FormData(document.getElementById("configurations_form"));
+        formData.set("id","save");
+        formData.set("session_id",resolvedSessionId);
+        setloadscreenState(true);
         fetch(`${API_URL}/configuration`, {
           method: "POST",
           body: formData,
@@ -5983,6 +6090,68 @@ function Root() {
           setloadscreenState(false);
         });    
       }, 300);
+    }
+    else if (id === "remove"){
+      const activeRuleName = payload?.rule || payload?.rule_name || "";
+      if (!activeRuleName) {
+        alert("Select a rule before removing.");
+        return;
+      }
+      const formData = new FormData();
+      formData.append("id", "remove_rule");
+      formData.append("session_id", resolvedSessionId);
+      formData.append("rule_name", activeRuleName);
+      setloadscreenState(true);
+      fetch(`${API_URL}/configuration`, {
+        method: "POST",
+        body: formData,
+      })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.message === "success!") {
+          alert("Rule removed!");
+          handleConfigurationActions("load_default");
+        } else {
+          alert(`Remove failed: ${data.message}${data?.results ? ` (${String(data.results)})` : ""}`);
+        }
+        setloadscreenState(false);
+      })
+      .catch((err) => {
+        console.error("ConfigRemoveErr", err);
+        setloadscreenState(false);
+      });
+    }
+    else if (id === "upload"){
+      const importInput = document.getElementById("import_config_file");
+      const importFile = importInput?.files?.[0];
+      if (!importFile) {
+        alert("Select a configuration file first.");
+        return;
+      }
+      const formData = new FormData();
+      formData.append("id", "upload");
+      formData.append("session_id", resolvedSessionId);
+      formData.append("import_config_file", importFile);
+      setloadscreenState(true);
+      fetch(`${API_URL}/configuration`, {
+        method: "POST",
+        body: formData,
+      })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.message === "success!") {
+          alert("Configuration uploaded!");
+          handleConfigurationActions("load_default");
+        } else {
+          alert(data.message);
+        }
+        if (importInput) importInput.value = "";
+        setloadscreenState(false);
+      })
+      .catch((err) => {
+        console.error("ConfigUploadErr", err);
+        setloadscreenState(false);
+      });
     }
     else if (id === "load_default"){
       const session = localStorage.getItem('session'); //Stored main session

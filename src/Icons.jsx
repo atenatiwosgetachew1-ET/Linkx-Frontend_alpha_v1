@@ -796,10 +796,42 @@ function Icons({id,category,type,condition}){
     }
   }
   if(id==="window_graph_option"){
+    if (type === "undo"){
+      if (condition === "True"){
+        return(
+          <span className="side_bar_icon_active" title="Undo">
+              <svg width="100%" height="100%">
+                <def>
+                  <symbol id="icon-forward" viewBox="-7 -6 47 47">
+                    <path d="M14.039 11.954v-9.954l-14.039 14 14.039 14v-10.042c7.135 0 14.177 1.242 17.961 7.136-0.394-10.741-8.43-13.298-17.961-15.14z"></path>
+                  </symbol>
+                </def>
+                <use xlinkHref="#icon-forward"/>
+              </svg>
+          </span>
+        )
+      }
+    }
+    if (type === "redo"){
+      if (condition === "True"){
+        return(
+          <span className="side_bar_icon_active" title="Redo">
+              <svg width="100%" height="100%" style={{ transform: "scaleX(-1)" }}>
+                <def>
+                  <symbol id="icon-forward" viewBox="-7 -6 47 47">
+                    <path d="M14.039 11.954v-9.954l-14.039 14 14.039 14v-10.042c7.135 0 14.177 1.242 17.961 7.136-0.394-10.741-8.43-13.298-17.961-15.14z"></path>
+                  </symbol>
+                </def>
+                <use xlinkHref="#icon-forward"/>
+              </svg>
+          </span>
+        )
+      }
+    }
     if (type === "fieldview"){
       if (condition === "True"){      
         return(
-          <span className="side_bar_icon_active" title="">
+          <span className="side_bar_icon_active" title="Fit Graph">
               <svg width="100%" height="100%">
                 <def>
                   <symbol id="icon-fieldview" viewBox="2 -3 20 30">

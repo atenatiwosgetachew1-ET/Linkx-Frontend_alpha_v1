@@ -139,6 +139,12 @@ window.addEventListener("message", (event) => {
     case "fit_graph":
       fit_graph();
       break;
+    case "undo_graph":
+      undoGraphAction();
+      break;
+    case "redo_graph":
+      redoGraphAction();
+      break;
 
     case "label_nodes_by":
       labelNodesWith(payload);
@@ -464,6 +470,7 @@ function getOleObjectIconPath() {
 }
 
 function persistNodeChange(id, patch) {
+  queueGraphHistoryCapture();
   window.MODIFIED_NODES.set(id, {
     ...(window.MODIFIED_NODES.get(id) || {}),
     ...patch
@@ -471,6 +478,7 @@ function persistNodeChange(id, patch) {
 }
 
 function persistEdgeChange(id, patch) {
+  queueGraphHistoryCapture();
   window.MODIFIED_EDGES.set(id, {
     ...(window.MODIFIED_EDGES.get(id) || {}),
     ...patch
@@ -662,6 +670,220 @@ window.ALERT_HIGHLIGHT_STATE = window.ALERT_HIGHLIGHT_STATE || {
   nodeIds: new Set(),
   edgeIds: new Set()
 };
+const GRAPH_HISTORY_MAX = 50;
+const GRAPH_HISTORY_SNAPSHOT_LIMIT = 4500;
+window.GRAPH_HISTORY = window.GRAPH_HISTORY || {
+  undo: [],
+  redo: [],
+  pendingBefore: null,
+  commitTimer: null,
+  applying: false,
+  max: GRAPH_HISTORY_MAX,
+  warnedLargeGraph: false
+};
+window.__graphHistorySuspendDepth = window.__graphHistorySuspendDepth || 0;
+
+function cloneHistoryValue(value) {
+  if (value == null) return value;
+  try {
+    if (typeof structuredClone === "function") return structuredClone(value);
+    return JSON.parse(JSON.stringify(value));
+  } catch (_err) {
+    return JSON.parse(JSON.stringify(value));
+  }
+}
+
+function suspendGraphHistoryStart() {
+  window.__graphHistorySuspendDepth = (window.__graphHistorySuspendDepth || 0) + 1;
+}
+
+function suspendGraphHistoryEnd() {
+  window.__graphHistorySuspendDepth = Math.max(0, (window.__graphHistorySuspendDepth || 0) - 1);
+}
+
+function clearPendingGraphHistoryCapture() {
+  const history = window.GRAPH_HISTORY;
+  if (!history) return;
+  history.pendingBefore = null;
+  if (history.commitTimer) {
+    clearTimeout(history.commitTimer);
+    history.commitTimer = null;
+  }
+}
+
+function resetGraphHistoryBuffer() {
+  const history = window.GRAPH_HISTORY;
+  if (!history) return;
+  clearPendingGraphHistoryCapture();
+  history.undo = [];
+  history.redo = [];
+}
+
+function canSnapshotGraphHistory() {
+  const totalElements = (FULL_GRAPH?.nodes?.size || 0) + (FULL_GRAPH?.edges?.size || 0);
+  if (totalElements <= GRAPH_HISTORY_SNAPSHOT_LIMIT) return true;
+  const history = window.GRAPH_HISTORY;
+  if (history && !history.warnedLargeGraph) {
+    history.warnedLargeGraph = true;
+    window.linkxNotify?.(
+      `Undo/Redo is disabled for large graphs (>${GRAPH_HISTORY_SNAPSHOT_LIMIT} entities).`,
+      { title: "History", level: "warning" }
+    );
+  }
+  return false;
+}
+
+function captureGraphHistorySnapshot() {
+  if (!canSnapshotGraphHistory()) return null;
+  return {
+    fullNodes: Array.from(FULL_GRAPH.nodes.entries()).map(([id, node]) => [id, cloneHistoryValue(node)]),
+    fullEdges: Array.from(FULL_GRAPH.edges.entries()).map(([id, edge]) => [id, cloneHistoryValue(edge)]),
+    modifiedNodes: Array.from(MODIFIED_NODES.entries()).map(([id, patch]) => [id, cloneHistoryValue(patch)]),
+    modifiedEdges: Array.from(MODIFIED_EDGES.entries()).map(([id, patch]) => [id, cloneHistoryValue(patch)]),
+    visibleNodes: Array.from(VISIBLE_STATE.nodes),
+    visibleEdges: Array.from(VISIBLE_STATE.edges),
+    settings: cloneHistoryValue(window.currentSettings || {}),
+    limitOverridden: !!window.limitOverridden,
+    pathNodeIds: Array.from(window.PATH_HIGHLIGHT_STATE?.nodeIds || []),
+    pathEdgeIds: Array.from(window.PATH_HIGHLIGHT_STATE?.edgeIds || []),
+    alertNodeIds: Array.from(window.ALERT_HIGHLIGHT_STATE?.nodeIds || []),
+    alertEdgeIds: Array.from(window.ALERT_HIGHLIGHT_STATE?.edgeIds || []),
+    selectedNodes: typeof network?.getSelectedNodes === "function" ? network.getSelectedNodes() : [],
+    selectedEdges: typeof network?.getSelectedEdges === "function" ? network.getSelectedEdges() : []
+  };
+}
+
+function applyGraphHistorySnapshot(snapshot) {
+  if (!snapshot) return;
+  const history = window.GRAPH_HISTORY;
+  if (!history) return;
+
+  history.applying = true;
+  suspendGraphHistoryStart();
+  try {
+    clearPendingGraphHistoryCapture();
+
+    nodesData.clear();
+    edgesData.clear();
+    FULL_GRAPH.nodes.clear();
+    FULL_GRAPH.edges.clear();
+    MODIFIED_NODES.clear();
+    MODIFIED_EDGES.clear();
+    VISIBLE_STATE.nodes.clear();
+    VISIBLE_STATE.edges.clear();
+
+    (snapshot.fullNodes || []).forEach(([id, node]) => {
+      FULL_GRAPH.nodes.set(id, cloneHistoryValue(node));
+    });
+    (snapshot.fullEdges || []).forEach(([id, edge]) => {
+      FULL_GRAPH.edges.set(id, cloneHistoryValue(edge));
+    });
+    (snapshot.modifiedNodes || []).forEach(([id, patch]) => {
+      MODIFIED_NODES.set(id, cloneHistoryValue(patch));
+    });
+    (snapshot.modifiedEdges || []).forEach(([id, patch]) => {
+      MODIFIED_EDGES.set(id, cloneHistoryValue(patch));
+    });
+    (snapshot.visibleNodes || []).forEach((id) => VISIBLE_STATE.nodes.add(id));
+    (snapshot.visibleEdges || []).forEach((id) => VISIBLE_STATE.edges.add(id));
+
+    window.currentSettings = cloneHistoryValue(snapshot.settings || window.currentSettings || {});
+    window.limitOverridden = !!snapshot.limitOverridden;
+
+    if (window.PATH_HIGHLIGHT_STATE) {
+      window.PATH_HIGHLIGHT_STATE.nodeIds.clear();
+      window.PATH_HIGHLIGHT_STATE.edgeIds.clear();
+      (snapshot.pathNodeIds || []).forEach((id) => window.PATH_HIGHLIGHT_STATE.nodeIds.add(id));
+      (snapshot.pathEdgeIds || []).forEach((id) => window.PATH_HIGHLIGHT_STATE.edgeIds.add(id));
+    }
+    if (window.ALERT_HIGHLIGHT_STATE) {
+      window.ALERT_HIGHLIGHT_STATE.nodeIds.clear();
+      window.ALERT_HIGHLIGHT_STATE.edgeIds.clear();
+      (snapshot.alertNodeIds || []).forEach((id) => window.ALERT_HIGHLIGHT_STATE.nodeIds.add(id));
+      (snapshot.alertEdgeIds || []).forEach((id) => window.ALERT_HIGHLIGHT_STATE.edgeIds.add(id));
+    }
+
+    rebuildAdjacencyFromFullGraph();
+    renderVisibleGraphBatch();
+    if (Array.isArray(snapshot.selectedNodes) && snapshot.selectedNodes.length > 0) {
+      network.selectNodes(snapshot.selectedNodes);
+      if (Array.isArray(snapshot.selectedEdges) && snapshot.selectedEdges.length > 0) {
+        network.selectEdges(snapshot.selectedEdges);
+      }
+    } else if (typeof network?.unselectAll === "function") {
+      network.unselectAll();
+    }
+  } finally {
+    suspendGraphHistoryEnd();
+    history.applying = false;
+  }
+}
+
+function queueGraphHistoryCapture() {
+  const history = window.GRAPH_HISTORY;
+  if (!history || history.applying || (window.__graphHistorySuspendDepth || 0) > 0) return;
+  if (!history.pendingBefore) {
+    history.pendingBefore = captureGraphHistorySnapshot();
+  }
+  if (!history.pendingBefore || history.commitTimer) return;
+  history.commitTimer = setTimeout(() => {
+    commitGraphHistoryCapture();
+  }, 0);
+}
+
+function commitGraphHistoryCapture() {
+  const history = window.GRAPH_HISTORY;
+  if (!history) return;
+  if (history.commitTimer) {
+    clearTimeout(history.commitTimer);
+    history.commitTimer = null;
+  }
+  if (history.applying || (window.__graphHistorySuspendDepth || 0) > 0) {
+    history.pendingBefore = null;
+    return;
+  }
+  const before = history.pendingBefore;
+  history.pendingBefore = null;
+  if (!before) return;
+
+  history.undo.push(before);
+  if (history.undo.length > history.max) {
+    history.undo.splice(0, history.undo.length - history.max);
+  }
+  history.redo = [];
+}
+
+function undoGraphAction() {
+  const history = window.GRAPH_HISTORY;
+  if (!history) return;
+  commitGraphHistoryCapture();
+  if (!history.undo.length) return;
+  const current = captureGraphHistorySnapshot();
+  const previous = history.undo.pop();
+  if (current) {
+    history.redo.push(current);
+    if (history.redo.length > history.max) {
+      history.redo.splice(0, history.redo.length - history.max);
+    }
+  }
+  applyGraphHistorySnapshot(previous);
+}
+
+function redoGraphAction() {
+  const history = window.GRAPH_HISTORY;
+  if (!history) return;
+  commitGraphHistoryCapture();
+  if (!history.redo.length) return;
+  const current = captureGraphHistorySnapshot();
+  const next = history.redo.pop();
+  if (current) {
+    history.undo.push(current);
+    if (history.undo.length > history.max) {
+      history.undo.splice(0, history.undo.length - history.max);
+    }
+  }
+  applyGraphHistorySnapshot(next);
+}
 
 function getDefaultEdgeWidth(edgeId) {
   const base = FULL_GRAPH.edges.get(edgeId) || {};
@@ -965,6 +1187,7 @@ function updateEdgeLabel(edgeId, label) {
     console.warn("[updateEdgeLabel] Edge not found:", edgeId);
     return;
   }
+  queueGraphHistoryCapture();
   MODIFIED_EDGES.set(edgeId, {
     ...(MODIFIED_EDGES.get(edgeId) || {}),
     label
@@ -1022,6 +1245,7 @@ function UpdateEdgeStyle(edgeId, newStyle) {
     console.warn("[UpdateEdgeStyle] Edge not found:", edgeId);
     return;
   }
+  queueGraphHistoryCapture();
 
   let dashes = false;
 
@@ -1071,6 +1295,7 @@ function updateEdgesWeight(edgeId, width) {
     console.warn("[updateEdgesWeight] Edge not found:", edgeId);
     return;
   }
+  queueGraphHistoryCapture();
 
   // Constrain width between 1 and 6
   const safeWidth = Math.max(1, Math.min(Number(width) || 1, 6));
@@ -1114,6 +1339,7 @@ function updateEdgeColor(edgeId, baseColor) {
     console.warn("[updateEdgeColor] Edge not found:", edgeId);
     return;
   }
+  queueGraphHistoryCapture();
 
   const color = {
     color: baseColor,
@@ -1173,6 +1399,7 @@ function buildNodeColor(baseColor, {
 // Function to update node color
 function updateNodeColor(nodeIds, baseColor) {
   if (!Array.isArray(nodeIds)) nodeIds = [nodeIds]; // always an array
+  queueGraphHistoryCapture();
   const color = buildNodeColor(baseColor);
 
   // Map to track affected nodes (avoid duplicates)
@@ -1603,6 +1830,7 @@ function removeFullGraphEdge(edgeId) {
   if (edgeId == null) return;
   const edge = FULL_GRAPH.edges.get(edgeId) || edgesData.get(edgeId);
   if (!edge) return;
+  queueGraphHistoryCapture();
 
   FULL_GRAPH.edges.delete(edgeId);
   const from = normalizeGraphId(edge.from);
@@ -1619,6 +1847,7 @@ function removeFullGraphEdge(edgeId) {
 function removeFullGraphNode(nodeId) {
   const id = normalizeGraphId(nodeId);
   if (id == null) return;
+  queueGraphHistoryCapture();
   const incident = [];
   FULL_GRAPH.edges.forEach((edge, edgeId) => {
     if (edge.from === id || edge.to === id) incident.push(edgeId);
@@ -1649,6 +1878,7 @@ function rebuildAdjacencyFromFullGraph() {
 
 function createGraphEdge(from, to, patch = {}) {
   if (from == null || to == null || from === to) return null;
+  queueGraphHistoryCapture();
   const edge = {
     ...patch,
     id: patch.id ?? createUniqueEdgeId("edge"),
@@ -1681,6 +1911,7 @@ function createAnnotationNode({
   font = { color: "#333333", size: 14 },
   extra = {}
 } = {}) {
+  queueGraphHistoryCapture();
   const id = createUniqueNodeId("anno");
   const normalizedShape = String(shape || "box");
   const normalizedImage = typeof image === "string" ? image.trim() : "";
@@ -1713,6 +1944,7 @@ function createAnnotationNode({
 
 // Context menu actions
 function handleAddNode(x, y) {
+  queueGraphHistoryCapture();
   const pos = getContextCanvasPosition(x, y);
   const id = createUniqueNodeId("node");
   const node = {
@@ -1856,6 +2088,7 @@ async function handleAddOleObject(x, y) {
 }
 
 function handleDeleteNode(nodeId) {
+  queueGraphHistoryCapture();
   removeFullGraphNode(nodeId);
   renderVisibleGraphBatch();
 }
@@ -1872,6 +2105,7 @@ function hasEdgeBetween(nodeA, nodeB) {
 function handleLinkNodes(selectedNodes) {
   const nodes = Array.isArray(selectedNodes) ? selectedNodes.map(normalizeGraphId) : [];
   if (nodes.length < 2) return;
+  queueGraphHistoryCapture();
 
   for (let i = 0; i < nodes.length; i++) {
     for (let j = i + 1; j < nodes.length; j++) {
@@ -1889,6 +2123,7 @@ function handleLinkNodes(selectedNodes) {
 function handleUnlinkNode(nodeId) {
   const id = normalizeGraphId(nodeId);
   const toRemove = [];
+  queueGraphHistoryCapture();
   FULL_GRAPH.edges.forEach((edge, edgeId) => {
     if (edge.from === id || edge.to === id) toRemove.push(edgeId);
   });
@@ -1900,6 +2135,7 @@ function handleUnlinkNode(nodeId) {
 function handleUnlinkNodes(selectedNodes) {
   const nodeSet = new Set((selectedNodes || []).map(normalizeGraphId));
   if (nodeSet.size < 2) return;
+  queueGraphHistoryCapture();
 
   const toRemove = [];
   FULL_GRAPH.edges.forEach((edge, edgeId) => {
@@ -1912,6 +2148,7 @@ function handleUnlinkNodes(selectedNodes) {
 function handleGroupNodes(nodeIds) {
   const ids = Array.isArray(nodeIds) ? nodeIds.map(normalizeGraphId) : [];
   if (ids.length < 2) return;
+  queueGraphHistoryCapture();
 
   const groupId = `Group ${Date.now()}`;
   const pos = network.getPositions(ids);
@@ -1960,6 +2197,7 @@ function handleUngroupNode(groupId) {
     console.warn("Not a group node:", groupId);
     return;
   }
+  queueGraphHistoryCapture();
 
   const { members = [], edges = [] } = groupNode;
   removeFullGraphNode(id);
@@ -2009,6 +2247,7 @@ function handleUngroupNode(groupId) {
 function expandNeighborhoodFromSelection(selectedNodes, maxDepth = 1) {
   const seeds = new Set((selectedNodes || []).map(normalizeGraphId).filter(id => FULL_GRAPH.nodes.has(id)));
   if (seeds.size === 0) return;
+  queueGraphHistoryCapture();
 
   const queue = [];
   const visited = new Set();
@@ -2039,6 +2278,7 @@ function expandNeighborhoodFromSelection(selectedNodes, maxDepth = 1) {
 function collapseNeighborhoodFromSelection(selectedNodes, maxDepth = 1) {
   const anchors = new Set((selectedNodes || []).map(normalizeGraphId).filter(id => VISIBLE_STATE.nodes.has(id)));
   if (anchors.size === 0) return;
+  queueGraphHistoryCapture();
 
   const toHide = new Set();
   const queue = [];
@@ -2739,6 +2979,7 @@ async function runPathFinderForSelection(selectedNodes) {
     alert("No path found between the selected nodes.");
     return;
   }
+  queueGraphHistoryCapture();
   pathResult.path.forEach(nodeId => VISIBLE_STATE.nodes.add(nodeId));
   recomputeVisibleEdges();
   highlightPath(pathResult);
@@ -2747,6 +2988,207 @@ async function runPathFinderForSelection(selectedNodes) {
     ? `Total cost: ${Number(pathResult.totalCost).toFixed(3)}`
     : `Hops: ${Math.max(0, pathResult.path.length - 1)}`;
   alert(`Path found. Nodes: ${pathResult.path.length}. ${distanceText}.`);
+}
+
+function findAllSimplePaths(startId, endId, options = {}) {
+  const normalizedOptions = {
+    directed: options.directed === true,
+    includeThemeLines: options.includeThemeLines === true,
+    maxDepth: Math.max(1, Math.min(12, Number(options.maxDepth) || 6)),
+    maxPaths: Math.max(1, Math.min(2000, Number(options.maxPaths) || 400))
+  };
+  const start = normalizeGraphId(startId);
+  const end = normalizeGraphId(endId);
+  if (!FULL_GRAPH.nodes.has(start) || !FULL_GRAPH.nodes.has(end)) return [];
+  if (start === end) return [{ path: [start], edgeIds: [] }];
+
+  const paths = [];
+  const stackNodes = [start];
+  const stackEdges = [];
+  const visited = new Set([start]);
+
+  function dfs(currentNode, depth) {
+    if (paths.length >= normalizedOptions.maxPaths) return;
+    if (depth > normalizedOptions.maxDepth) return;
+    if (currentNode === end) {
+      paths.push({ path: [...stackNodes], edgeIds: [...stackEdges] });
+      return;
+    }
+    const nextEdges = getTraversableEdges(currentNode, {
+      directed: normalizedOptions.directed,
+      weighted: false,
+      includeThemeLines: normalizedOptions.includeThemeLines
+    });
+    for (const next of nextEdges) {
+      if (visited.has(next.to)) continue;
+      visited.add(next.to);
+      stackNodes.push(next.to);
+      stackEdges.push(next.edgeId);
+      dfs(next.to, depth + 1);
+      stackEdges.pop();
+      stackNodes.pop();
+      visited.delete(next.to);
+      if (paths.length >= normalizedOptions.maxPaths) return;
+    }
+  }
+
+  dfs(start, 0);
+  return paths;
+}
+
+async function runFindAllPathsForSelection(selectedNodes) {
+  const ids = Array.isArray(selectedNodes) ? selectedNodes.map(normalizeGraphId) : [];
+  if (ids.length !== 2) {
+    alert("Select exactly two nodes to find all paths.");
+    return;
+  }
+
+  const depthInput = await requestUserInput(
+    "Max depth for all paths (recommended 4-8)",
+    "6",
+    { title: "Find All Paths" }
+  );
+  if (depthInput == null) return;
+  const maxDepth = Math.max(1, Math.min(12, Number(depthInput) || 6));
+
+  const current = normalizePathOptions(window.PATH_OPTIONS);
+  const allPaths = findAllSimplePaths(ids[0], ids[1], {
+    directed: current.directed,
+    includeThemeLines: current.includeThemeLines,
+    maxDepth,
+    maxPaths: 400
+  });
+  if (!allPaths.length) {
+    alert("No paths found between the selected nodes.");
+    return;
+  }
+  queueGraphHistoryCapture();
+
+  const pathNodeIds = new Set();
+  const pathEdgeIds = new Set();
+  allPaths.forEach(item => {
+    (item.path || []).forEach(nodeId => {
+      VISIBLE_STATE.nodes.add(nodeId);
+      pathNodeIds.add(nodeId);
+    });
+    (item.edgeIds || []).forEach(edgeId => pathEdgeIds.add(edgeId));
+  });
+
+  recomputeVisibleEdges();
+  if (window.PATH_HIGHLIGHT_STATE) {
+    window.PATH_HIGHLIGHT_STATE.nodeIds.clear();
+    window.PATH_HIGHLIGHT_STATE.edgeIds.clear();
+    pathNodeIds.forEach(nodeId => {
+      if (VISIBLE_STATE.nodes.has(nodeId)) window.PATH_HIGHLIGHT_STATE.nodeIds.add(nodeId);
+    });
+    pathEdgeIds.forEach(edgeId => {
+      if (VISIBLE_STATE.edges.has(edgeId)) window.PATH_HIGHLIGHT_STATE.edgeIds.add(edgeId);
+    });
+  }
+  renderVisibleGraphBatch();
+  alert(`Found ${allPaths.length} path(s) within depth ${maxDepth}.`);
+}
+
+function bringNodeToFront(nodeId) {
+  const focusId = normalizeGraphId(nodeId);
+  if (!FULL_GRAPH.nodes.has(focusId)) return;
+  queueGraphHistoryCapture();
+
+  const nextVisible = new Set([focusId]);
+  const neighbors = FULL_GRAPH.adjacency.get(focusId);
+  if (neighbors) {
+    neighbors.forEach(neighborId => {
+      if (FULL_GRAPH.nodes.has(neighborId)) nextVisible.add(neighborId);
+    });
+  }
+
+  VISIBLE_STATE.nodes.clear();
+  nextVisible.forEach(id => VISIBLE_STATE.nodes.add(id));
+  recomputeVisibleEdges();
+
+  if (window.PATH_HIGHLIGHT_STATE) {
+    window.PATH_HIGHLIGHT_STATE.nodeIds.clear();
+    window.PATH_HIGHLIGHT_STATE.edgeIds.clear();
+    window.PATH_HIGHLIGHT_STATE.nodeIds.add(focusId);
+    VISIBLE_STATE.edges.forEach(edgeId => window.PATH_HIGHLIGHT_STATE.edgeIds.add(edgeId));
+  }
+
+  renderVisibleGraphBatch();
+  network.fit({ nodes: Array.from(VISIBLE_STATE.nodes), animation: { duration: 300, easingFunction: "easeInOutQuad" } });
+}
+
+function runLinkTraversal(selectedNodes, degree = 4) {
+  const ids = Array.isArray(selectedNodes) ? selectedNodes.map(normalizeGraphId).filter(id => FULL_GRAPH.nodes.has(id)) : [];
+  if (!ids.length) {
+    alert("Select at least one node to run link traversal.");
+    return;
+  }
+  const maxDepth = Math.max(1, Math.min(4, Number(degree) || 4));
+  expandNeighborhoodFromSelection(ids, maxDepth);
+  alert(`Expanded traversal up to ${maxDepth} degree(s).`);
+}
+
+function findVisibleCutPoints() {
+  const visibleNodes = Array.from(VISIBLE_STATE.nodes).filter(id => FULL_GRAPH.nodes.has(id));
+  const visibleSet = new Set(visibleNodes);
+  const adjacency = new Map();
+  visibleNodes.forEach(nodeId => adjacency.set(nodeId, new Set()));
+
+  FULL_GRAPH.edges.forEach((edge) => {
+    const from = normalizeGraphId(edge.from);
+    const to = normalizeGraphId(edge.to);
+    if (!visibleSet.has(from) || !visibleSet.has(to) || from === to) return;
+    adjacency.get(from).add(to);
+    adjacency.get(to).add(from);
+  });
+
+  const discovery = new Map();
+  const low = new Map();
+  const parent = new Map();
+  const cutPoints = new Set();
+  let time = 0;
+
+  function dfs(u) {
+    discovery.set(u, ++time);
+    low.set(u, discovery.get(u));
+    let children = 0;
+
+    adjacency.get(u).forEach(v => {
+      if (!discovery.has(v)) {
+        children += 1;
+        parent.set(v, u);
+        dfs(v);
+        low.set(u, Math.min(low.get(u), low.get(v)));
+        if (!parent.has(u) && children > 1) cutPoints.add(u);
+        if (parent.has(u) && low.get(v) >= discovery.get(u)) cutPoints.add(u);
+      } else if (v !== parent.get(u)) {
+        low.set(u, Math.min(low.get(u), discovery.get(v)));
+      }
+    });
+  }
+
+  visibleNodes.forEach(nodeId => {
+    if (!discovery.has(nodeId)) dfs(nodeId);
+  });
+
+  return Array.from(cutPoints);
+}
+
+function runCutPointDetection() {
+  const cutPoints = findVisibleCutPoints();
+  queueGraphHistoryCapture();
+  if (window.PATH_HIGHLIGHT_STATE) {
+    window.PATH_HIGHLIGHT_STATE.nodeIds.clear();
+    window.PATH_HIGHLIGHT_STATE.edgeIds.clear();
+    cutPoints.forEach(nodeId => window.PATH_HIGHLIGHT_STATE.nodeIds.add(nodeId));
+  }
+  renderVisibleGraphBatch();
+  if (!cutPoints.length) {
+    alert("No cut points found in the current visible graph.");
+    return;
+  }
+  network.selectNodes(cutPoints);
+  alert(`Found ${cutPoints.length} cut point(s).`);
 }
 
 function clearEdgeBundlingLite() {
@@ -4815,6 +5257,7 @@ function printGraph() {
 }
 
 function resetGraph(settings) {
+  queueGraphHistoryCapture();
   MODIFIED_NODES.clear();
   MODIFIED_EDGES.clear();
   if (Array.isArray(settings)) {
@@ -5654,6 +6097,9 @@ function initializer(id){
 
 function createNewGraph({ id, nodes = [], edges = [], settings = null }) {
   console.log("yooo")
+  resetGraphHistoryBuffer();
+  suspendGraphHistoryStart();
+  try {
   // Reset visible graph
   nodesData.clear();
   edgesData.clear();
@@ -5689,6 +6135,9 @@ function createNewGraph({ id, nodes = [], edges = [], settings = null }) {
 
   if (Array.isArray(settings)) {
     restoreSettings(settings);
+  }
+  } finally {
+    suspendGraphHistoryEnd();
   }
 }
 

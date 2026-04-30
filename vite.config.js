@@ -14,7 +14,5 @@ export default defineConfig({
       interval: 100     // how often to check for changes
     }
   },
-  base: '/linkx/',
+  base: '/linkxDS2026/',
 });
-
-

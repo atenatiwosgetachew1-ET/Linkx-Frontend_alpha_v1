@@ -117,18 +117,44 @@ body{
 }
 .windows_loadscreen .loadscreen {
   position: absolute;
-  display: block;
-  min-width: 5vw;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 12vw;
+  min-height: 9vh;
+  margin: auto;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  color: #133a54;
+  gap: 0.8vh;
+}
+.windows_loadscreen .loadscreen .loadscreen_text{
   font-weight: bold;
   font-size: calc(0.4vh + 0.5vw);
-  height: 4vh;
-  margin: auto;
-  left: 0;
-  right: 0;
-  top: 0;
-  bottom: 0;
-  line-height: 4vh;
-  color: #133a54;
+}
+.windows_loadscreen .loadscreen .loadscreen_cancel_btn{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 80px;
+  height: 3.1vh;
+  min-height: 28px;
+  padding: 0 0.7vw;
+  border: none;
+  border-radius: 3px;
+  color: #2e4864;
+  cursor: pointer;
+  background: none;
+  font-size: calc(0.38vh + 0.45vw);
+}
+.windows_loadscreen .loadscreen .loadscreen_cancel_btn:hover{
+  text-decoration: underline;
+  color: #3b5c80;
+}
+.windows_loadscreen .loadscreen .loadscreen_cancel_btn:active{
+  color: #22384f;
 }
 #nav_bar{
 	position: relative;
@@ -828,6 +854,7 @@ body{
 }
 #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .critical_btns:focus{
   outline: 1px solid #cf4055;
+  background-color: #c7354a;
 }
 #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .input_file{
   position: relative;
@@ -3219,20 +3246,40 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 }
 .window .content_container .iframe_graph .iframe_options_layer{
 	position : absolute; 
-  margin : auto;             
-  bottom: 5px;
-  right: 5px;
-  z-index: 100;
-  background-color: rgba(0,0,0,0); 
-	height: 1.5vw;
-	width: 1.5vw;
-	overflow: hidden;  
+	margin : auto;             
+	bottom: 8px;
+	right: 5px;
+	z-index: 100;
+	display: inline-flex;
+	align-items: center;
+	gap: 0.25vw;
+	background-color: #ecf4f69d;
+  opacity: 0.8;
+  padding: 0.2vh 1vw;
+  border-radius: 3px 3px 0 0; 
+	height: 1.8vw;
+	width: auto;
+	overflow: visible;
+}
+.window .content_container .iframe_graph .iframe_options_layer:hover{
+  opacity: 1;
 }
 .window .content_container .iframe_graph .iframe_options_layer i{
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 1.4vw;
+	height: 1.4vw;
 	fill: #999;
+	cursor: pointer;
+}
+.window .content_container .iframe_graph .iframe_options_layer i .side_bar_icon_active{
+	display: inline-flex;
+	width: 100%;
+	height: 100%;
 }
 .window .content_container .iframe_graph .iframe_options_layer i:hover{
-	fill: #666;
+	fill: #142e47;
 }
 .window .content_container .iframe_graph .iframe_options_layer i:active{
 	opacity: 0.3;
