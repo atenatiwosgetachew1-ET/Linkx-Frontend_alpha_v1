@@ -15,6 +15,23 @@
       overflow-y: auto;
       user-select: none;
     }
+    html[data-theme="dark"] body {
+      background: radial-gradient(circle at center, #101820, #0a1016);
+      color: #d8e5f0;
+    }
+    html[data-theme="dark"] .report_item,
+    html[data-theme="dark"] .report_header,
+    html[data-theme="dark"] .section,
+    html[data-theme="dark"] .report_block,
+    html[data-theme="dark"] .report_table {
+      background: rgba(20, 31, 41, 0.85) !important;
+      color: #d8e5f0 !important;
+      border-color: #385064 !important;
+    }
+    html[data-theme="dark"] .report_header h1,
+    html[data-theme="dark"] .report_badge {
+      color: #d8e5f0 !important;
+    }
 
     .report_container {
       width: min(94vw, 1000px);
@@ -372,5 +389,13 @@
   </div>
 
   <script src="../temp_placeholders/graph_reports.js"></script>
+  <script>
+    window.addEventListener("message", (event) => {
+      if (event?.data?.action === "theme_mode") {
+        const nextMode = event.data.payload === "dark" ? "dark" : "light";
+        document.documentElement.setAttribute("data-theme", nextMode);
+      }
+    });
+  </script>
 </body>
 </html>

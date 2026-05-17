@@ -1,4 +1,54 @@
 /* Width of the scrollbar track */
+:root {
+  --app-bg: #ffffff;
+  --app-text: #1c2c3a;
+  --panel-bg: rgba(252, 254, 253, 0.9);
+  --panel-border: #bcd8ef;
+  --panel-shadow: rgba(0, 0, 0, 0.5);
+  --muted-text: #5a7188;
+  --input-bg: #ffffff;
+  --input-border: #c9d8e4;
+  --accent: #37618c;
+  --accent-strong: #235a91;
+  --disabled-bg: #e8edf2;
+  --disabled-border: #d4dde5;
+  --status-pending-text: #5a7188;
+  --status-pending-bg: rgba(90, 113, 136, 0.14);
+  --status-info-text: #245a93;
+  --status-info-bg: rgba(36, 90, 147, 0.15);
+  --status-success-text: #0e5a38;
+  --status-success-bg: rgba(17, 134, 82, 0.14);
+  --status-error-text: #8c1d2a;
+  --status-error-bg: rgba(210, 55, 79, 0.15);
+  --status-default-text: #1c2c3a;
+  --status-default-bg: rgba(160, 177, 194, 0.12);
+}
+
+[data-theme="dark"] {
+  --app-bg: #0f141a;
+  --app-text: #c9d5df;
+  --panel-bg: rgba(23, 33, 43, 0.92);
+  --panel-border: #2a3945;
+  --panel-shadow: rgba(0, 0, 0, 0.7);
+  --muted-text: #9eb5ca;
+  --input-bg: #151f29;
+  --input-border: #30414f;
+  --accent: #5a8fc2;
+  --accent-strong: #73a6d6;
+  --disabled-bg: #243544;
+  --disabled-border: #334756;
+  --status-pending-text: #9aabb9;
+  --status-pending-bg: rgba(46, 62, 76, 0.38);
+  --status-info-text: #a7bfd4;
+  --status-info-bg: rgba(44, 68, 90, 0.40);
+  --status-success-text: #9fcbb4;
+  --status-success-bg: rgba(33, 74, 58, 0.44);
+  --status-error-text: #c9a2a8;
+  --status-error-bg: rgba(88, 48, 56, 0.46);
+  --status-default-text: #b9c8d4;
+  --status-default-bg: rgba(53, 72, 88, 0.38);
+}
+
 ::-webkit-scrollbar {
   width: 0.8vw;
 }
@@ -80,7 +130,8 @@
 body{
 	position: relative;
 	display: block;
-	background-color:#FFF;
+	background-color: var(--app-bg);
+	color: var(--app-text);
 	width:100%;
 	height:100%;
 	margin: 0;
@@ -100,6 +151,10 @@ body{
 	right: 0;
 	bottom: 0;
 	overflow: auto;
+}
+#main {
+	min-height: 100vh;
+	background-color: var(--app-bg);
 }
 .windows_loadscreen {
   position: absolute;
@@ -156,6 +211,43 @@ body{
 .windows_loadscreen .loadscreen .loadscreen_cancel_btn:active{
   color: #22384f;
 }
+
+[data-theme="dark"] .windows_loadscreen {
+  background-color: rgba(8, 13, 19, 0.78);
+  text-shadow: none;
+  backdrop-filter: blur(2px);
+}
+[data-theme="dark"] .windows_loadscreen .loadscreen {
+  color: #c7d4de;
+}
+[data-theme="dark"] .windows_loadscreen .loadscreen .loadscreen_text {
+  color: #d1dde7;
+}
+[data-theme="dark"] .windows_loadscreen .loadscreen span,
+[data-theme="dark"] .windows_loadscreen .loadscreen i,
+[data-theme="dark"] .windows_loadscreen .loadscreen svg,
+[data-theme="dark"] .windows_loadscreen .loadscreen svg use,
+[data-theme="dark"] .windows_loadscreen .loadscreen svg path {
+  color: #9fb3c4 !important;
+  fill: #9fb3c4 !important;
+  stroke: #9fb3c4 !important;
+}
+[data-theme="dark"] .windows_loadscreen .loadscreen .loadscreen_cancel_btn {
+  color: #a6bbcd;
+  border: 1px solid #2b3f4f;
+  background-color: rgba(16, 26, 36, 0.92);
+}
+[data-theme="dark"] .windows_loadscreen .loadscreen .loadscreen_cancel_btn:hover {
+  color: #c7d5e2;
+  border-color: #385166;
+  background-color: rgba(22, 35, 47, 0.96);
+  text-decoration: none;
+}
+[data-theme="dark"] .windows_loadscreen .loadscreen .loadscreen_cancel_btn:active {
+  color: #8ea4b8;
+  border-color: #2a4053;
+  background-color: rgba(18, 30, 41, 1);
+}
 #nav_bar{
 	position: relative;
 	display: none;
@@ -193,6 +285,20 @@ body{
 	background-color: #000;
 	color: #AAA;
 }
+[data-theme="dark"] #nav_bar {
+	display: none !important;
+	visibility: hidden !important;
+	height: 0 !important;
+	width: 0 !important;
+	margin: 0 !important;
+	padding: 0 !important;
+	overflow: hidden !important;
+	pointer-events: none !important;
+	position: absolute !important;
+	left: -9999px !important;
+	top: 0 !important;
+	opacity: 0 !important;
+}
 #toggle_menu {
   position: fixed;
   margin: auto;
@@ -202,8 +308,8 @@ body{
   width: 15vw;
   //padding: 0.5%;
   z-index: 9999;
-  border-bottom: 0.1px solid #bcd8ef;
-  box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+  border-bottom: 0.1px solid var(--panel-border);
+  box-shadow: 0 0 20px var(--panel-shadow);
   overflow: visible;
   cursor: default;
   user-select: none;
@@ -1205,19 +1311,298 @@ body{
   text-align: center;
   border-radius: 0;
   background-color: none;
-  color: #142e47;
+  color: var(--app-text);
   cursor: pointer;
 }
 #toggle_menu #toggle_side_list .toggle_side_list_container .toogle_side_list_items ul .toogle_side_list_options_container li .toggle_btn_conatiner span:hover{
   background-color: rgba(255,255,255,0.2);
 }
 #toggle_menu #toggle_side_list .toggle_side_list_container .toogle_side_list_items ul .toogle_side_list_options_container li .toggle_btn_conatiner span.active{
-  background-image: linear-gradient(#37618c,#395b7d);
+  background-image: linear-gradient(var(--accent), var(--accent-strong));
   color: #FFF;
   box-shadow: 0 0 4px rgba(0, 0, 0, 0.4);
 }
 #toggle_menu #toggle_side_list .toggle_side_list_container .toogle_side_list_items ul .toogle_side_list_options_container li .toggle_btn_conatiner span.active:hover{
-  background-image: linear-gradient(#235a91,#32608f);
+  background-image: linear-gradient(var(--accent-strong), var(--accent));
+}
+
+[data-theme="dark"] #toggle_menu {
+  background-color: var(--panel-bg);
+  filter: none;
+}
+
+/* Collapsed width is 0 but children overflowed — clip so the rail / logo do not show in dark */
+[data-theme="dark"] #toggle_menu[data-menu-open="false"] {
+  overflow: hidden !important;
+  pointer-events: none;
+}
+[data-theme="dark"] #toggle_menu[data-menu-open="true"] {
+  overflow: visible;
+  pointer-events: auto;
+}
+
+[data-theme="dark"] #toggle_menu #toggle_side_list {
+  background-color: var(--panel-bg) !important;
+  backdrop-filter: blur(10px);
+}
+
+[data-theme="dark"] #toggle_menu #toggle_main_list {
+  background-color: rgba(10, 16, 22, 0.96) !important;
+  box-shadow: inset -1px 0 0 var(--panel-border);
+}
+
+[data-theme="dark"] #toggle_menu #toggle_main_list .animated_logo {
+  background-image: none !important;
+  background-color: var(--input-bg) !important;
+  border: 1px solid var(--panel-border);
+  animation: none;
+}
+
+[data-theme="dark"] #toggle_menu #toggle_main_list .animated_logo span i {
+  background-color: rgba(228, 237, 245, 0.85);
+}
+
+[data-theme="dark"] #toggle_menu #toggle_main_list .animated_logo span i a {
+  background-color: var(--accent);
+}
+
+[data-theme="dark"] #toggle_menu #toggle_side_list .toggle_side_list_container .toogle_side_list_items {
+  border-top-color: var(--panel-border);
+}
+
+[data-theme="dark"] #toggle_menu #toggle_side_list .toggle_side_list_container .toogle_side_list_items ul .toogle_side_list_menu_container li,
+[data-theme="dark"] #toggle_menu #toggle_side_list .toggle_side_list_container .toogle_side_list_items ul .toogle_side_list_options_container li {
+  color: var(--app-text) !important;
+}
+
+[data-theme="dark"] #toggle_menu #toggle_side_list .toggle_side_list_container .toogle_side_list_items ul .toogle_side_list_options_container {
+  background-image: none !important;
+  background-color: rgba(0, 0, 0, 0.2) !important;
+}
+
+[data-theme="dark"] #toggle_menu #toggle_side_list .toggle_side_list_container .toogle_side_list_items ul .toogle_side_list_options_container li .toggle_btn_conatiner {
+  background-image: none !important;
+  background-color: var(--input-bg) !important;
+  border: 1px solid var(--panel-border);
+}
+
+[data-theme="dark"] .dark_float_menu_handle {
+  position: fixed;
+  top: 0.45vh;
+  left: 0.35vw;
+  z-index: 100050;
+  pointer-events: auto;
+}
+
+[data-theme="dark"] .dark_float_menu_handle .dark_float_menu_handle__btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 3.5vh;
+  height: 3.5vh;
+  min-width: 36px;
+  min-height: 36px;
+  border-radius: 50%;
+  background-color: var(--input-bg);
+  border: 1px solid var(--panel-border);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+  user-select: none;
+}
+
+[data-theme="dark"] .dark_float_menu_handle .dark_float_menu_handle__btn:hover {
+  border-color: var(--accent);
+  box-shadow: 0 0 14px rgba(90, 143, 194, 0.35);
+}
+
+[data-theme="dark"] .dark_float_menu_handle .dark_float_menu_handle__btn i {
+  position: absolute;
+  margin: auto;
+  inset: 0;
+  width: 80%;
+  height: 0;
+  padding-bottom: 80%;
+  background-color: rgba(228, 237, 245, 0.85);
+  border-radius: 50%;
+}
+
+[data-theme="dark"] .dark_float_menu_handle .dark_float_menu_handle__btn i a {
+  position: absolute;
+  margin: auto;
+  inset: 0;
+  width: 50%;
+  height: 0;
+  padding-bottom: 50%;
+  background-color: var(--accent);
+  border-radius: 50%;
+}
+
+/* Dark + no windows: menu card over the network canvas (toggle rail hidden) */
+[data-theme="dark"] .dark_home_menu_overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: min(4vh, 34px) min(5vw, 28px);
+  pointer-events: none;
+}
+
+[data-theme="dark"] .dark_home_menu_overlay__dock {
+  width: min(92vw, 1460px);
+  display: flex;
+  flex-direction: column;
+  gap: min(8vh, 90px);
+}
+
+[data-theme="dark"] .dark_home_menu_overlay__panel {
+  pointer-events: auto;
+  border-radius: 14px;
+  border: 1px solid var(--panel-border);
+  background-color: rgba(22, 35, 50, 0.74);
+  box-shadow: inset 0 0 0 1px rgba(150, 188, 225, 0.04), 0 16px 46px rgba(0, 0, 0, 0.32);
+  backdrop-filter: blur(8px);
+  overflow: hidden;
+}
+
+[data-theme="dark"] .dark_home_menu_overlay__panel--actions {
+  padding: min(4vh, 40px) min(3vw, 44px);
+}
+
+[data-theme="dark"] .dark_home_menu_overlay__actions_row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(160px, 1fr));
+  gap: min(2.2vw, 28px);
+}
+
+[data-theme="dark"] .dark_home_menu_overlay__action_card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: min(2vh, 24px);
+  min-height: min(21vh, 250px);
+  border-radius: 18px;
+  border: 1px solid rgba(39, 73, 106, 0.5);
+  background-color: rgba(21, 36, 53, 0.54);
+  color: #d3d9e2;
+  cursor: pointer;
+  font-family: "Segoe UI", Roboto, Arial, sans-serif;
+  transition: border-color 0.16s ease, background-color 0.16s ease, transform 0.16s ease;
+}
+
+[data-theme="dark"] .dark_home_menu_overlay__action_card:hover {
+  border-color: rgba(106, 155, 198, 0.72);
+  background-color: rgba(28, 48, 68, 0.68);
+  transform: translateY(-1px);
+}
+
+[data-theme="dark"] .dark_home_menu_overlay__action_card:active {
+  transform: translateY(0);
+  opacity: 0.92;
+}
+
+[data-theme="dark"] .dark_home_menu_overlay__action_icon {
+  display: block;
+  line-height: 1;
+  font-size: clamp(1.5rem, 1.15vw + 0.9vh, 2.1rem);
+  font-weight: 300;
+  color: #f1f5fb;
+}
+
+[data-theme="dark"] .dark_home_menu_overlay__action_label {
+  display: block;
+  text-align: center;
+  line-height: 1.2;
+  font-size: clamp(0.96rem, 0.42vw + 0.66vh, 1.24rem);
+  color: #d2dae5;
+}
+
+[data-theme="dark"] .dark_home_menu_overlay__panel--reports {
+  padding: min(3.2vh, 34px) min(2.8vw, 42px);
+}
+
+[data-theme="dark"] .dark_home_menu_overlay__reports_title {
+  color: #d6dee9;
+  font-size: clamp(1.2rem, 0.72vw + 0.98vh, 2.9rem);
+  font-weight: 600;
+  margin-bottom: min(2.1vh, 22px);
+}
+
+[data-theme="dark"] .dark_home_menu_overlay__reports_list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: min(1.2vh, 14px);
+}
+
+[data-theme="dark"] .dark_home_menu_overlay__reports_item {
+  color: #93a8be;
+  font-size: clamp(0.94rem, 0.35vw + 0.6vh, 1.08rem);
+  line-height: 1.25;
+  padding: min(1.45vh, 15px) min(1.35vw, 28px);
+  border-radius: 18px;
+  border: 1px solid rgba(53, 89, 122, 0.72);
+  background-color: rgba(20, 35, 51, 0.42);
+}
+
+@media (max-width: 1080px) {
+  [data-theme="dark"] .dark_home_menu_overlay__actions_row {
+    grid-template-columns: repeat(2, minmax(160px, 1fr));
+  }
+}
+
+@media (max-width: 680px) {
+  [data-theme="dark"] .dark_home_menu_overlay__dock {
+    gap: min(5vh, 52px);
+  }
+  [data-theme="dark"] .dark_home_menu_overlay__actions_row {
+    grid-template-columns: 1fr;
+  }
+  [data-theme="dark"] .dark_home_menu_overlay__action_card {
+    min-height: 136px;
+  }
+}
+
+[data-theme="dark"] #toggle_menu #toggle_main_list .animated_logo span,
+[data-theme="dark"] #toggle_menu #toggle_main_list .animated_windows_taskbar span,
+[data-theme="dark"] #toggle_menu #toggle_side_list .toggle_side_list_container .toogle_side_list_items ul li span {
+  color: var(--app-text);
+}
+
+[data-theme="dark"] #toggle_menu #toggle_side_list .toggle_side_list_container .toogle_side_list_items ul li:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+[data-theme="dark"] .window,
+[data-theme="dark"] .window .window_bar,
+[data-theme="dark"] .window .content_container,
+[data-theme="dark"] .window .side_bar,
+[data-theme="dark"] .window_parent_tabs .window_parent_bar {
+  background-color: #080e14 !important;
+  color: var(--app-text) !important;
+  border-color: var(--panel-border) !important;
+}
+
+[data-theme="dark"] input,
+[data-theme="dark"] textarea,
+[data-theme="dark"] select,
+[data-theme="dark"] button {
+  background-color: var(--input-bg);
+  color: var(--app-text);
+  border-color: var(--input-border);
+}
+
+[data-theme="dark"] #windows_taskbar_container .windows_taskbar_lists,
+[data-theme="dark"] .settings_container,
+[data-theme="dark"] #configurations_container {
+  background-color: var(--panel-bg);
+  color: var(--app-text);
+  border-color: var(--panel-border);
 }
 .window.maximized {
   position: fixed;
@@ -1827,7 +2212,7 @@ body{
 	padding: 0vh 0vw;
 	min-height: 0;
 	max-height: 68.5vh;
-	top:5.5vh;
+	top:6.5vh;
 	left: 0.1vw;
 	border: none;
 	color: #142e47;
@@ -1866,6 +2251,7 @@ body{
 }
 .window .content_container .live_source_options_container{
 	position: relative;
+  top: 3vh;
 }
 .window .content_container .live_source_option{
 	position: relative;
@@ -4190,14 +4576,14 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 .window .window_footer{
 	position: absolute;
 	float: right;
-	border-top:1px solid #DDD;
+	border-top:1px solid #121f2a;
 	flex: 25;
 	width: 75vw;
 	margin: auto;
 	margin-left: 3;
 	right: 0;
 	bottom: 0;
-	height: 4.3vh;
+	height: 3.2vh;
 	padding: 0.5vh 1vw;
 	background-color: #fcfefd;
 	z-index: 99;
@@ -4414,6 +4800,112 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   background-image: linear-gradient(25deg,#FFF,#FFF);
   border-bottom: 0.1vh solid #FFF;
 }
+
+/* Dark + tabs: the gradient "Linkx" strip is separate from #nav_bar; collapse it and float the menu control */
+[data-theme="dark"] .window_parent_tabs {
+  height: 5vh;
+}
+[data-theme="dark"] .window_parent_tabs .window_parent_bar {
+  height: 0 !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  line-height: 0 !important;
+  background-image: none !important;
+  background-color: transparent !important;
+  border: none !important;
+  overflow: visible;
+}
+[data-theme="dark"] .window_parent_tabs .window_parent_bar .window_parent_bar_toggle_menu {
+  height: 0 !important;
+  padding: 0 !important;
+  overflow: visible;
+}
+[data-theme="dark"] .window_parent_tabs .window_parent_bar .window_parent_bar_title_container {
+  display: none !important;
+}
+[data-theme="dark"] .window_parent_tabs .window_parent_bar .window_parent_bar_toggle_menu .toggle_menu_btn {
+  position: fixed !important;
+  top: 1vh !important;
+  left: 0.35vw !important;
+  z-index: 100002 !important;
+  width: auto !important;
+  height: auto !important;
+  margin: 0 !important;
+}
+[data-theme="dark"] .window_parent_tabs .window_parent_bar .window_parent_bar_toggle_menu .toggle_menu_btn label {
+  display: none !important;
+}
+[data-theme="dark"] .window_parent_tabs .window_parent_tabs_container {
+  top: 0 !important;
+  left: 1 !important;
+  width: 100vw !important;
+  height: 5vh !important;
+  padding-left: 0 !important;
+  box-sizing: border-box !important;
+  background-image: linear-gradient(45deg, #1c232c, #0a1621);
+  border-bottom: 1px solid #0b1723 !important;
+  z-index: 100001 !important;
+}
+[data-theme="dark"] .window_parent_tabs .window_parent_tabs_container .tab_title {
+  background-image: none !important;
+  background-color: #212e3aeb !important;
+  color: var(--app-text) !important;
+  border-right-color: #021321 !important;
+  border-bottom-color: #021321 !important;
+  top: 1.3vh;
+}
+[data-theme="dark"] .window_parent_tabs .window_parent_tabs_container .tab_title:hover {
+  background-image: none !important;
+  background-color: rgba(255, 255, 255, 0.06) !important;
+}
+[data-theme="dark"] .window_parent_tabs .window_parent_tabs_container .tab_title.active {
+  background-image: none !important;
+  background-color: #080e14 !important;
+  border-bottom-color: transparent !important;
+}
+
+[data-theme="dark"] .window.focused .side_bar {
+  background-image: linear-gradient(rgb(30, 37, 45), rgb(9 20 31), rgb(10 22 34)) !important;
+}
+
+[data-theme="dark"] .window .window_bar,
+[data-theme="dark"] .window.focused .window_bar {
+  width: 95vw !important;
+  background-image: linear-gradient(90deg, #0c1a27, #050d13) !important;
+}
+
+[data-theme="dark"] .window.tab_mode {
+  top: -1vh;
+  height: 102vh !important;
+}
+
+[data-theme="dark"] .window_parent_tabs .window_parent_bar .window_parent_bar_toggle_menu .toggle_menu_btn span {
+  left: 0.55vw !important;
+  top: 0.5vh !important;
+}
+
+[data-theme="dark"] .window_parent_tabs .window_parent_tabs_container .tab_title {
+  height: 3.6vh !important;
+}
+
+[data-theme="dark"] .window.tab_mode .side_bar {
+  padding: 15vh 1vh 1vh calc(-1.4vh + 1.4vw) !important;
+}
+
+[data-theme="dark"] .window.tab_mode .content_container {
+  max-height: 92vh !important;
+}
+
+[data-theme="dark"] .window.tab_mode .content_container .iframe_graph {
+  height: 92vh !important;
+}
+
+[data-theme="dark"] .window .window_footer,
+[data-theme="dark"] .window .window_footer .window_footer {
+  border-bottom: 1px solid #0f1b27 !important;
+}
+
 .window.tab_mode{
   position: absolute;
   display: flex;
@@ -4520,7 +5012,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   background-color: rgba(236, 244, 246, 0.95);
   color: #3f4f56;
   width: 1.25vw;
-  //min-width: 18px;
+  min-width: 18px;
   height: 1.25vw;
   min-height: 18px;
   line-height: 0.20vw;
@@ -4630,6 +5122,124 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   outline: none;
   box-shadow: none;
 }
+
+/* Strong dark fallback layer for remaining hardcoded light panels */
+[data-theme="dark"] .window .properties_container,
+[data-theme="dark"] .window .properties_container .reference_container,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_infos_container,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_settings_container,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_filters_container,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_options_infos,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .settings_form,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .settings_form *,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .infos_form,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .infos_form *,
+[data-theme="dark"] .window .source_editor,
+[data-theme="dark"] .window .source_editor *,
+[data-theme="dark"] .window textarea,
+[data-theme="dark"] .window input,
+[data-theme="dark"] .window select {
+  background-color: rgba(18, 27, 36, 0.95) !important;
+  color: #c4d0db !important;
+  border-color: #3d5468 !important;
+}
+
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_options_infos div,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_options_infos div:nth-child(odd),
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_options_infos div:nth-child(1),
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_options_infos div:first-child {
+  background-color: rgba(24, 36, 48, 0.96) !important;
+  border-color: #344a5d !important;
+}
+
+[data-theme="dark"] .linkx_interaction_panel_react {
+  border-color: #3d5468;
+  background-color: rgba(20, 31, 41, 0.97);
+  color: #c4d0db;
+}
+[data-theme="dark"] .linkx_interaction_panel_react .linkx_interaction_title {
+  border-bottom-color: rgba(131, 165, 194, 0.35);
+}
+[data-theme="dark"] .linkx_interaction_panel_react .linkx_interaction_btn {
+  border-color: #557189;
+  background: rgba(37, 53, 66, 0.98);
+  color: #c4d0db;
+}
+[data-theme="dark"] .linkx_interaction_panel_react .linkx_interaction_btn:hover {
+  background: rgba(52, 73, 90, 1);
+  color: #c4d0db;
+}
+
+/* App-side source/search/forms that still had hardcoded light surfaces */
+[data-theme="dark"] .window .window_bar .window_bar_title_container input,
+[data-theme="dark"] .window .side_bar .side_bar_btn_options ul .window_side_bar_menu_list_I form input[type="text"],
+[data-theme="dark"] .window .content_container .live_source_option,
+[data-theme="dark"] .window .content_container .live_source_option_passive,
+[data-theme="dark"] .window .content_container .upload_source_option,
+[data-theme="dark"] .window .content_container .upload_source_option .upload_source_option_icon,
+[data-theme="dark"] .window .content_container .live_source_option .live_source_option_icon,
+[data-theme="dark"] .window .content_container .batch_connection_form_container form fieldset .radioinput,
+[data-theme="dark"] .window .content_container .batch_connection_form_container form fieldset .textinput,
+[data-theme="dark"] .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_form .batch_files_search_container .batch_files_search_text_input,
+[data-theme="dark"] .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_form .batch_files_search_container .batch_files_search_date_input,
+[data-theme="dark"] .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_form .batch_files_search_options_container input,
+[data-theme="dark"] .window .content_container .batch_connection_form_container .batch_files_table_form_fieldset table,
+[data-theme="dark"] .window .content_container .batch_connection_form_container .batch_files_table_form_fieldset table * {
+  background-color: rgba(18, 27, 36, 0.95) !important;
+  color: #c4d0db !important;
+  border-color: #3d5468 !important;
+}
+
+[data-theme="dark"] .window .content_container .batch_connection_form_container .form_response_container,
+[data-theme="dark"] .window .content_container .batch_connection_form_container .batch_files_search_result_container,
+[data-theme="dark"] .window .content_container .batch_connection_form_container .batch_files_search_result_container .batch_files_search_results li {
+  background-color: rgba(24, 36, 48, 0.96) !important;
+  color: #c4d0db !important;
+  border-color: #3d5468 !important;
+}
+
+[data-theme="dark"] .window .content_container .live_source_option,
+[data-theme="dark"] .window .content_container .live_source_option_passive {
+  background-color: #080e14 !important;
+  border-color: #080e14 !important;
+}
+[data-theme="dark"] .window .content_container .live_source_option:hover {
+  background-color: #14212d !important;
+  border-color: #304656 !important;
+}
+[data-theme="dark"] .window .content_container .live_source_option .live_source_option_icon,
+[data-theme="dark"] .window .content_container .live_source_option_passive .live_source_option_icon {
+  background-color: #0d151f !important;
+  box-shadow: inset 0 0 0 1px #1f2f3e !important;
+}
+[data-theme="dark"] .window .content_container .live_source_option .live_source_option_icon use,
+[data-theme="dark"] .window .content_container .live_source_option_passive .live_source_option_icon use {
+  fill: #8ea6ba !important;
+}
+[data-theme="dark"] .window .content_container .live_source_option:hover .live_source_option_icon use {
+  fill: #bfd0df !important;
+}
+[data-theme="dark"] .window .content_container .live_source_option .live_source_option_details label,
+[data-theme="dark"] .window .content_container .live_source_option_passive .live_source_option_details label {
+  color: #d0dce7 !important;
+}
+[data-theme="dark"] .window .content_container .live_source_option .live_source_option_details p,
+[data-theme="dark"] .window .content_container .live_source_option_passive .live_source_option_details p {
+  color: #9eb2c3 !important;
+}
+
+
+[data-theme="dark"] .window .window_footer {
+  background: #0f1b27 !important;
+  border-bottom: 1px solid #0f2133 !important;
+}
+
+[data-theme="dark"] .window .properties_container {
+  background: linear-gradient(#17212b, #0f1e2d) !important;
+  top: 6.5vh;
+}
 #bottom_slider{
 	position: fixed;
 	margin: auto;
@@ -4639,4 +5249,863 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 	width: 100%;
 	background-color: rgba(220,220,220,1);
 	z-index: 300; 
+}
+
+/* Properties panel: complete dark pass for all nested sections */
+[data-theme="dark"] .window .properties_container {
+  color: #c4d0db !important;
+}
+[data-theme="dark"] .window .properties_container .placeholder,
+[data-theme="dark"] .window .properties_container .reference_container {
+  background-color: #121d28 !important;
+  color: #c4d0db !important;
+}
+[data-theme="dark"] .window .properties_container .reference_container .top_panel {
+  background-color: #141f2b !important;
+  border-bottom-color: #32485c !important;
+}
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_container {
+  background-image: none !important;
+  background-color: #101924 !important;
+  color: #c4d0db !important;
+  border-bottom: 1px solid #2f4356 !important;
+}
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_container .ppt_tabs {
+  background-color: #182431 !important;
+  border-right-color: #2f4356 !important;
+  border-bottom-color: #2f4356 !important;
+  color: #a9bfd3 !important;
+}
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_container input[type="radio"]:checked + label {
+  background-color: #203141 !important;
+  color: #e4edf5 !important;
+  border-bottom-color: #203141 !important;
+}
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_container .ppt_tabs:hover {
+  background-color: #223445 !important;
+}
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_container .ppt_tabs:active {
+  background-color: #1b2a37 !important;
+}
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container {
+  background-color: #141f2b !important;
+  color: #c4d0db !important;
+}
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_filters_container,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_infos_container,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_settings_container,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .filter_form,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .infos_form,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .settings_form {
+  background-color: #141f2b !important;
+  color: #c4d0db !important;
+}
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .filter_form .filter_form_header_label,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .infos_form .infos_form_header_label,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .settings_form .setting_form_header_label {
+  background: transparent !important;
+  color: #c4d0db !important;
+  border-color: transparent !important;
+}
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .filter_form .filter_form_header_label i,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .infos_form .infos_form_header_label i,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .settings_form .setting_form_header_label i {
+  color: #9eb5ca !important;
+}
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .filter_form .filter_form_header_label i b,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .infos_form .infos_form_header_label i b,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .settings_form .setting_form_header_label i b {
+  color: #b7cce0 !important;
+}
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .filter_form .filter_form_search_container {
+  background: transparent !important;
+}
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .filter_form .filter_form_search_container input,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .settings_form .input_text,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .settings_form .select_option {
+  background-color: #0f1822 !important;
+  color: #c4d0db !important;
+  border-color: #3b5368 !important;
+}
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .filter_form .filter_form_search_container button {
+  background-color: #1b2a38 !important;
+  color: #c4d0db !important;
+  border-color: #3b5368 !important;
+}
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .filter_form .filter_form_search_container button:hover {
+  background-color: #24384a !important;
+}
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .filter_form .filter_form_search_container .filter_form_search_options_container,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .filter_form .filter_form_search_container .filter_form_search_options_container label,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .filter_form .filter_form_search_container .filter_form_search_condition,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .filter_form .filter_form_search_container .filter_form_search_condition span {
+  background: transparent !important;
+  color: #b7cce0 !important;
+  border-color: transparent !important;
+}
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .filter_form .filter_form_search_container .search_condition_reset_btn {
+  background-color: #223445 !important;
+  color: #c4d0db !important;
+  border-color: #4e6a81 !important;
+}
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .filter_form .filter_form_search_container .search_condition_reset_btn:hover:enabled {
+  background-color: #2b4155 !important;
+  border-color: #6a89a3 !important;
+}
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .filter_form .filter_form_search_container .filterPropertyKeys div,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .filter_form .filter_form_search_container .filterPropertyKeys span {
+  background: transparent !important;
+}
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .filter_form .filter_form_search_container .filterPropertyKeys span label {
+  background-color: #15222f !important;
+  color: #b7cce0 !important;
+  border-color: #385065 !important;
+}
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .filter_form .filter_form_search_container .filterPropertyKeys span label:hover {
+  border-color: #6a89a3 !important;
+}
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .filter_form .filter_form_search_container .filterPropertyKeys span input[type="checkbox"]:checked + label {
+  background-color: #30485d !important;
+  color: #e4edf5 !important;
+  border-color: #7898b3 !important;
+}
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .filter_form .filter_results h4 {
+  color: #c4d0db !important;
+  border-top-color: #2f4356 !important;
+  background: transparent !important;
+}
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .filter_form .filter_results span,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .filter_form .filter_results b {
+  color: #b7cce0 !important;
+  background: transparent !important;
+}
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_infos_container .graph_options_infos {
+  background-color: #101823 !important;
+}
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_infos_container .graph_options_infos div {
+  background-color: #182634 !important;
+  border-bottom-color: #2a4053 !important;
+}
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_infos_container .graph_options_infos div:nth-child(odd) {
+  background-color: #152230 !important;
+}
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_infos_container .graph_options_infos div:first-child {
+  background-color: #203244 !important;
+  border-top-color: #355066 !important;
+}
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_infos_container .graph_options_infos div span {
+  color: #bfd1e1 !important;
+}
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_infos_container .graph_options_infos div span:first-child {
+  color: #e4edf5 !important;
+  border-right-color: #2f4356 !important;
+}
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_infos_container p {
+  color: #9eb5ca !important;
+  background-color: #141f2b;
+}
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .settings_form .settings_form_div_performance_mood,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .settings_form .settings_form_div_firstChild {
+  background-image: none !important;
+  background-color: #152331 !important;
+  border-bottom-color: #2f4356 !important;
+}
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .settings_form .settings_form_div,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .settings_form .input_labels,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .settings_form .settings_form_div_firstChild label,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .settings_form .limit_range_separator {
+  background: transparent !important;
+  color: #c4d0db !important;
+  border-color: transparent !important;
+}
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .settings_form .select_option:focus,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .settings_form .input_text:focus {
+  border-color: #86a8c4 !important;
+}
+[data-theme="dark"] .window .properties_container .panel_separator {
+  background-color: #2a3f52 !important;
+}
+[data-theme="dark"] .window .properties_container .panel_separator span {
+  background-color: #122234 !important;
+  border-color: #3c5a74 !important;
+  color: #c4d0db !important;
+}
+[data-theme="dark"] .window .properties_container .panel_separator span:hover {
+  background-color: #21384d !important;
+  border-color: #6d8daa !important;
+}
+[data-theme="dark"] .window .properties_container .panel_separator span:active {
+  background-color: #2b455b !important;
+  color: #e4edf5 !important;
+}
+[data-theme="dark"] .window .properties_container .bottom_panel {
+  background-color: #121d28 !important;
+}
+[data-theme="dark"] .window .properties_container .bottom_panel .bottom_panel_title {
+  color: #c4d0db !important;
+  background-image: none !important;
+  background-color: #152331 !important;
+  border-bottom-color: #2f4356 !important;
+  box-shadow: 0 -4px 4px rgba(0, 0, 0, 0.35) !important;
+}
+[data-theme="dark"] .window .properties_container .bottom_panel ul:empty:before {
+  color: #9eb5ca !important;
+}
+[data-theme="dark"] .window .properties_container .bottom_panel ul li {
+  color: #e4edf5 !important;
+}
+[data-theme="dark"] .window .properties_container .bottom_panel ul li:first-child:has(input[type="radio"]:checked) {
+  background-color: #2e465a !important;
+  color: #e4edf5 !important;
+  opacity: 0.95 !important;
+}
+[data-theme="dark"] .window .properties_container .bottom_panel ul li:has(input[type="radio"]:checked) {
+  background-color: #2e465a !important;
+  color: #e4edf5 !important;
+  opacity: 0.82 !important;
+}
+[data-theme="dark"] .window .properties_container .bottom_panel ul li label {
+  color: inherit !important;
+}
+
+/* Force-dark override for broad filter_form wildcard rule */
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_filters_container .filter_form * {
+  background-color: transparent !important;
+  color: #c4d0db !important;
+  border-color: #3b5368 !important;
+}
+
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_filters_container .filter_form input,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_filters_container .filter_form select,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_filters_container .filter_form textarea {
+  background-color: #0f1822 !important;
+}
+
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_filters_container .filter_form button {
+  background-color: #1b2a38 !important;
+}
+
+/* Properties panel icons in dark mode: force white glyphs */
+[data-theme="dark"] .window .properties_container svg,
+[data-theme="dark"] .window .properties_container svg use,
+[data-theme="dark"] .window .properties_container svg path,
+[data-theme="dark"] .window .properties_container svg circle,
+[data-theme="dark"] .window .properties_container svg rect,
+[data-theme="dark"] .window .properties_container svg polygon,
+[data-theme="dark"] .window .properties_container svg line,
+[data-theme="dark"] .window .properties_container svg polyline,
+[data-theme="dark"] .window .properties_container svg ellipse {
+  fill: #ffffff !important;
+  stroke: #ffffff !important;
+}
+
+/* Requested sizing/shadow adjustments */
+.window.tab_mode .properties_container {
+  height: 91.2vh !important;
+}
+
+[data-theme=dark] .window .properties_container .bottom_panel .bottom_panel_title {
+  box-shadow: 0 -8px 15px #00000024 !important;
+}
+
+/* Soften dark-mode borders/lines for better blending in properties panel */
+[data-theme="dark"] .window .properties_container {
+  --prop-line-soft: rgba(150, 180, 205, 0.22);
+  --prop-line-softer: rgba(150, 180, 205, 0.14);
+  --prop-line-focus: rgba(168, 198, 224, 0.38);
+}
+
+[data-theme="dark"] .window .properties_container .reference_container .top_panel,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_container,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_container .ppt_tabs,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_infos_container .graph_options_infos div,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_infos_container .graph_options_infos div:first-child,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .filter_form .filter_results h4,
+[data-theme="dark"] .window .properties_container .bottom_panel .bottom_panel_title,
+[data-theme="dark"] .window .properties_container .panel_separator span,
+[data-theme="dark"] .window .properties_container .panel_separator {
+  border-color: var(--prop-line-soft) !important;
+}
+
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .filter_form .filter_form_search_container input,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .filter_form .filter_form_search_container button,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .settings_form .input_text,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .settings_form .select_option,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .filter_form .filter_form_search_container .search_condition_reset_btn,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .filter_form .filter_form_search_container .filterPropertyKeys span label,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_infos_container .graph_options_infos div span:first-child {
+  border-color: var(--prop-line-soft) !important;
+}
+
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_infos_container .graph_options_infos div,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_settings_container .settings_form .settings_form_div_performance_mood,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_settings_container .settings_form .settings_form_div_firstChild,
+[data-theme="dark"] .window .properties_container .bottom_panel .bottom_panel_title {
+  border-bottom-color: var(--prop-line-softer) !important;
+}
+
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .settings_form .select_option:focus,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .settings_form .input_text:focus,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .filter_form .filter_form_search_container .search_condition_reset_btn:hover:enabled,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_container .ppt_tabs:hover {
+  border-color: var(--prop-line-focus) !important;
+}
+
+[data-theme="dark"] .window .properties_container .bottom_panel .bottom_panel_title {
+  box-shadow: 0 -6px 12px rgba(0, 0, 0, 0.2) !important;
+}
+
+/* Additional blending pass (softer dark borders/lines) */
+[data-theme="dark"] .window .properties_container {
+  --prop-line-soft: rgba(156, 186, 210, 0.16);
+  --prop-line-softer: rgba(156, 186, 210, 0.10);
+  --prop-line-focus: rgba(176, 206, 230, 0.28);
+}
+
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_container input[type="radio"]:checked + label,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_infos_container .graph_options_infos div span:first-child,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_filters_container .filter_form .filter_form_search_container input,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_filters_container .filter_form .filter_form_search_container button,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_settings_container .settings_form .input_text,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_settings_container .settings_form .select_option,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_filters_container .filter_form .filter_form_search_container .search_condition_reset_btn,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_filters_container .filter_form .filter_form_search_container .filterPropertyKeys span label,
+[data-theme="dark"] .window .properties_container .panel_separator span {
+  border-color: var(--prop-line-soft) !important;
+}
+
+[data-theme="dark"] .window .properties_container .reference_container .top_panel,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_container,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_container .ppt_tabs,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_infos_container .graph_options_infos div,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_infos_container .graph_options_infos div:first-child,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_filters_container .filter_form .filter_results h4,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_settings_container .settings_form .settings_form_div_performance_mood,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_settings_container .settings_form .settings_form_div_firstChild,
+[data-theme="dark"] .window .properties_container .bottom_panel .bottom_panel_title {
+  border-bottom-color: var(--prop-line-softer) !important;
+  border-top-color: var(--prop-line-softer) !important;
+}
+
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_container .ppt_tabs:hover,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_container .ppt_tabs:active,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_settings_container .settings_form .input_text:focus,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_settings_container .settings_form .select_option:focus,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_filters_container .filter_form .filter_form_search_container .search_condition_reset_btn:hover:enabled {
+  border-color: var(--prop-line-focus) !important;
+}
+
+[data-theme="dark"] .window .properties_container .panel_separator {
+  background-color: rgba(130, 165, 194, 0.12) !important;
+}
+
+[data-theme="dark"] .window .properties_container .bottom_panel .bottom_panel_title {
+  box-shadow: 0 -6px 10px rgba(0, 0, 0, 0.14) !important;
+}
+
+/* Dark-mode notification overrides */
+[data-theme="dark"] .linkx_notice {
+  border-color: rgba(47, 61, 73, 0.92);
+  border-left-color: #41576b;
+  background: rgba(14, 22, 29, 0.96);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+}
+[data-theme="dark"] .linkx_notice.linkx_notice_success {
+  border-left-color: #3f7d64;
+}
+[data-theme="dark"] .linkx_notice.linkx_notice_warning {
+  border-left-color: #8a7340;
+}
+[data-theme="dark"] .linkx_notice.linkx_notice_error {
+  border-left-color: #8c525b;
+}
+[data-theme="dark"] .linkx_notice.linkx_notice_info {
+  border-left-color: #4f6a82;
+}
+[data-theme="dark"] .linkx_notice_title {
+  color: #c6d2dc;
+}
+[data-theme="dark"] .linkx_notice_body {
+  color: #b5c2ce;
+}
+[data-theme="dark"] .linkx_notice_meta {
+  color: #8f9eac;
+}
+[data-theme="dark"] .linkx_notice_close {
+  border-color: #394b5a;
+  background-color: rgba(30, 42, 52, 0.96);
+  color: #b7c6d2;
+}
+[data-theme="dark"] .linkx_notice_close:hover {
+  background-color: rgba(42, 58, 72, 1);
+}
+
+/* Source window: comprehensive dark-mode normalization (real-time, batch, upload, dataframe pages) */
+[data-theme="dark"] .window .content_container .upload_source_options_header {
+  color: var(--app-text);
+  border-bottom-color: #1f2f3d;
+}
+[data-theme="dark"] .window .content_container .upload_source_option {
+  background-color: #111a24;
+  border-color: #2a3b49;
+}
+[data-theme="dark"] .window .content_container .upload_source_option:hover {
+  background-color: #14212d;
+  border-color: #324757;
+}
+[data-theme="dark"] .window .content_container .upload_source_option .upload_source_option_icon {
+  background-color: #0e1721;
+  box-shadow: inset 0 0 0 1px #203141;
+}
+[data-theme="dark"] .window .content_container .upload_source_option .upload_source_option_icon use {
+  fill: #8ea6ba;
+}
+[data-theme="dark"] .window .content_container .upload_source_option button,
+[data-theme="dark"] .window .content_container .batch_connection_form_container form fieldset button,
+[data-theme="dark"] .window .content_container .batch_connection_form_container form button,
+[data-theme="dark"] .window .content_container .batch_connection_form_pager_container button,
+[data-theme="dark"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_menu .batch_files_dataframe_filter_menu_add_btn button {
+  background-image: none !important;
+  background-color: #2a4054 !important;
+  color: #d8e4ee !important;
+  border: 1px solid #3d5569 !important;
+  outline: none !important;
+}
+[data-theme="dark"] .window .content_container .upload_source_option button:hover,
+[data-theme="dark"] .window .content_container .batch_connection_form_container form fieldset button:hover,
+[data-theme="dark"] .window .content_container .batch_connection_form_container form button:hover,
+[data-theme="dark"] .window .content_container .batch_connection_form_pager_container button:hover,
+[data-theme="dark"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_menu .batch_files_dataframe_filter_menu_add_btn button:hover {
+  background-color: #324c63 !important;
+  border-color: #3c5568 !important;
+}
+[data-theme="dark"] .window .content_container .upload_source_option button:active,
+[data-theme="dark"] .window .content_container .batch_connection_form_container form fieldset button:active,
+[data-theme="dark"] .window .content_container .batch_connection_form_container form button:active,
+[data-theme="dark"] .window .content_container .batch_connection_form_pager_container button:active,
+[data-theme="dark"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_menu .batch_files_dataframe_filter_menu_add_btn button:active {
+  background-color: #223445 !important;
+}
+[data-theme="dark"] .window .content_container .upload_source_option button:disabled,
+[data-theme="dark"] .window .content_container .batch_connection_form_container form fieldset button:disabled,
+[data-theme="dark"] .window .content_container .batch_connection_form_container form button:disabled,
+[data-theme="dark"] .window .content_container .batch_connection_form_pager_container button:disabled,
+[data-theme="dark"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_menu .batch_files_dataframe_filter_menu_add_btn button:disabled {
+  background-color: #202c37 !important;
+  color: #8192a2 !important;
+  border-color: #2c3f4f !important;
+  opacity: 0.7 !important;
+}
+
+[data-theme="dark"] .window .content_container .batch_connection_form_container {
+  color: #bdcbd7;
+}
+[data-theme="dark"] .window .content_container .batch_connection_form_container .form_response_container {
+  border: 1px solid #2a3b4b;
+}
+[data-theme="dark"] .window .content_container .batch_connection_form_container form:first-child {
+  border-right-color: #203241;
+}
+[data-theme="dark"] .window .content_container .batch_connection_form_container form fieldset {
+  border-color: #2a3b4a;
+}
+[data-theme="dark"] .window .content_container .batch_connection_form_container form fieldset legend,
+[data-theme="dark"] .window .content_container .batch_connection_form_container form fieldset .box_inputs_container label,
+[data-theme="dark"] .window .content_container .batch_connection_form_container form fieldset .tool_form_response,
+[data-theme="dark"] .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_form label {
+  color: #b9c8d4;
+}
+[data-theme="dark"] .window .content_container .batch_connection_form_container form fieldset .textinput,
+[data-theme="dark"] .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_form .batch_files_search_container .batch_files_search_text_input,
+[data-theme="dark"] .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_form .batch_files_search_container .batch_files_search_date_input,
+[data-theme="dark"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_and_actions_container .batch_files_dataframe_filter_inputs .filters_partition input,
+[data-theme="dark"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_and_actions_container .batch_files_dataframe_filter_inputs .filters_partition select,
+[data-theme="dark"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_and_actions_container .batch_files_dataframe_action_inputs .actions_partition input,
+[data-theme="dark"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_and_actions_container .batch_files_dataframe_action_inputs .actions_partition select,
+[data-theme="dark"] .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_form .batch_files_search_options_containerI .col_select_option {
+  background-color: #101a24 !important;
+  color: #c4d0db !important;
+  border-color: #2f4355 !important;
+}
+[data-theme="dark"] .window .content_container .batch_connection_form_container form fieldset .textinput::placeholder,
+[data-theme="dark"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_and_actions_container .batch_files_dataframe_filter_inputs .filters_query_partition textarea::placeholder {
+  color: #7f93a6;
+}
+[data-theme="dark"] .window .content_container .batch_connection_form_container form fieldset .textinput:disabled,
+[data-theme="dark"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_and_actions_container .batch_files_dataframe_action_inputs .actions_partition input:disabled,
+[data-theme="dark"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_and_actions_container .batch_files_dataframe_action_inputs .actions_partition select:disabled {
+  background-color: #131f2b !important;
+  color: #8295a8 !important;
+  border-color: #293c4b !important;
+}
+[data-theme="dark"] .window .content_container .batch_connection_form_container form fieldset .box_inputs_container .radioinput {
+  background-color: #101a24;
+  border: 1px solid #2f4355;
+  accent-color: #6c859b;
+}
+
+[data-theme="dark"] .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_form .batch_files_search_container button,
+[data-theme="dark"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_and_actions_container .batch_files_dataframe_filter_inputs .filters_partition button {
+  background-color: #1f3040 !important;
+  border-color: #314657 !important;
+  color: #c4d0db !important;
+}
+[data-theme="dark"] .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_form .batch_files_search_options_container input {
+  accent-color: #68839b;
+}
+[data-theme="dark"] .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_form .batch_files_search_options_container input:disabled + label {
+  color: #8093a6;
+}
+[data-theme="dark"] .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_form .batch_files_search_options_containerI {
+  background-image: none;
+  background-color: #12202d;
+  border-top-color: #2d4253;
+  border-image: none;
+}
+[data-theme="dark"] .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_form .batch_files_search_options_containerI label {
+  color: #b9c8d4;
+}
+[data-theme="dark"] .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_form .batch_files_search_options_containerI label:not(:last-child) {
+  border-left-color: #2b3d4d;
+}
+
+[data-theme="dark"] .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_result_container {
+  background-color: #101924;
+  border-color: #2a3b4b;
+  border-top-color: #223342;
+}
+[data-theme="dark"] .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_result_container ul {
+  background-color: #121d28;
+  color: #b9c8d4;
+}
+[data-theme="dark"] .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_result_container ul::before,
+[data-theme="dark"] .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_result_container ul:empty::before,
+[data-theme="dark"] .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_result_container .batch_files_search_results:empty::before {
+  color: #8ea1b2;
+}
+[data-theme="dark"] .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_result_container ul li {
+  background-color: #162433;
+  border-color: #273949;
+  color: #c4d0db;
+}
+[data-theme="dark"] .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_result_container ul li span {
+  border-left-color: #2a3b4b;
+}
+[data-theme="dark"] .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_result_container ul li:hover {
+  background-color: #203344;
+}
+[data-theme="dark"] .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_result_container ul li:active {
+  background-color: #273d50;
+}
+[data-theme="dark"] .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_result_container ul .batch_files_search_results_load_more {
+  background-image: none;
+  background-color: #1a2a39;
+  color: #afc0cf;
+  border-top-color: #2e4354;
+}
+[data-theme="dark"] .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_result_container ul .batch_files_search_results_load_more:hover {
+  background-image: none;
+  background-color: #24384b;
+  color: #d7e3ee;
+}
+
+[data-theme="dark"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_form_fieldset .batch_files_dataframe_infos .dataframe_infos_left_container {
+  border-right-color: #263848;
+}
+[data-theme="dark"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_form_fieldset .batch_files_dataframe_infos .dataframe_infos_left_container table,
+[data-theme="dark"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_form_fieldset .batch_files_dataframe_infos .dataframe_infos_right_container table {
+  color: #aebfcd;
+}
+[data-theme="dark"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_menu,
+[data-theme="dark"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_and_actions_container,
+[data-theme="dark"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_and_actions_container .batch_files_dataframe_action_inputs,
+[data-theme="dark"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_and_actions_container .batch_files_dataframe_filter_inputs .filters_partition,
+[data-theme="dark"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_and_actions_container .batch_files_dataframe_filter_inputs .filters_query_partition,
+[data-theme="dark"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_form_fieldset .batch_files_dataframe_filter_log_textarea,
+[data-theme="dark"] .window .content_container .batch_connection_form_container form .batch_files_table_form_fieldset table,
+[data-theme="dark"] .window .content_container .batch_connection_form_container form .batch_files_table_form_fieldset table tbody tr,
+[data-theme="dark"] .window .content_container .batch_connection_form_container form .batch_files_table_form_fieldset table tbody tr td,
+[data-theme="dark"] .window .content_container .batch_connection_form_container form .batch_files_table_form_fieldset table tfoot,
+[data-theme="dark"] .window .content_container .batch_connection_form_container form .batch_files_table_form_fieldset table tfoot tr td {
+  background-color: #101924 !important;
+  border-color: #2a3b4b !important;
+  color: #c1ceda !important;
+}
+[data-theme="dark"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_menu .batch_files_dataframe_filter_menu_rows,
+[data-theme="dark"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_and_actions_container .batch_files_dataframe_filter_inputs .filters_label,
+[data-theme="dark"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_and_actions_container .batch_files_dataframe_action_inputs .actions_partition label {
+  color: #aebfcd;
+}
+[data-theme="dark"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_and_actions_container .batch_files_dataframe_filter_inputs .filters_query_partition label,
+[data-theme="dark"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_and_actions_container .batch_files_dataframe_action_inputs .actions_label {
+  background-color: #1a2937;
+  border-bottom-color: #2d4152;
+  color: #c7d4df;
+}
+[data-theme="dark"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_and_actions_container .batch_files_dataframe_filter_inputs .filters_query_partition textarea {
+  background-color: #101a24;
+  border-color: #1d2c3a;
+  color: #b9c8d4;
+}
+[data-theme="dark"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_and_actions_container .batch_files_dataframe_action_inputs .actions_partition {
+  border-bottom-color: #2a3b4b;
+}
+[data-theme="dark"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_and_actions_container .batch_files_dataframe_action_inputs .actions_partition label {
+  border-right-color: #2b3e4e;
+}
+[data-theme="dark"] .window .content_container .batch_connection_form_container form .batch_files_table_form_fieldset table thead,
+[data-theme="dark"] .window .content_container .batch_connection_form_container form .batch_files_table_form_fieldset table thead tr th {
+  background-color: #1b2b39;
+  border-color: #304555;
+  color: #c7d4df;
+}
+[data-theme="dark"] .window .content_container .batch_connection_form_container form .batch_files_table_form_fieldset table tbody tr:hover {
+  background-color: #203445;
+}
+[data-theme="dark"] .window .content_container .batch_connection_form_container form .batch_files_table_form_fieldset table tbody:empty:before {
+  color: #8ea1b2;
+}
+
+[data-theme="dark"] .window .content_container .batch_connection_form_container select option {
+  background-color: #101a24;
+  color: #c4d0db;
+}
+[data-theme="dark"] .window .content_container .batch_connection_form_container select option:disabled {
+  color: #8295a8;
+  background-color: #152230;
+}
+
+/* Graph window + configurations: comprehensive dark normalization */
+[data-theme="dark"] .window .content_container .iframe_graph .iframe_options_layer {
+  background-color: rgba(14, 24, 33, 0.96) !important;
+  border: 1px solid #233544 !important;
+  opacity: 0.96 !important;
+}
+[data-theme="dark"] .window .content_container .iframe_graph .iframe_options_layer i {
+  fill: #8ea5b8 !important;
+}
+[data-theme="dark"] .window .content_container .iframe_graph .iframe_options_layer i:hover {
+  fill: #c1d0dc !important;
+}
+
+[data-theme="dark"] .window .properties_container,
+[data-theme="dark"] .window .properties_container .placeholder,
+[data-theme="dark"] .window .properties_container .reference_container,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container,
+[data-theme="dark"] .window .properties_container .reference_container .bottom_panel {
+  background-image: none !important;
+  background-color: #0f1822 !important;
+  color: #c4d0db !important;
+}
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_container {
+  background-image: none !important;
+  background-color: #131f2b !important;
+  border-bottom: 1px solid #223342 !important;
+}
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_container .ppt_tabs {
+  background-color: #172534 !important;
+  color: #b8c7d3 !important;
+  border-right-color: #233544 !important;
+  border-bottom-color: #233544 !important;
+}
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_container .ppt_tabs:hover {
+  background-color: #1d2d3d !important;
+}
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_container input[type="radio"]:checked + label,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_container .ppt_tabs:active {
+  background-color: #0f1822 !important;
+  color: #d6e2ec !important;
+  border-bottom-color: #0f1822 !important;
+}
+
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_filters_container .filter_form .filter_form_header_label,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_infos_container .infos_form .infos_form_header_label,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_settings_container .settings_form .setting_form_header_label,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_filters_container .filter_form .filter_form_header_label i,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_infos_container .infos_form .infos_form_header_label i,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_settings_container .settings_form .setting_form_header_label i {
+  color: #9db1c3 !important;
+}
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_settings_container .settings_form .input_text,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_settings_container .settings_form .select_option,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_filters_container .filter_form .filter_form_search_container input,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_filters_container .filter_form .filter_form_search_container button,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_filters_container .filter_form .filter_form_search_container .search_condition_reset_btn {
+  background-color: #101a24 !important;
+  color: #c4d0db !important;
+  border-color: #2a3d4d !important;
+}
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_settings_container .settings_form .input_text:focus,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_settings_container .settings_form .select_option:focus,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_filters_container .filter_form .filter_form_search_container .search_condition_reset_btn:hover:enabled {
+  border-color: #385166 !important;
+}
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_settings_container .settings_form .settings_form_div,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_settings_container .settings_form .input_labels,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_settings_container .settings_form .limit_range_separator,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_filters_container .filter_form .filter_results span,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_filters_container .filter_form .filter_results b,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_filters_container .filter_form .filter_form_search_container .filter_form_search_condition span {
+  color: #a8bccd !important;
+}
+
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_infos_container .graph_options_infos,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_infos_container .graph_options_infos div {
+  background-color: #101a24 !important;
+  border-color: #223544 !important;
+}
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_infos_container .graph_options_infos div:first-child {
+  background-color: #182737 !important;
+  border-top-color: #2a3e4f !important;
+}
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_infos_container .graph_options_infos div span,
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_infos_container p {
+  color: #b6c7d5 !important;
+}
+[data-theme="dark"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_infos_container .graph_options_infos div span:first-child {
+  color: #d0dce7 !important;
+  border-right-color: #2a3d4d !important;
+}
+
+[data-theme="dark"] .window .properties_container .reference_container .panel_separator {
+  background-color: #1d2f3e !important;
+}
+[data-theme="dark"] .window .properties_container .reference_container .panel_separator span {
+  background-color: #132230 !important;
+  border-color: #2c4457 !important;
+  color: #c4d0db !important;
+}
+[data-theme="dark"] .window .properties_container .reference_container .panel_separator span:hover {
+  background-color: #1a3042 !important;
+  border-color: #385167 !important;
+}
+[data-theme="dark"] .window .properties_container .reference_container .bottom_panel .bottom_panel_title {
+  background-image: none !important;
+  background-color: #131f2b !important;
+  color: #c4d0db !important;
+  border-bottom-color: #253848 !important;
+}
+[data-theme="dark"] .window .properties_container .reference_container .bottom_panel ul li {
+  background-color: #1d3040 !important;
+  color: #d8e4ee !important;
+}
+[data-theme="dark"] .window .properties_container .reference_container .bottom_panel ul li:has(input[type="radio"]:checked),
+[data-theme="dark"] .window .properties_container .reference_container .bottom_panel ul li:first-child:has(input[type="radio"]:checked) {
+  background-color: #2a4054 !important;
+  color: #e4edf5 !important;
+}
+
+[data-theme="dark"] .window.tab_mode,
+[data-theme="dark"] .window.tab_mode .content_container,
+[data-theme="dark"] .window.tab_mode .side_bar {
+  background-color: #080e14 !important;
+  outline-color: #1b2d3b !important;
+}
+
+[data-theme="dark"] .window .side_bar .side_bar_btn_options ul .window_side_bar_menu_list_I,
+[data-theme="dark"] .window .side_bar .side_bar_btn_options ul .window_side_bar_menu_list_I form,
+[data-theme="dark"] .window .side_bar .side_bar_btn_options ul .window_side_bar_menu_list_I form input,
+[data-theme="dark"] .window .side_bar .side_bar_btn_options ul .window_side_bar_menu_list_I form button {
+  background-color: #101a24 !important;
+  color: #c4d0db !important;
+  border-color: #2b3f50 !important;
+}
+[data-theme="dark"] .window .side_bar .side_bar_btn_options ul li:hover {
+  background-color: #172736 !important;
+}
+
+[data-theme="dark"] #configurations_container {
+  background-color: rgba(6, 11, 16, 0.72) !important;
+}
+[data-theme="dark"] #configurations_container .configurations_options_container {
+  background-color: #0f1822 !important;
+  color: #c4d0db !important;
+  outline: 1px solid #1f313f !important;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.55) !important;
+}
+[data-theme="dark"] #configurations_container .configurations_options_container .configurations_options_container_bar {
+  background-image: none !important;
+  background-color: #132230 !important;
+  border-bottom-color: #233544 !important;
+  color: #d6e2ec !important;
+}
+[data-theme="dark"] #configurations_container .configurations_options_container .configurations_options_container_bar span {
+  background-color: #5f252c !important;
+  color: #e7d6d8 !important;
+}
+[data-theme="dark"] #configurations_container .configurations_options_container .configurations_options_container_bar span:first-child:hover {
+  background-color: #793038 !important;
+}
+[data-theme="dark"] #configurations_container .configurations_options_container .configurations_options {
+  background-color: #0f1822 !important;
+  color: #c4d0db !important;
+}
+[data-theme="dark"] #configurations_container .configurations_options_container .configurations_options .configurations_tabs button {
+  background-color: #142432 !important;
+  color: #b9c8d4 !important;
+  border-color: #2a3d4d !important;
+}
+[data-theme="dark"] #configurations_container .configurations_options_container .configurations_options .configurations_tabs button:hover {
+  background-color: #1b3041 !important;
+  border-color: #334c60 !important;
+}
+[data-theme="dark"] #configurations_container .configurations_options_container .configurations_options .configurations_tabs button.active {
+  background-color: #223a4e !important;
+  border-color: #355168 !important;
+  color: #dce7f0 !important;
+}
+[data-theme="dark"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset {
+  background-color: #101a24 !important;
+  border-color: #253848 !important;
+  box-shadow: none !important;
+}
+[data-theme="dark"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset legend {
+  background-color: #1e3345 !important;
+  color: #d6e2ec !important;
+}
+[data-theme="dark"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset label,
+[data-theme="dark"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset table td,
+[data-theme="dark"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset a {
+  color: #b1c3d2 !important;
+}
+[data-theme="dark"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset select,
+[data-theme="dark"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset input,
+[data-theme="dark"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .subinput,
+[data-theme="dark"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset textarea,
+[data-theme="dark"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .input_file {
+  background-color: #101a24 !important;
+  color: #c4d0db !important;
+  border-color: #2a3d4d !important;
+}
+[data-theme="dark"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset select:focus,
+[data-theme="dark"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset input:focus,
+[data-theme="dark"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset textarea:focus {
+  outline-color: #365069 !important;
+  border-color: #365069 !important;
+}
+[data-theme="dark"] #configurations_container .configurations_options_container .configurations_options .configurations_actions_bar {
+  border-top-color: #243747 !important;
+}
+[data-theme="dark"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .action_btns,
+[data-theme="dark"] #configurations_container .configurations_options_container .configurations_options .configurations_actions_bar .action_btns {
+  background-color: #22394d !important;
+  border-color: #355169 !important;
+  color: #dce8f1 !important;
+}
+[data-theme="dark"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .action_btns:hover,
+[data-theme="dark"] #configurations_container .configurations_options_container .configurations_options .configurations_actions_bar .action_btns:hover {
+  background-color: #2b455b !important;
+  border-color: #3f5d75 !important;
+}
+[data-theme="dark"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .critical_btns {
+  background-color: #6f2f37 !important;
+  border-color: #8b3f49 !important;
+  color: #ecdbe0 !important;
+}
+[data-theme="dark"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .critical_btns:hover {
+  background-color: #84404a !important;
+}
+[data-theme="dark"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .input_checkbox {
+  accent-color: #607b94 !important;
 }

@@ -555,7 +555,197 @@
 								  font-family: sans-serif;
 								  z-index: 1000;
 								}
-							  </style>
+								html[data-theme="dark"] body {
+								  background-color: #080e14;
+								  color: #c4d0db;
+								}
+								html[data-theme="dark"] #mynetwork {
+								  background-color: #080e14;
+								}
+								html[data-theme="dark"] .adjustBox,
+								html[data-theme="dark"] .annotationAdjustBox,
+								html[data-theme="dark"] .graph_options .graph_options_filters {
+								  background-color: rgba(21, 32, 42, 0.92) !important;
+								  color: #c4d0db !important;
+								  border-color: #2b3946 !important;
+								}
+								html[data-theme="dark"] input,
+								html[data-theme="dark"] textarea,
+								html[data-theme="dark"] select,
+								html[data-theme="dark"] button {
+								  background-color: rgba(15, 24, 32, 0.92) !important;
+								  color: #c4d0db !important;
+								  border-color: rgba(86, 114, 137, 0.28) !important;
+								}
+								html[data-theme="dark"] .iconThumb,
+								html[data-theme="dark"] .iconThumb:last-child {
+								  background-color: rgba(29, 44, 56, 0.9) !important;
+								  border-color: rgba(86, 114, 137, 0.28) !important;
+								}
+								html[data-theme="dark"] .vis-tooltip {
+								  background: rgba(15, 24, 32, 0.96) !important;
+								  color: #c4d0db !important;
+								  border-color: rgba(86, 114, 137, 0.28) !important;
+								}
+								html[data-theme="dark"] [style*="background-color: rgba(255, 255, 255"],
+								html[data-theme="dark"] [style*="background: rgba(255,255,255"],
+								html[data-theme="dark"] [style*="background: #fff"],
+								html[data-theme="dark"] [style*="background-color:#fff"] {
+								  background: rgba(21, 32, 42, 0.92) !important;
+								  background-color: rgba(21, 32, 42, 0.92) !important;
+								  color: #c4d0db !important;
+								  border-color: rgba(86, 114, 137, 0.28) !important;
+								}
+							  
+									html[data-theme="dark"] .customContextMenu {
+									  background-color: rgba(16, 27, 37, 0.96) !important;
+									  border-color: rgba(86, 114, 137, 0.30) !important;
+									  box-shadow: 0 6px 16px rgba(0,0,0,0.45) !important;
+									}
+									html[data-theme="dark"] .customContextMenu .menu_item {
+									  background-color: rgba(22, 37, 49, 0.92) !important;
+									  color: #bcc8d3 !important;
+									  border-bottom-color: rgba(102, 130, 152, 0.24) !important;
+									}
+									html[data-theme="dark"] .customContextMenu .menu_item:hover {
+									  background-color: rgba(24, 38, 50, 0.96) !important;
+									  color: #cdd8e2 !important;
+									  border-color: rgba(64, 82, 98, 0.65) !important;
+									}
+									html[data-theme="dark"] .customContextMenu .menu_item:active {
+									  background-color: rgba(19, 32, 44, 1) !important;
+									  color: #a8b6c3 !important;
+									}
+									html[data-theme="dark"] .customContextMenu .menu_item_disabled {
+									  color: #7f9ab0 !important;
+									}
+									html[data-theme="dark"] .graph_options,
+									html[data-theme="dark"] .graph_options .graph_options_settings,
+									html[data-theme="dark"] .graph_options .graph_options_infos,
+									html[data-theme="dark"] .graph_options .graph_options_filters {
+									  background-color: rgba(17, 29, 39, 0.96) !important;
+									  border-color: rgba(86, 114, 137, 0.30) !important;
+									  color: #c4d0db !important;
+									  box-shadow: 0 6px 16px rgba(0,0,0,0.45) !important;
+									}
+									html[data-theme="dark"] .graph_options .graph_options_infos div {
+									  border-bottom-color: rgba(102, 130, 152, 0.22) !important;
+									}
+									html[data-theme="dark"] .graph_options .graph_options_infos div:first-child {
+									  background-color: rgba(24, 38, 50, 0.88) !important;
+									}
+									html[data-theme="dark"] .graph_options .graph_options_infos div span,
+									html[data-theme="dark"] .graph_options .graph_options_infos div span:first-child,
+									html[data-theme="dark"] .graph_options .graph_options_infos div:first-child span {
+									  color: #c4d0db !important;
+									  border-right-color: rgba(102, 130, 152, 0.22) !important;
+									}
+									html[data-theme="dark"] .adjustBox .nodeAdjustBox_node_label input,
+									html[data-theme="dark"] .adjustBox .nodeAdjustBox_node_note textarea,
+									html[data-theme="dark"] .annotationAdjustBox label,
+									html[data-theme="dark"] .annotationAdjustBox .annotation_title {
+									  color: #c4d0db !important;
+									}
+									html[data-theme="dark"] [style*="background-color: #EEE"],
+									html[data-theme="dark"] [style*="background-color:#EEE"],
+									html[data-theme="dark"] [style*="border-bottom: 0.1vh solid #EEE"],
+									html[data-theme="dark"] [style*="color: #333"],
+									html[data-theme="dark"] [style*="color:#333"] {
+									  color: #c4d0db !important;
+									  border-color: rgba(102, 130, 152, 0.24) !important;
+									}
+								  /* Graph iframe: strict dark normalization for options/settings/menus */
+  html[data-theme="dark"] .customContextMenu,
+  html[data-theme="dark"] .graph_options,
+  html[data-theme="dark"] .graph_options .graph_options_settings,
+  html[data-theme="dark"] .graph_options .graph_options_filters,
+  html[data-theme="dark"] .graph_options .graph_options_infos,
+  html[data-theme="dark"] .adjustBox,
+  html[data-theme="dark"] .annotationAdjustBox {
+    background-color: #101a24 !important;
+    color: #c4d0db !important;
+    border-color: rgba(86, 114, 137, 0.26) !important;
+    box-shadow: 0 8px 18px rgba(0,0,0,0.55) !important;
+  }
+  html[data-theme="dark"] .customContextMenu .menu_item,
+  html[data-theme="dark"] .graph_options .graph_options_infos div,
+  html[data-theme="dark"] .adjustBox .menu_item {
+    background-color: #12202d !important;
+    color: #bccbda !important;
+    border-color: rgba(102, 130, 152, 0.24) !important;
+    border-bottom-color: rgba(102, 130, 152, 0.24) !important;
+  }
+  html[data-theme="dark"] .customContextMenu .menu_item:hover,
+  html[data-theme="dark"] .graph_options .graph_options_infos div:first-child,
+  html[data-theme="dark"] .graph_options .graph_options_infos div:hover {
+    background-color: #1a2c3c !important;
+    color: #d4e0ea !important;
+    border-color: rgba(126, 158, 182, 0.34) !important;
+  }
+  html[data-theme="dark"] .customContextMenu .menu_item:active {
+    background-color: #152635 !important;
+    color: #a9bac8 !important;
+  }
+  html[data-theme="dark"] .customContextMenu .menu_item_disabled {
+    color: #8397aa !important;
+  }
+  html[data-theme="dark"] .graph_options .graph_options_infos div span,
+  html[data-theme="dark"] .graph_options .graph_options_settings label,
+  html[data-theme="dark"] .graph_options .graph_options_filters label,
+  html[data-theme="dark"] .adjustBox label,
+  html[data-theme="dark"] .annotationAdjustBox label {
+    color: #c4d0db !important;
+  }
+  html[data-theme="dark"] .graph_options .graph_options_infos div span:first-child {
+    color: #d6e2ec !important;
+    border-right-color: rgba(102, 130, 152, 0.22) !important;
+  }
+  html[data-theme="dark"] .graph_options .graph_options_infos:empty:before {
+    color: #91a5b7 !important;
+  }
+  html[data-theme="dark"] .adjustBox input,
+  html[data-theme="dark"] .adjustBox textarea,
+  html[data-theme="dark"] .adjustBox select,
+  html[data-theme="dark"] .adjustBox button,
+  html[data-theme="dark"] .annotationAdjustBox input,
+  html[data-theme="dark"] .annotationAdjustBox textarea,
+  html[data-theme="dark"] .annotationAdjustBox select,
+  html[data-theme="dark"] .annotationAdjustBox button,
+  html[data-theme="dark"] .graph_options input,
+  html[data-theme="dark"] .graph_options textarea,
+  html[data-theme="dark"] .graph_options select,
+  html[data-theme="dark"] .graph_options button {
+    background-color: #0f1822 !important;
+    color: #c4d0db !important;
+    border-color: rgba(102, 130, 152, 0.24) !important;
+  }
+  html[data-theme="dark"] .adjustBox textarea::placeholder,
+  html[data-theme="dark"] .graph_options input::placeholder {
+    color: #7f93a6 !important;
+  }
+  html[data-theme="dark"] .adjustBox button:hover,
+  html[data-theme="dark"] .annotationAdjustBox button:hover,
+  html[data-theme="dark"] .graph_options button:hover {
+    background-color: #1a2d3d !important;
+    border-color: rgba(126, 158, 182, 0.30) !important;
+  }
+  html[data-theme="dark"] .sizeCircle {
+    background: #1a2d3d !important;
+    border-color: rgba(126, 158, 182, 0.30) !important;
+  }
+  html[data-theme="dark"] [style*="background-color: #EEE"],
+  html[data-theme="dark"] [style*="background:#EEE"],
+  html[data-theme="dark"] [style*="background-color: #FFF"],
+  html[data-theme="dark"] [style*="background-color:#FFF"],
+  html[data-theme="dark"] [style*="border: 0.1vh solid #EEE"],
+  html[data-theme="dark"] [style*="border:1px solid #EEE"],
+  html[data-theme="dark"] [style*="color: #333"],
+  html[data-theme="dark"] [style*="color:#333"] {
+    background-color: #101a24 !important;
+    color: #c4d0db !important;
+    border-color: rgba(102, 130, 152, 0.24) !important;
+  }
+</style>
 							</head>
 							<body>
 							  <!-- Adjustment box (hidden initially) -->
@@ -833,6 +1023,10 @@
 									    	localClipboard = normalizeClipboardPayload(e.data.payload);
 									    	writeClipboardToStorage(localClipboard);
 										}
+									if (e.data?.action === "theme_mode") {
+										const nextMode = e.data.payload === "dark" ? "dark" : "light";
+										document.documentElement.setAttribute("data-theme", nextMode);
+									}
 									if (e.data?.type === "init_graph") {
 										graphData = e.data.payload;
 										initializeFullGraph(graphData);

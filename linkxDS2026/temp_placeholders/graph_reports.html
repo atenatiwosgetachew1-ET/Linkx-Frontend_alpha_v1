@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Investigation Report</title>
+  <style>
+    body {
+      margin: 0;
+      min-height: 100vh;
+      width: 100vw;
+      background: radial-gradient(circle at center, #fff, #fcfefd);
+      color: #333;
+      font-family: "Segoe UI", Roboto, Arial, sans-serif;
+      overflow-y: auto;
+      user-select: none;
+    }
+    html[data-theme="dark"] body {
+      background: radial-gradient(circle at center, #101820, #0a1016);
+      color: #d8e5f0;
+    }
+    html[data-theme="dark"] .report_item,
+    html[data-theme="dark"] .report_header,
+    html[data-theme="dark"] .section,
+    html[data-theme="dark"] .report_block,
+    html[data-theme="dark"] .report_table {
+      background: rgba(20, 31, 41, 0.85) !important;
+      color: #d8e5f0 !important;
+      border-color: #385064 !important;
+    }
+    html[data-theme="dark"] .report_header h1,
+    html[data-theme="dark"] .report_badge {
+      color: #d8e5f0 !important;
+    }
+
+    .report_container {
+      width: min(94vw, 1000px);
+      margin: 2vh auto;
+      padding: 2vh 2vw;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .report_container > * {
+      position: relative;
+      z-index: 1;
+    }
+
+    .report_watermark {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: min(62vw, 460px);
+      max-width: 72%;
+      transform: translate(-50%, -50%);
+      opacity: 0.06;
+      filter: grayscale(20%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .report_header {
+      margin-bottom: 2vh;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+      padding-bottom: 1vh;
+    }
+
+    .report_header_topline {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1vw;
+      flex-wrap: wrap;
+      margin-bottom: 0.8vh;
+    }
+
+    .report_header_brand {
+      display: flex;
+      align-items: center;
+      gap: 0.8vw;
+    }
+
+    .report_logo {
+      width: 42px;
+      height: 42px;
+      object-fit: contain;
+      border-radius: 0.45vh;
+      border: 1px solid rgba(31, 58, 85, 0.12);
+      background: rgba(255, 255, 255, 0.85);
+      padding: 3px;
+    }
+
+    .report_subtitle {
+      margin: 0.2vh 0 0;
+      font-size: 11px;
+      color: #5f6f82;
+      letter-spacing: 0.02em;
+    }
+
+    .report_header h1 {
+      margin: 0;
+      font-size: 20px;
+      font-weight: 500;
+      color: #1f3a55;
+    }
+
+    .report_badge {
+      display: inline-block;
+      border: 1px solid rgba(31, 58, 85, 0.22);
+      color: #1f3a55;
+      font-size: 11px;
+      font-weight: 600;
+      border-radius: 999px;
+      padding: 0.2vh 0.7vw;
+      background: rgba(255, 255, 255, 0.75);
+    }
+
+    .report_header p {
+      margin: 0.45vh 0 0;
+      color: #555;
+      font-size: 13px;
+    }
+
+    .report_grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(260px, 1fr));
+      gap: 1vh 1vw;
+      margin-bottom: 1.5vh;
+    }
+
+    .report_item {
+      display: flex;
+      justify-content: space-between;
+      gap: 1vw;
+      border: 1px solid rgba(0, 0, 0, 0.08);
+      border-radius: 0.5vh;
+      background: rgba(255, 255, 255, 0.65);
+      padding: 1vh 0.9vw;
+      font-size: 13px;
+    }
+
+    .report_item b {
+      color: #1f3a55;
+      font-weight: 600;
+    }
+
+    .report_section {
+      border: 1px solid rgba(0, 0, 0, 0.08);
+      border-radius: 0.5vh;
+      background: rgba(255, 255, 255, 0.65);
+      margin-bottom: 1.2vh;
+      overflow: hidden;
+    }
+
+    .report_section h2 {
+      margin: 0;
+      padding: 0.9vh 0.9vw;
+      font-size: 14px;
+      font-weight: 600;
+      color: #1f3a55;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+      background: rgba(255, 255, 255, 0.4);
+    }
+
+    .report_section ul {
+      margin: 0;
+      padding: 0.6vh 0.9vw;
+      list-style: none;
+    }
+
+    .report_section li {
+      font-size: 13px;
+      color: #555;
+      line-height: 1.6;
+      padding: 0.3vh 0;
+      border-bottom: 1px dashed rgba(0, 0, 0, 0.06);
+    }
+
+    .report_section li:last-child {
+      border-bottom: none;
+    }
+
+    .report_remark_text {
+      margin: 0;
+      padding: 0.9vh 0.9vw;
+      font-size: 13px;
+      color: #555;
+      line-height: 1.65;
+      border-top: 1px dashed rgba(0, 0, 0, 0.06);
+      background: rgba(255, 255, 255, 0.45);
+    }
+
+    .report_signature {
+      display: grid;
+      grid-template-columns: auto 40% auto;
+      align-items: center;
+      column-gap: 0.8vw;
+      margin: 0;
+      padding: 0.7vh 0.9vw 0.9vh;
+      font-size: 12px;
+      color: #526174;
+      border-top: 1px solid rgba(0, 0, 0, 0.08);
+    }
+
+    .report_signature_left {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.9vw;
+    }
+
+    .report_signature_gap {
+      display: block;
+      width: 100%;
+      min-height: 1px;
+    }
+
+    .report_signature_right {
+      display: inline-flex;
+      align-items: center;
+      justify-self: start;
+      gap: 0.8vw;
+    }
+
+    .report_signature_line {
+      display: inline-block;
+      min-width: clamp(110px, 12vw, 190px);
+      text-align: center;
+      border-bottom: 1px solid rgba(31, 58, 85, 0.42);
+      line-height: 1.2;
+      padding-bottom: 1px;
+    }
+
+    .report_investigator_name {
+      font-weight: 500;
+      color: #3d536b;
+    }
+
+    .report_signature b {
+      color: #1f3a55;
+      font-weight: 600;
+    }
+
+    .report_graph_container {
+      margin: 0;
+      padding: 0.8vh 0.9vw 0.9vh;
+      background: rgba(255, 255, 255, 0.45);
+    }
+
+    .report_graph_snapshot {
+      display: block;
+      width: 100%;
+      max-height: 38vh;
+      object-fit: contain;
+      border: 1px solid rgba(0, 0, 0, 0.1);
+      border-radius: 0.4vh;
+      background: #fff;
+    }
+
+    .report_graph_empty {
+      margin: 0.7vh 0 0;
+      font-size: 12px;
+      color: #6b7481;
+    }
+
+    .report_handwritten_area {
+      min-height: 16vh;
+      margin: 0;
+      padding: 0.8vh 0.9vw 0.9vh;
+      border-top: 1px dashed rgba(0, 0, 0, 0.08);
+      background:
+        repeating-linear-gradient(
+          to bottom,
+          rgba(82, 97, 116, 0.06),
+          rgba(82, 97, 116, 0.06) 1px,
+          transparent 1px,
+          transparent 2.4vh
+        ),
+        rgba(255, 255, 255, 0.45);
+    }
+
+    @media (max-width: 780px) {
+      .report_grid {
+        grid-template-columns: 1fr;
+      }
+
+      .report_signature {
+        grid-template-columns: 1fr;
+        row-gap: 0.45vh;
+      }
+
+      .report_signature_gap {
+        display: none;
+      }
+
+      .report_signature_right {
+        justify-self: start;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="report_container">
+    <img
+      class="report_watermark"
+      src="../site_images/Logo_of_Ethiopian_INSA.png"
+      alt="Report Watermark"
+    />
+
+    <div class="report_header">
+      <div class="report_header_topline">
+        <div class="report_header_brand">
+          <img
+            id="report_logo"
+            class="report_logo"
+            src="../site_images/Linkx square (1024x1024).png"
+            alt="Investigation Logo"
+          />
+          <div>
+            <h1>Investigation Result Summary</h1>
+            <p class="report_subtitle">Generated from graph evidence analysis</p>
+          </div>
+        </div>
+        <span class="report_badge" id="report_case_status">Under Review</span>
+      </div>
+      <p>Case Reference: <span id="report_case_reference">INV--</span></p>
+      <p>Source Window: <span id="report_source_id">-</span></p>
+      <p>Generated At: <span id="report_generated_at">-</span></p>
+    </div>
+
+    <div class="report_grid">
+      <div class="report_item"><b>Observed Entities</b><span id="report_visible_nodes">0</span></div>
+      <div class="report_item"><b>Observed Relationships</b><span id="report_visible_edges">0</span></div>
+      <div class="report_item"><b>Total Entities</b><span id="report_total_nodes">0</span></div>
+      <div class="report_item"><b>Total Relationships</b><span id="report_total_edges">0</span></div>
+      <div class="report_item"><b>Focused Entities</b><span id="report_selected_nodes">0</span></div>
+      <div class="report_item"><b>Focused Relationships</b><span id="report_selected_edges">0</span></div>
+      <div class="report_item"><b>Connectivity Index</b><span id="report_avg_degree">0.00</span></div>
+      <div class="report_item"><b>Density</b><span id="report_density">0.00%</span></div>
+    </div>
+
+    <div class="report_section">
+      <h2>Graph Evidence Snapshot</h2>
+      <div class="report_graph_container">
+        <img id="report_graph_snapshot" class="report_graph_snapshot" alt="Graph Evidence Snapshot" />
+        <p id="report_graph_empty" class="report_graph_empty">Graph snapshot unavailable for this report.</p>
+      </div>
+    </div>
+
+    <div class="report_section">
+      <h2>Key Findings</h2>
+      <ul id="report_key_findings"><li>No findings.</li></ul>
+    </div>
+
+    <div class="report_section">
+      <h2>Relationship Breakdown</h2>
+      <ul id="report_relationship_types"><li>No data.</li></ul>
+    </div>
+
+    <div class="report_section">
+      <h2>Entity Distribution</h2>
+      <ul id="report_node_identity_distribution"><li>No data.</li></ul>
+    </div>
+
+    <div class="report_section">
+      <h2>Priority Entities</h2>
+      <ul id="report_top_degree_nodes"><li>No data.</li></ul>
+    </div>
+
+    <div class="report_section">
+      <h2>Investigation Summary</h2>
+      <p class="report_remark_text" id="report_summary_text">No summary generated.</p>
+      <p class="report_signature">
+        <span class="report_signature_left">
+          <b>Investigator Name</b>
+          <span class="report_investigator_name" id="report_investigator_name">Inverstigator</span>
+        </span>
+        <span class="report_signature_gap" aria-hidden="true"></span>
+        <span class="report_signature_right">
+          <b>Signature</b>
+          <span id="report_signature_dash" class="report_signature_line">-</span>
+        </span>
+      </p>
+    </div>
+
+    <div class="report_section">
+      <h2>Investigator Remark</h2>
+      <div class="report_handwritten_area"></div>
+    </div>
+  </div>
+
+  <script src="../temp_placeholders/graph_reports.js"></script>
+  <script>
+    window.addEventListener("message", (event) => {
+      if (event?.data?.action === "theme_mode") {
+        const nextMode = event.data.payload === "dark" ? "dark" : "light";
+        document.documentElement.setAttribute("data-theme", nextMode);
+      }
+    });
+  </script>
+</body>
+</html>

@@ -38,6 +38,11 @@
 
 window.addEventListener("message", (event) => {
   const { action, payload } = event.data;
+  if (action === "theme_mode") {
+    const nextMode = payload === "dark" ? "dark" : "light";
+    document.documentElement.setAttribute("data-theme", nextMode);
+    return;
+  }
   console.log("called_Chart_adjuster:",action,payload)
   switch (action) {
     case "network_components":      
@@ -272,7 +277,7 @@ window.addEventListener("message", (event) => {
         // Capture using html2canvas
         const canvas = await html2canvas(el, {
           scale: 2,
-          backgroundColor: "#fff",
+          backgroundColor: document.documentElement.getAttribute("data-theme") === "dark" ? "#1a2631" : "#fff",
           useCORS: true
         });
 
@@ -314,7 +319,7 @@ window.addEventListener("message", (event) => {
 
         const canvas = await html2canvas(el, {
           scale: 2,
-          backgroundColor: "#fff",
+          backgroundColor: document.documentElement.getAttribute("data-theme") === "dark" ? "#1a2631" : "#fff",
           useCORS: true
         });
 
@@ -324,12 +329,14 @@ window.addEventListener("message", (event) => {
       }
 
       const printWindow = window.open("", "_blank");
+      const currentTheme = document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light";
       printWindow.document.write(`
-        <html>
+        <html data-theme="${currentTheme}">
           <head>
             <title>Print Charts</title>
             <style>
               body { margin: 0; text-align: center; background: #fff; }
+              html[data-theme="dark"] body { background: #101820; }
               img { max-width: 90%; margin: 20px auto; display: block; border: 1px solid #ccc; box-shadow: 0 0 6px rgba(0,0,0,0.2); }
             </style>
           </head>

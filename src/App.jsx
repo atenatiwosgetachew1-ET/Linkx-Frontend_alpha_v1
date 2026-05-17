@@ -17,6 +17,53 @@ const GRAPH_LIMIT_WARNING_THRESHOLD = 300;
 const GRAPH_LIMIT_HARD_MAX = 100000;
 const DEFAULT_GRAPH_IFRAME_SETTINGS = ["", "", { min: 0, max: 25 }, "", "", "", false, false, false, false, "default", "UD", "directed", "hop_distance", ""];
 
+const STR_REPORT_SOCKET_EVENT_LINK_ANALYSIS = "str_report_link_analysis";
+const STR_REPORT_NOTIFICATION_CODE_PREPARE_RECEIVER = "str_report_prepare_receiver";
+const STR_REPORT_SOCKET_EMIT_REGISTER_RECEIVER = "str_report_register_receiver";
+
+const isStrReportAnalysisSession = (value) => {
+  const normalized = String(value || "").trim();
+  if (!normalized) return false;
+  return normalized.startsWith("str_report_") || /^\d+$/.test(normalized);
+};
+
+const normalizeStrReportSocketEmitList = (socketEmit) => {
+  if (socketEmit == null) return [];
+
+  const toEntry = (item) => {
+    if (typeof item === "string" && item.trim()) {
+      return { event: item.trim(), data: {} };
+    }
+    if (!item || typeof item !== "object") return null;
+    const event = item.event || item.emit || item.name;
+    if (!event) return null;
+    const data = item.data ?? item.payload ?? {};
+    return { event: String(event), data };
+  };
+
+  if (Array.isArray(socketEmit)) {
+    return socketEmit.map(toEntry).filter(Boolean);
+  }
+
+  if (typeof socketEmit === "object") {
+    return Object.entries(socketEmit).map(([event, data]) => ({ event: String(event), data: data ?? {} }));
+  }
+
+  return [];
+};
+
+const applyStrReportSocketEmitList = (socket, analysisSessionId, socketEmit) => {
+  if (!socket || !analysisSessionId) return;
+  const emitList = normalizeStrReportSocketEmitList(socketEmit);
+  emitList.forEach(({ event, data }) => {
+    const emitPayload = typeof data === "object" && data !== null ? { ...data } : { value: data };
+    if (emitPayload.session_id == null || emitPayload.session_id === "") {
+      emitPayload.session_id = analysisSessionId;
+    }
+    socket.emit(event, emitPayload);
+  });
+};
+
 const normalizeGraphLimitRange = (value, fallbackMax = 25) => {
   const clampInt = (num, min, max) => Math.max(min, Math.min(max, Math.floor(Number(num) || 0)));
 
@@ -89,6 +136,66 @@ const serializeClipboardPayload = (value) => {
   return nodes;
 };
 
+const getStatusToneStyle = (statusValue) => {
+  const status = String(statusValue || "").trim();
+  const normalized = status.toLowerCase();
+
+  if (!status || status === "..." || status === "Connecting...") {
+    return {
+      color: "var(--status-pending-text)",
+      backgroundColor: "var(--status-pending-bg)"
+    };
+  }
+
+  if (status === "Session running...") {
+    return {
+      color: "var(--status-info-text)",
+      backgroundColor: "var(--status-info-bg)"
+    };
+  }
+
+  if (status === "Connection established!" || status === "Dataset uploaded!" || status === "Connected!") {
+    return {
+      color: "var(--status-success-text)",
+      backgroundColor: "var(--status-success-bg)"
+    };
+  }
+
+  if (normalized.includes("failed") || normalized.includes("error")) {
+    return {
+      color: "var(--status-error-text)",
+      backgroundColor: "var(--status-error-bg)"
+    };
+  }
+
+  return {
+    color: "var(--status-default-text)",
+    backgroundColor: "var(--status-default-bg)"
+  };
+};
+
+const sourceOptionTitleStyle = { color: "var(--app-text)" };
+const sourceOptionBodyStyle = { color: "var(--muted-text)" };
+
+const getToolStatusTextStyle = (statusValue) => {
+  const status = String(statusValue || "").trim();
+  const normalized = status.toLowerCase();
+
+  if (!status || status === "Not connected!" || status === "Connecting...") {
+    return { color: "var(--status-pending-text)" };
+  }
+
+  if (status === "Connected!") {
+    return { color: "var(--status-success-text)" };
+  }
+
+  if (normalized.includes("failed") || normalized.includes("error")) {
+    return { color: "var(--status-error-text)" };
+  }
+
+  return { color: "var(--status-default-text)" };
+};
+
 const broadcastClipboard = () => {
   const payload = serializeClipboardPayload(clipboard);
   for (let i = 0; i < window.frames.length; i += 1) {
@@ -117,9 +224,78 @@ window.addEventListener("message", e => {
     broadcastClipboard();
   }
 });
-function ToggleMenu({ onToggle, isToggleMenuOpen, toggleAction, isMaximized, windows, orientation, menuRef}){
+/** Dark + zero windows: full menu on top of the network canvas (no slide rail / hamburger). */
+function DarkHomeMenuOverlay({ toggleAction }) {
+  const actionCards = [
+    {
+      label: "New source",
+      icon: "+",
+      action: "toggle_menu_new_source_window",
+    },
+    {
+      label: "New Graph",
+      icon: "+",
+      action: "toggle_menu_new_graph_window",
+    },
+    {
+      label: "Configurations",
+      icon: "⚙",
+      action: "configurations",
+    },
+    {
+      label: "Settings",
+      icon: "🛠",
+      action: "settings",
+    },
+  ];
+
+  const reportsUnderProcess = [
+    "STR-2026-0412 | Data harmonization",
+    "STR-2026-0412 | Data harmonization",
+    "STR-2026-0412 | Data harmonization",
+    "STR-2026-0412 | Data harmonization",
+  ];
+
+  return (
+    <div className="dark_home_menu_overlay" role="dialog" aria-label="Linkx menu">
+      <div className="dark_home_menu_overlay__dock">
+        <div className="dark_home_menu_overlay__panel dark_home_menu_overlay__panel--actions">
+          <div className="dark_home_menu_overlay__actions_row">
+            {actionCards.map((item) => (
+              <button
+                type="button"
+                key={item.label}
+                className="dark_home_menu_overlay__action_card"
+                onClick={() => toggleAction(item.action)}
+              >
+                <span className="dark_home_menu_overlay__action_icon">{item.icon}</span>
+                <span className="dark_home_menu_overlay__action_label">{item.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="dark_home_menu_overlay__panel dark_home_menu_overlay__panel--reports">
+          <div className="dark_home_menu_overlay__reports_title">Reports under process</div>
+          <ul className="dark_home_menu_overlay__reports_list">
+            {reportsUnderProcess.map((entry, idx) => (
+              <li className="dark_home_menu_overlay__reports_item" key={`${entry}-${idx}`}>
+                {entry}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ToggleMenu({ onToggle, isToggleMenuOpen, toggleAction, isMaximized, windows, orientation, menuRef, themeMode }){
   return(
-  <div ref={menuRef} id='toggle_menu' style={{width: isToggleMenuOpen ? '15vw' : '0vw', zIndex: isToggleMenuOpen ? '99999':'', visibility: orientation === "windows" || windows.length == 0 || isToggleMenuOpen ? 'visible':'hidden'}}>
+  <div
+    ref={menuRef}
+    id='toggle_menu'
+    data-menu-open={isToggleMenuOpen ? "true" : "false"}
+    style={{width: isToggleMenuOpen ? '15vw' : '0vw', zIndex: isToggleMenuOpen ? '99999':'', visibility: orientation === "windows" || windows.length == 0 || isToggleMenuOpen ? 'visible':'hidden'}}>
       <div id="toggle_main_list">
         <div className="animated_logo">
           <span onClick={onToggle}>
@@ -166,6 +342,9 @@ function ToggleMenu({ onToggle, isToggleMenuOpen, toggleAction, isMaximized, win
                   </li>*/}
                 </div>
                 <div className="toogle_side_list_options_container">                    
+                  <li onClick={() => toggleAction("settings")}>
+                    <span>&#9881; &nbsp;Settings</span>
+                  </li>
                   <li onClick={() => toggleAction("configurations")}>    
                     {/*<i>
                       <Icons id="window_side_bar" type="tabular_window" condition="True"/>
@@ -186,8 +365,9 @@ function ToggleMenu({ onToggle, isToggleMenuOpen, toggleAction, isMaximized, win
                       <Icons id="window_side_bar" type="tabular_window" condition="True"/>
                     </i> */}             
                     <span>&#9732; &nbsp;Mood</span>
-                    <div className="toggle_btn_conatiner">
-                      <span className="active">Day</span><span>Night</span>
+                    <div className="toggle_btn_conatiner" onClick={() => toggleAction("toggle_menu_mood")}>
+                      <span className={themeMode === "light" ? "active" : ""}>Day</span>
+                      <span className={themeMode === "dark" ? "active" : ""}>Night</span>
                     </div>
                   </li>
                 </div>
@@ -247,7 +427,6 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
   const canRemoveRule = ruleNames.length > 0 && selectedRuleForRemoval !== "";
 
   useEffect(() => {
-    console.log("configurations_window:",configurations)
     if (configurations) {
       // configurations may be a {value: string} object or already parsed
       let cfg;
@@ -731,6 +910,69 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
               title="Upload Configuration file"
             >&#128448; Import</button>
           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+function Settings({ isSettingsOpen, toggleAction }) {
+  const [activeSettingsTab, setActiveSettingsTab] = useState("preferences");
+  const [rememberLayout, setRememberLayout] = useState(true);
+  const [enableNotifications, setEnableNotifications] = useState(true);
+
+  return (
+    <div
+      id="configurations_container"
+      style={{ display: isSettingsOpen ? "block" : "none" }}
+    >
+      <div className="configurations_options_container">
+        <div className="configurations_options_container_bar">
+          <span onClick={() => toggleAction("settings")}>x</span>
+          <label>Settings</label>
+        </div>
+
+        <div className="configurations_options">
+          <div className="configurations_tabs">
+            <button
+              type="button"
+              className={activeSettingsTab === "preferences" ? "active" : ""}
+              onClick={() => setActiveSettingsTab("preferences")}
+            >
+              Preferences
+            </button>
+          </div>
+
+          <form
+            className="configurations_tab_form"
+            onSubmit={(event) => event.preventDefault()}
+          >
+            <div
+              className="configurations_options_panel"
+              style={{ display: activeSettingsTab === "preferences" ? "block" : "none" }}
+            >
+              <fieldset>
+                <legend>Preferences</legend>
+                <label>Workspace</label>
+                <input
+                  type="checkbox"
+                  id="pref_remember_layout"
+                  className="input_checkbox"
+                  checked={rememberLayout}
+                  onChange={() => setRememberLayout((prev) => !prev)}
+                />
+                <label htmlFor="pref_remember_layout" className="sublabel">Remember window layout</label>
+
+                <input
+                  type="checkbox"
+                  id="pref_enable_notifications"
+                  className="input_checkbox"
+                  checked={enableNotifications}
+                  onChange={() => setEnableNotifications((prev) => !prev)}
+                />
+                <label htmlFor="pref_enable_notifications" className="sublabel">Enable notifications</label>
+              </fieldset>
+            </div>
+          </form>
         </div>
       </div>
     </div>
@@ -1516,7 +1758,7 @@ function DraggableWindow({ children, initialPos = { top: 0, left: 0 }, orientati
     </div>
   );
 }
-function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText, loadscreenState, isSideBarMenuOpen, orientation, configurations, windowAction, graphAction, chartAction, selectedContent, selectedSubContent, selectedNodes, selectedEdges,windowResponseI,windowResponseII,formToolResponse,sourceAddressType,sourceAddressText,batchFilesSearchHybrid,batchFilesSearchHybridQuery,batchFilesSearchStrict,searchText,batchFilesSearchLimit,batchFilesSearchResults,batchFilesSearchMoreFiles,searchResultsVisible,searchPlaceholder,batchFilesCollection, batchFilesDataframeInfoI, batchFilesDataframeInfoII, batchFilesDataframeActionValue, batchFilesDataframeSourceValue, batchFilesDataframeTargetValue, batchFilesDataframeRelationshipValue, batchFilesDataframeRuleValue, sourceSessionLog, sourceStreams , sourceStreamListener, fileInputRef, textareaRefs, onClose, onMove, zIndex, onFocus, covered, graphLink, graphLinkId, graphLinkSource, graphStatus, activeGraph, chartLink, chartLinkId, activechart, iframeRef, iframeFilters, iframeSettings, iframeSearch, iframePerformanceMood, selectedPropertyTab, filterPropertyKeys, filterResults, nodeProperties, BASE_URL, searchButtonRef, resultContainerRef, requestConfirmation }) {
+function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText, loadscreenState, isSideBarMenuOpen, orientation, configurations, windowAction, graphAction, chartAction, selectedContent, selectedSubContent, selectedNodes, selectedEdges,windowResponseI,windowResponseII,windowRealtimeResponseI,formToolResponse,formRealtimeToolResponse,sourceAddressType,sourceAddressText,sourceStorageText,sourceTopicText,sourceRealtimeAddressType,sourceRealtimeAddressText,sourceRealtimeTopicText,batchFilesSearchHybrid,batchFilesSearchHybridQuery,batchFilesSearchStrict,searchText,batchFilesSearchLimit,batchFilesSearchResults,batchFilesSearchMoreFiles,searchResultsVisible,searchPlaceholder,batchFilesCollection, batchFilesDataframeInfoI, batchFilesDataframeInfoII, batchFilesDataframeActionValue, batchFilesDataframeSourceValue, batchFilesDataframeTargetValue, batchFilesDataframeRelationshipValue, batchFilesDataframeRuleValue, sourceSessionLog, sourceStreams , sourceStreamListener, fileInputRef, textareaRefs, onClose, onMove, zIndex, onFocus, covered, graphLink, graphLinkId, graphLinkSource, graphStatus, activeGraph, chartLink, chartLinkId, activechart, iframeRef, iframeFilters, iframeSettings, iframeSearch, iframePerformanceMood, selectedPropertyTab, filterPropertyKeys, filterResults, nodeProperties, BASE_URL, searchButtonRef, resultContainerRef, requestConfirmation }) {
   const canCancelGraphStaging = type === "graph" && typeof loadscreenText === "string" && loadscreenText.toLowerCase().startsWith("staging graph");
   if (type === "source") {
     return (
@@ -1584,19 +1826,19 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
             <div id={`window_content_${type}_${id}`}  className='content_container'>
                 {selectedContent === null && (
                   <div className="placeholder">
-                    <IframeEmbed wId={id} id="source_placeholder" fileName="source_placeholder" activeGraph={activeGraph} graphAction={graphAction} BASE_URL={BASE_URL}/>
+                    <IframeEmbed wId={id} id="source_placeholder" fileName="source_placeholder" activeGraph={activeGraph} graphAction={graphAction} iframeRef={iframeRef} BASE_URL={BASE_URL}/>
                   </div>
                 )}
                 {selectedContent === "live_source_options" && (
                   <div className="live_source_options_container">
-                    <div className="" style={{fontSize:'2.5vh',borderBottom:'1px solid #ccc', padding:'2vh',textAlign:'left',paddingLeft:'0vw',margin:'1.5vw'}}>Pick a source input</div>
-                    <div className="live_source_option">
+                    <div className="" style={{fontSize:'2.5vh',borderBottom:'1px solid var(--input-border)', color:'var(--app-text)', padding:'2vh',textAlign:'left',paddingLeft:'0vw',margin:'1.5vw'}}>Pick a source input</div>
+                    <div className="live_source_option" onClick={() => windowAction(id,"real_time_input","update")}>
                       <span className="live_source_option_icon">
                         <Icons id="window_live_source_option" type="realTime_input" condition="True"/> 
                       </span>
                       <span className="live_source_option_details">
-                        <label>Real-time input</label>
-                        <p>Connect to a Broker/API and consume data as a Real-time messages.</p>
+                        <label style={sourceOptionTitleStyle}>Real-time input</label>
+                        <p style={sourceOptionBodyStyle}>Connect to a Broker/API and consume data as a Real-time messages.</p>
                       </span>
                     </div>
                     <div className="live_source_option" onClick={() => windowAction(id,"batch_input","update")}>
@@ -1604,9 +1846,237 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
                         <Icons id="window_live_source_option" type="batch_input" condition="True"/> 
                       </span>
                       <span className="live_source_option_details">
-                        <label>Batch input</label>
-                        <p>Connect to a Broker/API and fetch for datas as a batch query.</p>
+                        <label style={sourceOptionTitleStyle}>Batch input</label>
+                        <p style={sourceOptionBodyStyle}>Connect to a Broker/API and fetch for datas as a batch query.</p>
                       </span>
+                    </div>
+                  </div>
+                )}
+                {selectedContent === "real_time_input" && (
+                  <div className="live_source_options_container">
+                    <div className="" style={{fontSize:'2.5vh',borderBottom:'1px solid var(--input-border)', color:'var(--app-text)', padding:'2vh',textAlign:'left',paddingLeft:'0vw',margin:'1.5vw',marginBottom:0}}>Pick a source input</div>
+                    <div className="live_source_option_passive" style={{position:'absolute',top:'calc( 3vh - 3vw)',left:'0vw'}}>
+                      <span className="live_source_option_icon">
+                        <Icons id="window_live_source_option" type="realTime_input" condition="True"/> 
+                      </span>
+                      <span className="live_source_option_details">
+                        <label style={sourceOptionTitleStyle}>Real-time input</label>
+                        <p style={sourceOptionBodyStyle}>Connect to a Broker/API and consume data as a Real-time messages.</p>
+                      </span>
+                    </div>
+                    <div className="batch_connection_form_container">
+                      {selectedSubContent === "real_time_input_form_pageI" && (
+                        <div>
+                          <div id="real_time_input_form_response" className="form_response_container"
+                            style={getStatusToneStyle(windowRealtimeResponseI)}>
+                            <span>
+                              <Icons
+                                id="window_live_source_option"
+                                type={
+                                  windowRealtimeResponseI === "Connecting..." ? "loadingx" :
+                                  windowRealtimeResponseI === "Connection established!" ? "correctx" : "errorx"
+                                }
+                                condition="True"
+                              />
+                            </span>
+                            <span>{windowRealtimeResponseI || "Not connected."}</span>
+                          </div>
+                          <form onSubmit={(e) => { e.preventDefault();
+                            if (windowRealtimeResponseI === "Connection established!") {
+                              windowAction(id, "real_time_input_form", "disconnect", {
+                                addressType: sourceRealtimeAddressType,
+                                address: sourceRealtimeAddressText,
+                                topic: sourceRealtimeAddressType === "broker" ? sourceRealtimeTopicText : null,
+                                session_id:id
+                              });
+                            }
+                            else if (windowRealtimeResponseI === "Disconnecting failed!") {
+                              windowAction(id, "real_time_input_form", "disconnect", {
+                                addressType: sourceRealtimeAddressType,
+                                address: sourceRealtimeAddressText,
+                                topic: sourceRealtimeAddressType === "broker" ? sourceRealtimeTopicText : null,
+                                session_id:id
+                              });
+                            }
+                            else {
+                              windowAction(id, "real_time_input_form", "connect", {
+                                addressType: sourceRealtimeAddressType,
+                                address: sourceRealtimeAddressText,
+                                topic: sourceRealtimeAddressType === "broker" ? sourceRealtimeTopicText : null,
+                                session_id:id
+                              });
+                            }
+                            }}>
+                            <fieldset>
+                              <legend><b>Broker/API</b> Connection</legend>
+                              <div className="box_inputs_container">
+                                <input id="realtime_broker_address_radio" className="radioinput" type="radio" name="realtime_source_input_address_type" value="broker" checked={sourceRealtimeAddressType === "broker"}
+                                  onChange={(e) => windowAction(id,"real_time_input_form_address","change",e.target.value)}
+                                  disabled={
+                                    windowRealtimeResponseI === "Connecting..." ? 'True' :
+                                    windowRealtimeResponseI === "Connection established!" ? 'True': ''
+                                  }/>
+                                <label htmlFor="realtime_broker_address_radio">Kafka Broker</label>
+                                <input id="realtime_api_address_radio" className="radioinput" type="radio" name="realtime_source_input_address_type" value="api" checked={sourceRealtimeAddressType === "api"} onChange={(e) => windowAction(id,"real_time_input_form_address","change",e.target.value)}
+                                  disabled={
+                                    windowRealtimeResponseI === "Connecting..." ? 'True' :
+                                    windowRealtimeResponseI === "Connection established!" ? 'True': ''
+                                  }/>
+                                <label htmlFor="realtime_api_address_radio">REST API</label>
+                              </div>
+                              <input id="realtime_source_input_address_text" placeholder="Enter Broker/API Address" value={sourceRealtimeAddressText ?? ''} className="textinput" type="text"
+                              disabled={
+                                windowRealtimeResponseI === "Connecting..." ? 'True' :
+                                windowRealtimeResponseI === "Connection established!" ? 'True': ''
+                              }
+                              onChange={(e) => windowAction(id,"real_time_source_address_text","change",e.target.value)}
+                              style={{
+                                color: windowRealtimeResponseI === "Connection established!" ? "var(--muted-text)" : "",
+                                backgroundColor: windowRealtimeResponseI === "Connection established!" ? "var(--disabled-bg)" : "",
+                                borderColor: windowRealtimeResponseI === "Connection established!" ? "var(--disabled-border)" : ""
+                              }}/>
+                              {sourceRealtimeAddressType === "broker" && (
+                                <input id="realtime_source_kafka_topic_text" placeholder="Enter Kafka topic" value={sourceRealtimeTopicText ?? ''} className="textinput" type="text"
+                                required={sourceRealtimeAddressType === "broker"}
+                                disabled={
+                                  windowRealtimeResponseI === "Connecting..." ? 'True' :
+                                  windowRealtimeResponseI === "Connection established!" ? 'True': ''
+                                }
+                                onChange={(e) => windowAction(id,"real_time_source_topic_text","change",e.target.value)}
+                                style={{
+                                  color: windowRealtimeResponseI === "Connection established!" ? "var(--muted-text)" : "",
+                                  backgroundColor: windowRealtimeResponseI === "Connection established!" ? "var(--disabled-bg)" : "",
+                                  borderColor: windowRealtimeResponseI === "Connection established!" ? "var(--disabled-border)" : ""
+                                }}/>
+                              )}
+                            </fieldset>
+                            <button type="submit"><span><Icons id="window_live_source_option" type="connect" condition="True"/></span>
+                              <span>
+                                {
+                                  windowRealtimeResponseI === null
+                                    ? "Connect":
+                                  windowRealtimeResponseI === "Not connected."
+                                    ? "Connect":
+                                  windowRealtimeResponseI === "Disconnecting..."
+                                    ? "Disconnecting...":
+                                  windowRealtimeResponseI === "Disconnected!"
+                                    ? "Connect":
+                                  windowRealtimeResponseI === "Connecting..."
+                                    ? "Connecting...":
+                                  windowRealtimeResponseI === "Connection established!"
+                                    ? "Disconnect":
+                                  windowRealtimeResponseI === "Connection failed!"
+                                    ? "Connect":
+                                  windowRealtimeResponseI === "Disconnecting failed!"
+                                    ? "Retry": ""
+                                }
+                              </span>
+                             </button>
+                          </form>
+                          <form onSubmit={(e) => { e.preventDefault();
+                            if (windowRealtimeResponseI === "Connection established!" && formRealtimeToolResponse !== "Connected!" ) {
+                              const toolUrl = document.getElementById("realtime_tool_url").value;
+                              const toolUsername = document.getElementById("realtime_tool_username").value;
+                              const toolPassword = document.getElementById("realtime_tool_password").value;
+                              const toolDatabase = document.getElementById("realtime_tool_database").value;
+                              windowAction(id, "real_time_tool_integration_form", "connect", {
+                                tool_name: 'neo4j',
+                                url: toolUrl,
+                                username: toolUsername,
+                                password: toolPassword,
+                                database: toolDatabase,
+                                source_id:id
+                              });
+                            }
+                            else{
+                              windowAction(id, "real_time_tool_integration_form", "disconnect", {
+                                tool_name: 'neo4j',
+                                source_id:id
+                              });
+                            }
+                            }}>
+                            <fieldset>
+                              <legend><b>Tool/Database</b> Integration</legend>
+                              <div className="box_inputs_container">
+                                <input id="realtime_tool_neo4j_radio" className="radioinput" type="radio" name="realtime_analysis_tool_type" defaultChecked />
+                                <label htmlFor="realtime_tool_neo4j_radio">Neo4j</label>
+                              </div>
+                              <input id="realtime_tool_url" placeholder="Url" className="textinput" defaultValue={configurations.active_tool_protocol} type="text"
+                                disabled={
+                                formRealtimeToolResponse === "Connected!" ? 'False': ''
+                              }/>
+                              <input id="realtime_tool_username" placeholder="Username" defaultValue={configurations.active_tool_username} className="textinput" type="text"
+                                disabled={
+                                formRealtimeToolResponse === "Connected!" ? 'False': ''
+                              }/>
+                              <input id="realtime_tool_password" placeholder="Password" defaultValue={configurations.active_tool_password} className="textinput" type="password"
+                                disabled={
+                                formRealtimeToolResponse === "Connected!" ? 'False': ''
+                              }/>
+                              <input id="realtime_tool_database" placeholder="Database name" className="textinput" type="text" disabled/>
+                              <div className="tool_form_response">
+                                <Icons
+                                  id="window_live_source_option"
+                                  type={
+                                    formRealtimeToolResponse === null ? "warningx" :
+                                    formRealtimeToolResponse === "Not connected!" ? "warningx" :
+                                    formRealtimeToolResponse === "Connecting..." ? "loadingx" :
+                                    formRealtimeToolResponse === "Connected!" ? "correctx" : "errorx"
+                                  }
+                                  condition="True"
+                                />
+                                <span
+                                  style={getToolStatusTextStyle(formRealtimeToolResponse)}>
+                                  {
+                                    formRealtimeToolResponse === null
+                                      ? "Not connected!":
+                                    formRealtimeToolResponse === "Not connected!"
+                                      ? "Not connected!":
+                                    formRealtimeToolResponse === "Disconnecting..."
+                                      ? "Disconnecting...":
+                                    formRealtimeToolResponse === "Disconnected!"
+                                      ? "Disconnected!":
+                                    formRealtimeToolResponse === "Connecting..."
+                                      ? "Connecting...":
+                                    formRealtimeToolResponse === "Connected!"
+                                      ? "Connected!":
+                                    formRealtimeToolResponse === "Connection failed!"
+                                      ? "Connection failed!":
+                                    formRealtimeToolResponse === "Disconnecting failed!"
+                                      ? "Disconnecting failed!"
+                                      : ""
+                                  }
+                                </span>
+                              </div>
+                              <button
+                                disabled={
+                                windowRealtimeResponseI === "Connection established!" ? '':
+                                windowRealtimeResponseI !== "Connection established!" && formRealtimeToolResponse === "Connected!" ? '': 'False'
+                              }>
+                                {
+                                  formRealtimeToolResponse === null ? "Connect":
+                                  formRealtimeToolResponse === "Not connected!" ? "Connect":
+                                  formRealtimeToolResponse === "Connected!" ? "Disconnect" :
+                                  formRealtimeToolResponse === "Disconnected!" ? "Connect" :
+                                  formRealtimeToolResponse === "Connecting..." ? "Connecting..." : "Disconnecting..."
+                                }
+                              </button>
+                            </fieldset>
+                          </form>
+                        </div>
+                      )}
+                    </div>
+                    <div className="batch_connection_form_pager_container">
+                      <button disabled={'True'}>
+                        {"Back"}
+                      </button>
+                      <button
+                        disabled={
+                          windowRealtimeResponseI === "Connection established!" && formRealtimeToolResponse === "Connected!" ? '' : 'True'
+                        }
+                        onClick={() => { const sourceAddress = sourceRealtimeAddressText || ""; const sourceTopic = sourceRealtimeAddressType === "broker" ? (sourceRealtimeTopicText || "") : null; windowAction(id, "batch_input_form_swap", "page_II", {"addressType":sourceRealtimeAddressType,"address":sourceAddress,"topic":sourceTopic,"mode":"realtime"}); }}>
+                        {"Next"}
+                      </button>
                     </div>
                   </div>
                 )}
@@ -1618,8 +2088,8 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
                         <Icons id="window_upload_source_option" type="upload_input" condition="True"/> 
                       </span>
                       <div className="upload_source_option_details">
-                        <label>Upload files or Drag and drop here.</label>
-                        <p>
+                        <label style={sourceOptionTitleStyle}>Upload files or Drag and drop here.</label>
+                        <p style={sourceOptionBodyStyle}>
                           <i><b>Note: </b>Only csv, parquet, json and xlsx file types are allowed.</i>
                         </p>
                       </div>
@@ -1630,24 +2100,21 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
                 )}
                 {selectedContent === "batch_input" && (
                   <div className="live_source_options_container">
-                    <div className="" style={{fontSize:'2.5vh',borderBottom:'1px solid #ccc', padding:'2vh',textAlign:'left',paddingLeft:'0vw',margin:'1.5vw',marginBottom:0}}>Pick a source input</div>
+                    <div className="" style={{fontSize:'2.5vh',borderBottom:'1px solid var(--input-border)', color:'var(--app-text)', padding:'2vh',textAlign:'left',paddingLeft:'0vw',margin:'1.5vw',marginBottom:0}}>Pick a source input</div>
                     <div className="live_source_option_passive" style={{position:'absolute',top:'calc( 3vh - 3vw)',left:'0vw'}}>
                       <span className="live_source_option_icon">
                         <Icons id="window_live_source_option" type="batch_input" condition="True"/> 
                       </span>
                       <span className="live_source_option_details">
-                        <label>Batch input</label>
-                        <p>Connect to a Broker/API or upload datasets and fetch for data in batch.</p>
+                        <label style={sourceOptionTitleStyle}>Batch input</label>
+                        <p style={sourceOptionBodyStyle}>Connect to a Broker/API or upload datasets and fetch for data in batch.</p>
                       </span>
                     </div>
                     <div className="batch_connection_form_container">
                       {selectedSubContent === "batch_input_form_pageI" && (
                         <div>
                           <div id="batch_input_form_response" className="form_response_container"
-                            style={{
-                              color: windowResponseI === "Connecting..." ? '#999' : windowResponseI === "Connection established!" ? '#090' : windowResponseI === "Connection failed!" ? '#900' : windowResponseI === "Dataset uploaded!" ? '#090' : '',
-                              backgroundColor: windowResponseI === "Connecting..." ? 'rgba(0,0,0,0.1)' : windowResponseI === "Connection established!" ? 'rgba(0, 255, 0, 0.2)' : windowResponseI === "Connection failed!" ? 'rgba(255, 0, 0, 0.2)' : windowResponseI === "Dataset uploaded!" ? 'rgba(0, 255, 0, 0.2)' :''
-                            }}>
+                            style={getStatusToneStyle(windowResponseI)}>
                             <span>
                               <Icons
                                 id="window_live_source_option"
@@ -1661,43 +2128,25 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
                             </span>
                             <span>{windowResponseI || "Not connected."}</span>
                           </div>
-                          <form onSubmit={(e) => { e.preventDefault(); 
-                            if (windowResponseI === "Connection established!") {
-                              // Disconnect logic
-                              //const sourceAddressType = Array.from(document.getElementsByName("source_input_address_type")).find(el => el.checked)?.value || null;
-                              //const sourceAddress = document.getElementById("source_input_address_text").value;
-                              const storageAddress = document.getElementById("source_storage_address_text").value;
-                              windowAction(id, "batch_input_form", "disconnect", {
-                                addressType: sourceAddressType,
-                                broker: sourceAddressText,
-                                hdfs: storageAddress,
-                                session_id:id                                
-                              });
-                            }
-                            else if (windowResponseI === "Disconnecting failed!") {
-                              // Disconnect logic
-                              //const sourceAddressType = Array.from(document.getElementsByName("source_input_address_type")).find(el => el.checked)?.value || null;
-                              //const sourceAddress = document.getElementById("source_input_address_text").value;
-                              const storageAddress = document.getElementById("source_storage_address_text").value;
-                              windowAction(id, "batch_input_form", "disconnect", {
-                                addressType: sourceAddressType,
-                                address: sourceAddressText,
-                                storage: storageAddress,
-                                session_id:id                                
-                              });
+                          <form onSubmit={(e) => { e.preventDefault();
+                            const brokerAddress = sourceAddressText || "";
+                            const storageAddress = sourceStorageText || "";
+                            const topicAddress = sourceAddressType === "broker" ? (sourceTopicText || "") : null;
+                            const sourcePayload = {
+                              addressType: sourceAddressType,
+                              address: brokerAddress,
+                              broker: brokerAddress,
+                              storage: storageAddress,
+                              hdfs: storageAddress,
+                              topic: topicAddress,
+                              session_id:id
+                            };
+                            if (windowResponseI === "Connection established!" || windowResponseI === "Disconnecting failed!") {
+                              windowAction(id, "batch_input_form", "disconnect", sourcePayload);
                             }
                             else {
-                              // connect logic
-                              //const sourceAddressType = Array.from(document.getElementsByName("source_input_address_type")).find(el => el.checked)?.value || null;
-                              //const sourceAddress = document.getElementById("source_input_address_text").value;
-                              const storageAddress = document.getElementById("source_storage_address_text").value;
-                              console.log("render sourceAddress:", sourceAddressText);
-                              windowAction(id, "batch_input_form", "connect", {
-                                addressType: sourceAddressType,
-                                address: sourceAddressText,
-                                storage: storageAddress,
-                                session_id:id                                
-                              });
+                              console.log("render sourceAddress:", brokerAddress);
+                              windowAction(id, "batch_input_form", "connect", sourcePayload);
                             }
                             }}
                             style={{
@@ -1721,17 +2170,29 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
                                   }/>
                                 <label htmlFor="api_address_radio">REST API</label>
                               </div>
-                              <input id="source_input_address_text" placeholder="Enter Broker/API Address" defaultValue={sourceAddressText} className="textinput" type="text"
+                              <input id="source_input_address_text" placeholder="Enter Broker/API Address" value={sourceAddressText ?? ''} className="textinput" type="text"
                               disabled={
                                 windowResponseI === "Connecting..." ? 'True' : 
                                 windowResponseI === "Connection established!" ? 'True': ''
                               }
-                              onChange={(e) => windowAction(id,"source_storage_address_text","change",e.target.value)}
+                              onChange={(e) => windowAction(id,"source_input_address_text","change",e.target.value)}
                               style={{
-                                color: windowResponseI === "Connection established!" ? '#AAA' : '',
-                                backgroundColor: windowResponseI === "Connection established!" ? '#EEE' : '',
-                                borderColor: windowResponseI === "Connection established!" ? '#DDD' : ''
-                              }}/>
+                                color: windowResponseI === "Connection established!" ? "var(--muted-text)" : "",
+                                backgroundColor: windowResponseI === "Connection established!" ? "var(--disabled-bg)" : "",
+                                borderColor: windowResponseI === "Connection established!" ? "var(--disabled-border)" : ""
+                              }}/>{sourceAddressType === "broker" && (
+                              <input id="source_topic_text" placeholder="Enter Kafka topic" value={sourceTopicText ?? ''} className="textinput" type="text"
+                              required={sourceAddressType === "broker"}
+                              disabled={
+                                windowResponseI === "Connecting..." ? 'True' :
+                                windowResponseI === "Connection established!" ? 'True': ''
+                              }
+                              onChange={(e) => windowAction(id,"source_topic_text","change",e.target.value)}
+                              style={{
+                                color: windowResponseI === "Connection established!" ? "var(--muted-text)" : "",
+                                backgroundColor: windowResponseI === "Connection established!" ? "var(--disabled-bg)" : "",
+                                borderColor: windowResponseI === "Connection established!" ? "var(--disabled-border)" : ""
+                              }}/>) }
                             </fieldset>
                             <fieldset>
                               <legend><b>HDFS</b> Connection</legend>
@@ -1743,15 +2204,16 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
                                   }/>
                                 <label htmlFor="hadoop_address_radio">Hadoop Cluster</label>
                               </div>                            
-                                <input id="source_storage_address_text" placeholder="Enter HDFS Address" defaultValue={sourceAddressText} className="textinput" type="text"
+                                <input id="source_storage_address_text" placeholder="Enter HDFS Address" value={sourceStorageText ?? ''} className="textinput" type="text"
                                 disabled={
                                   windowResponseI === "Connecting..." ? 'True' : 
                                   windowResponseI === "Connection established!" ? 'True': ''
                                 }
+                                onChange={(e) => windowAction(id,"source_storage_address_text","change",e.target.value)}
                                 style={{
-                                  color: windowResponseI === "Connection established!" ? '#AAA' : '',
-                                  backgroundColor: windowResponseI === "Connection established!" ? '#EEE' : '',
-                                  borderColor: windowResponseI === "Connection established!" ? '#DDD' : ''
+                                  color: windowResponseI === "Connection established!" ? "var(--muted-text)" : "",
+                                  backgroundColor: windowResponseI === "Connection established!" ? "var(--disabled-bg)" : "",
+                                  borderColor: windowResponseI === "Connection established!" ? "var(--disabled-border)" : ""
                                 }}/>                            
                             </fieldset>                        
                             <button type="submit"><span><Icons id="window_live_source_option" type="connect" condition="True"/></span>
@@ -1835,13 +2297,7 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
                                   condition="True"
                                 />
                                 <span 
-                                  style={{
-                                  color: 
-                                    formToolResponse === null ? '#CA4' :
-                                    formToolResponse === "Not connected!" ? '#CA4' :
-                                    formToolResponse === "Connected!" ? '#0B0' :
-                                    '' // Default color
-                                  }}>
+                                  style={getToolStatusTextStyle(formToolResponse)}>
                                   {
                                     formToolResponse === null
                                       ? "Not connected!":
@@ -1884,10 +2340,7 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
                       {selectedSubContent === "batch_input_form_pageII" && (
                         <div>
                           <div id="batch_input_form_response" className="form_response_container"
-                            style={{
-                              color: windowResponseI === "Connecting..." ? '#999' : windowResponseI === "Connection established!" ? '#090' : windowResponseI === "Connection failed!" ? '#900' : '',
-                              backgroundColor: windowResponseI === "Connecting..." ? 'rgba(0,0,0,0.1)' : windowResponseI === "Connection established!" ? 'rgba(0, 255, 0, 0.2)' : windowResponseI === "Connection failed!" ? 'rgba(255, 0, 0, 0.2)' : ''
-                            }}>
+                            style={getStatusToneStyle(windowResponseI)}>
                             <span>
                               <Icons
                                 id="window_live_source_option"
@@ -1919,8 +2372,8 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
                                   <label htmlFor="batch_files_search_es" title="Elastic keyword search">Hybrid (Elastic + Hive search)</label>                                                             
                                 </div>
                                 <div className='batch_files_search_options_containerI' style={{ opacity: !batchFilesSearchHybrid ? 0.5 : 1 }}>                                                                    
-                                   <select id="batch_files_search_column" className="col_select_option" name="" disabled={!batchFilesSearchHybrid} required={batchFilesSearchHybrid}>
-                                    <option value="" disabled>Select column</option>
+                                   <select id="batch_files_search_column" className="col_select_option" name="" disabled={!batchFilesSearchHybrid} required={batchFilesSearchHybrid && batchFilesSearchStrict}>
+                                    <option value="">{batchFilesSearchStrict ? "Select strict column" : "All columns (auto)"}</option>
                                     {(batchFilesSearchStrict ? configurations.search_columns_strict : configurations.search_columns_fuzzy).map((col) => (
                                       <option key={col} value={col}>{col}</option>
                                     ))}
@@ -1963,12 +2416,12 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
                                                       backgroundColor: batchFilesCollection.some(
                                                         (selectedFile) => selectedFile.name === name
                                                       )
-                                                        ? "#EEE"
+                                                        ? "var(--disabled-bg)"
                                                         : "",
                                                       color: batchFilesCollection.some(
                                                         (selectedFile) => selectedFile.name === name
                                                       )
-                                                        ? "#999"
+                                                        ? "var(--muted-text)"
                                                         : "",
                                                     }}
                                                     onClick={() => {
@@ -2003,12 +2456,12 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
                                                       backgroundColor: batchFilesCollection.some(
                                                         (selectedFile) => selectedFile.name === name && selectedFile.size === size
                                                       )
-                                                        ? "#EEE"
+                                                        ? "var(--disabled-bg)"
                                                         : "",
                                                       color: batchFilesCollection.some(
                                                         (selectedFile) => selectedFile.name === name && selectedFile.size === size
                                                       )
-                                                        ? "#999"
+                                                        ? "var(--muted-text)"
                                                         : "",
                                                     }}
                                                     onClick={() => {
@@ -2035,9 +2488,9 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
                                                 <li
                                                   style={{
                                                     backgroundColor:
-                                                      searchPlaceholder === "Load more" ? "#FFF" : "",
+                                                      searchPlaceholder === "Load more" ? "var(--panel-bg)" : "",
                                                     color:
-                                                      searchPlaceholder === "No more files" ? "#999" : "",
+                                                      searchPlaceholder === "No more files" ? "var(--muted-text)" : "",
                                                   }}
                                                   className="batch_files_search_results_load_more"
                                                   onClick={() =>
@@ -2046,10 +2499,11 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
                                                       "batch_files_search_input",
                                                       "load_more",
                                                       [
-                                                        document.getElementById("batch_files_search_input")
-                                                          .value,
+                                                        document.getElementById("batch_files_search_input").value,
+                                                        document.getElementById("batch_files_search_date")?.value || "",
                                                         batchFilesSearchHybrid,
-                                                        batchFilesSearchHybridQuery,
+                                                        document.getElementById("batch_files_search_column")?.value || "",
+                                                        document.getElementById("batch_files_search_strict")?.checked || false,
                                                       ]
                                                     )
                                                   }
@@ -2061,7 +2515,7 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
                                           )
                                         ) : (
                                           // No results
-                                          <li style={{ backgroundColor: "#EEE", color: "#AAA" }}>
+                                          <li style={{ backgroundColor: "var(--disabled-bg)", color: "var(--muted-text)" }}>
                                             No results Found!
                                           </li>
                                         )}
@@ -2134,10 +2588,7 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
                       {selectedSubContent === "batch_input_form_pageIII" && (
                         <div>
                           <div id="batch_input_form_response" className="form_response_container"
-                            style={{
-                              color: windowResponseI === null ? '#999' : windowResponseI === "Connecting..." ? '#999' : windowResponseI === "..." ? '#999' : windowResponseI === "Connection established!" ? '#090' : windowResponseI === "Connection failed!" ? '#900' : windowResponseI === "Dataset uploaded!" ? '#090' : '',
-                              backgroundColor: windowResponseI === null ? 'rgba(0,0,0,0.1)' :windowResponseI === "Connecting..." ? 'rgba(0,0,0,0.1)' : windowResponseI === "..." ? 'rgba(0,0,0,0.1)' : windowResponseI === "Connection established!" ? 'rgba(0, 255, 0, 0.2)' : windowResponseI === "Connection failed!" ? 'rgba(255, 0, 0, 0.2)' : windowResponseI === "Dataset uploaded!" ? 'rgba(0, 255, 0, 0.2)' :''
-                            }}>
+                            style={getStatusToneStyle(windowResponseI)}>
                             <span>
                               <Icons
                                 id="window_live_source_option"
@@ -2225,7 +2676,7 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
                                   </div>
                                   <div className="actions_partition">
                                     <label>Source/Target</label>                                    
-                                    <select id={`batch_files_dataframe_source_select_${type}_${id}`} value={batchFilesDataframeSourceValue ? batchFilesDataframeSourceValue:''} disabled={batchFilesDataframeInfoI[2]  && batchFilesDataframeActionValue === "Source / Target Relationship" ? false:true} onChange={(e) => windowAction(id,"batch_files_source_select","change",e.target.value)} style={{float:'left',position:'relative',width:'32.5%',borderRight:'0.1vh dashed #EEE',marginRight:'0.1vw'}}>
+                                    <select id={`batch_files_dataframe_source_select_${type}_${id}`} value={batchFilesDataframeSourceValue ? batchFilesDataframeSourceValue:''} disabled={batchFilesDataframeInfoI[2]  && batchFilesDataframeActionValue === "Source / Target Relationship" ? false:true} onChange={(e) => windowAction(id,"batch_files_source_select","change",e.target.value)} style={{float:'left',position:'relative',width:'32.5%',borderRight:'0.1vh dashed var(--input-border)',marginRight:'0.1vw'}}>
                                       <option value="" disabled>Select Source</option>
                                       {batchFilesDataframeInfoI[2] ? (
                                         batchFilesDataframeInfoI[2].map((item, index) => (
@@ -2235,7 +2686,7 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
                                           <option>No columns</option>
                                       )}
                                     </select>
-                                    <select id={`batch_files_dataframe_target_select_${type}_${id}`} value={batchFilesDataframeTargetValue ? batchFilesDataframeTargetValue:''} disabled={batchFilesDataframeInfoI[2] && batchFilesDataframeActionValue === "Source / Target Relationship" ? false:true} onChange={(e) => windowAction(id,"batch_files_target_select","change",e.target.value)} style={{float:'left',position:'relative',width:'32%',borderRight:'0.1vh dashed #EEE',marginRight:'0.1vw'}}>
+                                    <select id={`batch_files_dataframe_target_select_${type}_${id}`} value={batchFilesDataframeTargetValue ? batchFilesDataframeTargetValue:''} disabled={batchFilesDataframeInfoI[2] && batchFilesDataframeActionValue === "Source / Target Relationship" ? false:true} onChange={(e) => windowAction(id,"batch_files_target_select","change",e.target.value)} style={{float:'left',position:'relative',width:'32%',borderRight:'0.1vh dashed var(--input-border)',marginRight:'0.1vw'}}>
                                       <option value="" disabled>Select Target</option>
                                       {batchFilesDataframeInfoI[2] ? (
                                         batchFilesDataframeInfoI[2].map((item, index) => (
@@ -2312,10 +2763,7 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
                       {selectedSubContent === "batch_input_form_pageIV" && (
                         <div>
                           <div id="batch_input_form_response" className="form_response_container"
-                            style={{
-                              color: windowResponseI === null ? '#999' : windowResponseI === "Session running..." ? '#33C' : windowResponseI === "Connecting..." ? '#999' : windowResponseI === "..." ? '#999' : windowResponseI === "Connection established!" ? '#090' : windowResponseI === "Connection failed!" ? '#900' : '',
-                              backgroundColor:  windowResponseI === null ? '#999' : windowResponseI === "Session running..." ? 'rgba(0, 0, 255, 0.2)' : windowResponseI === "Connecting..." ? 'rgba(0,0,0,0.1)' : windowResponseI === "..." ? 'rgba(0,0,0,0.1)' : windowResponseI === "Connection established!" ? 'rgba(0, 255, 0, 0.2)' : windowResponseI === "Connection failed!" ? 'rgba(255, 0, 0, 0.2)' : ''
-                            }}>
+                            style={getStatusToneStyle(windowResponseI)}>
                             <span>
                               <Icons
                                 id="window_live_source_option"
@@ -2417,8 +2865,13 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
                       </button>
                       <button onClick={() => {
                           if (selectedSubContent === "batch_input_form_pageI" && windowResponseI === "Connection established!"){
-                            const sourceAddress = document.getElementById("source_input_address_text").value;
-                            windowAction(id, "batch_input_form_swap", "page_II",{"addressType":sourceAddressType,"address":sourceAddress});
+                            const sourceAddress = sourceAddressText || "";
+                            const sourceTopic = sourceAddressType === "broker" ? (sourceTopicText || "") : null;
+                            if (sourceAddressType === "broker" && !String(sourceTopic || "").trim()) {
+                              alert("Kafka topic is required.");
+                              return null;
+                            }
+                            windowAction(id, "batch_input_form_swap", "page_II",{"addressType":sourceAddressType,"address":sourceAddress,"topic":sourceTopic,"mode":"batch"});
                           }
                           else if (selectedSubContent === "batch_input_form_pageI" && windowResponseI === "Dataset uploaded!"){
                             windowAction(id, "batch_input_form_swap", "page_III",null);
@@ -2465,7 +2918,7 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
               )}
               {selectedContent === "null2" && (
                 <div className="placeholder">
-                  <IframeEmbed wId={id} id="source_placeholder" fileName="source_placeholder" activeGraph={activeGraph} graphAction={graphAction} BASE_URL={BASE_URL}/>
+                  <IframeEmbed wId={id} id="source_placeholder" fileName="source_placeholder" activeGraph={activeGraph} graphAction={graphAction} iframeRef={iframeRef} BASE_URL={BASE_URL}/>
                 </div>
               )}
             </div>
@@ -3163,13 +3616,12 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
     )
   }
 }
-function Main({userName,setSessionId, API_URL,debounceRef,setConfigurations, configurations,windows, setWindows, openWindows }) {
+function Main({userName,setSessionId, API_URL,debounceRef,setConfigurations, configurations,windows, setWindows, openWindows, themeMode }) {
   const hasRunRef = useRef(false);
   const iframeRef = useRef(null);
   useEffect(() => {
     if (hasRunRef.current) return;
     hasRunRef.current = true;
-    console.log("Running initial openWindows calls");
     //openWindows('source', '',iframeRef);
     //openWindows('graph', '',iframeRef);
 
@@ -3177,7 +3629,7 @@ function Main({userName,setSessionId, API_URL,debounceRef,setConfigurations, con
   }, []);
   return (
     <main id='main'>
-      <NetworkBackground name={userName} />    
+      <NetworkBackground name={userName} themeMode={themeMode} />    
     </main>
   );
 }
@@ -3298,8 +3750,13 @@ function Root() {
   const [sessionId, setSessionId] = useState(null);
   const [isToggleMenuOpen, setIsToggleMenuOpen] = useState(false);
   const [isTaskBarOpen, setIsTaskBarOpen] = useState(false);
+  const [themeMode, setThemeMode] = useState(() => {
+    const savedMode = localStorage.getItem("linkx_theme_mode");
+    return savedMode === "dark" ? "dark" : "light";
+  });
   const [configurations, setConfigurations] = useState({});
   const [isConfigurationsOpen, setIsConfigurationsOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [loadscreenState, setloadscreenState] = useState(false);
   const [loadscreenText, setloadscreenText] = useState('');
   const [isSideBarMenuOpen, setIsSideBarMenuOpen] = useState(false);
@@ -3326,10 +3783,20 @@ function Root() {
   const [sourceStreams, setSourceStreams] = useState({});  
   const [sourceStreamListener, setSourceStreamListener] = useState(false);
   const [sourceSessionLog, setSourceSessionLog] = useState('');
-  const [sourceSessionLogFile, setSourceSessionLogFile] = useState({});     
-  const fileInputRef = useRef(null);  
+  const [sourceSessionLogFile, setSourceSessionLogFile] = useState(null);     
+const fileInputRef = useRef(null);  
   const sourceRef = useRef(null);
   const socketRef = useRef(null);
+  const strReportPendingRef = useRef(null);
+  const strReportGraphByAnalysisRef = useRef({});
+  const strReportOpenInFlightRef = useRef(new Set());
+  const strReportSubscribedSessionsRef = useRef(new Set());
+  const graphStatusSubscribedSessionsRef = useRef(new Set());
+  const graphStatusErrorNoticeRef = useRef({});
+  const graphInfoPayloadBySessionRef = useRef({});
+  const openStrReportGraphAndBindRef = useRef(null);
+  const pushNotificationRef = useRef(null);
+  const sessionIdRef = useRef(null);
   const logRef = useRef(''); // for accumulating logs    
   const textareaRefs = useRef({});
   const debounceRef = useRef(null);
@@ -3354,14 +3821,25 @@ function Root() {
   const graphFetchAbortControllersRef = useRef({});
   const toggleMenuRef = useRef(null);
   const tabsToggleButtonRef = useRef(null);
+  const darkFloatMenuToggleRef = useRef(null);
   const API_URL = import.meta.env.VITE_API_URL
   const BASE_URL = import.meta.env.VITE_BASE_URL
+  const HEADER_TRIGGER_ALLOWED_ORIGINS = String(import.meta.env.VITE_HEADER_ALLOWED_ORIGINS || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
   //const BASE_URL = "http://localhost:5173"
   //const API_URL = "http://localhost:5000";
 
   // useEffect(() => {  // Sync windowsRef on every update
   //   console.log("orientation:",orientation)
   // }, [orientation]);
+
+  useEffect(() => {
+    if (themeMode === "dark" && windows.length === 0) {
+      setIsToggleMenuOpen(false);
+    }
+  }, [themeMode, windows.length]);
 
   useEffect(() => {
     if (!isToggleMenuOpen) return;
@@ -3371,6 +3849,7 @@ function Root() {
       if (!(target instanceof Node)) return;
       if (toggleMenuRef.current?.contains(target)) return;
       if (tabsToggleButtonRef.current?.contains(target)) return;
+      if (darkFloatMenuToggleRef.current?.contains(target)) return;
       setIsToggleMenuOpen(false);
     };
 
@@ -3379,6 +3858,55 @@ function Root() {
       document.removeEventListener("pointerdown", handleOutsideToggleClick);
     };
   }, [isToggleMenuOpen]);
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", themeMode);
+    localStorage.setItem("linkx_theme_mode", themeMode);
+  }, [themeMode]);
+
+  useEffect(() => {
+    const listeners = [];
+    const sendThemeMode = (frameEl) => {
+      frameEl?.contentWindow?.postMessage(
+        { action: "theme_mode", payload: themeMode },
+        "*"
+      );
+    };
+
+    const replayGraphInfoToFrame = (windowId, frameEl) => {
+      const windowState = windowsRef.current.find((w) => String(w.id) === String(windowId));
+      if (!windowState) return;
+      if (String(windowState.activeGraph || "") !== "graph_info_placeholder") return;
+
+      const sessionKey = String(windowState.graphLinkSource || windowState.sessionId || "").trim();
+      if (!sessionKey) return;
+
+      const cachedPayload = graphInfoPayloadBySessionRef.current[sessionKey];
+      if (!cachedPayload || typeof cachedPayload !== "object") return;
+
+      frameEl?.contentWindow?.postMessage(
+        { action: "informations", payload: cachedPayload },
+        "*"
+      );
+    };
+
+    Object.entries(iframeRefs.current || {}).forEach(([windowId, frameRef]) => {
+      const frameEl = frameRef?.current;
+      if (!frameEl) return;
+      const onLoad = () => {
+        sendThemeMode(frameEl);
+        replayGraphInfoToFrame(windowId, frameEl);
+      };
+      frameEl.addEventListener("load", onLoad);
+      listeners.push(() => frameEl.removeEventListener("load", onLoad));
+      sendThemeMode(frameEl);
+      replayGraphInfoToFrame(windowId, frameEl);
+    });
+
+    return () => {
+      listeners.forEach((dispose) => dispose());
+    };
+  }, [themeMode, windows.length]);
 
   const removeNotification = useCallback((id) => {
     setNotifications((prev) => prev.filter((item) => item.id !== id));
@@ -3423,6 +3951,19 @@ function Root() {
     }
     return id;
   }, [removeNotification, sanitizeNotificationMessage]);
+
+  pushNotificationRef.current = pushNotification;
+  sessionIdRef.current = sessionId;
+
+  const registerStrReportSocketReceiver = (browserSession) => {
+    const socket = socketRef.current;
+    const resolvedSession = String(browserSession || "").trim();
+    if (!socket?.connected || !resolvedSession) {      return;
+    }
+    const payload = { session_id: resolvedSession, socket_id: socket.id };
+    socket.emit("notification_subscribe", { session_id: resolvedSession });
+    socket.emit(STR_REPORT_SOCKET_EMIT_REGISTER_RECEIVER, payload);
+  };
 
   const resolveConfirmation = useCallback((id, accepted) => {
     setConfirmations((prev) => {
@@ -3495,7 +4036,11 @@ function Root() {
   useEffect(() => {
     const oldSession = localStorage.getItem('session'); //Already stored session
     debounceRef.current = setTimeout(() => {
-        const payload = { id: "init", existing_session:oldSession};
+        const payload = {
+          id: "init",
+          existing_session: oldSession,
+          socket_id: socketRef.current?.id || null,
+        };
         fetch(`${API_URL}/init`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -3520,6 +4065,13 @@ function Root() {
                 localStorage.setItem('session', session);
                 setSessionId(session);
               }
+              const registerAfterInit = () => registerStrReportSocketReceiver(session);
+              const socket = socketRef.current;
+              if (socket?.connected) {
+                registerAfterInit();
+              } else if (socket) {
+                socket.once("connect", registerAfterInit);
+              }
             } else {
               alert("Could not initialize!");
             }
@@ -3542,17 +4094,99 @@ function Root() {
     };
   }, [pushNotification]);
   // ---------------------------------------------------------------------------- sockets ---
-  console.log("API_URL:",API_URL)
 
   useEffect(() => {  // Sync windowsRef on every update
     windowsRef.current = windows;
   }, [windows]);
   useEffect(() => {
-    socketRef.current = io(API_URL);
-    return () => {
-      if (socketRef.current) {
-        socketRef.current.disconnect();
+    const socket = io(API_URL);
+    socketRef.current = socket;
+
+    const resolveAnalysisSessionId = (payload = {}) => {
+      return String(
+        payload.session_id ??
+        payload.analysis_session_id ??
+        payload.analysisSessionId ??
+        ""
+      ).trim();
+    };
+
+    const resolveSocketEmitFromPayload = (payload = {}) => {
+      return payload.socket?.emit ?? payload.socket_emit ?? payload.socketEmit ?? null;
+    };
+    const handleStrReportLinkAnalysis = (payload = {}) => {
+      const analysisSessionId = resolveAnalysisSessionId(payload);
+      if (!analysisSessionId) {
+        return;
       }
+
+      const socketEmit = resolveSocketEmitFromPayload(payload);
+      strReportPendingRef.current = { analysisSessionId, socketEmit };
+
+      const waitForPrepare =
+        payload.wait_for_prepare === true || payload.defer_graph_open === true;
+
+      if (waitForPrepare) {
+        pushNotificationRef.current?.({
+          title: "STR Report Analysis",
+          message: `Analysis session ${analysisSessionId} is ready. Waiting for graph receiver.`,
+          source: "Socket",
+          level: "info",
+          durationMs: 6000,
+        });
+        return;
+      }
+
+      if (!openStrReportGraphAndBindRef.current) {
+        setTimeout(() => {
+          openStrReportGraphAndBindRef.current?.(analysisSessionId, socketEmit);
+        }, 0);
+        return;
+      }
+
+      openStrReportGraphAndBindRef.current(analysisSessionId, socketEmit);
+    };
+
+    const handleStrReportNotification = (payload = {}) => {
+      const code = String(payload.code || "").trim();      if (code !== STR_REPORT_NOTIFICATION_CODE_PREPARE_RECEIVER) return;
+
+      const pendingAnalysisSessionId = String(strReportPendingRef.current?.analysisSessionId || "").trim();
+      const payloadSessionId = resolveAnalysisSessionId(payload);
+      const analysisSessionId =
+        pendingAnalysisSessionId ||
+        (isStrReportAnalysisSession(payloadSessionId) ? payloadSessionId : "");
+
+      if (!analysisSessionId) {
+        return;
+      }
+
+      const socketEmit =
+        resolveSocketEmitFromPayload(payload) ??
+        strReportPendingRef.current?.socketEmit ??
+        null;
+
+      openStrReportGraphAndBindRef.current?.(analysisSessionId, socketEmit);
+    };
+
+    socket.on(STR_REPORT_SOCKET_EVENT_LINK_ANALYSIS, handleStrReportLinkAnalysis);
+    socket.on("notification", handleStrReportNotification);
+    const handleSocketConnect = () => {
+      const browserSession =
+        sessionIdRef.current || localStorage.getItem("session") || "";registerStrReportSocketReceiver(browserSession);    };
+    const handleSocketDisconnect = () => {};
+    const handleSocketConnectError = () => {};
+
+    socket.on("connect", handleSocketConnect);
+    socket.on("disconnect", handleSocketDisconnect);
+    socket.on("connect_error", handleSocketConnectError);
+
+    return () => {      socket.off(STR_REPORT_SOCKET_EVENT_LINK_ANALYSIS, handleStrReportLinkAnalysis);
+      socket.off("notification", handleStrReportNotification);
+      socket.off("connect", handleSocketConnect);
+      socket.off("disconnect", handleSocketDisconnect);
+      socket.off("connect_error", handleSocketConnectError);
+      socket.disconnect();
+      socketRef.current = null;
     };
   }, []);
   // ------------------------------------------------------- backend notifications socket ---
@@ -3587,6 +4221,9 @@ function Root() {
     };
 
     const handleNotification = (payload = {}) => {
+      const code = String(payload.code || "").trim();
+      if (code === STR_REPORT_NOTIFICATION_CODE_PREPARE_RECEIVER) return;
+
       const sid = String(payload.session_id ?? "");
       if (!sid || !subscribedIds.has(sid)) return;
 
@@ -3622,6 +4259,9 @@ function Root() {
   // ------------------------------------------------------------------ logger ---
   useEffect(() => {
     if (!sourceSessionLogFile) return;
+    const logFile = sourceSessionLogFile?.logFile;
+    const logSessionId = sourceSessionLogFile?.session_id;
+    if (!logFile || logSessionId == null || logSessionId === "") return;
 
     logRef.current = '';
     const socket = socketRef.current;
@@ -3649,10 +4289,10 @@ function Root() {
     };
 
     socket.on("stream_logs", handleLogs);
-    socket.emit("log_stream_plug", {filename: sourceSessionLogFile.logFile,session_id: sourceSessionLogFile.session_id});
+    socket.emit("log_stream_plug", { filename: logFile, session_id: logSessionId });
 
     return () => {
-      socket.emit("log_stream_unplug", {filename: sourceSessionLogFile.logFile,session_id: sourceSessionLogFile.session_id});
+      socket.emit("log_stream_unplug", { filename: logFile, session_id: logSessionId });
       socket.off("stream_logs", handleLogs);
     };
   }, [sourceSessionLogFile]);
@@ -3665,10 +4305,46 @@ function Root() {
     let lastHash = null;
     let sessionId = sourceStreams
     const latestStreamingId = Object.entries(sourceStreams).filter(([_, isStreaming]) => isStreaming).at(-1)?.[0];
+    if (!latestStreamingId) return;
     const handleGraphStatus = (payload) => {
       const { type, data, error, session_id } = payload;
       sessionId = session_id
+      const isGraphInfoPlaceholderPath = (pathname) => {
+        const normalizedPath = String(pathname || "");
+        return normalizedPath.endsWith("/temp_placeholders/graph_info_placeholder.html");
+      };
+
+      const buildGraphInfoPayload = (metadata, sessionKey, relationships = []) => {
+        const base = metadata && typeof metadata === "object" ? metadata : {};
+        const relationshipList = Array.isArray(relationships) ? relationships : [];
+        const relationshipLabels = relationshipList
+          .map((item) => item?.type)
+          .filter((item) => item != null && String(item).trim() !== "");
+        return {
+          ...base,
+          session_id: String(sessionKey || ""),
+          analysisSessionId: String(sessionKey || ""),
+          relationship_labels: relationshipLabels,
+          total_relationships:
+            base?.summary?.total_relationships != null
+              ? base.summary.total_relationships
+              : relationshipList.length,
+        };
+      };
       if (error) {
+        const sessionKey = String(session_id || "").trim();
+        const hasLinkedTarget = windowsRef.current.some(
+          (w) => String(w.graphLinkSource || "") === sessionKey
+        );
+        if (!hasLinkedTarget) return;
+
+        const errorText = typeof error === "string" ? error : JSON.stringify(error);
+        const dedupeKey = `${sessionKey}::${errorText}`;
+        const now = Date.now();
+        const lastSeen = Number(graphStatusErrorNoticeRef.current[dedupeKey] || 0);
+        if (now - lastSeen < 60000) return;
+        graphStatusErrorNoticeRef.current[dedupeKey] = now;
+
         console.error("Graph status error:", error);
         return;
       }
@@ -3683,6 +4359,9 @@ function Root() {
       }
 
       if (type === "metadata") {
+        const previousRelationships = graphStatus?.[session_id]?.relationships;
+        const infoPayload = buildGraphInfoPayload(data, session_id, previousRelationships);
+        graphInfoPayloadBySessionRef.current[String(session_id)] = infoPayload;
         // Update local graph status
         //the global GraphStatus is dictionary
         setGraphStatus(prev => ({
@@ -3698,12 +4377,12 @@ function Root() {
           const iframe = iframeRefs.current[w.id];
           if (iframe?.current?.contentWindow) {
             console.log("contentWindow:",iframe?.current?.contentWindow)
-            if (iframe?.current?.contentWindow.location.pathname == "/linkxDS2026/temp_placeholders/graph_info_placeholder.html"){
+            if (isGraphInfoPlaceholderPath(iframe?.current?.contentWindow.location?.pathname)) {
               iframe.current.contentWindow.postMessage(
-                { action: "informations", payload: data },
+                { action: "informations", payload: infoPayload },
                 "*"
               );
-            }          
+            }
           } else {
             console.warn("Iframe ref not avaiLabel for window:", w.id);
           }
@@ -3735,14 +4414,33 @@ function Root() {
               : w
           )
         );
+
+        const metadataPayload = graphStatus?.[session_id]?.status;
+        if (metadataPayload && typeof metadataPayload === "object") {
+          const infoPayload = buildGraphInfoPayload(metadataPayload, session_id, data);
+          graphInfoPayloadBySessionRef.current[String(session_id)] = infoPayload;
+          targetWindows.forEach((w) => {
+            const iframe = iframeRefs.current[w.id];
+            if (iframe?.current?.contentWindow && isGraphInfoPlaceholderPath(iframe?.current?.contentWindow.location?.pathname)) {
+              iframe.current.contentWindow.postMessage(
+                { action: "informations", payload: infoPayload },
+                "*"
+              );
+            }
+          });
+        }
       }
     };
 
-    socket.emit("graph_status_subscribe", { session_id: latestStreamingId });
+    if (!graphStatusSubscribedSessionsRef.current.has(String(latestStreamingId))) {
+      socket.emit("graph_status_subscribe", { session_id: latestStreamingId });
+      graphStatusSubscribedSessionsRef.current.add(String(latestStreamingId));
+    }
     socket.on("status", handleGraphStatus);
 
     return () => {
       socket.emit("graph_status_unsubscribe", { session_id: latestStreamingId });
+      graphStatusSubscribedSessionsRef.current.delete(String(latestStreamingId));
       socket.off("status", handleGraphStatus);
     };
   }, [sourceStreamListener]); // depend only on the source/session
@@ -3822,6 +4520,69 @@ function Root() {
   useEffect(() => {
     const handleIframeMessage = (event) => {
       console.log("event detected:",event)
+      // ---------------- Header trigger (revertable block) ----------------
+      // Contract:
+      // event.data = {
+      //   type: "linkx_header_trigger",
+      //   command: "open_graph_window",
+      //   payload?: { analysisSessionId?: "str_report_...", socketEmit?: any }
+      // }
+      if (event.data?.type === "linkx_header_trigger") {
+        const origin = String(event.origin || "");
+        const sameOrigin = origin === window.location.origin;
+        const allowedOrigin = HEADER_TRIGGER_ALLOWED_ORIGINS.includes(origin);
+        if (!sameOrigin && !allowedOrigin) {
+          console.warn("[header-trigger] blocked origin:", origin || null);
+          return;
+        }
+
+        const triggerPayload = event.data?.payload && typeof event.data.payload === "object"
+          ? event.data.payload
+          : {};
+        const command = String(event.data?.command || triggerPayload.command || "").trim().toLowerCase();
+
+        if (command !== "open_graph_window") {
+          event.source?.postMessage(
+            {
+              type: "linkx_header_trigger_result",
+              payload: { ok: false, reason: `Unsupported command: ${command || "empty"}` }
+            },
+            event.origin
+          );
+          return;
+        }
+
+        let windowId = null;
+        const analysisSessionId = String(triggerPayload.analysisSessionId || "").trim();
+        if (analysisSessionId && openStrReportGraphAndBindRef.current) {
+          windowId = openStrReportGraphAndBindRef.current(
+            analysisSessionId,
+            triggerPayload.socketEmit ?? null
+          );
+        } else {
+          const resolvedSession =
+            String(triggerPayload.sessionId || sessionIdRef.current || localStorage.getItem("session") || "").trim();
+          windowId = handleCreateWindows(resolvedSession, "graph");
+          if (windowId != null) {
+            handleFocusWindow(windowId);
+          }
+        }
+
+        event.source?.postMessage(
+          {
+            type: "linkx_header_trigger_result",
+            payload: {
+              ok: windowId != null,
+              command: "open_graph_window",
+              windowId,
+              mode: analysisSessionId ? "analysis_linked" : "blank_graph"
+            }
+          },
+          event.origin
+        );
+        return;
+      }
+
       if (
         event.data?.type === "app_notification" ||
         event.data?.type === "notification" ||
@@ -4001,6 +4762,7 @@ function Root() {
             .then(res => res.json())
             .then(data => {
               if (data.message === "success!") {
+                iframeRefs.current[windowsId] = React.createRef();
                 setActiveWindowId(windowsId);
                 setWindows(prev => {
                   const maxZ = prev.length
@@ -4017,9 +4779,16 @@ function Root() {
                       selectedSubContent: null,
                       formData: {},
                       windowResponseI: null,
+                      windowRealtimeResponseI: null,
                       sourceAddressType: 'broker',
                       sourceAddressText: '',
+                      sourceStorageText: '',
+                      sourceTopicText: '',
+                      sourceRealtimeAddressType: 'broker',
+                      sourceRealtimeAddressText: '',
+                      sourceRealtimeTopicText: '',
                       formToolResponse: null,
+                      formRealtimeToolResponse: null,
                       batchFilesSearchResults: null,
                     },
                   ];
@@ -4074,6 +4843,7 @@ function Root() {
       });
       handleFocusWindow(id)
       setZIndexCounter(prev => prev + 1);
+      return id;
     } else if (type === "chart") {
       iframeRefs.current[id] = React.createRef();
       setActiveWindowId(id);
@@ -4151,6 +4921,116 @@ function Root() {
       handleCreateWindows(type);
     }
   };
+  // ------------------------------------------------------- str report link analysis (backend-driven graph) ---
+  const bindStrReportGraphWindow = (graphWindowId, analysisSessionId, socketEmit) => {
+    const socket = socketRef.current;
+    if (!socket || graphWindowId == null || !analysisSessionId) return;
+    setGraphLinkState(true);
+    setGraphLinkSource(analysisSessionId);
+    sourceRef.current = analysisSessionId;
+    setGraphStatusListener(true);
+    setSourceStreamListener(true);
+    setSourceStreams((prev) => ({ ...prev, [analysisSessionId]: true }));
+
+    if (!strReportSubscribedSessionsRef.current.has(analysisSessionId)) {
+      applyStrReportSocketEmitList(socket, analysisSessionId, socketEmit);
+      socket.emit("graph_status_subscribe", { session_id: analysisSessionId });
+      strReportSubscribedSessionsRef.current.add(analysisSessionId);
+    }
+
+    setWindows((prev) =>
+      prev.map((w) =>
+        w.id === graphWindowId
+          ? {
+              ...w,
+              sessionId: analysisSessionId,
+              graphLinkSource: analysisSessionId,
+              selectedContent: "graph_content",
+              activeGraph: "graph_info_placeholder",
+              graphLink: true,
+              loadscreenState: false,
+              loadscreenText: "",
+            }
+          : w
+      )
+    );
+
+    strReportGraphByAnalysisRef.current[analysisSessionId] = graphWindowId;
+  };
+
+  const openStrReportGraphAndBind = (analysisSessionId, socketEmit) => {
+    if (!analysisSessionId) return null;
+
+    const analysisKey = String(analysisSessionId).trim();
+    if (!isStrReportAnalysisSession(analysisKey)) {
+      return null;
+    }
+
+    const pendingSocketEmit = socketEmit ?? strReportPendingRef.current?.socketEmit ?? null;
+
+    const existingGraphWindowId =
+      strReportGraphByAnalysisRef.current[analysisKey] ??
+      windowsRef.current.find(
+        (w) => w.type === "graph" && String(w.graphLinkSource) === analysisKey
+      )?.id;
+
+    if (existingGraphWindowId != null) {
+      bindStrReportGraphWindow(existingGraphWindowId, analysisKey, pendingSocketEmit);
+      handleFocusWindow(existingGraphWindowId);
+      strReportPendingRef.current = null;
+      return existingGraphWindowId;
+    }
+
+    if (strReportOpenInFlightRef.current.has(analysisKey)) {
+      return null;
+    }
+
+    strReportOpenInFlightRef.current.add(analysisKey);
+
+    const graphWindowId = handleCreateWindows(analysisKey, "graph");
+    if (graphWindowId == null) {
+      strReportOpenInFlightRef.current.delete(analysisKey);
+      return null;
+    }
+
+    setWindows((prev) =>
+      prev.map((w) =>
+        w.id === graphWindowId
+          ? { ...w, loadscreenState: true, loadscreenText: "Linking STR report graph " }
+          : w
+      )
+    );
+
+    const linkPayload = { id: "link", source_id: analysisKey, LinkedTo: graphWindowId };
+    fetch(`${API_URL}/graph_link`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(linkPayload),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.message !== "success!") {
+          console.warn("str_report graph_link:", data?.message || data);
+        }
+        bindStrReportGraphWindow(graphWindowId, analysisKey, pendingSocketEmit);
+        handleFocusWindow(graphWindowId);
+        strReportPendingRef.current = null;
+      })
+      .catch((err) => {
+        console.error("str_report graph_link failed:", err);
+        bindStrReportGraphWindow(graphWindowId, analysisKey, pendingSocketEmit);
+        handleFocusWindow(graphWindowId);
+        strReportPendingRef.current = null;
+      })
+      .finally(() => {
+        strReportOpenInFlightRef.current.delete(analysisKey);
+      });
+
+    return graphWindowId;
+  };
+
+  openStrReportGraphAndBindRef.current = openStrReportGraphAndBind;
+
     // --- Bring window to front ---
   const handleCloseWindow = (id) => {
     setWindows(prev => {
@@ -4165,9 +5045,22 @@ function Root() {
       }, 0);
       console.log("closingWindow:",closingWindow, "id:",id)
       const socket = socketRef.current;
+      if (closingWindow?.type === "graph" && closingWindow.graphLinkSource) {
+        const analysisKey = String(closingWindow.graphLinkSource);
+        if (strReportGraphByAnalysisRef.current[analysisKey] === id) {
+          delete strReportGraphByAnalysisRef.current[analysisKey];
+        }
+        strReportOpenInFlightRef.current.delete(analysisKey);
+        strReportSubscribedSessionsRef.current.delete(analysisKey);
+        graphStatusSubscribedSessionsRef.current.delete(analysisKey);
+        if (socket && socket.connected) {
+          socket.emit("graph_status_unsubscribe", { session_id: analysisKey });
+        }
+      }
       if (socket && socket.connected && closingWindow.type == "source") {
         socket.emit("log_stream_unplug", {filename: closingWindow.sourceSessionLogFile,session_id: id});
         socket.emit("graph_status_unsubscribe", { session_id: id });
+        graphStatusSubscribedSessionsRef.current.delete(String(id));
       }
       return newWindows;
     });
@@ -4531,6 +5424,8 @@ function Root() {
         let newBatchSearchResult = w.batchFilesSearchResults;
         let newBatchFilesCollection = w.batchFilesCollection || []; // Makes Ensure selectedFiles is initialized
         let windowResponseI = w.windowResponseI 
+        let windowRealtimeResponseI = w.windowRealtimeResponseI 
+        let formRealtimeToolResponse = w.formRealtimeToolResponse 
         if (menuId === "cancel_graph_staging") {
           const controller = graphFetchAbortControllersRef.current[id];
           if (controller) {
@@ -4632,6 +5527,15 @@ function Root() {
         if (menuId === "live_source_options_passive" && action === "update") {
           newContent = "live_source_options";
         }
+        if (menuId === "real_time_input" && action === "update") {
+          newContent = "real_time_input";
+          newSubContent = "real_time_input_form_pageI";
+          setWindows(prev =>
+            prev.map(w =>
+              w.id === id ? { ...w,loadscreenState: false,loadscreenText:null,selectedContent:newContent,selectedSubContent:newSubContent,windowRealtimeResponseI:windowRealtimeResponseI,formRealtimeToolResponse:formRealtimeToolResponse} : w
+            )
+          );
+        }
         if (menuId === "batch_input" && action === "update") {
           newContent = "batch_input";
           newSubContent = "batch_input_form_pageI";
@@ -4660,13 +5564,172 @@ function Root() {
             )
           );
         }
-        if (menuId === "source_storage_address_text" && action === "change" && payload) {
+        if (menuId === "source_input_address_text" && action === "change") {
           console.log("address_change:",payload);
           setWindows(prev =>
             prev.map(w =>
-              w.id === id ? { ...w, sourceAddressText: payload } : w
+              w.id === id ? { ...w, sourceAddressText: payload ?? "" } : w
             )
           );
+        }
+        if (menuId === "source_storage_address_text" && action === "change") {
+          console.log("storage_change:",payload);
+          setWindows(prev =>
+            prev.map(w =>
+              w.id === id ? { ...w, sourceStorageText: payload ?? "" } : w
+            )
+          );
+        }
+        if (menuId === "source_topic_text" && action === "change") {
+          console.log("topic_change:",payload);
+          setWindows(prev =>
+            prev.map(w =>
+              w.id === id ? { ...w, sourceTopicText: payload ?? "" } : w
+            )
+          );
+        }
+        if (menuId === "real_time_input_form_address" && action === "change" && payload) {
+          console.log("address_change:",payload);
+          setWindows(prev =>
+            prev.map(w =>
+              w.id === id ? { ...w, sourceRealtimeAddressType: payload } : w
+            )
+          );
+        }
+        if (menuId === "real_time_source_address_text" && action === "change") {
+          console.log("address_change:",payload);
+          setWindows(prev =>
+            prev.map(w =>
+              w.id === id ? { ...w, sourceRealtimeAddressText: payload ?? "" } : w
+            )
+          );
+        }
+        if (menuId === "real_time_source_topic_text" && action === "change") {
+          console.log("topic_change:",payload);
+          setWindows(prev =>
+            prev.map(w =>
+              w.id === id ? { ...w, sourceRealtimeTopicText: payload ?? "" } : w
+            )
+          );
+        }
+        if (menuId === "real_time_input_form" && action === "connect" && payload) {
+          console.log("realtime_connection_payload:",payload);
+          setWindows(prev =>
+            prev.map(w =>
+              w.id === id ? { ...w, windowRealtimeResponseI: "Connecting..." } : w
+            )
+          );
+          fetch(`${API_URL}/connect_to_source`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          })
+          .then((res) => res.json())
+          .then((data) => {
+            setWindows(prev =>
+              prev.map(w =>
+                w.id === id ? { ...w, windowRealtimeResponseI: data.message } : w
+              )
+            );
+          })
+          .catch((err) => {
+            console.error(err);
+            setWindows(prev =>
+              prev.map(w =>
+                w.id === id ? { ...w, windowRealtimeResponseI: "Connection failed!" } : w
+              )
+            );
+          });
+        }
+        if (menuId === "real_time_input_form" && action === "disconnect" && payload) {
+          setWindows(prev =>
+            prev.map(w =>
+              w.id === id ? { ...w, windowRealtimeResponseI: "Disconnecting..." } : w
+            )
+          );
+          const disconnectPayload = {
+            ...payload,
+            broker: payload?.broker ?? payload?.address ?? "",
+            hdfs: payload?.hdfs ?? payload?.storage ?? "",
+            session_id: payload?.session_id ?? id,
+          };
+          fetch(`${API_URL}/disconnect_source`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(disconnectPayload),
+          })
+            .then((res) => res.json())
+            .then((data) => {
+              setWindows(prev =>
+                prev.map(w =>
+                  w.id === id ? { ...w, windowRealtimeResponseI: data.message } : w
+                )
+              );
+            })
+            .catch((err) => {
+              console.error(err);
+              setWindows(prev =>
+                prev.map(w =>
+                  w.id === id ? { ...w, windowRealtimeResponseI: "Disconnecting failed!" } : w
+                )
+              );
+            });
+        }
+        if (menuId === "real_time_tool_integration_form" && action === "connect" && payload) {
+          setWindows(prev =>
+            prev.map(w =>
+              w.id === id ? { ...w, formRealtimeToolResponse: "Connecting..." } : w
+            )
+          );
+          fetch(`${API_URL}/connect_to_tool`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          })
+            .then((res) => res.json())
+            .then((data) => {
+              setWindows(prev =>
+                prev.map(w =>
+                  w.id === id ? { ...w, formRealtimeToolResponse: data.message } : w
+                )
+              );
+            })
+            .catch((err) => {
+              console.error(err);
+              setWindows(prev =>
+                prev.map(w =>
+                  w.id === id ? { ...w, formRealtimeToolResponse: "Connecting failed!" } : w
+                )
+              );
+            });
+        }
+        if (menuId === "real_time_tool_integration_form" && action === "disconnect" && payload) {
+          setWindows(prev =>
+            prev.map(w =>
+              w.id === id ? { ...w, formRealtimeToolResponse: "Disconnecting..." } : w
+            )
+          );
+          fetch(`${API_URL}/disconnect_tool`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          })
+            .then((res) => res.json())
+            .then((data) => {
+              setWindows(prev =>
+                prev.map(w =>
+                  w.id === id ? { ...w, formRealtimeToolResponse: data.message } : w
+                )
+              );
+            })
+            .catch((err) => {
+              console.error(err);
+              setWindows(prev =>
+                prev.map(w =>
+                  w.id === id ? { ...w, formRealtimeToolResponse: "Disonnecting failed!" } : w
+                )
+              );
+            });
         }
         if (menuId === "batch_input_form" && action === "connect" && payload) {
           console.log("connection_payload:",payload);
@@ -4792,16 +5855,7 @@ function Root() {
         }
         if (menuId === "batch_input_form_swap" && action === "page_II") {
           if (payload){ //For Broker and API jumps to dataframe creation
-            if (payload["addressType"] === "broker"){ //For kafka broker
-              newContent = "batch_input";
-              newSubContent = "batch_input_form_pageII";
-              setWindows(prev =>
-                prev.map(w =>
-                  w.id === id ? { ...w, batchFilesCollection: [] } : w
-                )
-              );
-            }
-            else if (payload["addressType"] === "api"){ //API is Expected                          
+            if (payload["addressType"] === "broker" || payload["addressType"] === "api"){ //For kafka broker and API                          
               //Request a dataframe creation from the api address           
               // Set new timeout for debounce
               debounceRef.current = setTimeout(() => {
@@ -4813,22 +5867,37 @@ function Root() {
                 );
                 //Requesting dataframe creation
                 let dataSourceKind="address";
+                const payloadAddress = String(payload["address"] || "").trim();
+                const payloadTopic = payload["topic"] == null ? null : String(payload["topic"]).trim();
                 const payload1 = {
                     id: "create_DF",
                     type: payload["addressType"],
                     kind: dataSourceKind,
                     session_id: id,//Source window id
-                    value: payload["address"], 
+                    value: payloadAddress,
+                    address: payloadAddress,
+                    broker: payloadAddress,
+                    broker_url: payloadAddress,
+                    topic: payloadTopic,
                   };
                 fetch(`${API_URL}/live_batch_files`, {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify(payload1),
                 })
-                .then((res) => res.json())
+                .then(async (res) => {
+                  const data = await res.json().catch(() => ({}));
+                  if (!res.ok) {
+                    throw new Error(`live_batch_files ${res.status}: ${JSON.stringify(data)}`);
+                  }
+                  return data;
+                })
                 .then((data) => { 
-                    console.log("public source data:",data)   
+                    console.log("public source data:",data, "payload:", payload1, "api:", `${API_URL}/live_batch_files`)   
                     var arrayData=Object.values(data.results)
+                    if (payload["addressType"] === "broker" && payload["mode"] === "realtime") {
+                      arrayData[4] = "Live";
+                    }
                     if (data.message == "success!"){
                       //Changing window content
                       alert("Dataframe created")
@@ -4843,7 +5912,7 @@ function Root() {
                       );
                     }
                     else {
-                      alert("faild to create a dataframe1",data.message)
+                      alert(`Failed to create dataframe: ${data.message || "Unknown response"}`)
                       setWindows(prev =>
                         prev.map(w =>
                           w.id === id ? { ...w, batchFilesDataframeInfoI:[],loadscreenState: false } : w
@@ -4852,8 +5921,8 @@ function Root() {
                     }
                   })
                 .catch((err) => {
-                  console.error(err);
-                  alert("requestID8234690944 failed!");
+                  console.error("create_DF error:", err, "payload:", payload1, "api:", `${API_URL}/live_batch_files`);
+                  alert(`requestID8234690944 failed! ${err?.message || ""}\nBroker: ${payload1.value}\nTopic: ${payload1.topic || "<none>"}`);
                   setWindows(prev =>
                     prev.map(w =>
                       w.id === id ? { ...w, batchFilesDataframeInfoI: null, loadscreenState: false} : w
@@ -4885,7 +5954,7 @@ function Root() {
         if (menuId === "batch_input_form_swap_passive" && action === "page_II") {
           newContent = "batch_input";
           const targetWindow = windowsRef.current.find(w => w.id === String(id) || w.id === Number(id));        
-          if (targetWindow.sourceAddressType === "api"){
+          if (targetWindow.sourceAddressType === "api" || targetWindow.sourceAddressType === "broker"){
             newSubContent = "batch_input_form_pageI";  
           }
           else{
@@ -4930,148 +5999,195 @@ function Root() {
             ));
         }
         if (menuId === "batch_files_search_input") {
-            const keyword = payload[0];
-            const date = payload[1];
-            const hybrid = payload[2];
-            const search_column = payload[3];
-            const strict_mood = payload[4];
-            console.log("search_column:",search_column)
-            const buildPayload = offset => ({
+            const keyword = String(payload?.[0] || "").trim();
+            const selectedDateRaw = String(payload?.[1] || "").trim();
+            const selectedDate = selectedDateRaw || null;
+            const hybrid = !!payload?.[2];
+            const search_column = String(payload?.[3] || "").trim();
+            const strict_mood = !!payload?.[4];
+            const isStrictHybridSearch = hybrid && strict_mood;
+
+            const buildPayload = (offset) => {
+              const value = {
+                keyword,
+                date: selectedDate,
+                hybrid,
+                offset,
+                limit: batchFilesSearchLimit
+              };
+
+              if (hybrid) {
+                value.strict_mood = isStrictHybridSearch;
+                if (isStrictHybridSearch) {
+                  value.search_column = search_column;
+                } else if (search_column) {
+                  value.search_column = search_column;
+                }
+              }
+
+              return {
                 id: "search",
-                value: {
-                    keyword,
-                    date,
-                    hybrid,
-                    search_column,
-                    strict_mood,
-                    offset,
-                    limit: batchFilesSearchLimit
-                },
+                value,
                 session_id: id
-            });
+              };
+            };
+
+            const handleRawSearchDiagnostics = (data, results) => {
+              if (hybrid || results.length !== 0) return;
+
+              const diagnosticsSource = data?.data && typeof data.data === "object" ? data.data : data;
+              const diagnostics = {
+                base_path: diagnosticsSource?.base_path ?? null,
+                storage: diagnosticsSource?.storage ?? null,
+                errors: diagnosticsSource?.errors ?? null,
+                message: diagnosticsSource?.message ?? data?.message ?? null,
+              };
+
+              console.warn("Raw search returned no results", diagnostics);
+
+              const lines = [];
+              if (diagnostics.base_path) lines.push("base_path: " + diagnostics.base_path);
+              if (diagnostics.storage) lines.push("storage: " + diagnostics.storage);
+              if (diagnostics.message) lines.push("message: " + diagnostics.message);
+              if (diagnostics.errors) {
+                const errorsText = Array.isArray(diagnostics.errors)
+                  ? diagnostics.errors.join(" | ")
+                  : String(diagnostics.errors);
+                lines.push("errors: " + errorsText);
+              }
+              if (lines.length > 0) {
+                alert("No raw files found.\n" + lines.join("\n"));
+              }
+            };
+
             // ============================
             //       FIRST SEARCH
             // ============================
-            if (action === "search" && keyword ) {
+            if (action === "search" && keyword) {
+              if (isStrictHybridSearch && !search_column) {
+                alert("Strict Elastic search requires selecting a search column.");
+                return { ...w };
+              }
 
-                clearTimeout(debounceRef.current);
+              clearTimeout(debounceRef.current);
 
-                debounceRef.current = setTimeout(() => {
+              debounceRef.current = setTimeout(() => {
+                setBatchFilesSearchOffset(0);
+                setBatchFilesSearchResults([]);
+                setSearchPlaceholder("Searching...");
 
-                    setBatchFilesSearchOffset(0);
-                    setBatchFilesSearchResults([]);
-                    setSearchPlaceholder("Searching...");
+                // UI reset
+                setWindows(prev =>
+                  prev.map(w =>
+                    w.id === id
+                      ? {
+                          ...w,
+                          searchText: true,
+                          searchResultsVisible: true,
+                          searchPlaceholder: "Searching..."
+                        }
+                      : w
+                  )
+                );
 
-                    // UI reset
+                fetch(API_URL + "/live_batch_files", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify(buildPayload(0))
+                })
+                  .then(res => res.json())
+                  .then(data => {
+                    const results = Array.isArray(data?.results) ? data.results : [];
+                    const hasMore = !!data?.has_more;
+                    console.log("search results:", results, hasMore, "payload:", buildPayload(0));
+
+                    handleRawSearchDiagnostics(data, results);
+
+                    setBatchFilesSearchResults(results);
+                    setBatchFilesSearchMoreFiles(hasMore);
+                    setBatchFilesSearchOffset(results.length);
+
                     setWindows(prev =>
-                        prev.map(w =>
-                            w.id === id
-                                ? {
-                                      ...w,
-                                      searchText: true,
-                                      searchResultsVisible: true,
-                                      searchPlaceholder: "Searching..."
-                                  }
-                                : w
-                        )
-                    );
-                    fetch(API_URL + "/live_batch_files", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify(buildPayload(0))
-                    })
-                        .then(res => res.json())
-                        .then(data => {
-                            const hasMore = data.has_more;
-                            console.log("search results:",data.results,hasMore)
-
-                            // update the actual rendered list
-                            setBatchFilesSearchResults(data.results);
-                            setBatchFilesSearchMoreFiles(hasMore);
-                            setBatchFilesSearchOffset(data.results.length);
-                            // update UI flags only
-                            setWindows(prev =>
-                                prev.map(w =>
-                                    w.id === id
-                                        ? {
-                                              ...w,
-                                              searchText: false,
-                                              batchFilesSearchResults:data.results,
-                                              batchFilesSearchMoreFiles: hasMore,
-                                              searchResultsVisible: true,
-                                              searchPlaceholder: hasMore
-                                                  ? "Load more"
-                                                  : "No more files"
-                                          }
-                                        : w
-                                )
-                            );
-                            if(data.message === "Result out of bound!"){
-                              alert(data.message)
+                      prev.map(w =>
+                        w.id === id
+                          ? {
+                              ...w,
+                              searchText: false,
+                              batchFilesSearchResults: results,
+                              batchFilesSearchMoreFiles: hasMore,
+                              searchResultsVisible: true,
+                              searchPlaceholder: hasMore ? "Load more" : "No more files"
                             }
-                        })
-                        .catch(console.error);
-                }, 300);
+                          : w
+                      )
+                    );
+
+                    if (data?.message === "Result out of bound!") {
+                      alert(data.message);
+                    }
+                  })
+                  .catch(console.error);
+              }, 300);
             }
 
             // ============================
             //         LOAD MORE
             // ============================
             if (action === "load_more") {
-                const offset = batchFilesSearchOffset;
+              if (isStrictHybridSearch && !search_column) {
+                alert("Strict Elastic search requires selecting a search column.");
+                return { ...w };
+              }
 
-                // Only set text/loading UI
-                setWindows(prev =>
+              const offset = batchFilesSearchOffset;
+
+              setWindows(prev =>
+                prev.map(w =>
+                  w.id === id
+                    ? {
+                        ...w,
+                        searchText: true,
+                        searchResultsVisible: true,
+                        searchPlaceholder: "Loading more..."
+                      }
+                    : w
+                )
+              );
+
+              fetch(API_URL + "/live_batch_files", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(buildPayload(offset))
+              })
+                .then(res => res.json())
+                .then(data => {
+                  const results = Array.isArray(data?.results) ? data.results : [];
+                  const hasMore = !!data?.has_more;
+                  console.log("search results:", data, "payload:", buildPayload(offset));
+
+                  setBatchFilesSearchResults(prev => [...prev, ...results]);
+                  setBatchFilesSearchMoreFiles(hasMore);
+                  setBatchFilesSearchOffset(offset + results.length);
+
+                  setWindows(prev =>
                     prev.map(w =>
-                        w.id === id
-                            ? {
-                                  ...w,
-                                  searchText: true,
-                                  searchResultsVisible: true,
-                                  searchPlaceholder: "Loading more..."
-                              }
-                            : w
+                      w.id === id
+                        ? {
+                            ...w,
+                            searchText: false,
+                            batchFilesSearchResults: [ ...(w.batchFilesSearchResults || []), ...results ],
+                            batchFilesSearchMoreFiles: hasMore,
+                            searchPlaceholder: hasMore ? "Load more" : "No more files"
+                          }
+                        : w
                     )
-                );
-
-                fetch(API_URL + "/live_batch_files", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(buildPayload(offset))
+                  );
                 })
-                    .then(res => res.json())
-                    .then(data => {
-                        console.log("search results:",data)
-                        const hasMore =  data.has_more;
-
-                        // append to the REAL list used by UI
-                        setBatchFilesSearchResults(prev => [...prev, ...data.results]);
-
-                        // update pagination flags
-                        setBatchFilesSearchMoreFiles(hasMore);
-                        setBatchFilesSearchOffset(offset + data.results.length);
-
-                        // update UI state (not the actual list)
-                        setWindows(prev =>
-                            prev.map(w =>
-                                w.id === id
-                                    ? {
-                                          ...w,
-                                          searchText: false,
-                                          batchFilesSearchResults: [ ...(w.batchFilesSearchResults || []), ...data.results ],
-                                          batchFilesSearchMoreFiles: hasMore,
-                                          searchPlaceholder: hasMore
-                                              ? "Load more"
-                                              : "No more files"
-                                      }
-                                    : w
-                            )
-                        );
-                    })
-                    .catch(console.error);
+                .catch(console.error);
             }
         }
         if (menuId === "batch_files_select_file" && action === "toggle_select") {
+
           var filename=payload["name"];
           var filesize=payload["size"];
 
@@ -5109,15 +6225,18 @@ function Root() {
             let dataSourceKind="";
             if (windowResponseI == "Dataset uploaded!"){
               console.log("16/03/2026",1)
-                dataSourceKind = "files"
+              dataSourceKind = "files"
             }
-            if (batchFilesSearchHybrid == true && windowResponseI == "Connection established!"){ // For both hdfs (files) and hybrid (kewords) search results
-              console.log("16/03/2026",2)
-               dataSourceKind = "hybrid"
+            if (windowResponseI == "Connection established!"){
+              if (batchFilesSearchHybrid == true) {
+                console.log("16/03/2026",2)
+                dataSourceKind = "hybrid"
+              }
+              else {
+                dataSourceKind = "hdfs"
+              }
             }
-            // if (batchFilesSearchHybridQuery == true){
-            //   dataSourceKind = "hive_query"
-            // }
+
             const payload = {
                 id: "create_DF",
                 type: "array",
@@ -6067,6 +7186,9 @@ function Root() {
         const formData = payload instanceof FormData
           ? payload
           : new FormData(document.getElementById("configurations_form"));
+        const uploadedRuleFile = formData.get("rule_file");
+        const hasRuleUpload =
+          uploadedRuleFile instanceof File && !!uploadedRuleFile.name;
         formData.set("id","save");
         formData.set("session_id",resolvedSessionId);
         setloadscreenState(true);
@@ -6077,7 +7199,17 @@ function Root() {
         .then((res) => res.json())
         .then((data) => {
           if (data.message === "success!") {
-            alert("Configuration saved!")
+            if (hasRuleUpload) {
+              const ruleUploadInput = document.getElementById("rule_to_upload");
+              const ruleNameInput = document.querySelector('#configurations_form input[name="rule_name"]');
+              if (ruleUploadInput) ruleUploadInput.value = "";
+              if (ruleNameInput) ruleNameInput.value = "";
+              setConfigurations((prev) => ({ ...prev, rule_name: "" }));
+              alert("Rule uploaded!");
+              handleConfigurationActions("load_default");
+            } else {
+              alert("Configuration saved!");
+            }
             setloadscreenState(false);
           } 
           else {
@@ -6220,6 +7352,15 @@ function Root() {
     else if(id === "configurations") {
       handleConfigurationActions("load_default")
       setIsConfigurationsOpen(prev => !prev);
+      setIsSettingsOpen(false);
+    }
+    else if(id === "settings") {
+      setIsSettingsOpen(prev => !prev);
+      setIsConfigurationsOpen(false);
+    }
+    else if (id === "toggle_menu_mood") {
+      setThemeMode(prev => (prev === "light" ? "dark" : "light"));
+      setIsToggleMenuOpen(true);
     }
     else{
       setIsToggleMenuOpen(prev => !prev);
@@ -6233,19 +7374,46 @@ function Root() {
     <div style={{ position: 'relative', minHeight: '100vh', overflow: 'hidden' }}>
       {/*<NetworkBackground />*/}
       <div style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, zIndex: 1 }}>
-        <NavBar onNavAction={handleNavAction} />
-        <ToggleMenu
-          onToggle={handleToggleMenu}
-          isToggleMenuOpen={isToggleMenuOpen}
-          toggleAction={handleToggleMenu}
-          isMaximized={isMaximized}
-          windows={windows}
-          orientation={orientation}
-          menuRef={toggleMenuRef}
-        />
+        {themeMode !== "dark" && <NavBar onNavAction={handleNavAction} />}
+        {!(themeMode === "dark" && windows.length === 0) && (
+          <ToggleMenu
+            onToggle={handleToggleMenu}
+            isToggleMenuOpen={isToggleMenuOpen}
+            toggleAction={handleToggleMenu}
+            isMaximized={isMaximized}
+            windows={windows}
+            orientation={orientation}
+            menuRef={toggleMenuRef}
+            themeMode={themeMode}
+          />
+        )}
+        {themeMode === "dark" &&
+          !isToggleMenuOpen &&
+          windows.length > 0 &&
+          orientation === "windows" && (
+            <div
+              className="dark_float_menu_handle"
+              ref={darkFloatMenuToggleRef}
+              title="Menu"
+            >
+              <span className="dark_float_menu_handle__btn" onClick={() => handleToggleMenu()}>
+                <i>
+                  <a />
+                </i>
+              </span>
+            </div>
+          )}
         <Taskbar windows={windows} isTaskBarOpen={isTaskBarOpen} activeWindowId={activeWindowId} focusWindow={handleFocusWindow} toggleAction={handleToggleMenu} isCtrlHeld={isCtrlHeld}/>
         <Configurations sessionId={sessionId} actions={handleConfigurationActions} loadscreenState={loadscreenState} setloadscreenState={setloadscreenState} toggleAction={handleToggleMenu} configurations={configurations} isConfigurationsOpen={isConfigurationsOpen}/>
-        <Main userName={userName} setSessionId={setSessionId} API_URL={API_URL} debounceRef={debounceRef} setConfigurations={setConfigurations} configurations={configurations} windows={windows} setWindows={setWindows} openWindows={handleOpenWindows} />
+        <Settings isSettingsOpen={isSettingsOpen} toggleAction={handleToggleMenu} />
+        <Main userName={userName} setSessionId={setSessionId} API_URL={API_URL} debounceRef={debounceRef} setConfigurations={setConfigurations} configurations={configurations} windows={windows} setWindows={setWindows} openWindows={handleOpenWindows} themeMode={themeMode} />
+        {themeMode === "dark" && windows.length === 0 && (
+          <DarkHomeMenuOverlay
+            orientation={orientation}
+            themeMode={themeMode}
+            toggleAction={handleToggleMenu}
+          />
+        )}
         {/* ----------------------
             Windows Container
         ---------------------- */}
@@ -6275,9 +7443,16 @@ function Root() {
               selectedSubContent={window.selectedSubContent}
               windowResponseI={window.windowResponseI}
               windowResponseII={window.windowResponseII}
+              windowRealtimeResponseI={window.windowRealtimeResponseI}
               formToolResponse={window.formToolResponse}
+              formRealtimeToolResponse={window.formRealtimeToolResponse}
               sourceAddressType={window.sourceAddressType}// Local
               sourceAddressText={window.sourceAddressText}// Local
+              sourceStorageText={window.sourceStorageText}// Local
+              sourceTopicText={window.sourceTopicText}// Local
+              sourceRealtimeAddressType={window.sourceRealtimeAddressType}// Local
+              sourceRealtimeAddressText={window.sourceRealtimeAddressText}// Local
+              sourceRealtimeTopicText={window.sourceRealtimeTopicText}// Local
               batchFilesSearchHybrid={window.batchFilesSearchHybrid}
               batchFilesSearchHiveQuery={window.batchFilesSearchHiveQuery}
               batchFilesSearchStrict={window.batchFilesSearchStrict}

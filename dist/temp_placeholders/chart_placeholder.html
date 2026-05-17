@@ -8,6 +8,16 @@
 :root {
   --accent-gradient: linear-gradient(45deg, #00bcd4, #8e44ad, #e91e63);
   --text-muted: #555;
+  --page-bg: radial-gradient(circle at center, #FFF, #fcfefd);
+  --dot: #666;
+  --dot-active: #333;
+}
+
+html[data-theme="dark"] {
+  --text-muted: #9fb3c8;
+  --page-bg: radial-gradient(circle at center, #101820, #070c12);
+  --dot: #8aa0b5;
+  --dot-active: #d6e3ef;
 }
 
 @keyframes hueshift {
@@ -21,11 +31,11 @@ body {
   display: flex;
   justify-content: center;
   align-items: center;
-  background: radial-gradient(circle at center, #FFF, #fcfefd);
+  background: var(--page-bg);
   font-family: "Segoe UI", Roboto, Arial, sans-serif;
   overflow: hidden;
   width: 100vw;
-  opacity: 0.5;
+  opacity: 1;
   user-select: none;
 }
 
@@ -104,13 +114,13 @@ body {
   width: 1vw;
   height: 1vw;
   border-radius: 50%;
-  background: #666;
+  background: var(--dot);
   cursor: pointer;
   transition: background 0.3s;
   opacity: 0.3;
 }
 .dot.active {
-  background: #333;
+  background: var(--dot-active);
   opacity: 0.9;
 }
 
@@ -251,6 +261,13 @@ function showSlide(i) {
 }
 
 setInterval(() => showSlide(index + 1), 2500);
+
+window.addEventListener("message", (event) => {
+  if (event?.data?.action === "theme_mode") {
+    const nextMode = event.data.payload === "dark" ? "dark" : "light";
+    document.documentElement.setAttribute("data-theme", nextMode);
+  }
+});
 </script>
 </body>
 </html>

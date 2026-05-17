@@ -11,7 +11,7 @@
   <style>
     /* ---------------- Base ---------------- */
     :root{
-      --bg:#fafafa;
+      --bg:radial-gradient(circle at center, #FFF, #fcfefd);
       --card:#fff;
       --muted:#777;
       --border:#e6e6e6;
@@ -19,6 +19,19 @@
       --gap:10px;
       --radius:6px;
       --control-h:38px;
+      --text:#222;
+      --hover-bg:#f2f2f2;
+      --slider-thumb:#fff;
+    }
+    html[data-theme="dark"]{
+      --bg:radial-gradient(circle at center, #101820, #070c12);
+      --card:#1a2631;
+      --muted:#9cb0c3;
+      --border:#324759;
+      --accent:#5a8fc2;
+      --text:#c4d0db;
+      --hover-bg:#233340;
+      --slider-thumb:#c4d0db;
     }
     html,body{
       height:100%;
@@ -26,7 +39,7 @@
       padding:0;
       font-family:"Segoe UI",Roboto,Arial,sans-serif;
       background:var(--bg);
-      color:#222;
+      color:var(--text);
     }
     a{color:inherit}
     /* ------------- Top Controls ------------- */
@@ -36,7 +49,7 @@
       gap: 8px;
       padding: 0.5vh 2vw;
       background: var(--card);
-      border: 1px solid #ddd;
+      border: 1px solid var(--border);
       position: fixed;
       top: 0;
       width: 93vw;
@@ -60,7 +73,7 @@
       font-size: calc(0.7vh + 0.8vw);
       font-weight:600; 
       margin-left:4px; 
-      color: #333; 
+      color: var(--text); 
     }
     #global_schema { 
       height: 30px; 
@@ -135,8 +148,8 @@
       margin:0;
       font-size: calc(0.7vh + 0.8vw);
       font-weight:500;
-      color:#222;
-      border-bottom: 0.1vh solid #EEE;
+      color:var(--text);
+      border-bottom: 0.1vh solid var(--border);
       padding-bottom: 8px;
       padding-right: 60px;
       padding-left: 5px;
@@ -168,7 +181,7 @@
       font-size:14px;
     }
     button:hover{
-      background:#f2f2f2;
+      background:var(--hover-bg);
     }
     select{
       padding:6px 8px;
@@ -210,7 +223,7 @@
       width:15px;
       left:0px;
       bottom:-3px;
-      background:#fff;
+      background:var(--slider-thumb);
       border-radius: 3px;
       transition:.24s;
       border: 0.1vh solid #DDD;
@@ -270,6 +283,29 @@
       color:var(--muted);
       padding-left:6px;
     }
+  
+
+    html[data-theme="dark"] #controls_top {
+      box-shadow: 0 0 12px rgba(0,0,0,0.45);
+    }
+    html[data-theme="dark"] #global_schema {
+      background-color: rgba(15, 24, 32, 0.92);
+      border-color: #2f404d;
+      color: #c4d0db;
+    }
+    html[data-theme="dark"] .slider:before {
+      border-color: #2f404d;
+    }
+    html[data-theme="dark"] .chart_containers {
+      border-color: #3f5a70;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.35);
+    }
+    html[data-theme="dark"] .chart_containers:hover {
+      border-color: #41576a;
+    }
+    html[data-theme="dark"] .small_muted {
+      color: #8f9eac;
+    }
   </style>
 </head>
 <body>
@@ -319,6 +355,13 @@
     observer.observe(mainContainer, { childList: true, subtree: false });
     // Run once at start
     updateControlsVisibility();
+
+    window.addEventListener("message", (event) => {
+      if (event?.data?.action === "theme_mode") {
+        const nextMode = event.data.payload === "dark" ? "dark" : "light";
+        document.documentElement.setAttribute("data-theme", nextMode);
+      }
+    });
 
   </script>
 

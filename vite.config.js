@@ -7,6 +7,10 @@ export default defineConfig({
     react(),
     //basicSsl(),
   ],
+  build: {
+    outDir: "linkxDS2026",
+    emptyOutDir: false,
+  },
   server: {
     host: true,        // allows access from outside container
     watch: {

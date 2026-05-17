@@ -38,6 +38,11 @@
 
 window.addEventListener("message", (event) => {
   const { action, payload } = event.data;
+  if (action === "theme_mode") {
+    const nextMode = payload === "dark" ? "dark" : "light";
+    document.documentElement.setAttribute("data-theme", nextMode);
+    return;
+  }
   switch (action) {
     case "network_components":      
       getNetworkComponents(payload);
@@ -273,6 +278,29 @@ function ensureInteractionPopupUi() {
       }
       #linkx_interaction_ok:hover {
         background: rgba(208, 227, 244, 1);
+      }
+      html[data-theme="dark"] #linkx_interaction_panel {
+        border: 0.1vh solid #3a5165;
+        box-shadow: rgba(0, 0, 0, 0.35) 0px 0px 10px;
+        background-color: rgba(20, 31, 41, 0.96);
+        color: #d8e5f0;
+      }
+      html[data-theme="dark"] #linkx_interaction_title {
+        border-bottom: 0.1vh solid rgba(131, 165, 194, 0.35);
+      }
+      html[data-theme="dark"] #linkx_interaction_input,
+      html[data-theme="dark"] #linkx_interaction_textarea {
+        border: 0.1vh solid rgba(109, 143, 171, 0.55);
+        background: rgba(18, 27, 36, 0.92);
+        color: #d8e5f0;
+      }
+      html[data-theme="dark"] .linkx_interaction_btn {
+        border: 0.1vh solid rgba(109, 143, 171, 0.75);
+        background: rgba(35, 51, 64, 0.96);
+        color: #d8e5f0;
+      }
+      html[data-theme="dark"] .linkx_interaction_btn:hover {
+        background: rgba(52, 73, 90, 1);
       }
     `;
     document.head.appendChild(style);

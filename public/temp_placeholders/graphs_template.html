@@ -418,6 +418,28 @@
 								  font-family: sans-serif;
 								  z-index: 1000;
 								}
+								html[data-theme="dark"] body {
+								  background-color: #0f171f;
+								  color: #d8e5f0;
+								}
+								html[data-theme="dark"] #mynetwork {
+								  background-color: #101b24;
+								}
+								html[data-theme="dark"] .nodeAdjustBox,
+								html[data-theme="dark"] .graph_options .graph_options_filters {
+								  background-color: rgba(21, 32, 42, 0.92) !important;
+								  color: #d8e5f0 !important;
+								  border-color: #385064 !important;
+								}
+								html[data-theme="dark"] [style*="background-color: rgba(255, 255, 255"],
+								html[data-theme="dark"] [style*="background: rgba(255,255,255"],
+								html[data-theme="dark"] [style*="background: #fff"],
+								html[data-theme="dark"] [style*="background-color:#fff"] {
+								  background: rgba(21, 32, 42, 0.92) !important;
+								  background-color: rgba(21, 32, 42, 0.92) !important;
+								  color: #d8e5f0 !important;
+								  border-color: #4a657a !important;
+								}
 							  </style>
 							</head>
 							<body>
@@ -1003,6 +1025,11 @@
 								// Listen for JSON injection from parent
 								window.addEventListener("message", (event) => {
 								    const data = event.data;
+									if (data?.action === "theme_mode") {
+									  const nextMode = data.payload === "dark" ? "dark" : "light";
+									  document.documentElement.setAttribute("data-theme", nextMode);
+									  return;
+									}
 								    if (data.type === "loadGraph") {
 								      nodesData.clear();
 								      edgesData.clear();
