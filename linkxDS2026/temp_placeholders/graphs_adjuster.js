@@ -41,6 +41,11 @@ window.addEventListener("message", (event) => {
   if (action === "theme_mode") {
     const nextMode = payload === "dark" ? "dark" : "light";
     document.documentElement.setAttribute("data-theme", nextMode);
+    if (typeof renderVisibleGraphBatch === "function") {
+      renderVisibleGraphBatch();
+    } else if (typeof renderVisibleGraph === "function") {
+      renderVisibleGraph();
+    }
     return;
   }
   switch (action) {
@@ -1255,9 +1260,15 @@ function UpdateNodeShape(newShape) {
     if (shape === "circularImage" && iconPath) {
       patch.image = iconPath;
       patch.imagePadding = 10;
+      patch.iconPath = iconPath;
     }
 
-    nodesData.update({ id, ...patch });
+    const themedPatch = { ...patch };
+    if (shape === "circularImage" && iconPath) {
+      themedPatch.image = resolveNodeIconImageForTheme(iconPath, id);
+    }
+
+    nodesData.update({ id, ...themedPatch });
 
     // Always persist iconPath to MODIFIED_NODES
     persistNodeChange(id, {
@@ -1509,6 +1520,87 @@ function updateNodeDisplay(node) {
 }
 
 
+const ICON_THEME_CACHE = new Map();
+const ICON_THEME_PENDING = new Set();
+
+function getGraphThemeMode() {
+  return document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light";
+}
+
+function isBuiltinGraphSvgIcon(iconPath) {
+  const raw = String(iconPath || "").trim();
+  if (!raw || raw.indexOf("data:") === 0) return false;
+  return /graph_icons\/.+\.svg/i.test(raw);
+}
+
+function getIconCacheKey(iconPath, mode) {
+  try {
+    return new URL(iconPath, window.location.href).toString() + "|" + mode;
+  } catch (_err) {
+    return String(iconPath || "").trim() + "|" + mode;
+  }
+}
+
+function svgToDataUrl(svgText) {
+  const encoded = encodeURIComponent(svgText)
+    .replace(/%20/g, " ")
+    .replace(/%3D/g, "=")
+    .replace(/%3A/g, ":")
+    .replace(/%2F/g, "/");
+  return "data:image/svg+xml;charset=UTF-8," + encoded;
+}
+
+function recolorSvgForDarkMode(svgText) {
+  if (typeof svgText !== "string" || svgText.indexOf("<svg") === -1) return svgText;
+  if (svgText.indexOf("<style") !== -1) return svgText;
+  return svgText.replace(/<svg\b[^>]*>/i, function(openTag) {
+    return openTag + "<style>path,rect,circle,ellipse,polygon,line,polyline{fill:#ffffff !important;stroke:#ffffff !important;}<\/style>";
+  });
+}
+
+function ensureDarkIconCached(iconPath, nodeIdHint) {
+  if (!isBuiltinGraphSvgIcon(iconPath)) return;
+  const cacheKey = getIconCacheKey(iconPath, "dark");
+  if (ICON_THEME_CACHE.has(cacheKey) || ICON_THEME_PENDING.has(cacheKey)) return;
+  ICON_THEME_PENDING.add(cacheKey);
+
+  let requestUrl = iconPath;
+  try { requestUrl = new URL(iconPath, window.location.href).toString(); } catch (_err) {}
+
+  fetch(requestUrl)
+    .then(resp => (resp.ok ? resp.text() : Promise.reject(new Error("Icon fetch failed"))))
+    .then(svgText => {
+      const themedUrl = svgToDataUrl(recolorSvgForDarkMode(svgText));
+      ICON_THEME_CACHE.set(cacheKey, themedUrl);
+      if (getGraphThemeMode() !== "dark") return;
+      const updates = [];
+      nodesData.get().forEach(node => {
+        if (String((node && node.shape) || "") !== "circularImage") return;
+        if (String((node && node.iconPath) || "").trim() !== iconPath) return;
+        updates.push({ id: node.id, image: themedUrl, imagePadding: (node.imagePadding == null ? 10 : node.imagePadding) });
+      });
+      if (nodeIdHint != null && updates.length === 0) {
+        const node = nodesData.get(nodeIdHint);
+        if (node && String(node.shape || "") === "circularImage" && String(node.iconPath || "").trim() === iconPath) {
+          updates.push({ id: nodeIdHint, image: themedUrl, imagePadding: (node.imagePadding == null ? 10 : node.imagePadding) });
+        }
+      }
+      if (updates.length > 0) nodesData.update(updates);
+    })
+    .catch(() => {})
+    .finally(() => { ICON_THEME_PENDING.delete(cacheKey); });
+}
+
+function resolveNodeIconImageForTheme(iconPath, nodeIdHint) {
+  const mode = getGraphThemeMode();
+  if (mode !== "dark" || !isBuiltinGraphSvgIcon(iconPath)) return iconPath;
+  const cacheKey = getIconCacheKey(iconPath, "dark");
+  const cached = ICON_THEME_CACHE.get(cacheKey);
+  if (cached) return cached;
+  ensureDarkIconCached(iconPath, nodeIdHint);
+  return iconPath;
+}
+
 function applyNodeIcon(nodeId, iconPath) {
   if (!nodesData.get(nodeId)) return;
 
@@ -1518,8 +1610,9 @@ function applyNodeIcon(nodeId, iconPath) {
     imagePadding: 10,
     iconPath
   };
+  const themedImage = resolveNodeIconImageForTheme(iconPath, nodeId);
 
-  nodesData.update({ id: nodeId, ...patch });
+  nodesData.update({ id: nodeId, ...patch, image: themedImage });
   persistNodeChange(nodeId, patch);
 }
 
@@ -1971,6 +2064,44 @@ function createAnnotationNode({
 }
 
 // Context menu actions
+function isGraphDarkThemeActive() {
+  if (document.documentElement.getAttribute("data-theme") === "dark") return true;
+
+  try {
+    if (window.parent && window.parent !== window) {
+      const parentTheme = window.parent.document?.documentElement?.getAttribute("data-theme");
+      if (parentTheme === "dark") return true;
+    }
+  } catch (_err) {
+    // ignore cross-window access issues
+  }
+
+  const bg = window.getComputedStyle(document.getElementById("mynetwork") || document.body).backgroundColor || "";
+  const match = bg.match(/rgba?\(([^)]+)\)/i);
+  if (match) {
+    const parts = match[1].split(",").map(v => Number(v.trim()));
+    const r = Number.isFinite(parts[0]) ? parts[0] : 255;
+    const g = Number.isFinite(parts[1]) ? parts[1] : 255;
+    const b = Number.isFinite(parts[2]) ? parts[2] : 255;
+    const luminance = (0.2126 * r) + (0.7152 * g) + (0.0722 * b);
+    if (luminance < 120) return true;
+  }
+
+  return false;
+}
+
+function getDefaultGraphNodeColor() {
+  if (isGraphDarkThemeActive()) {
+    return {
+      background: "#080e14",
+      border: "#3e5775",
+      highlight: { background: "#101822", border: "#4a6484" },
+      hover: { background: "#0c131d", border: "#446082" }
+    };
+  }
+  return { background: "#FFFFFF", border: "#777777" };
+}
+
 function handleAddNode(x, y) {
   queueGraphHistoryCapture();
   const pos = getContextCanvasPosition(x, y);
@@ -1980,7 +2111,7 @@ function handleAddNode(x, y) {
     label: window.currentSettings.showLabels ? `Node ${id}` : "",
     x: pos.x,
     y: pos.y,
-    color: { background: "#FFFFFF", border: "#777777" }
+    color: getDefaultGraphNodeColor()
   };
 
   upsertFullGraphNode(node);
@@ -2206,7 +2337,7 @@ function handleGroupNodes(nodeIds) {
     size: 40,
     x,
     y,
-    color: { background: "#FFFFFF", border: "#777777" },
+    color: getDefaultGraphNodeColor(),
     isGroup: true,
     members: memberNodes,
     edges: memberEdges
@@ -6251,6 +6382,13 @@ function renderVisibleGraphBatch() {
       merged.label = getNodeRenderLabel(base, mod, window.currentSettings.showLabels);
       applyNodeStateDecorations(merged, id, markerSets);
 
+      const runtimeIconPath = String(merged.iconPath || merged.image || "").trim();
+      if (String(merged.shape || "") === "circularImage" && runtimeIconPath) {
+        merged.iconPath = runtimeIconPath;
+        merged.image = resolveNodeIconImageForTheme(runtimeIconPath, id);
+        merged.imagePadding = merged.imagePadding ?? 10;
+      }
+
       // Keep analyst focus stable: do not reset already-rendered node coordinates.
       if (currentNodeIds.has(id)) {
         delete merged.x;
@@ -6391,6 +6529,13 @@ function renderVisibleGraph() {
     // build label ALWAYS correctly
     merged.label = getNodeRenderLabel(base, mod, window.currentSettings.showLabels);
     applyNodeStateDecorations(merged, id, markerSets);
+
+      const runtimeIconPath = String(merged.iconPath || merged.image || "").trim();
+      if (String(merged.shape || "") === "circularImage" && runtimeIconPath) {
+        merged.iconPath = runtimeIconPath;
+        merged.image = resolveNodeIconImageForTheme(runtimeIconPath, id);
+        merged.imagePadding = merged.imagePadding ?? 10;
+      }
 
     nodeBatch.push(merged);
   }

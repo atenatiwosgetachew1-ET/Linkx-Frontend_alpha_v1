@@ -1971,6 +1971,44 @@ function createAnnotationNode({
 }
 
 // Context menu actions
+function isGraphDarkThemeActive() {
+  if (document.documentElement.getAttribute("data-theme") === "dark") return true;
+
+  try {
+    if (window.parent && window.parent !== window) {
+      const parentTheme = window.parent.document?.documentElement?.getAttribute("data-theme");
+      if (parentTheme === "dark") return true;
+    }
+  } catch (_err) {
+    // ignore cross-window access issues
+  }
+
+  const bg = window.getComputedStyle(document.getElementById("mynetwork") || document.body).backgroundColor || "";
+  const match = bg.match(/rgba?\(([^)]+)\)/i);
+  if (match) {
+    const parts = match[1].split(",").map(v => Number(v.trim()));
+    const r = Number.isFinite(parts[0]) ? parts[0] : 255;
+    const g = Number.isFinite(parts[1]) ? parts[1] : 255;
+    const b = Number.isFinite(parts[2]) ? parts[2] : 255;
+    const luminance = (0.2126 * r) + (0.7152 * g) + (0.0722 * b);
+    if (luminance < 120) return true;
+  }
+
+  return false;
+}
+
+function getDefaultGraphNodeColor() {
+  if (isGraphDarkThemeActive()) {
+    return {
+      background: "#080e14",
+      border: "#3e5775",
+      highlight: { background: "#101822", border: "#4a6484" },
+      hover: { background: "#0c131d", border: "#446082" }
+    };
+  }
+  return { background: "#FFFFFF", border: "#777777" };
+}
+
 function handleAddNode(x, y) {
   queueGraphHistoryCapture();
   const pos = getContextCanvasPosition(x, y);
@@ -1980,7 +2018,7 @@ function handleAddNode(x, y) {
     label: window.currentSettings.showLabels ? `Node ${id}` : "",
     x: pos.x,
     y: pos.y,
-    color: { background: "#FFFFFF", border: "#777777" }
+    color: getDefaultGraphNodeColor()
   };
 
   upsertFullGraphNode(node);
@@ -2206,7 +2244,7 @@ function handleGroupNodes(nodeIds) {
     size: 40,
     x,
     y,
-    color: { background: "#FFFFFF", border: "#777777" },
+    color: getDefaultGraphNodeColor(),
     isGroup: true,
     members: memberNodes,
     edges: memberEdges

@@ -848,7 +848,7 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
                 />
 
                 <label>
-                  Get latest sample <a href="public/temp_rules/Linkx_Rules_Template.zip" download> Template</a>
+                  Get latest sample <a href="/linkxDS2026/temp_rules/Linkx_Rules_Template.zip" download> Template</a>
                 </label>
               </fieldset>
 
@@ -881,7 +881,7 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
             <button className="action_btns" type="button" onClick={() => actions("load_default")} title="Reset">⟳ Reset</button>
             <a
               className="action_btns"
-              href={`public/temp_config/${sessionId}_temp_config.JSON`}
+              href={`/linkxDS2026/temp_config/${sessionId}_temp_config.JSON`}
               download
               title="Download"
             >⭳ Export</a>

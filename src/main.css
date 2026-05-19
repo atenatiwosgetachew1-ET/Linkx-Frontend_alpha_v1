@@ -5878,7 +5878,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 /* Graph window + configurations: comprehensive dark normalization */
 [data-theme="dark"] .window .content_container .iframe_graph .iframe_options_layer {
   background-color: rgba(14, 24, 33, 0.96) !important;
-  border: 1px solid #233544 !important;
+  border: 1px solid #141e27 !important;
   opacity: 0.96 !important;
 }
 [data-theme="dark"] .window .content_container .iframe_graph .iframe_options_layer i {

@@ -12,7 +12,7 @@
 								}
 								</script>
 							  <!-- Your control script -->
-							  <script src="../temp_placeholders/graphs_adjuster.js"></script>
+							  <script src="../temp_placeholders/graphs_adjuster.js?v=20260518-darknode3"></script>
 							  <style>
 							  	*{
 							  		padding: 0;
@@ -69,7 +69,7 @@
                                     right: 0;
                                     max-height: 22vh;
                                     margin-bottom: 1vh;
-                                    border: 0.1vh solid rgba(179, 179, 179,0.7); 
+                                    border: 0.1vh solid rgb(179 179 179 / 12%);
                                     //box-shadow: rgba(0, 0, 0, 0.2) 0px 0px 8px; 
                                     background-color: rgba(0, 0, 0, 0); 
                                     padding: 0.5vw; 
@@ -80,8 +80,10 @@
                                 	overflow-x: hidden;
                                 }
 								.albumBox:hover{
-									background-color: rgba(255, 255, 255,0.1); 
-								}
+					background-color: transparent !important;
+					box-shadow: none !important;
+					filter: none !important;
+				}
                                 #iconGrid {
 								    display: flex;
 								    flex-wrap: wrap;
@@ -89,11 +91,22 @@
 								}
 								.iconThumb {
 									width: 5vh;
-								    height: 5vh;
-								    cursor: pointer;
-								    border: 0.1vh solid #EEE;
-								    padding: 5px;
-								    box-sizing: border-box;
+									height: 5vh;
+									cursor: pointer;
+									border: 0.1vh solid #EEE;
+									padding: 5px;
+									box-sizing: border-box;
+									display: flex;
+									align-items: center;
+									justify-content: center;
+									background-color: transparent;
+								}
+								.iconGlyph{
+									width: 100%;
+									height: 100%;
+									object-fit: contain;
+									display: block;
+									filter: none;
 								}
 								.iconThumb:hover{
 									border: 0.1vh solid #AAA;
@@ -111,6 +124,11 @@
 								.iconThumb:last-child:hover{
 									border: 0.1vh dashed #999;
 									opacity: 1;
+								}
+								#iconGrid:hover{
+									background: transparent !important;
+									box-shadow: none !important;
+									filter: none !important;
 								}
                                 .adjustment_options_cotainer{
                                 	display: block; 
@@ -581,6 +599,25 @@
 								html[data-theme="dark"] .iconThumb:last-child {
 								  background-color: rgba(29, 44, 56, 0.9) !important;
 								  border-color: rgba(86, 114, 137, 0.28) !important;
+								  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+								}
+								html[data-theme="dark"] .iconGlyph {
+								  filter: brightness(0) invert(1);
+								}
+								html:not([data-theme="dark"]) .iconGlyph {
+								  filter: none;
+								}
+								html[data-theme="dark"] .iconThumb:hover,
+								html[data-theme="dark"] .iconThumb:last-child:hover {
+								  border-color: #8ca9c8 !important;
+								  background-color: rgba(37, 55, 70, 0.95) !important;
+								  box-shadow: rgba(24, 39, 53, 0.55) 0px 2px 0.5vh !important;
+								  transform: translateY(-1px);
+								}
+								html[data-theme="dark"] #iconGrid:hover{
+								  background: none !important;
+								  box-shadow: none !important;
+								  filter: none !important;
 								}
 								html[data-theme="dark"] .vis-tooltip {
 								  background: rgba(15, 24, 32, 0.96) !important;
@@ -623,7 +660,7 @@
 									html[data-theme="dark"] .graph_options .graph_options_settings,
 									html[data-theme="dark"] .graph_options .graph_options_infos,
 									html[data-theme="dark"] .graph_options .graph_options_filters {
-									  background-color: rgba(17, 29, 39, 0.96) !important;
+									  background-color:  #101b29 !important;
 									  border-color: rgba(86, 114, 137, 0.30) !important;
 									  color: #c4d0db !important;
 									  box-shadow: 0 6px 16px rgba(0,0,0,0.45) !important;
@@ -715,7 +752,7 @@
   html[data-theme="dark"] .graph_options textarea,
   html[data-theme="dark"] .graph_options select,
   html[data-theme="dark"] .graph_options button {
-    background-color: #0f1822 !important;
+    background-color: #101b29 !important;
     color: #c4d0db !important;
     border-color: rgba(102, 130, 152, 0.24) !important;
   }
@@ -744,6 +781,102 @@
     background-color: #101a24 !important;
     color: #c4d0db !important;
     border-color: rgba(102, 130, 152, 0.24) !important;
+  }
+  html[data-theme="dark"] .adjustBox .nodeAdjustBox_node_note {
+    border-color: #b3b3b330 !important;
+  }
+  html[data-theme="dark"] .adjustBox .nodeAdjustBox_node_image:hover {
+    background-color: rgba(62, 87, 117, 0.22) !important;
+    border-color: #3e5775 !important;
+    box-shadow: rgba(62, 87, 117, 0.35) 0px 0px 0.45vh !important;
+  }
+  html[data-theme="dark"] .adjustBox .nodeAdjustBox_node_image:empty:hover {
+    border-color: #3e5775 !important;
+    background-color: rgba(12, 21, 31, 0.95) !important;
+  }
+  html[data-theme="dark"] .adjustBox .nodeAdjustBox_node_image:empty:before {
+    color: #aab8c8 !important;
+  }
+  html[data-theme="dark"] .adjustBox .nodeAdjustBox_node_image:empty:hover:before {
+    color: #d5e3f0 !important;
+  }
+  html[data-theme="dark"] .adjustBox .adjustment_options_cotainer > div[style*="width:38%"][style*="border-right"] {
+    border-right-color: #dddddd1a !important;
+  }
+  html[data-theme="dark"] .adjustBox .adjustment_options_cotainer div[style*="border-bottom: 0.1vh dashed #EEE"] {
+    border-bottom-color: #dddddd1a !important;
+    border-right-color: #dddddd1a !important;
+  }
+
+  /* Modernized adjust box separators and fields */
+  .adjustBox {
+    border-color: rgba(132, 146, 163, 0.26) !important;
+    border-radius: 0.6vh !important;
+    box-shadow: 0 1.2vh 3.2vh rgba(16, 24, 40, 0.14) !important;
+    background-color: rgba(255, 255, 255, 0.82) !important;
+    backdrop-filter: blur(6px);
+  }
+  .adjustBox .nodeAdjustBox_node_label input,
+  .adjustBox .nodeAdjustBox_node_note,
+  .adjustBox .nodeAdjustBox_node_image,
+  .adjustBox .select_options,
+  .adjustBox .small_input {
+    border-color: rgba(124, 138, 156, 0.24) !important;
+    box-shadow: none !important;
+  }
+  .adjustBox .nodeAdjustBox_node_note {
+    background-color: rgba(255, 255, 255, 0.55) !important;
+  }
+  .adjustBox .nodeAdjustBox_node_note textarea {
+    background-color: transparent !important;
+  }
+  .adjustBox .colorOption {
+    border-color: rgba(124, 138, 156, 0.28) !important;
+  }
+  .adjustBox .sizeCircle {
+    border-color: rgba(124, 138, 156, 0.32) !important;
+  }
+  .adjustBox .adjustment_options_cotainer > div[style*="width:38%"][style*="border-right"] {
+    border-right: none !important;
+    padding-right: 0.2vw !important;
+  }
+  .adjustBox .adjustment_options_cotainer div[style*="border-bottom: 0.1vh dashed #EEE"],
+  .adjustBox .adjustment_options_cotainer > div[style*="border-bottom: 0.1vh solid #EEE"] {
+    border-bottom-style: solid !important;
+    border-bottom-color: rgba(123, 137, 154, 0.18) !important;
+  }
+  .adjustBox .nodeAdjustBox_node_image:empty {
+    border-style: solid !important;
+  }
+
+  html[data-theme="dark"] .adjustBox {
+    border-color: rgba(108, 139, 165, 0.24) !important;
+    background-color: rgba(16, 26, 36, 0.9) !important;
+    box-shadow: 0 1.2vh 3.4vh rgba(0, 0, 0, 0.52) !important;
+  }
+  html[data-theme="dark"] .adjustBox .nodeAdjustBox_node_label input,
+  html[data-theme="dark"] .adjustBox .nodeAdjustBox_node_note,
+  html[data-theme="dark"] .adjustBox .nodeAdjustBox_node_image,
+  html[data-theme="dark"] .adjustBox .select_options,
+  html[data-theme="dark"] .adjustBox .small_input {
+    border-color: #3d50603d !important;
+  }
+  html[data-theme="dark"] .adjustBox .nodeAdjustBox_node_note {
+    background-color: #101b29 !important;
+  }
+  html[data-theme="dark"] .adjustBox .colorOption {
+    border-color: rgba(136, 165, 188, 0.34) !important;
+  }
+  html[data-theme="dark"] .adjustBox .sizeCircle {
+    border-color: rgba(136, 165, 188, 0.34) !important;
+  }
+  html[data-theme="dark"] .adjustBox .adjustment_options_cotainer > div[style*="width:38%"][style*="border-right"] {
+    border-right: none !important;
+  }
+  html[data-theme="dark"] .adjustBox .adjustment_options_cotainer div[style*="border-bottom: 0.1vh dashed #EEE"],
+  html[data-theme="dark"] .adjustBox .adjustment_options_cotainer > div[style*="border-bottom: 0.1vh solid #EEE"] {
+    border-bottom-style: solid !important;
+    border-bottom-color: rgba(132, 161, 186, 0.15) !important;
   }
 </style>
 							</head>
@@ -1018,14 +1151,118 @@
 								    window.parent.postMessage({ type: "clipboard_get" }, "*");
 								    let localClipboard = readClipboardFromStorage();
 
-									window.addEventListener("message", e => {
+									let graphThemeMode = document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light";
+									function getThemeNodeDefaults(mode) {
+										if (mode === "dark") {
+											return {
+												background: "#080e14",
+												border: "#3e5775",
+												highlight: { background: "#101822", border: "#4a6484" },
+												hover: { background: "#0c131d", border: "#446082" }
+											};
+										}
+										return {
+											background: "rgba(255,255,255,1)",
+											border: "#555",
+											highlight: { background: "rgba(255,255,255,1)", border: "#111" },
+											hover: { background: "rgba(255,255,255,1)", border: "#333" }
+										};
+									}
+									function getThemeNodeLabelColor(mode) {
+								return mode === "dark" ? "#4a6484" : "#111111";
+							}
+							function getThemeEdgeDefaults(mode) {
+										if (mode === "dark") {
+											return { color: "#485360", highlight: "#5b6776", hover: "#55616f", inherit: false };
+										}
+										return { color: "rgba(0,0,0,1)", highlight: "rgba(0,0,0,1)", hover: "rgba(0,0,0,1)", inherit: false };
+									}
+									function applyNetworkThemeDefaults(mode) {
+								const nodeDefaults = getThemeNodeDefaults(mode);
+								const edgeDefaults = getThemeEdgeDefaults(mode);
+								if (window.currentOptions?.nodes) window.currentOptions.nodes.color = nodeDefaults;
+								if (window.currentOptions?.nodes?.font) window.currentOptions.nodes.font.color = getThemeNodeLabelColor(mode);
+								if (window.currentOptions?.edges) window.currentOptions.edges.color = edgeDefaults;
+								if (window.network?.setOptions) {
+									window.network.setOptions({
+										nodes: { color: nodeDefaults, font: { color: getThemeNodeLabelColor(mode) } },
+										edges: { color: edgeDefaults }
+									});
+								}
+							}
+
+							function normalizeColorToken(value) {
+										return String(value || "").replace(/\s+/g, "").toLowerCase();
+									}
+									function isWhiteLike(value) {
+										const token = normalizeColorToken(value);
+										return token === "#fff" || token === "#ffffff" || token === "rgb(255,255,255)" || token === "rgba(255,255,255,1)";
+									}
+									function isBlackLike(value) {
+										const token = normalizeColorToken(value);
+										return token === "#000" || token === "#000000" || token === "rgb(0,0,0)" || token === "rgba(0,0,0,1)";
+									}
+									function isLightDefaultNodeColor(color) {
+										if (!color) return true;
+										if (typeof color === "string") return isWhiteLike(color);
+										const bg = color.background;
+										const border = normalizeColorToken(color.border);
+										const defaultBorder = border === "" || border === "#555" || border === "#333" || border === "#111" || border === "#777" || border === "#777777";
+										return isWhiteLike(bg) && defaultBorder;
+									}
+									function isLightDefaultEdgeColor(color) {
+										if (!color) return true;
+										if (typeof color === "string") return isBlackLike(color);
+										if (color.inherit === true) return true;
+										return isBlackLike(color.color);
+									}
+									function normalizeIncomingNodeForTheme(node) {
+								if (graphThemeMode !== "dark") return node;
+								const needsColor = isLightDefaultNodeColor(node?.color);
+								const currentFontColor = normalizeColorToken(node?.font?.color);
+								const needsFontColor = !currentFontColor || isBlackLike(currentFontColor);
+								if (!needsColor && !needsFontColor) return node;
+								const themedNode = { ...node };
+								if (needsColor) themedNode.color = getThemeNodeDefaults("dark");
+								if (needsFontColor) themedNode.font = { ...(node?.font || {}), color: getThemeNodeLabelColor("dark") };
+								return themedNode;
+							}
+							function normalizeIncomingEdgeForTheme(edge) {
+										if (graphThemeMode !== "dark") return edge;
+										if (!isLightDefaultEdgeColor(edge?.color)) return edge;
+										return { ...edge, color: getThemeEdgeDefaults("dark") };
+									}
+									function applyThemeDefaultsToExistingGraph(mode) {
+								if (mode !== "dark") return;
+								if (!window.FULL_GRAPH?.nodes || !window.FULL_GRAPH?.edges) return;
+								for (const [nodeId, node] of window.FULL_GRAPH.nodes.entries()) {
+									const currentFontColor = normalizeColorToken(node?.font?.color);
+									const shouldSetDarkFont = !currentFontColor || isBlackLike(currentFontColor);
+									if (isLightDefaultNodeColor(node?.color) || shouldSetDarkFont) {
+										window.FULL_GRAPH.nodes.set(nodeId, {
+											...node,
+											color: isLightDefaultNodeColor(node?.color) ? getThemeNodeDefaults("dark") : node.color,
+											font: shouldSetDarkFont ? { ...(node?.font || {}), color: getThemeNodeLabelColor("dark") } : node.font
+										});
+									}
+								}
+								for (const [edgeId, edge] of window.FULL_GRAPH.edges.entries()) {
+									if (isLightDefaultEdgeColor(edge?.color)) {
+										window.FULL_GRAPH.edges.set(edgeId, { ...edge, color: getThemeEdgeDefaults("dark") });
+									}
+								}
+								if (typeof renderVisibleGraphBatch === "function") renderVisibleGraphBatch();
+							}
+							window.addEventListener("message", e => {
 										if (e.data.type === "clipboard_data") {
 									    	localClipboard = normalizeClipboardPayload(e.data.payload);
 									    	writeClipboardToStorage(localClipboard);
 										}
 									if (e.data?.action === "theme_mode") {
-										const nextMode = e.data.payload === "dark" ? "dark" : "light";
-										document.documentElement.setAttribute("data-theme", nextMode);
+										graphThemeMode = e.data.payload === "dark" ? "dark" : "light";
+										document.documentElement.setAttribute("data-theme", graphThemeMode);
+										applyThemeDefaultsToExistingGraph(graphThemeMode);
+										applyNetworkThemeDefaults(graphThemeMode);
 									}
 									if (e.data?.type === "init_graph") {
 										graphData = e.data.payload;
@@ -1076,35 +1313,23 @@
 									nodes: {
 										shape: "dot",
 										size: 15,
-										font: { size: 16 },
+										font: { size: 16, color: getThemeNodeLabelColor(graphThemeMode) },
 										borderWidth: 1.3,
 										borderWidthSelected: 2,
 										margin: 5,
-										color: {
-										    background: "rgba(255,255,255,1)",
-										    border: "#555",
-											highlight: {
-										    	background: "rgba(255,255,255,1)",
-										    	border: "#111"
-											},
-											hover: {
-										    	background: "rgba(255,255,255,1)",
-										    	border: "#333"
-											}
-										}
-									},										  
+										color: getThemeNodeDefaults(graphThemeMode)
+									},									  
 									edges: {
 										arrows: "to",
-										width: 1, // default thickness
-										hoverWidth: 1,
+										width: 0.85, // default thin stroke
+										hoverWidth: 1.05,
+										selectionWidth: 1.15,
 										title: undefined, // default no title
 										font: {
 										    size: 10
 										},
-										color: {
-    										inherit: true // edges will use default black
-  										},										
-										smooth: {
+										color: getThemeEdgeDefaults(graphThemeMode),										
+smooth: {
 											type: "dynamic",
 											roundness: 0.1
 										}
@@ -1120,36 +1345,22 @@
 									nodes: {
 										shape: "dot",
 										size: 15,
-										font: { size: 16 },
+										font: { size: 16, color: getThemeNodeLabelColor(graphThemeMode) },
 										borderWidth: 1.3,
 										borderWidthSelected: 2,
 										margin: 5,
-										color: {
-										    background: "rgba(255,255,255,1)",
-										    border: "#555",
-										    highlight: {
-										        background: "rgba(255,255,255,1)",
-										        border: "#111"
-										    },
-										    hover: {
-										        background: "rgba(255,255,255,1)",
-										        border: "#333"
-										    }
-										}
-									},										  
+										color: getThemeNodeDefaults(graphThemeMode)
+									},									  
 									edges: {
 										arrows: "to",
-										width: 1, // default thickness
-										hoverWidth: 1,
+										width: 0.85, // default thin stroke
+										hoverWidth: 1.05,
+										selectionWidth: 1.15,
 										title: undefined, // default no title
 										font: {
 										    size: 10
 										},
-										color: {
-										    color: "rgba(0,0,0,1)",       // default edge color
-										    //highlight: "rgba(255,0,0,1)", // optional highlight color
-										    //hover: "rgba(0,0,255,1)"      // optional hover color
-										}
+										color: getThemeEdgeDefaults(graphThemeMode)
 									},
 									interaction: { hover: true, multiselect: true },
 									physics:  STABLE_PHYSICS,
@@ -1158,7 +1369,9 @@
 								
 
 							    var network = new vis.Network(container, data, options);
-								network.setOptions({ physics: STABLE_PHYSICS });								
+									window.network = network;
+									applyNetworkThemeDefaults(graphThemeMode);
+									network.setOptions({ physics: STABLE_PHYSICS });								
 
 
 // ------------------------------------------------------------------------------------------------------------------------ Adjustments starts
@@ -1191,7 +1404,8 @@
 									const nodeMap = new Map();
 									
 									// First pass: store all nodes in FULL_GRAPH only
-									for (const node of graphData.nodes) {
+									for (const rawNode of graphData.nodes) {
+										const node = normalizeIncomingNodeForTheme(rawNode);
 										FULL_GRAPH.nodes.set(node.id, node);
 										FULL_GRAPH.adjacency.set(node.id, new Set());
 										nodeMap.set(node.id, node);
@@ -1199,7 +1413,8 @@
 
 									// Second pass: process edges in batches
 									const edgeMap = new Map();
-									for (const edge of graphData.edges) {
+									for (const rawEdge of graphData.edges) {
+										const edge = normalizeIncomingEdgeForTheme(rawEdge);
 										const id = edge.id ?? `${edge.from}_${edge.to}`;
 										// Store edge with minimal processing
 										const weightedEdge = {
@@ -1747,7 +1962,17 @@
 											const nodelabel = document.getElementById("nodeAdjustBox_node_label_field");
 											nodelabel.value = node?.label || "";
 											const nodeImage = document.getElementById("nodeAdjustBox_node_image");
-											nodeImage.innerHTML = node?.image ? `<img src="${node.image}" style="width:100%; height:auto;">` : "";
+											const previewIconPath = String(node?.iconPath || "").trim();
+										if (previewIconPath) {
+											const previewIsBuiltinIcon = /graph_icons\/.+\.svg/i.test(previewIconPath) && previewIconPath.indexOf("data:") !== 0;
+											nodeImage.innerHTML = previewIsBuiltinIcon
+												? '<img class="iconGlyph" src="' + previewIconPath + '" style="width:100%; height:100%; object-fit:contain;">'
+												: '<img src="' + previewIconPath + '" style="width:100%; height:100%; object-fit:contain;">';
+										} else if (node?.image) {
+											nodeImage.innerHTML = '<img src="' + node.image + '" style="width:100%; height:auto;">';
+										} else {
+											nodeImage.innerHTML = "";
+										}
 											const nodeNote = document.getElementById("nodeAdjustBox_node_note_text");
 											nodeNote.value = node?.note || "";
 											const nodeShapeSelect = document.getElementById("nodeAdjustBox_node_shape");
@@ -2114,16 +2339,20 @@
 								const displayIcon = document.getElementById('nodeAdjustBox_node_image');
 								// Function to load and display SVG thumbnails
 								svgFiles.forEach(filename => {
+								  const iconTile = document.createElement('div');
 								  const img = document.createElement('img');
 								  img.src = `${iconFolder}${filename}.svg`; // path to your SVG folder
-								  img.className = 'iconThumb';
+								  img.className = 'iconGlyph';
 								  img.title = filename;
-								  img.onclick = () => {
+								  iconTile.className = 'iconThumb';
+								  iconTile.title = filename;
+								  iconTile.appendChild(img);
+								  iconTile.onclick = () => {
 								  if (filename !== "Upload") {
 								    selectedIconPath = `${iconFolder}${filename}.svg`;
 								    if (currentEntityId) {
 								      applyNodeIcon(currentEntityId, selectedIconPath);
-								      displayIcon.innerHTML = `<img src="${selectedIconPath}" style="width:100%; height:auto;">`;
+								      displayIcon.innerHTML = `<img class="iconGlyph" src="${selectedIconPath}" style="width:100%; height:100%; object-fit:contain;">`;
 								    }
 								  } else {
 								    // Handle Upload
@@ -2148,7 +2377,7 @@
 								    };
 								  }
 								};
-								  iconGrid.appendChild(img);
+								  iconGrid.appendChild(iconTile);
 								});							
 								// -------------------------------------------------------------------------------------------- Notes
 								//------------------------------ Notes options

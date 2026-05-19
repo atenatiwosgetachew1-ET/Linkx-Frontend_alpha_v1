@@ -12,7 +12,7 @@
 								}
 								</script>
 							  <!-- Your control script -->
-							  <script src="../temp_placeholders/graphs_adjuster.js"></script>
+							  <script src="../temp_placeholders/graphs_adjuster.js?v=20260518-darknode3"></script>
 							  <style>
 							  	*{
 							  		padding: 0;
@@ -1018,14 +1018,99 @@
 								    window.parent.postMessage({ type: "clipboard_get" }, "*");
 								    let localClipboard = readClipboardFromStorage();
 
+									let graphThemeMode = document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light";
+									function getThemeNodeDefaults(mode) {
+										if (mode === "dark") {
+											return {
+												background: "#080e14",
+												border: "#3e5775",
+												highlight: { background: "#101822", border: "#4a6484" },
+												hover: { background: "#0c131d", border: "#446082" }
+											};
+										}
+										return {
+											background: "rgba(255,255,255,1)",
+											border: "#555",
+											highlight: { background: "rgba(255,255,255,1)", border: "#111" },
+											hover: { background: "rgba(255,255,255,1)", border: "#333" }
+										};
+									}
+									function getThemeEdgeDefaults(mode) {
+										if (mode === "dark") {
+											return { color: "#485360", highlight: "#5b6776", hover: "#55616f", inherit: false };
+										}
+										return { color: "rgba(0,0,0,1)", highlight: "rgba(0,0,0,1)", hover: "rgba(0,0,0,1)", inherit: false };
+									}
+									function applyNetworkThemeDefaults(mode) {
+										const nodeDefaults = getThemeNodeDefaults(mode);
+										const edgeDefaults = getThemeEdgeDefaults(mode);
+										if (window.currentOptions?.nodes) window.currentOptions.nodes.color = nodeDefaults;
+										if (window.currentOptions?.edges) window.currentOptions.edges.color = edgeDefaults;
+										if (window.network?.setOptions) {
+											window.network.setOptions({ nodes: { color: nodeDefaults }, edges: { color: edgeDefaults } });
+										}
+									}
+
+									function normalizeColorToken(value) {
+										return String(value || "").replace(/\s+/g, "").toLowerCase();
+									}
+									function isWhiteLike(value) {
+										const token = normalizeColorToken(value);
+										return token === "#fff" || token === "#ffffff" || token === "rgb(255,255,255)" || token === "rgba(255,255,255,1)";
+									}
+									function isBlackLike(value) {
+										const token = normalizeColorToken(value);
+										return token === "#000" || token === "#000000" || token === "rgb(0,0,0)" || token === "rgba(0,0,0,1)";
+									}
+									function isLightDefaultNodeColor(color) {
+										if (!color) return true;
+										if (typeof color === "string") return isWhiteLike(color);
+										const bg = color.background;
+										const border = normalizeColorToken(color.border);
+										const defaultBorder = border === "" || border === "#555" || border === "#333" || border === "#111" || border === "#777" || border === "#777777";
+										return isWhiteLike(bg) && defaultBorder;
+									}
+									function isLightDefaultEdgeColor(color) {
+										if (!color) return true;
+										if (typeof color === "string") return isBlackLike(color);
+										if (color.inherit === true) return true;
+										return isBlackLike(color.color);
+									}
+									function normalizeIncomingNodeForTheme(node) {
+										if (graphThemeMode !== "dark") return node;
+										if (!isLightDefaultNodeColor(node?.color)) return node;
+										return { ...node, color: getThemeNodeDefaults("dark") };
+									}
+									function normalizeIncomingEdgeForTheme(edge) {
+										if (graphThemeMode !== "dark") return edge;
+										if (!isLightDefaultEdgeColor(edge?.color)) return edge;
+										return { ...edge, color: getThemeEdgeDefaults("dark") };
+									}
+									function applyThemeDefaultsToExistingGraph(mode) {
+										if (mode !== "dark") return;
+										if (!window.FULL_GRAPH?.nodes || !window.FULL_GRAPH?.edges) return;
+										for (const [nodeId, node] of window.FULL_GRAPH.nodes.entries()) {
+											if (isLightDefaultNodeColor(node?.color)) {
+												window.FULL_GRAPH.nodes.set(nodeId, { ...node, color: getThemeNodeDefaults("dark") });
+											}
+										}
+										for (const [edgeId, edge] of window.FULL_GRAPH.edges.entries()) {
+											if (isLightDefaultEdgeColor(edge?.color)) {
+												window.FULL_GRAPH.edges.set(edgeId, { ...edge, color: getThemeEdgeDefaults("dark") });
+											}
+										}
+										if (typeof renderVisibleGraphBatch === "function") renderVisibleGraphBatch();
+									}
 									window.addEventListener("message", e => {
 										if (e.data.type === "clipboard_data") {
 									    	localClipboard = normalizeClipboardPayload(e.data.payload);
 									    	writeClipboardToStorage(localClipboard);
 										}
 									if (e.data?.action === "theme_mode") {
-										const nextMode = e.data.payload === "dark" ? "dark" : "light";
-										document.documentElement.setAttribute("data-theme", nextMode);
+										graphThemeMode = e.data.payload === "dark" ? "dark" : "light";
+										document.documentElement.setAttribute("data-theme", graphThemeMode);
+										applyThemeDefaultsToExistingGraph(graphThemeMode);
+										applyNetworkThemeDefaults(graphThemeMode);
 									}
 									if (e.data?.type === "init_graph") {
 										graphData = e.data.payload;
@@ -1080,19 +1165,8 @@
 										borderWidth: 1.3,
 										borderWidthSelected: 2,
 										margin: 5,
-										color: {
-										    background: "rgba(255,255,255,1)",
-										    border: "#555",
-											highlight: {
-										    	background: "rgba(255,255,255,1)",
-										    	border: "#111"
-											},
-											hover: {
-										    	background: "rgba(255,255,255,1)",
-										    	border: "#333"
-											}
-										}
-									},										  
+										color: getThemeNodeDefaults(graphThemeMode)
+									},									  
 									edges: {
 										arrows: "to",
 										width: 1, // default thickness
@@ -1101,10 +1175,8 @@
 										font: {
 										    size: 10
 										},
-										color: {
-    										inherit: true // edges will use default black
-  										},										
-										smooth: {
+										color: getThemeEdgeDefaults(graphThemeMode),										
+smooth: {
 											type: "dynamic",
 											roundness: 0.1
 										}
@@ -1124,19 +1196,8 @@
 										borderWidth: 1.3,
 										borderWidthSelected: 2,
 										margin: 5,
-										color: {
-										    background: "rgba(255,255,255,1)",
-										    border: "#555",
-										    highlight: {
-										        background: "rgba(255,255,255,1)",
-										        border: "#111"
-										    },
-										    hover: {
-										        background: "rgba(255,255,255,1)",
-										        border: "#333"
-										    }
-										}
-									},										  
+										color: getThemeNodeDefaults(graphThemeMode)
+									},									  
 									edges: {
 										arrows: "to",
 										width: 1, // default thickness
@@ -1145,11 +1206,7 @@
 										font: {
 										    size: 10
 										},
-										color: {
-										    color: "rgba(0,0,0,1)",       // default edge color
-										    //highlight: "rgba(255,0,0,1)", // optional highlight color
-										    //hover: "rgba(0,0,255,1)"      // optional hover color
-										}
+										color: getThemeEdgeDefaults(graphThemeMode)
 									},
 									interaction: { hover: true, multiselect: true },
 									physics:  STABLE_PHYSICS,
@@ -1158,7 +1215,9 @@
 								
 
 							    var network = new vis.Network(container, data, options);
-								network.setOptions({ physics: STABLE_PHYSICS });								
+									window.network = network;
+									applyNetworkThemeDefaults(graphThemeMode);
+									network.setOptions({ physics: STABLE_PHYSICS });								
 
 
 // ------------------------------------------------------------------------------------------------------------------------ Adjustments starts
@@ -1191,7 +1250,8 @@
 									const nodeMap = new Map();
 									
 									// First pass: store all nodes in FULL_GRAPH only
-									for (const node of graphData.nodes) {
+									for (const rawNode of graphData.nodes) {
+										const node = normalizeIncomingNodeForTheme(rawNode);
 										FULL_GRAPH.nodes.set(node.id, node);
 										FULL_GRAPH.adjacency.set(node.id, new Set());
 										nodeMap.set(node.id, node);
@@ -1199,7 +1259,8 @@
 
 									// Second pass: process edges in batches
 									const edgeMap = new Map();
-									for (const edge of graphData.edges) {
+									for (const rawEdge of graphData.edges) {
+										const edge = normalizeIncomingEdgeForTheme(rawEdge);
 										const id = edge.id ?? `${edge.from}_${edge.to}`;
 										// Store edge with minimal processing
 										const weightedEdge = {
