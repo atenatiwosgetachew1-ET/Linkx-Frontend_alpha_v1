@@ -878,6 +878,106 @@
     border-bottom-style: solid !important;
     border-bottom-color: rgba(132, 161, 186, 0.15) !important;
   }
+
+  /* Graph UI polish: popups + menus + scrollbars */
+  :root {
+    --graph-scrollbar-track: #e8edf3;
+    --graph-scrollbar-thumb: #8ea2b5;
+    --graph-scrollbar-thumb-hover: #748da4;
+  }
+  html[data-theme="dark"] {
+    --graph-scrollbar-track: #0f1822;
+    --graph-scrollbar-thumb: #3f5468;
+    --graph-scrollbar-thumb-hover: #5c7690;
+  }
+  html, body, #mynetwork, .albumBox, .customContextMenu, .adjustBox, #linkx_interaction_message, #linkx_interaction_choices {
+    scrollbar-width: thin;
+    scrollbar-color: var(--graph-scrollbar-thumb) var(--graph-scrollbar-track);
+  }
+  ::-webkit-scrollbar-track {
+    background: var(--graph-scrollbar-track) !important;
+  }
+  ::-webkit-scrollbar-thumb {
+    background-color: var(--graph-scrollbar-thumb) !important;
+    border-color: var(--graph-scrollbar-track) !important;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: var(--graph-scrollbar-thumb-hover) !important;
+  }
+
+  .customContextMenu,
+  .adjustBox,
+  .annotationAdjustBox {
+    border: 0.1vh solid rgba(126, 144, 161, 0.28) !important;
+    background: rgba(250, 253, 255, 0.92) !important;
+    box-shadow: 0 10px 24px rgba(16, 29, 41, 0.16) !important;
+    backdrop-filter: blur(8px) !important;
+  }
+  .customContextMenu .menu_item {
+    background: transparent !important;
+    border: 0.1vh solid transparent !important;
+    border-bottom-color: rgba(140, 157, 173, 0.22) !important;
+    color: #344b60 !important;
+  }
+  .customContextMenu .menu_item:hover {
+    background: rgba(65, 95, 122, 0.10) !important;
+    border-color: rgba(96, 123, 147, 0.40) !important;
+    color: #1f3347 !important;
+  }
+  .customContextMenu .menu_item:active {
+    background: rgba(65, 95, 122, 0.16) !important;
+    color: #203241 !important;
+  }
+
+  html[data-theme="dark"] .customContextMenu,
+  html[data-theme="dark"] .adjustBox,
+  html[data-theme="dark"] .annotationAdjustBox {
+    border: 0.1vh solid rgba(95, 124, 147, 0.34) !important;
+    background: rgba(15, 25, 35, 0.94) !important;
+    box-shadow: 0 10px 26px rgba(0, 0, 0, 0.52) !important;
+  }
+  html[data-theme="dark"] .customContextMenu .menu_item {
+    background: transparent !important;
+    border: 0.1vh solid transparent !important;
+    border-bottom-color: rgba(95, 124, 147, 0.24) !important;
+    color: #b7c6d4 !important;
+  }
+  html[data-theme="dark"] .customContextMenu .menu_item:hover {
+    background: rgba(74, 104, 132, 0.18) !important;
+    border-color: rgba(114, 149, 177, 0.45) !important;
+    color: #d2deea !important;
+  }
+  html[data-theme="dark"] .customContextMenu .menu_item:active {
+    background: rgba(74, 104, 132, 0.25) !important;
+    color: #dbe7f1 !important;
+  }
+  .customContextMenu .menu_item_disabled {
+    background: rgba(110, 124, 138, 0.22) !important;
+    color: #7b8ea1 !important;
+    border-color: rgba(118, 134, 149, 0.26) !important;
+  }
+  html[data-theme="dark"] .customContextMenu .menu_item_disabled {
+    background: rgba(33, 46, 58, 0.84) !important;
+    color: #7d94aa !important;
+    border-color: rgba(86, 111, 131, 0.40) !important;
+  }
+  .customContextMenu .menu_item_disabled:hover,
+  .customContextMenu .menu_item_disabled:active {
+    background: rgba(110, 124, 138, 0.22) !important;
+    color: #7b8ea1 !important;
+    border-color: rgba(118, 134, 149, 0.26) !important;
+    transform: none !important;
+    box-shadow: none !important;
+  }
+  html[data-theme="dark"] .customContextMenu .menu_item_disabled:hover,
+  html[data-theme="dark"] .customContextMenu .menu_item_disabled:active {
+    background: rgba(33, 46, 58, 0.84) !important;
+    color: #7d94aa !important;
+    border-color: rgba(86, 111, 131, 0.40) !important;
+    transform: none !important;
+    box-shadow: none !important;
+  }
+
 </style>
 							</head>
 							<body>
@@ -1155,21 +1255,21 @@
 									function getThemeNodeDefaults(mode) {
 										if (mode === "dark") {
 											return {
-												background: "#080e14",
+												background: "rgba(0,0,0,0)",
 												border: "#3e5775",
-												highlight: { background: "#101822", border: "#4a6484" },
-												hover: { background: "#0c131d", border: "#446082" }
+												highlight: { background: "rgba(0,0,0,0)", border: "#4a6484" },
+												hover: { background: "rgba(0,0,0,0)", border: "#446082" }
 											};
 										}
 										return {
-											background: "rgba(255,255,255,1)",
+											background: "rgba(0,0,0,0)",
 											border: "#555",
-											highlight: { background: "rgba(255,255,255,1)", border: "#111" },
-											hover: { background: "rgba(255,255,255,1)", border: "#333" }
+											highlight: { background: "rgba(0,0,0,0)", border: "#111" },
+											hover: { background: "rgba(0,0,0,0)", border: "#333" }
 										};
 									}
 									function getThemeNodeLabelColor(mode) {
-								return mode === "dark" ? "#4a6484" : "#111111";
+								return mode === "dark" ? "#8fa4bd" : "#111111";
 							}
 							function getThemeEdgeDefaults(mode) {
 										if (mode === "dark") {
@@ -1204,11 +1304,16 @@
 									}
 									function isLightDefaultNodeColor(color) {
 										if (!color) return true;
-										if (typeof color === "string") return isWhiteLike(color);
+										if (typeof color === "string") {
+								const token = normalizeColorToken(color);
+								return isWhiteLike(color) || token === "transparent" || token === "rgba(0,0,0,0)" || token === "rgba(0,0,0,0.0)";
+								}
 										const bg = color.background;
 										const border = normalizeColorToken(color.border);
 										const defaultBorder = border === "" || border === "#555" || border === "#333" || border === "#111" || border === "#777" || border === "#777777";
-										return isWhiteLike(bg) && defaultBorder;
+										const bgToken = normalizeColorToken(bg);
+								const defaultBg = isWhiteLike(bg) || bgToken === "transparent" || bgToken === "rgba(0,0,0,0)" || bgToken === "rgba(0,0,0,0.0)";
+								return defaultBg && defaultBorder;
 									}
 									function isLightDefaultEdgeColor(color) {
 										if (!color) return true;
@@ -1326,8 +1431,10 @@
 										selectionWidth: 1.15,
 										title: undefined, // default no title
 										font: {
-										    size: 10
-										},
+						    size: 10,
+						    strokeWidth: 0.8,
+						    strokeColor: "rgba(0,0,0,0.12)"
+						},
 										color: getThemeEdgeDefaults(graphThemeMode),										
 smooth: {
 											type: "dynamic",
@@ -1358,8 +1465,10 @@ smooth: {
 										selectionWidth: 1.15,
 										title: undefined, // default no title
 										font: {
-										    size: 10
-										},
+						    size: 10,
+						    strokeWidth: 0.8,
+						    strokeColor: "rgba(0,0,0,0.12)"
+						},
 										color: getThemeEdgeDefaults(graphThemeMode)
 									},
 									interaction: { hover: true, multiselect: true },
@@ -1395,6 +1504,13 @@ smooth: {
 								
 								function initializeFullGraph(graphData) {
 									console.log("Initializing FULL_GRAPH with provided graph data...");
+									const totalNodes = Array.isArray(graphData?.nodes) ? graphData.nodes.length : 0;
+									const totalEdges = Array.isArray(graphData?.edges) ? graphData.edges.length : 0;
+									const totalWork = Math.max(1, totalNodes + totalEdges);
+									let progressCounter = 0;
+									if (typeof window.showGraphLoading === "function") {
+										window.showGraphLoading("Loading graph elements...", 0, totalWork);
+									}
 									
 									FULL_GRAPH.nodes.clear();
 									FULL_GRAPH.edges.clear();
@@ -1409,6 +1525,10 @@ smooth: {
 										FULL_GRAPH.nodes.set(node.id, node);
 										FULL_GRAPH.adjacency.set(node.id, new Set());
 										nodeMap.set(node.id, node);
+										progressCounter += 1;
+										if (progressCounter % 200 === 0 && typeof window.setGraphLoadingProgress === "function") {
+											window.setGraphLoadingProgress(progressCounter, totalWork, "Loading nodes...");
+										}
 									}
 
 									// Second pass: process edges in batches
@@ -1432,6 +1552,10 @@ smooth: {
 										const toSet = FULL_GRAPH.adjacency.get(edge.to);
 										if (fromSet) fromSet.add(edge.to);
 										if (toSet) toSet.add(edge.from);
+										progressCounter += 1;
+										if (progressCounter % 300 === 0 && typeof window.setGraphLoadingProgress === "function") {
+											window.setGraphLoadingProgress(progressCounter, totalWork, "Loading edges...");
+										}
 									}
 
 									// CRITICAL: Don't add nodes to vis yet for large graphs
@@ -1458,10 +1582,20 @@ smooth: {
 										VISIBLE_STATE.nodes.add(value);
 									}
 									
+									if (typeof window.setGraphLoadingProgress === "function") {
+										window.setGraphLoadingProgress(totalWork, totalWork, "Rendering graph...");
+									}
 									// Batch render visible graph
 									renderVisibleGraphBatch();
-									
+
+									if (typeof setCurrentGraphScope === "function") {
+										setCurrentGraphScope(graphData?.id || graphData?.graph_id || graphData?.name || "");
+									}
+
 									console.log("FULL_GRAPH initialization complete.");
+									if (typeof window.hideGraphLoading === "function") {
+										setTimeout(() => { window.hideGraphLoading(); }, 160);
+									}
 								}
 
 								// //initiate modified nodes and edges (after checking no modification has happend)
@@ -1648,7 +1782,10 @@ smooth: {
 								        menuHTML += `<div class="menu_item" data-action="add_event_frame">Event Frame</div>`;
 								        menuHTML += `<div class="menu_item ${selectedNodes.length >= 2 ? "" : "menu_item_disabled"}" data-action="add_theme_line">Theme Line</div>`;
 								        menuHTML += `<div class="menu_item" data-action="add_ole_object">OLE Object</div>`;
-								        menuHTML += `<div class="menu_item" data-action="save_view">Save View</div>`;
+								menuHTML += `<div class="menu_item" data-action="visual_degree">Visualize by Degree</div>`;
+								menuHTML += `<div class="menu_item" data-action="visual_property">Visualize by Property</div>`;
+								menuHTML += `<div class="menu_item" data-action="filter_elements">Filter Elements</div>`;
+								menuHTML += `<div class="menu_item" data-action="save_view">Save View</div>`;
 								        if ((window.SAVED_VIEWS || []).length > 0) {
 								        	menuHTML += `<div class="menu_item" data-action="load_view">Load View</div>`;
 								        }
@@ -1680,8 +1817,8 @@ smooth: {
 								            menuHTML += `<div class="menu_item" data-action="expand_neighborhood">Expand Neighborhood</div>`;
 								            menuHTML += `<div class="menu_item" data-action="collapse_neighborhood">Collapse Neighborhood</div>`;
 								            menuHTML += `<div class="menu_item" data-action="bring_to_front" data-id="${nodeId}">Bring to Front</div>`;
-								            menuHTML += `<div class="menu_item" data-action="pin_evidence">Pin Evidence</div>`;
-								            menuHTML += `<div class="menu_item" data-action="unpin_evidence">Unpin Evidence</div>`;
+								            menuHTML += `<div class="menu_item" data-action="pin_evidence" data-id="${nodeId}">Pin Evidence</div>`;
+								            menuHTML += `<div class="menu_item" data-action="unpin_evidence" data-id="${nodeId}">Unpin Evidence</div>`;
 											} else if (selectedNodes.length > 1) {
 											const fullyLinked = areAllSelectedNodesLinked(selectedNodes);
 											menuHTML += `<div class="menu_item" data-action="copy">Copy Nodes/Edges</div>`;
@@ -1700,10 +1837,7 @@ smooth: {
 												menuHTML += `<div class="menu_item" data-action="pin_evidence">Pin Evidence</div>`;
 												menuHTML += `<div class="menu_item" data-action="unpin_evidence">Unpin Evidence</div>`;
 											}
-
-											menuHTML += `<div class="menu_item" data-action="visual_degree">Visualize by Degree</div>`;
-											menuHTML += `<div class="menu_item" data-action="visual_property">Visualize by Property</div>`;
-											menuHTML += `<div class="menu_item ${selectedNodes.length > 0 ? "" : "menu_item_disabled"}" data-action="link_traversal">Link Traversal (4 degrees)</div>`;
+									menuHTML += `<div class="menu_item" data-action="link_traversal">Link Traversal (4 degrees)</div>`;
 											menuHTML += `<div class="menu_item" data-action="cut_points">Cut Points</div>`;
 											if (
 											(window.PATH_HIGHLIGHT_STATE?.nodeIds?.size || 0) > 0 ||
@@ -1795,23 +1929,27 @@ smooth: {
 								      	await mergeSelectedNodes(selectedNodes);
 								      	break;
 								      case 'visual_degree':
-								      	applyVisualEncodingByDegree();
-								      	break;
-								      case 'visual_property': {
-								      	const visibleNodes = getVisibleNodeSnapshots();
-								      	const dynamic = inferDynamicNodeKeys(visibleNodes);
-								      	const suggestedKeys = [...dynamic.numeric, ...dynamic.categorical].slice(0, 12);
-								      	const defaultKey = suggestedKeys[0] || "";
-								      	const message = suggestedKeys.length > 0
-								      		? `Property key (examples): ${suggestedKeys.join(", ")}`
-								      		: "Property key";
-								      	const chosenKey = await requestUserInput(message, defaultKey, { title: "Visualize by Property" });
-								      	if (chosenKey != null && String(chosenKey).trim() !== "") {
-								      		applyVisualEncodingByProperty(chosenKey);
-								      	}
-								      	break;
-								      }
-								      case 'save_view': {
+									applyVisualEncodingByDegree();
+									break;
+								case 'visual_property': {
+									const visibleNodes = getVisibleNodeSnapshots();
+									const dynamic = inferDynamicNodeKeys(visibleNodes);
+									const suggestedKeys = [...dynamic.numeric, ...dynamic.categorical].slice(0, 12);
+									const defaultKey = suggestedKeys[0] || "";
+									const message = suggestedKeys.length > 0
+										? `Property key (examples): ${suggestedKeys.join(", ")}`
+										: "Property key";
+									const chosenKey = await requestUserInput(message, defaultKey, { title: "Visualize by Property" });
+									if (chosenKey != null && String(chosenKey).trim() !== "") {
+										applyVisualEncodingByProperty(chosenKey);
+									}
+									break;
+								}
+								case 'filter_elements': {
+									await configureElementTypeFilters();
+									break;
+								}
+								case 'save_view': {
 								      	const suggestedName = `View ${new Date().toISOString().slice(0, 19).replace("T", " ")}`;
 								      	const viewName = await requestUserInput("View name", suggestedName, { title: "Save View" });
 								      	if (viewName != null) {
@@ -1820,16 +1958,12 @@ smooth: {
 								      	break;
 								      }
 								      case 'load_view': {
-								      	const saved = Array.isArray(window.SAVED_VIEWS) ? window.SAVED_VIEWS : [];
-								      	if (saved.length === 0) break;
-								      	const defaultName = saved[0]?.name || "";
-								      	const list = saved.slice(0, 12).map(v => v.name).join(", ");
-								      	const targetName = await requestUserInput(`Load view by name (${list})`, defaultName, { title: "Load View" });
-								      	if (targetName != null && String(targetName).trim() !== "") {
-								      		loadSavedView(targetName);
-								      	}
-								      	break;
-								      }
+									const targetName = await requestSavedViewSelectionPopup();
+									if (targetName != null && String(targetName).trim() !== "") {
+										loadSavedView(targetName);
+									}
+									break;
+								}
 									      case 'path_finder':
 									      	await runPathFinderForSelection(selectedNodes);
 									      	break;
@@ -1840,16 +1974,16 @@ smooth: {
 									      	bringNodeToFront(nodeId || selectedNodes[0]);
 									      	break;
 									      case 'link_traversal':
-									      	runLinkTraversal(selectedNodes, 4);
+									      	await runLinkTraversal(selectedNodes, 4);
 									      	break;
 									      case 'cut_points':
-									      	runCutPointDetection();
+									      	await runCutPointDetection();
 									      	break;
 									      case 'clear_path':
 									      	clearPathHighlight();
 								      	break;
 								      case 'toggle_edge_bundling':
-								      	toggleEdgeBundlingLite();
+								      	await toggleEdgeBundlingLiteWithLoading();
 								      	break;
 								      case 'configure_edge_bundling':
 								      	await configureEdgeBundlingLite();
@@ -1864,11 +1998,13 @@ smooth: {
 								      	runAlertScan(true);
 								      	break;
 								      case 'pin_evidence':
-								      	pinSelectedEvidence();
-								      	break;
+	      	if (nodeId) pinEvidenceByContext(nodeId || selectedNodes[0], null);
+	      	else pinSelectedEvidence();
+	      	break;
 								      case 'unpin_evidence':
-								      	unpinSelectedEvidence();
-								      	break;
+	      	if (nodeId) unpinEvidenceByContext(nodeId || selectedNodes[0], null);
+	      	else unpinSelectedEvidence();
+	      	break;
 								      case 'show_pinned_evidence':
 								      	showPinnedEvidenceSummary();
 								      	break;
@@ -1876,7 +2012,7 @@ smooth: {
 								      	clearPinnedEvidence();
 								      	break;
 								      case 'apply_community_detection':
-								      	applyCommunityDetection();
+								      	await applyCommunityDetection();
 								      	break;
 								      default:
 								      	console.warn("Unhandled context action:", action);

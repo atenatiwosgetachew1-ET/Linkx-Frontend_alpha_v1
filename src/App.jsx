@@ -15,7 +15,7 @@ import Icons from './Icons.jsx'
 let clipboard = { nodes: [], edges: [] };
 const GRAPH_LIMIT_WARNING_THRESHOLD = 300;
 const GRAPH_LIMIT_HARD_MAX = 100000;
-const DEFAULT_GRAPH_IFRAME_SETTINGS = ["", "", { min: 0, max: 25 }, "", "", "", false, false, false, false, "default", "UD", "directed", "hop_distance", ""];
+const DEFAULT_GRAPH_IFRAME_SETTINGS = ["", "", { min: 0, max: 25 }, "", "", "", false, false, false, false, "concentric", "UD", "directed", "hop_distance", ""];
 
 const STR_REPORT_SOCKET_EVENT_LINK_ANALYSIS = "str_report_link_analysis";
 const STR_REPORT_NOTIFICATION_CODE_PREPARE_RECEIVER = "str_report_prepare_receiver";
@@ -100,6 +100,9 @@ const normalizeGraphIframeSettings = (value) => {
     });
   }
   normalized[2] = normalizeGraphLimitRange(normalized[2], 25);
+  if (normalized[10] === "default" || !normalized[10]) {
+    normalized[10] = "concentric";
+  }
   return normalized;
 };
 
@@ -1481,14 +1484,14 @@ function WindowVerticalSplitPanels({id, type, sourceId, initialTopHeight, minTop
               </div>
               <div className="settings_form_div">
                 <label className="input_labels">Layout type</label>
-                <select className="select_option" value={settings[10] ? (settings[10]):("default")} onChange={(e) => {graphAction(id, "properties_tab", "settings", 
+                <select className="select_option" value={settings[10] === "concentric" ? "default" : (settings[10] ? settings[10] : "default")} onChange={(e) => {graphAction(id, "properties_tab", "settings", 
                   {
                     iframe: iframeRef,
                     settings: "layout_type",
                     state: e.target.value,
                   })}}
                   disabled={!activeGraph}>
-                  <option value="default">Default</option>
+                  <option value="default">Default (Concentric)</option>
                   <option value="hierarchical">hierarchical</option>
                   <option value="layered">layered</option>
                   <option value="circle">circle</option>
@@ -1496,7 +1499,6 @@ function WindowVerticalSplitPanels({id, type, sourceId, initialTopHeight, minTop
                   <option value="radial">radial</option>
                   <option value="grid">grid</option>
                   <option value="spiral">spiral</option>
-                  <option value="concentric">concentric</option>
                 </select>                
               </div>
               <div className="settings_form_div">
@@ -5300,7 +5302,6 @@ const fileInputRef = useRef(null);
                     sendToIframe(iframe, setting, value);
                   });
                 }
-
                 return { ...w, ...updates };
               }
 
@@ -5323,9 +5324,12 @@ const fileInputRef = useRef(null);
               };
               // Organizing settings (to have a concurent/ Multi settings for batch)
               const [index, key] = settingsMap[payload.settings] || [];
+              const normalizedSettingState = payload.settings === "layout_type" && payload.state === "default"
+                ? "concentric"
+                : payload.state;
               if (index !== undefined) { // If setting really exists 
                 console.log("passing_setting_update_state:",id, index, key,payload.state)
-                updateIframeSettings(id, index, key ? payload.state[key] : payload.state);
+                updateIframeSettings(id, index, key ? normalizedSettingState[key] : normalizedSettingState);
                 // Concurrent settings
                 //------------------ Labe nodes by
                 if (payload.settings === "label_nodes_by") {//Changing a lable by always activates the show label
@@ -5333,11 +5337,11 @@ const fileInputRef = useRef(null);
                   updateIframeSettings(id, 4, payload.state.labelkey)
                 }
                 //------------------ Layout type
-                if (payload.settings === "layout_type" && payload.state === "hierarchical") {
+                if (payload.settings === "layout_type" && normalizedSettingState === "hierarchical") {
                   updateIframeSettings(id, 11, "UD");
                   updateIframeSettings(id, 12, "directed");
                 }
-                if (payload.settings === "layout_type" && payload.state === "layered") {
+                if (payload.settings === "layout_type" && normalizedSettingState === "layered") {
                   const existingSettings = normalizeGraphIframeSettings(iframeSettings[id] || w.iframeSettings);
                   updateIframeSettings(id, 11, existingSettings[11] || "UD");
                   updateIframeSettings(id, 13, existingSettings[13] || "hop_distance");
@@ -5351,8 +5355,8 @@ const fileInputRef = useRef(null);
                 }));
               }
               //Pass the setting change to the child iframe
-              sendToIframe(iframe, payload.settings, payload.state);              
-            }
+              sendToIframe(iframe, payload.settings, normalizedSettingState);
+}
             if (action === "search") {
               const { option, keyword, keys, settings } = payload;
               sendToIframe(iframe, "graph_search", { id, option, keyword, keys, settings });

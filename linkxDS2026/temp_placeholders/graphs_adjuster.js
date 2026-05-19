@@ -232,6 +232,45 @@ function ensureInteractionPopupUi() {
         max-height: 32vh;
         overflow-y: auto;
       }
+      #linkx_interaction_choices {
+        display: none;
+        margin-bottom: 0.9vh;
+        max-height: 34vh;
+        overflow-y: auto;
+        border: 0.1vh solid rgba(179, 179, 179, 0.45);
+        border-radius: 0.35vh;
+        background: rgba(255, 255, 255, 0.72);
+        padding: 0.35vh 0;
+      }
+      .linkx_interaction_choice {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.55vw;
+        padding: 0.55vh 0.6vw;
+        cursor: pointer;
+        border-top: 0.1vh solid rgba(179, 179, 179, 0.18);
+      }
+      .linkx_interaction_choice:first-child {
+        border-top: 0;
+      }
+      .linkx_interaction_choice:hover {
+        background: rgba(195, 214, 230, 0.2);
+      }
+      .linkx_interaction_choice input[type="radio"] {
+        margin-top: 0.15vh;
+        accent-color: #3f5f7f;
+      }
+      .linkx_interaction_choice_main {
+        font-size: 12.5px;
+        color: #22313f;
+        line-height: 1.35;
+      }
+      .linkx_interaction_choice_desc {
+        font-size: 11px;
+        color: #657789;
+        margin-top: 0.2vh;
+        line-height: 1.3;
+      }
       #linkx_interaction_input,
       #linkx_interaction_textarea {
         width: 100%;
@@ -293,6 +332,22 @@ function ensureInteractionPopupUi() {
       html[data-theme="dark"] #linkx_interaction_title {
         border-bottom: 0.1vh solid rgba(131, 165, 194, 0.35);
       }
+      html[data-theme="dark"] #linkx_interaction_choices {
+        border: 0.1vh solid rgba(109, 143, 171, 0.48);
+        background: rgba(18, 27, 36, 0.85);
+      }
+      html[data-theme="dark"] .linkx_interaction_choice {
+        border-top-color: rgba(109, 143, 171, 0.2);
+      }
+      html[data-theme="dark"] .linkx_interaction_choice:hover {
+        background: rgba(56, 78, 96, 0.32);
+      }
+      html[data-theme="dark"] .linkx_interaction_choice_main {
+        color: #d8e5f0;
+      }
+      html[data-theme="dark"] .linkx_interaction_choice_desc {
+        color: #96abc0;
+      }
       html[data-theme="dark"] #linkx_interaction_input,
       html[data-theme="dark"] #linkx_interaction_textarea {
         border: 0.1vh solid rgba(109, 143, 171, 0.55);
@@ -323,6 +378,9 @@ function ensureInteractionPopupUi() {
   const messageEl = document.createElement("div");
   messageEl.id = "linkx_interaction_message";
 
+  const choicesEl = document.createElement("div");
+  choicesEl.id = "linkx_interaction_choices";
+
   const inputEl = document.createElement("input");
   inputEl.id = "linkx_interaction_input";
   inputEl.type = "text";
@@ -350,6 +408,7 @@ function ensureInteractionPopupUi() {
 
   panel.appendChild(titleEl);
   panel.appendChild(messageEl);
+  panel.appendChild(choicesEl);
   panel.appendChild(inputEl);
   panel.appendChild(textareaEl);
   panel.appendChild(actions);
@@ -361,6 +420,7 @@ function ensureInteractionPopupUi() {
     panel,
     titleEl,
     messageEl,
+    choicesEl,
     inputEl,
     textareaEl,
     cancelBtn,
@@ -377,14 +437,18 @@ function showInteractionPopup({
   placeholder = "",
   okText = "OK",
   cancelText = "Cancel",
-  multiline = false
+  multiline = false,
+  choices = []
 } = {}) {
   return new Promise(resolve => {
     const ui = ensureInteractionPopupUi();
-    const { overlay, panel, titleEl, messageEl, inputEl, textareaEl, cancelBtn, okBtn } = ui;
+    const { overlay, panel, titleEl, messageEl, choicesEl, inputEl, textareaEl, cancelBtn, okBtn } = ui;
     const isPrompt = mode === "prompt";
+    const isRadio = mode === "radio";
+    const isCheckbox = mode === "checkbox";
     const useTextarea = isPrompt && multiline;
     let finished = false;
+    let onChoicesChange = null;
 
     titleEl.textContent = title;
     messageEl.textContent = String(message ?? "");
@@ -392,8 +456,89 @@ function showInteractionPopup({
     cancelBtn.textContent = cancelText;
     cancelBtn.style.display = "inline-block";
 
-    inputEl.style.display = useTextarea ? "none" : (isPrompt ? "block" : "none");
-    textareaEl.style.display = useTextarea ? "block" : "none";
+    if (isRadio || isCheckbox) {
+      choicesEl.innerHTML = "";
+      const normalizedChoices = Array.isArray(choices) ? choices : [];
+      const hasAllChoice = isCheckbox && normalizedChoices.some(item => String(item?.value ?? "").trim().toLowerCase() === "all");
+      normalizedChoices.forEach((item, idx) => {
+        const value = String(item?.value ?? "");
+        const label = String(item?.label ?? (value || ("Option " + (idx + 1))));
+        const description = item?.description == null ? "" : String(item.description);
+
+        const row = document.createElement("label");
+        row.className = "linkx_interaction_choice";
+
+        const radio = document.createElement("input");
+        radio.type = isCheckbox ? "checkbox" : "radio";
+        radio.name = isCheckbox ? ("linkx_interaction_choice_" + idx) : "linkx_interaction_choice";
+        radio.value = value;
+
+        if (isCheckbox) {
+          const defaultSet = Array.isArray(defaultValue)
+            ? new Set(defaultValue.map(item => String(item)))
+            : new Set(String(defaultValue ?? "") ? [String(defaultValue ?? "")] : []);
+          radio.checked = defaultSet.has(value);
+        } else {
+          const shouldCheck = String(defaultValue ?? "") === value || (idx === 0 && String(defaultValue ?? "") === "");
+          if (shouldCheck) radio.checked = true;
+        }
+
+        const textWrap = document.createElement("span");
+        const main = document.createElement("div");
+        main.className = "linkx_interaction_choice_main";
+        main.textContent = label;
+        textWrap.appendChild(main);
+
+        if (description) {
+          const desc = document.createElement("div");
+          desc.className = "linkx_interaction_choice_desc";
+          desc.textContent = description;
+          textWrap.appendChild(desc);
+        }
+
+        row.appendChild(radio);
+        row.appendChild(textWrap);
+        choicesEl.appendChild(row);
+      });
+      if (hasAllChoice) {
+        const syncAllState = (changedInput = null) => {
+          const checkboxes = Array.from(choicesEl.querySelectorAll('input[type="checkbox"]'));
+          const allCheckbox = checkboxes.find(box => String(box.value || "").trim().toLowerCase() === "all");
+          if (!allCheckbox) return;
+          const optionCheckboxes = checkboxes.filter(box => box !== allCheckbox);
+          if (optionCheckboxes.length === 0) return;
+
+          if (changedInput === allCheckbox) {
+            optionCheckboxes.forEach(box => { box.checked = allCheckbox.checked; });
+            return;
+          }
+
+          const allOptionsChecked = optionCheckboxes.every(box => box.checked);
+          allCheckbox.checked = allOptionsChecked;
+        };
+
+        onChoicesChange = (event) => {
+          const target = event?.target;
+          if (!(target instanceof HTMLInputElement) || target.type !== "checkbox") return;
+          syncAllState(target);
+        };
+        choicesEl.addEventListener("change", onChoicesChange, true);
+
+        const allCheckbox = choicesEl.querySelector('input[type="checkbox"][value="all"]');
+        if (allCheckbox && allCheckbox.checked) {
+          syncAllState(allCheckbox);
+        } else {
+          syncAllState(null);
+        }
+      }
+      choicesEl.style.display = "block";
+    } else {
+      choicesEl.style.display = "none";
+      choicesEl.innerHTML = "";
+    }
+
+    inputEl.style.display = (isRadio || isCheckbox) ? "none" : (useTextarea ? "none" : (isPrompt ? "block" : "none"));
+    textareaEl.style.display = (isRadio || isCheckbox) ? "none" : (useTextarea ? "block" : "none");
     inputEl.value = isPrompt && !useTextarea ? String(defaultValue ?? "") : "";
     textareaEl.value = isPrompt && useTextarea ? String(defaultValue ?? "") : "";
     inputEl.placeholder = placeholder;
@@ -404,13 +549,24 @@ function showInteractionPopup({
       overlay.removeEventListener("click", onBackdropClick, true);
       cancelBtn.removeEventListener("click", onCancel, true);
       okBtn.removeEventListener("click", onConfirm, true);
+      if (onChoicesChange) {
+        choicesEl.removeEventListener("change", onChoicesChange, true);
+      }
       overlay.style.display = "none";
     };
 
     const finish = (confirmed) => {
       if (finished) return;
       finished = true;
-      const value = useTextarea ? textareaEl.value : inputEl.value;
+      let value = "";
+      if (isRadio) {
+        const selected = choicesEl.querySelector('input[type="radio"]:checked');
+        value = selected ? String(selected.value) : "";
+      } else if (isCheckbox) {
+        value = Array.from(choicesEl.querySelectorAll('input[type="checkbox"]:checked')).map(el => String(el.value));
+      } else {
+        value = useTextarea ? textareaEl.value : inputEl.value;
+      }
       cleanup();
       resolve({
         confirmed: !!confirmed,
@@ -444,6 +600,13 @@ function showInteractionPopup({
 
     overlay.style.display = "flex";
     requestAnimationFrame(() => {
+      if (isRadio || isCheckbox) {
+        const selector = isCheckbox ? 'input[type="checkbox"]' : 'input[type="radio"]';
+        const selected = choicesEl.querySelector(selector + ':checked') || choicesEl.querySelector(selector);
+        if (selected) selected.focus();
+        else okBtn.focus();
+        return;
+      }
       const target = useTextarea ? textareaEl : inputEl;
       if (isPrompt) {
         target.focus();
@@ -453,6 +616,33 @@ function showInteractionPopup({
       }
     });
   });
+}
+
+async function requestUserRadioChoice(message, choices, defaultValue = "", options = {}) {
+  const result = await showInteractionPopup({
+    title: options.title || "Select Option",
+    message,
+    mode: "radio",
+    defaultValue,
+    okText: options.okText || "Select",
+    cancelText: options.cancelText || "Cancel",
+    choices: Array.isArray(choices) ? choices : []
+  });
+  return result.confirmed ? result.value : null;
+}
+
+async function requestUserCheckboxChoices(message, choices, defaultValues = [], options = {}) {
+  const result = await showInteractionPopup({
+    title: options.title || "Select Options",
+    message,
+    mode: "checkbox",
+    defaultValue: Array.isArray(defaultValues) ? defaultValues : [],
+    okText: options.okText || "Apply",
+    cancelText: options.cancelText || "Cancel",
+    choices: Array.isArray(choices) ? choices : []
+  });
+  if (!result.confirmed) return null;
+  return Array.isArray(result.value) ? result.value : [];
 }
 
 async function requestUserInput(message, defaultValue = "", options = {}) {
@@ -480,29 +670,249 @@ async function requestUserConfirmation(message, options = {}) {
   return result.confirmed;
 }
 
+async function requestSavedViewSelectionPopup() {
+  refreshScopedSavedViews();
+  let list = Array.isArray(window.SAVED_VIEWS) ? window.SAVED_VIEWS.slice() : [];
+  if (list.length === 0) {
+    alert("No saved views available for this graph.");
+    return null;
+  }
+
+  while (list.length > 0) {
+    const choices = list.map(function(item, index) {
+      const stamp = item?.createdAt ? new Date(item.createdAt).toLocaleString() : "";
+      return {
+        value: String(item.name || ""),
+        label: String(item.name || ("View " + (index + 1))),
+        description: stamp ? ("Saved " + stamp) : ""
+      };
+    });
+    choices.push({
+      value: "__remove_saved_views__",
+      label: "Remove saved view(s)",
+      description: "Delete saved view entries for this graph only"
+    });
+
+    const selected = await requestUserRadioChoice(
+      "Select a saved view",
+      choices,
+      choices[0]?.value || "",
+      { title: "Load Saved View", okText: "Continue" }
+    );
+    if (selected == null || String(selected).trim() === "") return null;
+
+    if (selected !== "__remove_saved_views__") {
+      return String(selected);
+    }
+
+    const removeChoices = list.map(function(item, index) {
+      const stamp = item?.createdAt ? new Date(item.createdAt).toLocaleString() : "";
+      return {
+        value: String(item.name || ""),
+        label: String(item.name || ("View " + (index + 1))),
+        description: stamp ? ("Saved " + stamp) : ""
+      };
+    });
+
+    const toRemove = await requestUserCheckboxChoices(
+      "Select saved views to remove",
+      removeChoices,
+      [],
+      { title: "Remove Saved Views", okText: "Remove" }
+    );
+    if (toRemove == null) return null;
+
+    const uniqueNames = Array.from(new Set((toRemove || []).map(item => String(item).trim()).filter(Boolean)));
+    if (uniqueNames.length === 0) {
+      alert("No saved views selected for removal.");
+      continue;
+    }
+
+    const confirmed = await requestUserConfirmation(
+      "Remove " + uniqueNames.length + " saved view(s) from this graph?",
+      { title: "Confirm Remove", okText: "Remove" }
+    );
+    if (!confirmed) continue;
+
+    removeSavedViewsByNames(uniqueNames);
+    list = Array.isArray(window.SAVED_VIEWS) ? window.SAVED_VIEWS.slice() : [];
+    if (list.length === 0) {
+      alert("No saved views remaining for this graph.");
+      return null;
+    }
+  }
+
+  return null;
+}
+
+function getNodeElementFilterKey(node) {
+  const annotationType = String((node && node.annotationType) || "").toLowerCase();
+  if (annotationType === "label") return "labels";
+  if (annotationType === "comment_box") return "comment_boxes";
+  if (annotationType === "text_block") return "text_blocks";
+  if (annotationType === "event_frame") return "event_frames";
+  if (annotationType === "ole_object") return "ole_objects";
+  return "nodes";
+}
+
+function isNodeVisibleByTypeFilter(node) {
+  const state = normalizeElementFilterState(window.ELEMENT_FILTER_STATE);
+  const key = getNodeElementFilterKey(node);
+  return !!state[key];
+}
+
+function getFilteredVisibleGraphIds() {
+  const state = normalizeElementFilterState(window.ELEMENT_FILTER_STATE);
+  const nodeIds = new Set();
+
+  for (const nodeId of VISIBLE_STATE.nodes) {
+    const base = FULL_GRAPH.nodes.get(nodeId);
+    if (!base) continue;
+    const mod = MODIFIED_NODES.get(nodeId) || {};
+    const merged = { ...base, ...mod };
+    if (!isNodeVisibleByTypeFilter(merged)) continue;
+    nodeIds.add(nodeId);
+  }
+
+  const edgeIds = new Set();
+  for (const edgeId of VISIBLE_STATE.edges) {
+    const edge = FULL_GRAPH.edges.get(edgeId) || edgesData.get(edgeId);
+    if (!edge) continue;
+    if (isThemeLineEdge(edge) && !state.theme_lines) continue;
+    if (!nodeIds.has(edge.from) || !nodeIds.has(edge.to)) continue;
+    edgeIds.add(edgeId);
+  }
+
+  return { nodeIds: nodeIds, edgeIds: edgeIds };
+}
+
+function applyElementTypeFilterState(nextState, options) {
+  const normalized = normalizeElementFilterState(nextState);
+  const cfg = options && typeof options === "object" ? options : {};
+  window.ELEMENT_FILTER_STATE = normalized;
+  if (!window.currentSettings || typeof window.currentSettings !== "object") {
+    window.currentSettings = {};
+  }
+  window.currentSettings.elementFilters = { ...normalized };
+
+  if (cfg.persist !== false) {
+    writeJsonStorage(ELEMENT_FILTERS_STORAGE_KEY, normalized);
+  }
+  if (cfg.rerender !== false && typeof renderVisibleGraphBatch === "function") {
+    renderVisibleGraphBatch();
+    if (cfg.fit !== false && network && typeof network.fit === "function") {
+      const filtered = getFilteredVisibleGraphIds();
+      const ids = Array.from(filtered.nodeIds || []);
+      if (ids.length > 0) {
+        network.fit({ nodes: ids, animation: { duration: 220, easingFunction: "easeInOutQuad" } });
+      }
+    }
+  }
+}
+
+async function configureElementTypeFilters() {
+  const current = normalizeElementFilterState(window.ELEMENT_FILTER_STATE);
+
+  const choices = [
+    { value: "all", label: "All", description: "Check all element types" },
+    { value: "nodes", label: "Nodes", description: "Entity nodes" },
+    { value: "labels", label: "Labels", description: "Label elements" },
+    { value: "comment_boxes", label: "Comment boxes", description: "Comment containers" },
+    { value: "text_blocks", label: "Text blocks", description: "Text block annotations" },
+    { value: "event_frames", label: "Event frames", description: "Event frame annotations" },
+    { value: "theme_lines", label: "Theme lines", description: "Theme line edges" },
+    { value: "ole_objects", label: "OLE Objects", description: "Embedded object nodes" }
+  ];
+
+  const allEnabled = current.nodes && current.labels && current.comment_boxes && current.text_blocks && current.event_frames && current.theme_lines && current.ole_objects;
+  const defaults = [];
+  if (allEnabled) defaults.push("all");
+  Object.keys(current).forEach(function(key) {
+    if (current[key]) defaults.push(key);
+  });
+
+  const selectedValues = await requestUserCheckboxChoices(
+    "Select visible graph elements",
+    choices,
+    defaults,
+    { title: "Filter Graph Elements", okText: "Apply" }
+  );
+  if (selectedValues == null) return;
+
+  const selected = new Set((selectedValues || []).map(function(item) { return String(item); }));
+  const useAll = selected.has("all");
+  const nextState = useAll
+    ? { ...DEFAULT_ELEMENT_FILTERS }
+    : {
+        nodes: selected.has("nodes"),
+        labels: selected.has("labels"),
+        comment_boxes: selected.has("comment_boxes"),
+        text_blocks: selected.has("text_blocks"),
+        event_frames: selected.has("event_frames"),
+        theme_lines: selected.has("theme_lines"),
+        ole_objects: selected.has("ole_objects")
+      };
+
+  applyElementTypeFilterState(nextState, { fit: true });
+}
+
 function clearVisibleGraph() {
+
   nodesData.clear();
   edgesData.clear();
   VISIBLE_STATE.nodes.clear();
   VISIBLE_STATE.edges.clear();
 }
 
-function getDocumentOneIconDataUri(fillColor = "#7c3aed") {
-  const fill = String(fillColor || "#7c3aed");
+function getDocumentOneIconDataUri(fillColor = "#4f6c86") {
+  const fill = String(fillColor || "#4f6c86");
   const pathData = "M19.5 3h0.5l6 7v18.009c0 1.093-0.894 1.991-1.997 1.991h-15.005c-1.107 0-1.997-0.899-1.997-2.007v-22.985c0-1.109 0.897-2.007 2.003-2.007h10.497zM19 4h-10.004c-0.55 0-0.996 0.455-0.996 0.995v23.009c0 0.55 0.455 0.995 1 0.995h15c0.552 0 1-0.445 1-0.993v-17.007h-4.002c-1.103 0-1.998-0.887-1.998-2.006v-4.994zM20 4.5v4.491c0 0.557 0.451 1.009 0.997 1.009h3.703l-4.7-5.5z";
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><path fill="${fill}" d="${pathData}"/></svg>`;
-  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+  const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><path fill="' + fill + '" d="' + pathData + '"/></svg>';
+  return 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg);
+}
+
+function getOleObjectThemeDefaults() {
+  const dark = isGraphDarkThemeActive();
+  if (dark) {
+    return {
+      iconFill: "#d5e1ec",
+      fontColor: "#a9bdd1",
+      shadowColor: "rgba(111, 139, 164, 0.34)",
+      accentColor: "#8ca9c4"
+    };
+  }
+  return {
+    iconFill: "#4f6c86",
+    fontColor: "#2f4a63",
+    shadowColor: "rgba(79, 108, 134, 0.24)",
+    accentColor: "#4f6c86"
+  };
+}
+
+function isLegacyOleColorToken(value) {
+  const token = String(value == null ? "" : value)
+    .replace(/\s+/g, "")
+    .toLowerCase();
+  return token === "#7c3aed"
+    || token === "#6d28d9"
+    || token === "rgba(124,58,237,0.32)"
+    || token === "rgba(124,58,237,0.35)"
+    || token === "rgb(124,58,237)"
+    || token === "rgb(109,40,217)";
 }
 
 if (!window.OLE_OBJECT_ICON_PATH) {
-  window.OLE_OBJECT_ICON_PATH = getDocumentOneIconDataUri("#7c3aed");
+  window.OLE_OBJECT_ICON_PATH = "";
 }
 
 function getOleObjectIconPath() {
-  return window.OLE_OBJECT_ICON_PATH || getDocumentOneIconDataUri("#7c3aed");
+  const configured = String(window.OLE_OBJECT_ICON_PATH || "").trim();
+  if (configured) return configured;
+  return getDocumentOneIconDataUri(getOleObjectThemeDefaults().iconFill);
 }
 
 function persistNodeChange(id, patch) {
+
   queueGraphHistoryCapture();
   window.MODIFIED_NODES.set(id, {
     ...(window.MODIFIED_NODES.get(id) || {}),
@@ -598,6 +1008,7 @@ const SAVED_VIEWS_STORAGE_KEY = "linkx_saved_views_v1";
 const PINNED_EVIDENCE_STORAGE_KEY = "linkx_pinned_evidence_v1";
 const ALERT_RULES_STORAGE_KEY = "linkx_alert_rules_v1";
 const PATH_OPTIONS_STORAGE_KEY = "linkx_path_options_v1";
+const ELEMENT_FILTERS_STORAGE_KEY = "linkx_element_filters_v1";
 const MAX_SAVED_VIEWS = 30;
 const DEFAULT_ALERT_RULES_CONFIG = {
   enableHighDegree: true,
@@ -614,6 +1025,15 @@ const DEFAULT_PATH_OPTIONS = {
   directed: false,
   weighted: false,
   includeThemeLines: false
+};
+const DEFAULT_ELEMENT_FILTERS = {
+  nodes: true,
+  labels: true,
+  comment_boxes: true,
+  text_blocks: true,
+  event_frames: true,
+  theme_lines: true,
+  ole_objects: true
 };
 
 function normalizeAlertRulesConfig(config) {
@@ -657,6 +1077,25 @@ function normalizePathOptions(options) {
   };
 }
 
+function normalizeElementFilterState(filters) {
+  const source = filters && typeof filters === "object" ? filters : {};
+  const asBool = (value, fallback) => {
+    if (value === true || value === false) return value;
+    if (value === "true") return true;
+    if (value === "false") return false;
+    return fallback;
+  };
+  return {
+    nodes: asBool(source.nodes, DEFAULT_ELEMENT_FILTERS.nodes),
+    labels: asBool(source.labels, DEFAULT_ELEMENT_FILTERS.labels),
+    comment_boxes: asBool(source.comment_boxes, DEFAULT_ELEMENT_FILTERS.comment_boxes),
+    text_blocks: asBool(source.text_blocks, DEFAULT_ELEMENT_FILTERS.text_blocks),
+    event_frames: asBool(source.event_frames, DEFAULT_ELEMENT_FILTERS.event_frames),
+    theme_lines: asBool(source.theme_lines, DEFAULT_ELEMENT_FILTERS.theme_lines),
+    ole_objects: asBool(source.ole_objects, DEFAULT_ELEMENT_FILTERS.ole_objects)
+  };
+}
+
 function readJsonStorage(key, fallbackValue) {
   try {
     const raw = localStorage.getItem(key);
@@ -676,9 +1115,105 @@ function writeJsonStorage(key, value) {
   }
 }
 
-window.SAVED_VIEWS = Array.isArray(window.SAVED_VIEWS)
-  ? window.SAVED_VIEWS
-  : readJsonStorage(SAVED_VIEWS_STORAGE_KEY, []);
+function sanitizeScopeToken(value) {
+  const raw = String(value == null ? "" : value).trim();
+  if (!raw) return "";
+  return raw.toLowerCase().replace(/[^a-z0-9_\-.]+/g, "_").slice(0, 120);
+}
+
+function computeGraphScopeFingerprint() {
+  const nodeCount = FULL_GRAPH?.nodes?.size || 0;
+  const edgeCount = FULL_GRAPH?.edges?.size || 0;
+  const sample = Array.from((FULL_GRAPH?.nodes?.keys?.() || []))
+    .map(item => String(item))
+    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+    .slice(0, 24)
+    .join("|");
+  const raw = nodeCount + ":" + edgeCount + ":" + sample;
+  let hash = 0;
+  for (let i = 0; i < raw.length; i += 1) {
+    hash = ((hash << 5) - hash + raw.charCodeAt(i)) | 0;
+  }
+  return "graph_" + nodeCount + "_" + edgeCount + "_" + Math.abs(hash);
+}
+
+function getAllSavedViewsFromStorage() {
+  const raw = readJsonStorage(SAVED_VIEWS_STORAGE_KEY, []);
+  return Array.isArray(raw) ? raw : [];
+}
+
+function getCurrentGraphScopeId() {
+  const existing = sanitizeScopeToken(window.CURRENT_GRAPH_SCOPE);
+  if (existing) return existing;
+  const fallback = sanitizeScopeToken(computeGraphScopeFingerprint()) || "graph_default";
+  window.CURRENT_GRAPH_SCOPE = fallback;
+  return fallback;
+}
+
+function getSavedViewsForScope(scopeId) {
+  const target = sanitizeScopeToken(scopeId);
+  if (!target) return [];
+  return getAllSavedViewsFromStorage().filter(function(item) {
+    return sanitizeScopeToken(item?.scopeId) === target;
+  });
+}
+
+function refreshScopedSavedViews() {
+  const scopeId = getCurrentGraphScopeId();
+  window.SAVED_VIEWS = getSavedViewsForScope(scopeId).slice(0, MAX_SAVED_VIEWS);
+  return window.SAVED_VIEWS;
+}
+
+function persistSavedViewsForScope(nextScopedViews) {
+  const scopeId = getCurrentGraphScopeId();
+  const all = getAllSavedViewsFromStorage().filter(function(item) {
+    return sanitizeScopeToken(item?.scopeId) !== scopeId;
+  });
+
+  const scoped = (Array.isArray(nextScopedViews) ? nextScopedViews : [])
+    .map(function(item) {
+      return { ...item, scopeId: scopeId };
+    })
+    .slice(0, MAX_SAVED_VIEWS);
+
+  const merged = [...scoped, ...all].slice(0, Math.max(MAX_SAVED_VIEWS * 20, 600));
+  writeJsonStorage(SAVED_VIEWS_STORAGE_KEY, merged);
+  window.SAVED_VIEWS = scoped;
+  return window.SAVED_VIEWS;
+}
+
+function setCurrentGraphScope(scopeHint = "") {
+  const hinted = sanitizeScopeToken(scopeHint);
+  const resolved = hinted || sanitizeScopeToken(computeGraphScopeFingerprint()) || "graph_default";
+  window.CURRENT_GRAPH_SCOPE = resolved;
+  refreshScopedSavedViews();
+  return resolved;
+}
+
+function removeSavedViewsByNames(names) {
+  const wanted = new Set((Array.isArray(names) ? names : []).map(item => String(item).trim()).filter(Boolean));
+  if (wanted.size === 0) return 0;
+  const scopeId = getCurrentGraphScopeId();
+  const all = getAllSavedViewsFromStorage();
+  const kept = [];
+  let removed = 0;
+
+  all.forEach(function(item) {
+    const sameScope = sanitizeScopeToken(item?.scopeId) === scopeId;
+    const sameName = wanted.has(String(item?.name || "").trim());
+    if (sameScope && sameName) {
+      removed += 1;
+      return;
+    }
+    kept.push(item);
+  });
+
+  writeJsonStorage(SAVED_VIEWS_STORAGE_KEY, kept);
+  refreshScopedSavedViews();
+  return removed;
+}
+
+window.SAVED_VIEWS = [];
 window.PINNED_EVIDENCE = Array.isArray(window.PINNED_EVIDENCE)
   ? window.PINNED_EVIDENCE
   : readJsonStorage(PINNED_EVIDENCE_STORAGE_KEY, []);
@@ -687,6 +1222,9 @@ window.ALERT_RULES_CONFIG = normalizeAlertRulesConfig(
 );
 window.PATH_OPTIONS = normalizePathOptions(
   window.PATH_OPTIONS || readJsonStorage(PATH_OPTIONS_STORAGE_KEY, DEFAULT_PATH_OPTIONS)
+);
+window.ELEMENT_FILTER_STATE = normalizeElementFilterState(
+  window.ELEMENT_FILTER_STATE || readJsonStorage(ELEMENT_FILTERS_STORAGE_KEY, DEFAULT_ELEMENT_FILTERS)
 );
 window.ALERT_RULES_ENABLED = window.ALERT_RULES_ENABLED !== false;
 window.EDGE_BUNDLING_STATE = window.EDGE_BUNDLING_STATE || {
@@ -1520,6 +2058,154 @@ function updateNodeDisplay(node) {
 }
 
 
+
+function ensureGraphLoadingUi() {
+  let ui = window.__linkxGraphLoadingUi;
+  if (ui && ui.overlay && ui.titleEl && ui.progressEl) return ui;
+
+  if (!document.getElementById("linkx_graph_loading_styles")) {
+    const style = document.createElement("style");
+    style.id = "linkx_graph_loading_styles";
+    style.textContent = '#linkx_graph_loading_overlay {\n'
+      + '  position: fixed;\n'
+      + '  inset: 0;\n'
+      + '  z-index: 14000;\n'
+      + '  display: none;\n'
+      + '  align-items: center;\n'
+      + '  justify-content: center;\n'
+      + '  background: rgba(10, 18, 24, 0.36);\n'
+      + '  backdrop-filter: blur(1px);\n'
+      + '}\n'
+      + '#linkx_graph_loading_panel {\n'
+      + '  min-width: 280px;\n'
+      + '  max-width: min(92vw, 520px);\n'
+      + '  border-radius: 10px;\n'
+      + '  border: 1px solid rgba(122, 147, 168, 0.30);\n'
+      + '  background: rgba(247, 251, 255, 0.96);\n'
+      + '  color: #304559;\n'
+      + '  padding: 14px 16px;\n'
+      + '  box-shadow: 0 10px 24px rgba(0,0,0,0.20);\n'
+      + '  font-family: "Segoe UI", Arial, sans-serif;\n'
+      + '}\n'
+      + '#linkx_graph_loading_title {\n'
+      + '  font-size: 13px;\n'
+      + '  font-weight: 600;\n'
+      + '  letter-spacing: 0.02em;\n'
+      + '  margin-bottom: 8px;\n'
+      + '}\n'
+      + '#linkx_graph_loading_progress {\n'
+      + '  font-size: 12px;\n'
+      + '  color: #4f667c;\n'
+      + '}\n'
+      + 'html[data-theme="dark"] #linkx_graph_loading_overlay {\n'
+      + '  background: rgba(5, 10, 14, 0.56);\n'
+      + '}\n'
+      + 'html[data-theme="dark"] #linkx_graph_loading_panel {\n'
+      + '  background: rgba(15, 26, 36, 0.95);\n'
+      + '  border-color: rgba(103, 132, 156, 0.36);\n'
+      + '  color: #c8d4df;\n'
+      + '  box-shadow: 0 12px 26px rgba(0,0,0,0.50);\n'
+      + '}\n'
+      + 'html[data-theme="dark"] #linkx_graph_loading_progress {\n'
+      + '  color: #94a7b9;\n'
+      + '}';
+    document.head.appendChild(style);
+  }
+
+  const overlay = document.createElement("div");
+  overlay.id = "linkx_graph_loading_overlay";
+  overlay.setAttribute("aria-live", "polite");
+  overlay.innerHTML = '<div id="linkx_graph_loading_panel">'
+    + '<div id="linkx_graph_loading_title">Loading graph...</div>'
+    + '<div id="linkx_graph_loading_progress">Preparing...</div>'
+    + '</div>';
+  document.body.appendChild(overlay);
+  ui = {
+    overlay,
+    titleEl: overlay.querySelector("#linkx_graph_loading_title"),
+    progressEl: overlay.querySelector("#linkx_graph_loading_progress")
+  };
+  window.__linkxGraphLoadingUi = ui;
+  return ui;
+}
+
+function showGraphLoading(title = "Loading graph...", current = null, total = null) {
+  const ui = ensureGraphLoadingUi();
+  ui.titleEl.textContent = String(title || "Loading graph...");
+  if (Number.isFinite(current) && Number.isFinite(total) && total > 0) {
+    const safeCurrent = Math.max(0, Math.min(total, current));
+    const pct = Math.round((safeCurrent / total) * 100);
+    ui.progressEl.textContent = "Processed " + safeCurrent + " of " + total + " (" + pct + "%)";
+  } else {
+    ui.progressEl.textContent = "Preparing...";
+  }
+  ui.overlay.style.display = "flex";
+}
+
+function setGraphLoadingProgress(current, total, title = "") {
+  const ui = ensureGraphLoadingUi();
+  if (title) ui.titleEl.textContent = String(title);
+  if (Number.isFinite(current) && Number.isFinite(total) && total > 0) {
+    const safeCurrent = Math.max(0, Math.min(total, current));
+    const pct = Math.round((safeCurrent / total) * 100);
+    ui.progressEl.textContent = "Processed " + safeCurrent + " of " + total + " (" + pct + "%)";
+  } else {
+    ui.progressEl.textContent = "Working...";
+  }
+  ui.overlay.style.display = "flex";
+}
+
+function hideGraphLoading() {
+  const ui = window.__linkxGraphLoadingUi;
+  if (!ui || !ui.overlay) return;
+  ui.overlay.style.display = "none";
+}
+
+async function runWithGraphLoading(title, worker, options = {}) {
+  if (typeof worker !== "function") return null;
+
+  const minVisibleMs = Math.max(0, Number(options?.minVisibleMs) || 220);
+  const totalRaw = Number(options?.total);
+  const defaultTotal = Number.isFinite(totalRaw) && totalRaw > 0 ? totalRaw : null;
+  const hasUi = typeof window.showGraphLoading === "function" && typeof window.hideGraphLoading === "function";
+
+  let wasVisible = false;
+  const startTs = Date.now();
+  if (hasUi) {
+    const ui = ensureGraphLoadingUi();
+    wasVisible = ui?.overlay?.style?.display === "flex";
+    window.showGraphLoading(title || "Working...", defaultTotal == null ? null : 0, defaultTotal);
+  }
+
+  await new Promise(resolve => {
+    requestAnimationFrame(() => setTimeout(resolve, 0));
+  });
+
+  try {
+    return await worker({
+      setProgress: (current, totalOverride, nextTitle = "") => {
+        if (typeof window.setGraphLoadingProgress !== "function") return;
+        const totalValue = Number(totalOverride);
+        const useTotal = Number.isFinite(totalValue) && totalValue > 0
+          ? totalValue
+          : defaultTotal;
+        window.setGraphLoadingProgress(current, useTotal, nextTitle || "");
+      }
+    });
+  } finally {
+    if (!hasUi || wasVisible) return;
+    const elapsed = Date.now() - startTs;
+    const waitMs = Math.max(0, minVisibleMs - elapsed);
+    setTimeout(() => { window.hideGraphLoading(); }, waitMs);
+  }
+}
+
+window.showGraphLoading = showGraphLoading;
+window.setGraphLoadingProgress = setGraphLoadingProgress;
+window.hideGraphLoading = hideGraphLoading;
+window.runWithGraphLoading = runWithGraphLoading;
+
+
 const ICON_THEME_CACHE = new Map();
 const ICON_THEME_PENDING = new Set();
 
@@ -2093,13 +2779,13 @@ function isGraphDarkThemeActive() {
 function getDefaultGraphNodeColor() {
   if (isGraphDarkThemeActive()) {
     return {
-      background: "#080e14",
+      background: "rgba(0,0,0,0)",
       border: "#3e5775",
-      highlight: { background: "#101822", border: "#4a6484" },
-      hover: { background: "#0c131d", border: "#446082" }
+      highlight: { background: "rgba(0,0,0,0)", border: "#4a6484" },
+      hover: { background: "rgba(0,0,0,0)", border: "#446082" }
     };
   }
-  return { background: "#FFFFFF", border: "#777777" };
+  return { background: "rgba(0,0,0,0)", border: "#777777", highlight: { background: "rgba(0,0,0,0)", border: "#333333" }, hover: { background: "rgba(0,0,0,0)", border: "#555555" } };
 }
 
 function handleAddNode(x, y) {
@@ -2125,12 +2811,13 @@ async function handleAddLabelNode(x, y) {
   const text = await requestUserInput("Label text", "Label", { title: "Add Label" });
   if (text == null) return;
   const pos = getContextCanvasPosition(x, y);
+  const isDark = isGraphDarkThemeActive();
   createAnnotationNode({
     label: String(text),
     x: pos.x,
     y: pos.y,
     shape: "text",
-    font: { color: "#1f2d3d", size: 18, face: "Georgia" },
+    font: { color: isDark ? "#8fa4bd" : "#1f2d3d", size: 18, face: "Georgia" },
     extra: { annotationType: "label" }
   });
 }
@@ -2139,13 +2826,22 @@ async function handleAddCommentBox(x, y) {
   const text = await requestUserInput("Comment", "New comment", { title: "Add Comment Box" });
   if (text == null) return;
   const pos = getContextCanvasPosition(x, y);
+  const isDark = isGraphDarkThemeActive();
+  const commentColor = isDark
+    ? {
+        background: "rgba(34, 47, 60, 0.42)",
+        border: "rgba(137, 157, 178, 0.42)",
+        hover: { background: "rgba(46, 62, 78, 0.54)", border: "rgba(154, 178, 201, 0.50)" },
+        highlight: { background: "rgba(50, 67, 84, 0.58)", border: "rgba(168, 191, 213, 0.56)" }
+      }
+    : { background: "#fff9e6", border: "#b8860b" };
   createAnnotationNode({
     label: String(text),
     x: pos.x,
     y: pos.y,
     shape: "box",
-    color: { background: "#fff9e6", border: "#b8860b" },
-    font: { color: "#4d3b00", size: 14 },
+    color: commentColor,
+    font: { color: isDark ? "#c4d1dd" : "#4d3b00", size: 14 },
     extra: { annotationType: "comment_box", note: String(text) }
   });
 }
@@ -2154,13 +2850,22 @@ async function handleAddTextBlock(x, y) {
   const text = await requestUserInput("Text block", "Analyst note", { title: "Add Text Block" });
   if (text == null) return;
   const pos = getContextCanvasPosition(x, y);
+  const isDark = isGraphDarkThemeActive();
+  const noteColor = isDark
+    ? {
+        background: "rgba(30, 42, 55, 0.40)",
+        border: "rgba(126, 151, 175, 0.40)",
+        hover: { background: "rgba(41, 57, 73, 0.52)", border: "rgba(146, 172, 197, 0.48)" },
+        highlight: { background: "rgba(44, 62, 79, 0.56)", border: "rgba(162, 188, 212, 0.54)" }
+      }
+    : { background: "#f3f7ff", border: "#4a6fa5" };
   createAnnotationNode({
     label: String(text),
     x: pos.x,
     y: pos.y,
     shape: "box",
-    color: { background: "#f3f7ff", border: "#4a6fa5" },
-    font: { color: "#1b3558", size: 13 },
+    color: noteColor,
+    font: { color: isDark ? "#c8d5e1" : "#1b3558", size: 13 },
     extra: { annotationType: "text_block", note: String(text) }
   });
 }
@@ -2169,13 +2874,22 @@ async function handleAddEventFrame(x, y) {
   const text = await requestUserInput("Event frame title", "Event Frame", { title: "Add Event Frame" });
   if (text == null) return;
   const pos = getContextCanvasPosition(x, y);
+  const isDark = isGraphDarkThemeActive();
+  const eventColor = isDark
+    ? {
+        background: "rgba(24, 35, 46, 0.34)",
+        border: "rgba(121, 146, 170, 0.46)",
+        hover: { background: "rgba(33, 48, 62, 0.44)", border: "rgba(145, 170, 194, 0.52)" },
+        highlight: { background: "rgba(37, 53, 68, 0.50)", border: "rgba(160, 185, 208, 0.58)" }
+      }
+    : { background: "#f8f8f8", border: "#555555" };
   createAnnotationNode({
     label: String(text),
     x: pos.x,
     y: pos.y,
     shape: "box",
-    color: { background: "#f8f8f8", border: "#555555" },
-    font: { color: "#333333", size: 13 },
+    color: eventColor,
+    font: { color: isDark ? "#b8c9da" : "#333333", size: 13 },
     extra: {
       annotationType: "event_frame",
       borderWidth: 2,
@@ -2223,6 +2937,7 @@ async function handleAddOleObject(x, y) {
   const text = await requestUserInput("OLE object title", "External Object", { title: "Add OLE Object" });
   if (text == null) return;
   const pos = getContextCanvasPosition(x, y);
+  const oleTheme = getOleObjectThemeDefaults();
   createAnnotationNode({
     label: String(text),
     x: pos.x,
@@ -2232,11 +2947,11 @@ async function handleAddOleObject(x, y) {
     size: 34,
     borderWidth: 0,
     borderWidthSelected: 0,
-    font: { color: "#6d28d9", size: 13, face: "Georgia" },
-    shadow: { enabled: true, color: "rgba(124,58,237,0.32)", size: 10, x: 0, y: 0 },
+    font: { color: oleTheme.fontColor, size: 13, face: "Georgia" },
+    shadow: { enabled: true, color: oleTheme.shadowColor, size: 10, x: 0, y: 0 },
     extra: {
       annotationType: "ole_object",
-      accentColor: "#7c3aed",
+      accentColor: oleTheme.accentColor,
       attachmentLink: "",
       attachmentDataUrl: "",
       attachmentName: "",
@@ -2773,9 +3488,10 @@ function saveCurrentView(name) {
   if (!trimmedName) return;
 
   const snapshot = {
-    id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    id: Date.now() + "_" + Math.random().toString(36).slice(2, 8),
     name: trimmedName,
     createdAt: new Date().toISOString(),
+    scopeId: getCurrentGraphScopeId(),
     position: network.getViewPosition(),
     scale: network.getScale(),
     visibleNodes: Array.from(VISIBLE_STATE.nodes),
@@ -2785,12 +3501,12 @@ function saveCurrentView(name) {
     settings: { ...window.currentSettings }
   };
 
+  refreshScopedSavedViews();
   const next = Array.isArray(window.SAVED_VIEWS) ? window.SAVED_VIEWS.slice() : [];
-  const existingIndex = next.findIndex(item => item.name === trimmedName);
+  const existingIndex = next.findIndex(item => String(item.name || "") === trimmedName);
   if (existingIndex >= 0) next.splice(existingIndex, 1);
   next.unshift(snapshot);
-  window.SAVED_VIEWS = next.slice(0, MAX_SAVED_VIEWS);
-  writeJsonStorage(SAVED_VIEWS_STORAGE_KEY, window.SAVED_VIEWS);
+  persistSavedViewsForScope(next);
 }
 
 function applySavedViewSettings(settings) {
@@ -2802,7 +3518,9 @@ function applySavedViewSettings(settings) {
     ...settings
   };
 
+  merged.elementFilters = normalizeElementFilterState(merged.elementFilters || window.ELEMENT_FILTER_STATE);
   window.currentSettings = merged;
+  applyElementTypeFilterState(merged.elementFilters, { persist: false, rerender: false });
 
   const limitAmount = normalizeLimitRange({
     min: merged.limitMin ?? merged.limitRangeMin ?? 0,
@@ -2833,6 +3551,7 @@ function applySavedViewSettings(settings) {
 }
 
 function loadSavedView(name) {
+  refreshScopedSavedViews();
   const list = Array.isArray(window.SAVED_VIEWS) ? window.SAVED_VIEWS : [];
   if (list.length === 0) return;
   const target = list.find(item => item.name === name) || list[0];
@@ -3133,15 +3852,25 @@ async function runPathFinderForSelection(selectedNodes) {
   window.PATH_OPTIONS = normalizePathOptions(nextOptions);
   writeJsonStorage(PATH_OPTIONS_STORAGE_KEY, window.PATH_OPTIONS);
 
-  const pathResult = findShortestPath(ids[0], ids[1], window.PATH_OPTIONS);
+  const pathResult = await runWithGraphLoading("Finding shortest path...", async ({ setProgress }) => {
+    setProgress(1, 3, "Building traversal map...");
+    const result = findShortestPath(ids[0], ids[1], window.PATH_OPTIONS);
+    if (!result.path.length) return result;
+
+    setProgress(2, 3, "Applying path highlight...");
+    queueGraphHistoryCapture();
+    result.path.forEach(nodeId => VISIBLE_STATE.nodes.add(nodeId));
+    recomputeVisibleEdges();
+    highlightPath(result);
+
+    setProgress(3, 3, "Finalizing...");
+    return result;
+  }, { minVisibleMs: 260, total: 3 });
+
   if (!pathResult.path.length) {
     alert("No path found between the selected nodes.");
     return;
   }
-  queueGraphHistoryCapture();
-  pathResult.path.forEach(nodeId => VISIBLE_STATE.nodes.add(nodeId));
-  recomputeVisibleEdges();
-  highlightPath(pathResult);
 
   const distanceText = pathResult.weighted
     ? `Total cost: ${Number(pathResult.totalCost).toFixed(3)}`
@@ -3211,40 +3940,51 @@ async function runFindAllPathsForSelection(selectedNodes) {
   const maxDepth = Math.max(1, Math.min(12, Number(depthInput) || 6));
 
   const current = normalizePathOptions(window.PATH_OPTIONS);
-  const allPaths = findAllSimplePaths(ids[0], ids[1], {
-    directed: current.directed,
-    includeThemeLines: current.includeThemeLines,
-    maxDepth,
-    maxPaths: 400
-  });
+  const allPaths = await runWithGraphLoading("Finding all paths...", async ({ setProgress }) => {
+    setProgress(1, 3, "Enumerating candidate paths...");
+    const found = findAllSimplePaths(ids[0], ids[1], {
+      directed: current.directed,
+      includeThemeLines: current.includeThemeLines,
+      maxDepth,
+      maxPaths: 400
+    });
+    if (!found.length) return found;
+
+    setProgress(2, 3, "Applying path highlights...");
+    queueGraphHistoryCapture();
+
+    const pathNodeIds = new Set();
+    const pathEdgeIds = new Set();
+    found.forEach(item => {
+      (item.path || []).forEach(nodeId => {
+        VISIBLE_STATE.nodes.add(nodeId);
+        pathNodeIds.add(nodeId);
+      });
+      (item.edgeIds || []).forEach(edgeId => pathEdgeIds.add(edgeId));
+    });
+
+    recomputeVisibleEdges();
+    if (window.PATH_HIGHLIGHT_STATE) {
+      window.PATH_HIGHLIGHT_STATE.nodeIds.clear();
+      window.PATH_HIGHLIGHT_STATE.edgeIds.clear();
+      pathNodeIds.forEach(nodeId => {
+        if (VISIBLE_STATE.nodes.has(nodeId)) window.PATH_HIGHLIGHT_STATE.nodeIds.add(nodeId);
+      });
+      pathEdgeIds.forEach(edgeId => {
+        if (VISIBLE_STATE.edges.has(edgeId)) window.PATH_HIGHLIGHT_STATE.edgeIds.add(edgeId);
+      });
+    }
+    renderVisibleGraphBatch();
+
+    setProgress(3, 3, "Finalizing...");
+    return found;
+  }, { minVisibleMs: 320, total: 3 });
+
   if (!allPaths.length) {
     alert("No paths found between the selected nodes.");
     return;
   }
-  queueGraphHistoryCapture();
 
-  const pathNodeIds = new Set();
-  const pathEdgeIds = new Set();
-  allPaths.forEach(item => {
-    (item.path || []).forEach(nodeId => {
-      VISIBLE_STATE.nodes.add(nodeId);
-      pathNodeIds.add(nodeId);
-    });
-    (item.edgeIds || []).forEach(edgeId => pathEdgeIds.add(edgeId));
-  });
-
-  recomputeVisibleEdges();
-  if (window.PATH_HIGHLIGHT_STATE) {
-    window.PATH_HIGHLIGHT_STATE.nodeIds.clear();
-    window.PATH_HIGHLIGHT_STATE.edgeIds.clear();
-    pathNodeIds.forEach(nodeId => {
-      if (VISIBLE_STATE.nodes.has(nodeId)) window.PATH_HIGHLIGHT_STATE.nodeIds.add(nodeId);
-    });
-    pathEdgeIds.forEach(edgeId => {
-      if (VISIBLE_STATE.edges.has(edgeId)) window.PATH_HIGHLIGHT_STATE.edgeIds.add(edgeId);
-    });
-  }
-  renderVisibleGraphBatch();
   alert(`Found ${allPaths.length} path(s) within depth ${maxDepth}.`);
 }
 
@@ -3276,14 +4016,20 @@ function bringNodeToFront(nodeId) {
   network.fit({ nodes: Array.from(VISIBLE_STATE.nodes), animation: { duration: 300, easingFunction: "easeInOutQuad" } });
 }
 
-function runLinkTraversal(selectedNodes, degree = 4) {
+async function runLinkTraversal(selectedNodes, degree = 4) {
   const ids = Array.isArray(selectedNodes) ? selectedNodes.map(normalizeGraphId).filter(id => FULL_GRAPH.nodes.has(id)) : [];
   if (!ids.length) {
     alert("Select at least one node to run link traversal.");
     return;
   }
   const maxDepth = Math.max(1, Math.min(4, Number(degree) || 4));
-  expandNeighborhoodFromSelection(ids, maxDepth);
+
+  await runWithGraphLoading("Expanding traversal...", async ({ setProgress }) => {
+    setProgress(1, 2, "Expanding neighborhood...");
+    expandNeighborhoodFromSelection(ids, maxDepth);
+    setProgress(2, 2, "Refreshing graph...");
+  }, { minVisibleMs: 180, total: 2 });
+
   alert(`Expanded traversal up to ${maxDepth} degree(s).`);
 }
 
@@ -3333,20 +4079,29 @@ function findVisibleCutPoints() {
   return Array.from(cutPoints);
 }
 
-function runCutPointDetection() {
-  const cutPoints = findVisibleCutPoints();
-  queueGraphHistoryCapture();
-  if (window.PATH_HIGHLIGHT_STATE) {
-    window.PATH_HIGHLIGHT_STATE.nodeIds.clear();
-    window.PATH_HIGHLIGHT_STATE.edgeIds.clear();
-    cutPoints.forEach(nodeId => window.PATH_HIGHLIGHT_STATE.nodeIds.add(nodeId));
-  }
-  renderVisibleGraphBatch();
+async function runCutPointDetection() {
+  const cutPoints = await runWithGraphLoading("Detecting cut points...", async ({ setProgress }) => {
+    setProgress(1, 3, "Analyzing articulation points...");
+    const points = findVisibleCutPoints();
+
+    setProgress(2, 3, "Applying highlights...");
+    queueGraphHistoryCapture();
+    if (window.PATH_HIGHLIGHT_STATE) {
+      window.PATH_HIGHLIGHT_STATE.nodeIds.clear();
+      window.PATH_HIGHLIGHT_STATE.edgeIds.clear();
+      points.forEach(nodeId => window.PATH_HIGHLIGHT_STATE.nodeIds.add(nodeId));
+    }
+    renderVisibleGraphBatch();
+    if (points.length) network.selectNodes(points);
+
+    setProgress(3, 3, "Finalizing...");
+    return points;
+  }, { minVisibleMs: 220, total: 3 });
+
   if (!cutPoints.length) {
     alert("No cut points found in the current visible graph.");
     return;
   }
-  network.selectNodes(cutPoints);
   alert(`Found ${cutPoints.length} cut point(s).`);
 }
 
@@ -3372,10 +4127,13 @@ function applyEdgeBundlingLite() {
   const minGroupSize = Math.max(2, parseInt(state.minGroupSize, 10) || 2);
 
   const groups = new Map();
-  Array.from(VISIBLE_STATE.edges).forEach(edgeId => {
+  Array.from(getFilteredVisibleGraphIds().edgeIds).forEach(edgeId => {
     const edge = edgesData.get(edgeId) || FULL_GRAPH.edges.get(edgeId);
     if (!edge) return;
-    const key = isThemeLineEdge(edge) ? `theme::${edge.id}` : `${String(edge.from)}-->${String(edge.to)}`;
+    const fromKey = String(edge.from);
+    const toKey = String(edge.to);
+    const pairKey = fromKey <= toKey ? (fromKey + "<->" + toKey) : (toKey + "<->" + fromKey);
+    const key = isThemeLineEdge(edge) ? ("theme::" + pairKey) : ("pair::" + pairKey);
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(edge);
   });
@@ -3434,6 +4192,15 @@ function toggleEdgeBundlingLite(forceState = null) {
   return next;
 }
 
+async function toggleEdgeBundlingLiteWithLoading(forceState = null) {
+  return runWithGraphLoading("Updating edge bundling...", async ({ setProgress }) => {
+    setProgress(1, 2, "Calculating bundle groups...");
+    const next = toggleEdgeBundlingLite(forceState);
+    setProgress(2, 2, "Refreshing graph...");
+    return next;
+  }, { minVisibleMs: 180, total: 2 });
+}
+
 async function configureEdgeBundlingLite() {
   const state = window.EDGE_BUNDLING_STATE || {};
   const currentMin = Math.max(2, parseInt(state.minGroupSize, 10) || 2);
@@ -3448,8 +4215,12 @@ async function configureEdgeBundlingLite() {
   window.EDGE_BUNDLING_STATE = state;
 
   if (state.enabled) {
-    applyEdgeBundlingLite();
-    network.redraw();
+    await runWithGraphLoading("Rebuilding edge bundles...", async ({ setProgress }) => {
+      setProgress(1, 2, "Applying bundle settings...");
+      applyEdgeBundlingLite();
+      network.redraw();
+      setProgress(2, 2, "Finalizing...");
+    }, { minVisibleMs: 180, total: 2 });
   }
 }
 
@@ -3626,10 +4397,11 @@ function pushPinnedEvidenceItem(item) {
 function pinSelectedEvidence() {
   const selectedNodes = network.getSelectedNodes();
   const selectedEdges = network.getSelectedEdges();
-  selectedNodes.forEach(nodeId => {
-    const base = FULL_GRAPH.nodes.get(nodeId);
+  selectedNodes.forEach(rawNodeId => {
+    const nodeId = normalizeGraphId(rawNodeId);
+    const base = FULL_GRAPH.nodes.get(nodeId) || FULL_GRAPH.nodes.get(rawNodeId);
     if (!base) return;
-    const mod = MODIFIED_NODES.get(nodeId) || {};
+    const mod = MODIFIED_NODES.get(nodeId) || MODIFIED_NODES.get(rawNodeId) || {};
     pushPinnedEvidenceItem({
       type: "node",
       id: nodeId,
@@ -3659,6 +4431,42 @@ function clearPinnedEvidence() {
   renderVisibleGraphBatch();
 }
 
+function pinEvidenceByContext(nodeId = null, edgeId = null) {
+  const hasNode = nodeId != null && nodeId !== "";
+  const hasEdge = edgeId != null && edgeId !== "";
+  if (!hasNode && !hasEdge) {
+    pinSelectedEvidence();
+    return;
+  }
+
+  if (hasNode) {
+    const normalizedNodeId = normalizeGraphId(nodeId);
+    const baseNode = FULL_GRAPH.nodes.get(normalizedNodeId) || FULL_GRAPH.nodes.get(nodeId);
+    if (baseNode) {
+      const modNode = MODIFIED_NODES.get(normalizedNodeId) || MODIFIED_NODES.get(nodeId) || {};
+      pushPinnedEvidenceItem({
+        type: "node",
+        id: normalizedNodeId,
+        data: { ...baseNode, ...modNode }
+      });
+    }
+  }
+
+  if (hasEdge) {
+    const baseEdge = FULL_GRAPH.edges.get(edgeId);
+    if (baseEdge) {
+      const modEdge = MODIFIED_EDGES.get(edgeId) || {};
+      pushPinnedEvidenceItem({
+        type: "edge",
+        id: edgeId,
+        data: { ...baseEdge, ...modEdge }
+      });
+    }
+  }
+
+  renderVisibleGraphBatch();
+}
+
 function unpinSelectedEvidence() {
   const selectedNodeIds = new Set(network.getSelectedNodes().map(normalizeGraphId));
   const selectedEdgeIds = new Set(network.getSelectedEdges());
@@ -3680,11 +4488,62 @@ function unpinSelectedEvidence() {
   renderVisibleGraphBatch();
 }
 
+function unpinEvidenceByContext(nodeId = null, edgeId = null) {
+  const list = Array.isArray(window.PINNED_EVIDENCE) ? window.PINNED_EVIDENCE : [];
+  const hasNode = nodeId != null && nodeId !== "";
+  const hasEdge = edgeId != null && edgeId !== "";
+  if (!hasNode && !hasEdge) {
+    unpinSelectedEvidence();
+    return;
+  }
+
+  const normalizedNodeId = hasNode ? normalizeGraphId(nodeId) : null;
+  const next = list.filter(item => {
+    if (!item) return false;
+    if (hasNode && item.type === "node" && normalizeGraphId(item.id) === normalizedNodeId) return false;
+    if (hasEdge && item.type === "edge" && item.id === edgeId) return false;
+    return true;
+  });
+
+  window.PINNED_EVIDENCE = next;
+  writeJsonStorage(PINNED_EVIDENCE_STORAGE_KEY, window.PINNED_EVIDENCE);
+  window.parent.postMessage({
+    type: "pinned_evidence_update",
+    payload: window.PINNED_EVIDENCE
+  }, "*");
+  renderVisibleGraphBatch();
+}
+
 function showPinnedEvidenceSummary() {
   const list = Array.isArray(window.PINNED_EVIDENCE) ? window.PINNED_EVIDENCE : [];
   if (list.length === 0) {
     alert("No pinned evidence.");
     return;
+  }
+
+  const fitNodeIds = new Set();
+  list.forEach(item => {
+    if (!item) return;
+    if (item.type === "node" && item.id != null) {
+      const nodeId = normalizeGraphId(item.id);
+      if (FULL_GRAPH.nodes.has(nodeId)) fitNodeIds.add(nodeId);
+      return;
+    }
+    if (item.type === "edge" && item.id != null) {
+      const edge = FULL_GRAPH.edges.get(item.id);
+      if (!edge) return;
+      const from = normalizeGraphId(edge.from);
+      const to = normalizeGraphId(edge.to);
+      if (FULL_GRAPH.nodes.has(from)) fitNodeIds.add(from);
+      if (FULL_GRAPH.nodes.has(to)) fitNodeIds.add(to);
+    }
+  });
+  const nodesForFit = Array.from(fitNodeIds).filter(nodeId => VISIBLE_STATE.nodes.has(nodeId));
+  if (nodesForFit.length > 0 && network && typeof network.fit === "function") {
+    network.fit({
+      nodes: nodesForFit,
+      animation: { duration: 240, easingFunction: "easeInOutQuad" }
+    });
   }
 
   const preview = list
@@ -3695,8 +4554,20 @@ function showPinnedEvidenceSummary() {
   alert(`Pinned evidence (${list.length}):\n${preview}${suffix}`);
 }
 
-function detectVisibleCommunities() {
-  const visibleSet = new Set(VISIBLE_STATE.nodes);
+function isCommunityDetectableNode(nodeId) {
+  const base = FULL_GRAPH.nodes.get(nodeId);
+  if (!base) return false;
+  const mod = MODIFIED_NODES.get(nodeId) || {};
+  const merged = { ...base, ...mod };
+  const annotationType = String(merged.annotationType || "").trim().toLowerCase();
+  if (annotationType !== "") return false;
+  return true;
+}
+
+function detectVisibleCommunities(options = {}) {
+  const includeThemeLines = options.includeThemeLines === true;
+  const filtered = getFilteredVisibleGraphIds();
+  const visibleSet = new Set(Array.from(filtered.nodeIds).filter(isCommunityDetectableNode));
   const visited = new Set();
   const communities = [];
 
@@ -3709,12 +4580,17 @@ function detectVisibleCommunities() {
     while (queue.length > 0) {
       const nodeId = queue.shift();
       members.push(nodeId);
-      const neighbors = FULL_GRAPH.adjacency.get(nodeId);
-      if (!neighbors) continue;
-      neighbors.forEach(neighborId => {
-        if (!visibleSet.has(neighborId) || visited.has(neighborId)) return;
-        visited.add(neighborId);
-        queue.push(neighborId);
+
+      const traversable = getTraversableEdges(nodeId, {
+        directed: false,
+        weighted: false,
+        includeThemeLines
+      });
+
+      traversable.forEach(next => {
+        if (!visibleSet.has(next.to) || visited.has(next.to)) return;
+        visited.add(next.to);
+        queue.push(next.to);
       });
     }
     communities.push(members);
@@ -3723,32 +4599,46 @@ function detectVisibleCommunities() {
   return communities.sort((a, b) => b.length - a.length);
 }
 
-function applyCommunityDetection() {
-  const communities = detectVisibleCommunities();
-  if (communities.length === 0) return;
-
-  const nodeUpdates = [];
-  communities.forEach((communityNodes, index) => {
-    const color = generatePaletteColor(index, communities.length);
-    communityNodes.forEach(nodeId => {
-      const patch = {
-        id: nodeId,
-        community_id: index + 1,
-        color: buildNodeColor(color)
-      };
-      persistNodeChange(nodeId, patch);
-      nodeUpdates.push(patch);
-    });
-  });
-  nodesData.update(nodeUpdates);
-
-  window.parent.postMessage({
-    type: "community_detection_result",
-    payload: {
-      communities: communities.length,
-      largest: communities[0]?.length || 0
+async function applyCommunityDetection() {
+  const result = await runWithGraphLoading("Detecting communities...", async ({ setProgress }) => {
+    setProgress(1, 3, "Scanning connected groups...");
+    const communities = detectVisibleCommunities({ includeThemeLines: false });
+    if (communities.length === 0) {
+      setProgress(3, 3, "No communities found");
+      return { communities };
     }
-  }, "*");
+
+    setProgress(2, 3, "Applying community colors...");
+    const nodeUpdates = [];
+    communities.forEach((communityNodes, index) => {
+      const color = generatePaletteColor(index, communities.length);
+      communityNodes.forEach(nodeId => {
+        const patch = {
+          id: nodeId,
+          community_id: index + 1,
+          color: buildNodeColor(color)
+        };
+        persistNodeChange(nodeId, patch);
+        nodeUpdates.push(patch);
+      });
+    });
+    nodesData.update(nodeUpdates);
+
+    window.parent.postMessage({
+      type: "community_detection_result",
+      payload: {
+        communities: communities.length,
+        largest: communities[0]?.length || 0
+      }
+    }, "*");
+
+    setProgress(3, 3, "Finalizing...");
+    return { communities };
+  }, { minVisibleMs: 280, total: 3 });
+
+  if (!result || !Array.isArray(result.communities) || result.communities.length === 0) {
+    alert("No communities detected in the current visible graph.");
+  }
 }
 
 
@@ -6258,6 +7148,12 @@ function createNewGraph({ id, nodes = [], edges = [], settings = null }) {
   console.log("yooo")
   resetGraphHistoryBuffer();
   suspendGraphHistoryStart();
+  const totalNodes = Array.isArray(nodes) ? nodes.length : 0;
+  const totalEdges = Array.isArray(edges) ? edges.length : 0;
+  const totalElements = totalNodes + totalEdges;
+  if (typeof window.showGraphLoading === "function") {
+    window.showGraphLoading("Preparing graph data...", 0, Math.max(1, totalElements));
+  }
   try {
   // Reset visible graph
   nodesData.clear();
@@ -6288,6 +7184,7 @@ function createNewGraph({ id, nodes = [], edges = [], settings = null }) {
   console.log("Initializing FullGraph...");
   FULL_GRAPH.edgesByNode = null;
   initializeFullGraph({ nodes, edges });
+  setCurrentGraphScope("");
 
   // Optional: any iframe / parent init logic
   initializer?.(id);
@@ -6297,6 +7194,9 @@ function createNewGraph({ id, nodes = [], edges = [], settings = null }) {
   }
   } finally {
     suspendGraphHistoryEnd();
+    if (typeof window.hideGraphLoading === "function") {
+      setTimeout(() => { window.hideGraphLoading(); }, 180);
+    }
   }
 }
 
@@ -6312,8 +7212,9 @@ function renderVisibleGraphBatch() {
       recomputeVisibleEdges();
     }
 
-    const desiredNodeIds = new Set(VISIBLE_STATE.nodes);
-    const desiredEdgeIds = new Set(VISIBLE_STATE.edges);
+    const filteredIds = getFilteredVisibleGraphIds();
+    const desiredNodeIds = filteredIds.nodeIds;
+    const desiredEdgeIds = filteredIds.edgeIds;
     updatePerformancePhysicsGuard(desiredNodeIds.size);
     const markerSets = getMarkerSets();
 
@@ -6349,26 +7250,37 @@ function renderVisibleGraphBatch() {
       const annotationType = String(merged.annotationType || "").toLowerCase();
       if (annotationType === "ole_object") {
         merged.shape = "image";
+        const oleTheme = getOleObjectThemeDefaults();
         const currentImage = String(merged.image || "").trim();
         const isLegacyDocIcon =
           currentImage.includes("Document 1.svg") ||
-          currentImage.includes("Document%201.svg");
+          currentImage.includes("Document%201.svg") ||
+          currentImage.includes("data:image/svg+xml;charset=UTF-8");
         if (!currentImage || isLegacyDocIcon) {
-          merged.image = getOleObjectIconPath();
+          merged.image = getDocumentOneIconDataUri(oleTheme.iconFill);
         }
         merged.borderWidth = 0;
         merged.borderWidthSelected = 0;
+
+        const fontColor = merged.font && merged.font.color;
         merged.font = {
           ...(merged.font || {}),
-          color: (merged.font && merged.font.color) ? merged.font.color : "#6d28d9"
+          color: (!fontColor || isLegacyOleColorToken(fontColor)) ? oleTheme.fontColor : fontColor
         };
-        merged.shadow = merged.shadow || {
+
+        const shadowColor = merged.shadow && merged.shadow.color;
+        merged.shadow = {
+          ...(merged.shadow || {}),
           enabled: true,
-          color: `rgba(124,58,237,0.32)`,
-          size: 10,
-          x: 0,
-          y: 0
+          color: (!shadowColor || isLegacyOleColorToken(shadowColor)) ? oleTheme.shadowColor : shadowColor,
+          size: Number((merged.shadow && merged.shadow.size) || 10) || 10,
+          x: Number((merged.shadow && merged.shadow.x) || 0) || 0,
+          y: Number((merged.shadow && merged.shadow.y) || 0) || 0
         };
+
+        if (!merged.accentColor || isLegacyOleColorToken(merged.accentColor)) {
+          merged.accentColor = oleTheme.accentColor;
+        }
       } else if (merged.shape === "image" && (!merged.image || String(merged.image).trim() === "")) {
         merged.image = getOleObjectIconPath();
       }
@@ -6508,8 +7420,9 @@ function renderVisibleGraph() {
   const nodeBatch = [];
   const edgeBatch = [];
   const markerSets = getMarkerSets();
+  const filteredIds = getFilteredVisibleGraphIds();
 
-  for (const id of VISIBLE_STATE.nodes) {
+  for (const id of filteredIds.nodeIds) {
     const base = FULL_GRAPH.nodes.get(id);
     if (!base) continue;
 
@@ -6540,7 +7453,7 @@ function renderVisibleGraph() {
     nodeBatch.push(merged);
   }
 
-  for (const id of VISIBLE_STATE.edges) {
+  for (const id of filteredIds.edgeIds) {
     const base = FULL_GRAPH.edges.get(id);
     if (!base) continue;
 
@@ -6557,7 +7470,7 @@ function renderVisibleGraph() {
 
   nodesData.add(nodeBatch);
   edgesData.add(edgeBatch);
-  applyMarkerOverlays(VISIBLE_STATE.nodes, VISIBLE_STATE.edges);
+  applyMarkerOverlays(filteredIds.nodeIds, filteredIds.edgeIds);
 
   network.redraw();
 }
