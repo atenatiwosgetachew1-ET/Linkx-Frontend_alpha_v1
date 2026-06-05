@@ -16,7 +16,7 @@
             durationMs: options.durationMs
           }
         },
-        "*"
+        window.location.origin
       );
       return true;
     } catch (_err) {
@@ -37,6 +37,7 @@
 })();
 
 window.addEventListener("message", (event) => {
+  if (event.origin !== window.location.origin) return;
   const { action, payload } = event.data;
   if (action === "theme_mode") {
     const nextMode = payload === "dark" ? "dark" : "light";
@@ -184,7 +185,7 @@ function messageParent(payload){
         edges: edgesData.get(edgeIds)  // pass array of edge IDs
       }
     },
-    "*"
+    window.location.origin
   );
 }
 
@@ -1623,7 +1624,7 @@ function getAllNodeKeys(id) {
   window.parent.postMessage({
     type: "all_property_keys_response",
     payload: { id, keys: [...keySet] }
-  }, "*");
+  }, window.location.origin);
 }
 
 function normalizeLimitRange(value, fallbackMax = 25) {
@@ -4306,7 +4307,7 @@ function publishGraphAlerts(alerts) {
       count: alerts.length,
       alerts
     }
-  }, "*");
+  }, window.location.origin);
 }
 
 function runAlertScan(notify = true) {
@@ -4391,7 +4392,7 @@ function pushPinnedEvidenceItem(item) {
   window.parent.postMessage({
     type: "pinned_evidence_update",
     payload: window.PINNED_EVIDENCE
-  }, "*");
+  }, window.location.origin);
 }
 
 function pinSelectedEvidence() {
@@ -4427,7 +4428,7 @@ function clearPinnedEvidence() {
   window.parent.postMessage({
     type: "pinned_evidence_update",
     payload: window.PINNED_EVIDENCE
-  }, "*");
+  }, window.location.origin);
   renderVisibleGraphBatch();
 }
 
@@ -4484,7 +4485,7 @@ function unpinSelectedEvidence() {
   window.parent.postMessage({
     type: "pinned_evidence_update",
     payload: window.PINNED_EVIDENCE
-  }, "*");
+  }, window.location.origin);
   renderVisibleGraphBatch();
 }
 
@@ -4510,7 +4511,7 @@ function unpinEvidenceByContext(nodeId = null, edgeId = null) {
   window.parent.postMessage({
     type: "pinned_evidence_update",
     payload: window.PINNED_EVIDENCE
-  }, "*");
+  }, window.location.origin);
   renderVisibleGraphBatch();
 }
 
@@ -4630,7 +4631,7 @@ async function applyCommunityDetection() {
         communities: communities.length,
         largest: communities[0]?.length || 0
       }
-    }, "*");
+    }, window.location.origin);
 
     setProgress(3, 3, "Finalizing...");
     return { communities };
@@ -5043,7 +5044,7 @@ function copyNodes(selectedIds) {
       type: "clipboard_set",
       payload: clipboardPayload
     },
-    "*"
+    window.location.origin
   );
 }
 
@@ -5241,7 +5242,7 @@ function showNodeInfos(node, state) {
   // Send message to parent window
   window.parent.postMessage(
     { type: "nodeProperties", payload: result },
-    "*"
+    window.location.origin
   );
   return result;
 }
@@ -5982,7 +5983,7 @@ function graphSearch({ id, keyword, option, keys, settings }) {
     window.parent.postMessage({
       type: "graph_search_results",
       payload: { id, nodes: VISIBLE_STATE.nodes.size, edges: VISIBLE_STATE.edges.size }
-    }, "*");
+    }, window.location.origin);
   };
 
   const limitRange = normalizeLimitRange(
@@ -6333,7 +6334,7 @@ function getNetworkComponents(payload){
         edges: edgesData.get()
       }
     },
-    "*"
+    window.location.origin
   );
 }
 
@@ -6686,7 +6687,7 @@ async function renderReportCanvasFromTemplate(report) {
       throw new Error("Report template iframe is unavailable");
     }
 
-    iframe.contentWindow.postMessage({ action: "graph_report", payload: report }, "*");
+    iframe.contentWindow.postMessage({ action: "graph_report", payload: report }, window.location.origin);
     await waitForFrames(3);
 
     const root = iframe.contentDocument.querySelector(".report_container") || iframe.contentDocument.body;

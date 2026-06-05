@@ -16,7 +16,7 @@
             durationMs: options.durationMs
           }
         },
-        "*"
+        window.location.origin
       );
       return true;
     } catch (_err) {
@@ -37,6 +37,7 @@
 })();
 
 window.addEventListener("message", (event) => {
+  if (event.origin !== window.location.origin) return;
   const { action, payload } = event.data;
   if (action === "theme_mode") {
     const nextMode = payload === "dark" ? "dark" : "light";

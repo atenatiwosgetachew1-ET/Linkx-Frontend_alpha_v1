@@ -213,6 +213,7 @@
   }
 
   window.addEventListener("message", function (event) {
+  if (event.origin !== window.location.origin) return;
     const data = event?.data || {};
     if (data.action !== "graph_report") return;
     updateReport(data.payload);

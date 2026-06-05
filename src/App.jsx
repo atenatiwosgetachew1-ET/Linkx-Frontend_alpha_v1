@@ -1,9 +1,27 @@
-import React, { useState, useRef, useEffect, createContext, useContext, useCallback, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { io } from 'socket.io-client';
 import { createPortal } from 'react-dom';
 
 import './main.css'
 import NetworkBackground from './networkAnimation.jsx'
+import { createApiClient } from './api/client.js';
+import { AuthProvider, useAuth } from './auth/AuthContext.jsx';
+import LoginPage from './auth/LoginPage.jsx';
+import {
+  compactValidationErrors,
+  sanitizeConnectionValue,
+  sanitizeIdentifier,
+  sanitizeKafkaTopic,
+  sanitizeRelationshipName,
+  sanitizePermissionList,
+  sanitizeRoleList,
+  sanitizeSecret,
+  sanitizeText,
+  validateClientSecret,
+  validateDisplayName,
+  validateNewPassword,
+  validateRequiredIdentifier,
+} from './utils/inputSecurity.js';
 //importing the icons function
 import Icons from './Icons.jsx'
 // importing action functions
@@ -16,10 +34,44 @@ let clipboard = { nodes: [], edges: [] };
 const GRAPH_LIMIT_WARNING_THRESHOLD = 300;
 const GRAPH_LIMIT_HARD_MAX = 100000;
 const DEFAULT_GRAPH_IFRAME_SETTINGS = ["", "", { min: 0, max: 25 }, "", "", "", false, false, false, false, "concentric", "UD", "directed", "hop_distance", ""];
+const LINKX_IFRAME_CHANNEL = "linkx:iframe";
+const LINKX_IFRAME_VERSION = 1;
+const TRUSTED_IFRAME_MESSAGE_TYPES = new Set(["app_notification", "notification", "nodeProperties", "all_property_keys_response", "graph_search_results", "network_components", "entity_selection", "graph_alerts", "pinned_evidence_update", "clipboard_get", "clipboard_set"]);
+
+const getTrustedMessageOrigin = () => window.location.origin;
+const buildIframeMessage = (action, payload = {}) => ({ channel: LINKX_IFRAME_CHANNEL, version: LINKX_IFRAME_VERSION, action, payload });
+const getIframeMessageAction = (data) => data?.action || data?.type || "";
+const isTrustedMessageOrigin = (event) => String(event?.origin || "") === getTrustedMessageOrigin();
+const isRegisteredIframeSource = (source, iframeRefs = {}) => Object.values(iframeRefs || {}).some((frameRef) => frameRef?.current?.contentWindow === source);
+
 
 const STR_REPORT_SOCKET_EVENT_LINK_ANALYSIS = "str_report_link_analysis";
 const STR_REPORT_NOTIFICATION_CODE_PREPARE_RECEIVER = "str_report_prepare_receiver";
 const STR_REPORT_SOCKET_EMIT_REGISTER_RECEIVER = "str_report_register_receiver";
+const PERMISSIONS = {
+  CONFIG_READ: "config:read",
+  CONFIG_WRITE: "config:write",
+  SOURCE_CREATE: "source:create",
+  SOURCE_CONNECT: "source:connect",
+  SOURCE_DISCONNECT: "source:disconnect",
+  GRAPH_CREATE: "graph:create",
+  GRAPH_READ: "graph:read",
+  GRAPH_LINK: "graph:link",
+  BATCH_UPLOAD: "batch:upload",
+  BATCH_QUERY: "batch:query",
+  ANALYSIS_RUN: "analysis:run",
+};
+
+const getWindowActionPermission = (menuId, action) => {
+  if (menuId === "upload_source_files") return PERMISSIONS.BATCH_UPLOAD;
+  if (["batch_files_search_input", "batch_input_form_swap"].includes(menuId) && ["page_II", "page_III"].includes(action)) return PERMISSIONS.BATCH_QUERY;
+  if (menuId === "batch_input_form_swap" && action === "page_IV") return PERMISSIONS.ANALYSIS_RUN;
+  if (menuId === "batch_input_stream_terminate") return PERMISSIONS.ANALYSIS_RUN;
+  if (["real_time_input_form", "batch_input_form"].includes(menuId) && action === "connect") return PERMISSIONS.SOURCE_CONNECT;
+  if (["real_time_input_form", "batch_input_form"].includes(menuId) && action === "disconnect") return PERMISSIONS.SOURCE_DISCONNECT;
+  if (menuId === "graph_link_form" && action === "link") return PERMISSIONS.GRAPH_LINK;
+  return null;
+};
 
 const isStrReportAnalysisSession = (value) => {
   const normalized = String(value || "").trim();
@@ -205,7 +257,7 @@ const broadcastClipboard = () => {
     try {
       window.frames[i].postMessage(
         { type: "clipboard_data", payload },
-        "*"
+        getTrustedMessageOrigin()
       );
     } catch (_err) {
       // Ignore inaccessible frames.
@@ -214,6 +266,8 @@ const broadcastClipboard = () => {
 };
 
 window.addEventListener("message", e => {
+  if (!isTrustedMessageOrigin(e)) return;
+
   if (e.data?.type === "clipboard_get") {
     const payload = serializeClipboardPayload(clipboard);
     e.source?.postMessage(
@@ -228,22 +282,25 @@ window.addEventListener("message", e => {
   }
 });
 /** Dark + zero windows: full menu on top of the network canvas (no slide rail / hamburger). */
-function DarkHomeMenuOverlay({ toggleAction }) {
+function DarkHomeMenuOverlay({ toggleAction, canAccess = () => true }) {
   const actionCards = [
     {
       label: "New source",
       icon: "+",
       action: "toggle_menu_new_source_window",
+      permission: PERMISSIONS.SOURCE_CREATE,
     },
     {
       label: "New Graph",
       icon: "+",
       action: "toggle_menu_new_graph_window",
+      permission: PERMISSIONS.GRAPH_CREATE,
     },
     {
       label: "Configurations",
       icon: "⚙",
       action: "configurations",
+      permission: PERMISSIONS.CONFIG_READ,
     },
     {
       label: "Settings",
@@ -264,7 +321,7 @@ function DarkHomeMenuOverlay({ toggleAction }) {
       <div className="dark_home_menu_overlay__dock">
         <div className="dark_home_menu_overlay__panel dark_home_menu_overlay__panel--actions">
           <div className="dark_home_menu_overlay__actions_row">
-            {actionCards.map((item) => (
+            {actionCards.filter((item) => !item.permission || canAccess(item.permission)).map((item) => (
               <button
                 type="button"
                 key={item.label}
@@ -292,7 +349,7 @@ function DarkHomeMenuOverlay({ toggleAction }) {
   );
 }
 
-function ToggleMenu({ onToggle, isToggleMenuOpen, toggleAction, isMaximized, windows, orientation, menuRef, themeMode }){
+function ToggleMenu({ onToggle, isToggleMenuOpen, toggleAction, isMaximized, windows, orientation, menuRef, themeMode, canAccess = () => true }){
   return(
   <div
     ref={menuRef}
@@ -319,18 +376,22 @@ function ToggleMenu({ onToggle, isToggleMenuOpen, toggleAction, isMaximized, win
               display: isToggleMenuOpen ? 'block' : 'none'}}>
               <ul>
                 <div className="toogle_side_list_menu_container">  
+                  {canAccess(PERMISSIONS.SOURCE_CREATE) && (
                   <li onClick={() => toggleAction("toggle_menu_new_source_window")}>    
                     {/*<i>
                       <Icons id="toggle_menu" type="source_window" condition="True"/>
                     </i> */}  
                     <span>&#10011; &nbsp;Source window</span>
                   </li>
+                  )}
+                  {canAccess(PERMISSIONS.GRAPH_CREATE) && (
                   <li onClick={() => toggleAction("toggle_menu_new_graph_window")}>    
                     {/*<i>
                       <Icons id="toggle_menu" type="garph_window" condition="True"/>
                     </i>  */}            
                     <span>&#10011; &nbsp;Graph window</span>
                   </li>
+                  )}
                   {/*<li onClick={() => toggleAction("toggle_menu_new_chart_window")}>    
                     <i>
                       <Icons id="toggle_menu" type="chart_window" condition="True"/>
@@ -348,12 +409,14 @@ function ToggleMenu({ onToggle, isToggleMenuOpen, toggleAction, isMaximized, win
                   <li onClick={() => toggleAction("settings")}>
                     <span>&#9881; &nbsp;Settings</span>
                   </li>
+                  {canAccess(PERMISSIONS.CONFIG_READ) && (
                   <li onClick={() => toggleAction("configurations")}>    
                     {/*<i>
                       <Icons id="window_side_bar" type="tabular_window" condition="True"/>
                     </i> */}             
                     <span>&#9881; &nbsp;Configurations</span>
                   </li>
+                  )}
                   <li>    
                     {/*<i>
                       <Icons id="window_side_bar" type="tabular_window" condition="True"/>
@@ -380,14 +443,15 @@ function ToggleMenu({ onToggle, isToggleMenuOpen, toggleAction, isMaximized, win
       </div>
     </div>
   );
-}
-function NavBar({ onNavAction }) {
+function NavBar({ onNavAction, user }) {
+  const label = user?.display_name || user?.username || "User";
   return (
-    <nav id='nav_bar'>
-      <span onClick={() => onNavAction('login')}>Login</span>
-      <span onClick={() => onNavAction('about')}>About</span>
+    <nav id="nav_bar">
+      <span onClick={() => onNavAction("logout")}>Logout ({label})</span>
+      <span onClick={() => onNavAction("about")}>About</span>
     </nav>
   );
+}
 }
 function Taskbar({ windows, isTaskBarOpen, activeWindowId, focusWindow, toggleAction, isCtrlHeld}) {
   const thumbnailBaseUrl = `${import.meta.env.BASE_URL}thumbnails`;
@@ -458,7 +522,7 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
   }, [removeRuleArmed]);
 
   const handleActiveRuleChange = (event) => {
-    const nextRule = event.target.value;
+    const nextRule = sanitizeText(event.target.value, { maxLength: 120 });
     setSelectedRuleForRemoval(nextRule);
     setRemoveRuleArmed(false);
     actions("change", { name: event.target.name, value: nextRule });
@@ -918,62 +982,380 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
     </div>
   );
 }
-function Settings({ isSettingsOpen, toggleAction }) {
-  const [activeSettingsTab, setActiveSettingsTab] = useState("preferences");
-  const [rememberLayout, setRememberLayout] = useState(true);
-  const [enableNotifications, setEnableNotifications] = useState(true);
+function PermissionGate({ permission, canAccess, children, fallback = null }) {
+  return canAccess(permission) ? children : fallback;
+}
+
+function PermissionEditor({ value = [], onChange, idPrefix = "permissions" }) {
+  const permissionGroups = [
+    { label: "Session", items: ["session:create", "session:read"] },
+    { label: "Config", items: ["config:read", "config:write"] },
+    { label: "Source", items: ["source:create", "source:connect", "source:disconnect"] },
+    { label: "Graph", items: ["graph:create", "graph:read", "graph:link"] },
+    { label: "Batch", items: ["batch:upload", "batch:query"] },
+    { label: "Analysis", items: ["analysis:run"] },
+    { label: "Reports", items: ["reports:read"] },
+    { label: "Admin", items: ["users:manage"] },
+    { label: "Auth", items: ["auth:verify"] },
+  ];
+  const selected = new Set(Array.isArray(value) ? value : []);
+  const togglePermission = (permission) => {
+    const next = new Set(selected);
+    if (next.has(permission)) next.delete(permission);
+    else next.add(permission);
+    onChange(sanitizePermissionList(Array.from(next).sort()));
+  };
+  return (
+    <div className="permission_editor">
+      {permissionGroups.map((group) => (
+        <fieldset className="permission_group" key={group.label}>
+          <legend>{group.label}</legend>
+          {group.items.map((permission) => {
+            const inputId = idPrefix + "_" + permission.replace(/[^a-z0-9]/gi, "_");
+            return (
+              <label className="permission_option" htmlFor={inputId} key={permission}>
+                <input id={inputId} type="checkbox" checked={selected.has(permission)} onChange={() => togglePermission(permission)} />
+                <span>{permission}</span>
+              </label>
+            );
+          })}
+        </fieldset>
+      ))}
+    </div>
+  );
+}
+
+const normalizeServiceAccountList = (data) => {
+  const raw = Array.isArray(data) ? data : Array.isArray(data?.results) ? data.results : Array.isArray(data?.service_accounts) ? data.service_accounts : Array.isArray(data?.data) ? data.data : [];
+  return raw.map((account) => ({
+    ...account,
+    id: account.id ?? account.client_id,
+    client_id: account.client_id || account.username || "",
+    display_name: account.display_name || account.name || account.client_id || "",
+    is_active: account.is_active !== false,
+    permissions: Array.isArray(account.permissions) ? account.permissions : [],
+  }));
+};
+const extractServiceSecret = (data) => (data?.client_secret || data?.secret || data?.results?.client_secret || data?.results?.secret || data?.service_account?.client_secret || data?.service_account?.secret || "");
+const generateClientSecret = () => {
+  const bytes = new Uint8Array(24);
+  window.crypto?.getRandomValues?.(bytes);
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+};
+
+function CurrentActorPanel({ actor, roles = [], permissions = [], sessionId, onLogout }) {
+  const actorType = actor?.actor_type || (actor?.client_id ? "service" : "user");
+  const actorName = actorType === "service" ? actor?.client_id : actor?.username;
+  return (
+    <div className="settings_admin_panel">
+      <fieldset><legend>Current Actor</legend><div className="profile_grid"><span>Actor type</span><b>{actorType || "unknown"}</b><span>Identifier</span><b>{actorName || "unknown"}</b><span>Display name</span><b>{actor?.display_name || actorName || "unknown"}</b><span>Linkx session</span><b>{sessionId || "not initialized"}</b></div><div className="settings_action_row"><button type="button" className="profile_logout_btn" onClick={onLogout}>Logout</button></div></fieldset>
+      <fieldset><legend>Roles</legend><div className="token_list">{(roles.length ? roles : ["none"]).map((role) => <span key={role}>{role}</span>)}</div></fieldset>
+      <fieldset><legend>Permissions</legend><div className="token_list">{(permissions.length ? permissions : ["none"]).map((permission) => <span key={permission}>{permission}</span>)}</div></fieldset>
+    </div>
+  );
+}
+
+function ServiceSecretNotice({ secret, onClear }) {
+  if (!secret) return null;
+  return <div className="service_secret_notice"><div><b>New client secret</b><p>Copy this now. It will not be shown again.</p></div><code>{secret}</code><button type="button" onClick={() => navigator.clipboard?.writeText(secret)}>Copy</button><button type="button" onClick={onClear}>Dismiss</button></div>;
+}
+
+
+const normalizeAdminUserList = (data) => {
+  const raw = Array.isArray(data) ? data : Array.isArray(data?.results) ? data.results : Array.isArray(data?.users) ? data.users : Array.isArray(data?.data) ? data.data : [];
+  return raw.map((item) => ({
+    ...item,
+    id: item.id ?? item.username,
+    username: item.username || "",
+    display_name: item.display_name || item.name || item.username || "",
+    roles: Array.isArray(item.roles) ? item.roles : [],
+    permissions: Array.isArray(item.permissions) ? item.permissions : [],
+    is_active: item.is_active !== false,
+  }));
+};
+
+function UserManagementPanel({ apiFetch, canManageUsers, canManageSuperusers, onNotice, isActive }) {
+  const availableRoles = canManageSuperusers ? ["superuser", "admin", "analyst", "viewer"] : ["analyst", "viewer"];
+  const emptyDraft = { username: "", password: "", display_name: "", roles: [availableRoles[0]], is_active: true, permissions: [] };
+  const [users, setUsers] = useState([]);
+  const [draft, setDraft] = useState(emptyDraft);
+  const [editDrafts, setEditDrafts] = useState({});
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const loadUsers = useCallback(async () => {
+    if (!canManageUsers) return;
+    setLoading(true);
+    setError("");
+    try {
+      const data = await apiFetch("/auth/admin/users", { method: "GET" });
+      const normalized = normalizeAdminUserList(data);
+      setUsers(normalized);
+      setEditDrafts(Object.fromEntries(normalized.map((user) => [String(user.id), {
+        display_name: user.display_name,
+        roles: user.roles,
+        permissions: user.permissions,
+        is_active: user.is_active,
+        password: "",
+      }])));
+    } catch (err) {
+      setError(err?.message || "Failed to load users.");
+    } finally {
+      setLoading(false);
+    }
+  }, [apiFetch, canManageUsers]);
+
+  useEffect(() => {
+    if (isActive && canManageUsers) loadUsers();
+  }, [isActive, canManageUsers, loadUsers]);
+
+  useEffect(() => {
+    setDraft((prev) => ({ ...prev, roles: prev.roles.filter((role) => availableRoles.includes(role)).length ? prev.roles.filter((role) => availableRoles.includes(role)) : [availableRoles[0]] }));
+  }, [canManageSuperusers]);
+
+  const updateEditDraft = (id, patch) => setEditDrafts((prev) => ({ ...prev, [String(id)]: { ...(prev[String(id)] || {}), ...patch } }));
+  const toggleRole = (roles, role) => {
+    const next = new Set(Array.isArray(roles) ? roles : []);
+    if (next.has(role)) next.delete(role);
+    else next.add(role);
+    return Array.from(next).filter((item) => availableRoles.includes(item));
+  };
+
+  const createUser = async () => {
+    const payload = {
+      username: sanitizeIdentifier(draft.username, { maxLength: 120 }).trim(),
+      password: sanitizeSecret(draft.password, { maxLength: 256 }),
+      display_name: sanitizeText(draft.display_name, { maxLength: 120 }).trim(),
+      roles: sanitizeRoleList(draft.roles, availableRoles),
+      permissions: sanitizePermissionList(draft.permissions),
+      is_active: !!draft.is_active,
+    };
+    const validationError = compactValidationErrors(
+      validateRequiredIdentifier(payload.username, "Username", { minLength: 3, maxLength: 120 }),
+      validateNewPassword(payload.password, { required: true }),
+      validateDisplayName(payload.display_name),
+      payload.roles.length ? "" : "At least one allowed role is required.",
+    );
+    if (validationError) { setError(validationError); return; }
+    setSaving(true);
+    setError("");
+    try {
+      await apiFetch("/auth/admin/users", { method: "POST", body: payload });
+      setDraft(emptyDraft);
+      onNotice?.({ title: "User created", message: payload.username + " was created.", source: "Admin", level: "success" });
+      await loadUsers();
+    } catch (err) {
+      setError(err?.message || "Failed to create user.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const saveUser = async (user) => {
+    const draftPatch = { ...(editDrafts[String(user.id)] || {}) };
+    const patch = {
+      display_name: sanitizeText(draftPatch.display_name, { maxLength: 120 }).trim(),
+      roles: sanitizeRoleList(draftPatch.roles, availableRoles),
+      permissions: sanitizePermissionList(draftPatch.permissions),
+      is_active: !!draftPatch.is_active,
+    };
+    if (draftPatch.password) patch.password = sanitizeSecret(draftPatch.password, { maxLength: 256 });
+    const validationError = compactValidationErrors(
+      validateDisplayName(patch.display_name),
+      validateNewPassword(patch.password || "", { required: false }),
+      patch.roles.length ? "" : "At least one allowed role is required.",
+    );
+    if (validationError) { setError(validationError); return; }
+    setSaving(true);
+    setError("");
+    try {
+      await apiFetch("/auth/admin/users/" + encodeURIComponent(user.id), { method: "PATCH", body: patch });
+      onNotice?.({ title: "User updated", message: user.username + " was updated.", source: "Admin", level: "success" });
+      await loadUsers();
+    } catch (err) {
+      setError(err?.message || "Failed to update user.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deleteUser = async (user) => {
+    if (!window.confirm("Delete user " + user.username + "?")) return;
+    setSaving(true);
+    setError("");
+    try {
+      await apiFetch("/auth/admin/users/" + encodeURIComponent(user.id), { method: "DELETE" });
+      onNotice?.({ title: "User deleted", message: user.username + " was removed.", source: "Admin", level: "warning" });
+      await loadUsers();
+    } catch (err) {
+      setError(err?.message || "Failed to delete user.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!canManageUsers) return <div className="settings_admin_panel"><fieldset><legend>Users</legend><p className="settings_hint">You need users:manage to manage users.</p></fieldset></div>;
 
   return (
-    <div
-      id="configurations_container"
-      style={{ display: isSettingsOpen ? "block" : "none" }}
-    >
-      <div className="configurations_options_container">
+    <div className="settings_admin_panel">
+      {error && <div className="settings_error">{error}</div>}
+      <fieldset><legend>Create User</legend><div className="service_account_form_grid"><label>Username<input className="settings_textinput" value={draft.username} maxLength={120} onChange={(event) => setDraft((prev) => ({ ...prev, username: sanitizeIdentifier(event.target.value, { maxLength: 120 }) }))} /></label><label>Display name<input className="settings_textinput" value={draft.display_name} maxLength={120} onChange={(event) => setDraft((prev) => ({ ...prev, display_name: sanitizeText(event.target.value, { maxLength: 120 }) }))} /></label><label>Password<input className="settings_textinput" type="password" value={draft.password} maxLength={256} onChange={(event) => setDraft((prev) => ({ ...prev, password: sanitizeSecret(event.target.value, { maxLength: 256 }) }))} /></label><label className="settings_inline_check"><input type="checkbox" checked={draft.is_active} onChange={(event) => setDraft((prev) => ({ ...prev, is_active: event.target.checked }))} /> Active</label></div><div className="role_editor">{availableRoles.map((role) => <label key={role} className="permission_option"><input type="checkbox" checked={draft.roles.includes(role)} onChange={() => setDraft((prev) => ({ ...prev, roles: toggleRole(prev.roles, role) }))} /> <span>{role}</span></label>)}</div><PermissionEditor value={draft.permissions} onChange={(permissions) => setDraft((prev) => ({ ...prev, permissions: sanitizePermissionList(permissions) }))} idPrefix="new_user_permissions" /><div className="settings_action_row"><button type="button" onClick={createUser} disabled={saving}>Create user</button></div></fieldset>
+      <fieldset><legend>Existing Users</legend><div className="settings_action_row"><button type="button" onClick={loadUsers} disabled={loading}>{loading ? "Refreshing..." : "Refresh"}</button></div>{users.length === 0 && <p className="settings_hint">No users found.</p>}{users.map((user) => { const editDraft = editDrafts[String(user.id)] || { display_name: user.display_name, roles: user.roles, permissions: user.permissions, is_active: user.is_active, password: "" }; return <div className="service_account_card" key={user.id}><div className="service_account_card_header"><div><b>{user.username}</b><span>{(user.roles || []).join(", ") || "no role"} · {user.is_active ? "Active" : "Inactive"}</span></div><div className="service_account_actions"><button type="button" onClick={() => saveUser(user)} disabled={saving}>Save</button><button type="button" className="critical_btns" onClick={() => deleteUser(user)} disabled={saving}>Delete</button></div></div><label>Display name<input className="settings_textinput" value={editDraft.display_name || ""} maxLength={120} onChange={(event) => updateEditDraft(user.id, { display_name: sanitizeText(event.target.value, { maxLength: 120 }) })} /></label><label>Password reset<input className="settings_textinput" type="password" value={editDraft.password || ""} maxLength={256} placeholder="Leave blank to keep current password" onChange={(event) => updateEditDraft(user.id, { password: sanitizeSecret(event.target.value, { maxLength: 256 }) })} /></label><label className="settings_inline_check"><input type="checkbox" checked={!!editDraft.is_active} onChange={(event) => updateEditDraft(user.id, { is_active: event.target.checked })} /> Active</label><div className="role_editor">{availableRoles.map((role) => <label key={role} className="permission_option"><input type="checkbox" checked={(editDraft.roles || []).includes(role)} onChange={() => updateEditDraft(user.id, { roles: toggleRole(editDraft.roles, role) })} /> <span>{role}</span></label>)}</div><PermissionEditor value={editDraft.permissions || []} onChange={(permissions) => updateEditDraft(user.id, { permissions: sanitizePermissionList(permissions) })} idPrefix={"user_" + user.id + "_permissions"} /></div>; })}</fieldset>
+    </div>
+  );
+}
+
+function ServiceAccountsPanel({ apiFetch, canManageUsers, onNotice, isActive }) {
+  const emptyDraft = { client_id: "", client_secret: generateClientSecret(), display_name: "", is_active: true, permissions: [] };
+  const [accounts, setAccounts] = useState([]);
+  const [draft, setDraft] = useState(emptyDraft);
+  const [editDrafts, setEditDrafts] = useState({});
+  const [newSecret, setNewSecret] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const loadAccounts = useCallback(async () => {
+    if (!canManageUsers) return;
+    setLoading(true); setError("");
+    try {
+      const data = await apiFetch("/auth/admin/service-accounts", { method: "GET" });
+      const normalized = normalizeServiceAccountList(data);
+      setAccounts(normalized);
+      setEditDrafts(Object.fromEntries(normalized.map((account) => [String(account.id), { display_name: account.display_name, is_active: account.is_active, permissions: account.permissions }])));
+    } catch (err) { setError(err?.message || "Failed to load service accounts."); }
+    finally { setLoading(false); }
+  }, [apiFetch, canManageUsers]);
+  useEffect(() => { if (isActive && canManageUsers) loadAccounts(); }, [isActive, canManageUsers, loadAccounts]);
+  const updateEditDraft = (id, patch) => setEditDrafts((prev) => ({ ...prev, [String(id)]: { ...(prev[String(id)] || {}), ...patch } }));
+  const createAccount = async () => {
+    const clientSecret = sanitizeSecret(draft.client_secret || generateClientSecret(), { maxLength: 128 });
+    const payload = {
+      client_id: sanitizeIdentifier(draft.client_id, { maxLength: 80 }).trim(),
+      client_secret: clientSecret,
+      display_name: sanitizeText(draft.display_name, { maxLength: 120 }).trim(),
+      is_active: !!draft.is_active,
+      permissions: sanitizePermissionList(draft.permissions),
+    };
+    const validationError = compactValidationErrors(
+      validateRequiredIdentifier(payload.client_id, "Client ID", { minLength: 3, maxLength: 80 }),
+      validateClientSecret(payload.client_secret),
+      validateDisplayName(payload.display_name),
+    );
+    if (validationError) { setError(validationError); return; }
+    setSaving(true); setError("");
+    try {
+      const data = await apiFetch("/auth/admin/service-accounts", { method: "POST", body: payload });
+      setNewSecret(extractServiceSecret(data) || clientSecret); setDraft({ ...emptyDraft, client_secret: generateClientSecret() });
+      onNotice?.({ title: "Service account created", message: "Copy the generated secret before closing this panel.", source: "Admin", level: "success" });
+      await loadAccounts();
+    } catch (err) { setError(err?.message || "Failed to create service account."); }
+    finally { setSaving(false); }
+  };
+  const saveAccount = async (account) => {
+    const draftPatch = editDrafts[String(account.id)] || {};
+    const patch = {
+      display_name: sanitizeText(draftPatch.display_name, { maxLength: 120 }).trim(),
+      is_active: !!draftPatch.is_active,
+      permissions: sanitizePermissionList(draftPatch.permissions),
+    };
+    const validationError = validateDisplayName(patch.display_name);
+    if (validationError) { setError(validationError); return; }
+    setSaving(true); setError("");
+    try { await apiFetch("/auth/admin/service-accounts/" + encodeURIComponent(account.id), { method: "PATCH", body: patch }); onNotice?.({ title: "Service account updated", message: account.client_id + " was updated.", source: "Admin", level: "success" }); await loadAccounts(); }
+    catch (err) { setError(err?.message || "Failed to update service account."); }
+    finally { setSaving(false); }
+  };
+  const rotateSecret = async (account) => {
+    if (!window.confirm("Rotate secret for " + account.client_id + "? The old secret should stop being used by sibling services.")) return;
+    setSaving(true); setError("");
+    try { const rotatedSecret = sanitizeSecret(generateClientSecret(), { maxLength: 128 }); const secretError = validateClientSecret(rotatedSecret); if (secretError) { setError(secretError); return; } const data = await apiFetch("/auth/admin/service-accounts/" + encodeURIComponent(account.id), { method: "PATCH", body: { rotate_secret: true, client_secret: rotatedSecret } }); setNewSecret(extractServiceSecret(data) || rotatedSecret); onNotice?.({ title: "Secret rotated", message: "Copy the new secret now. It will not be shown again.", source: "Admin", level: "warning" }); await loadAccounts(); }
+    catch (err) { setError(err?.message || "Failed to rotate secret."); }
+    finally { setSaving(false); }
+  };
+  const deleteAccount = async (account) => {
+    if (!window.confirm("Delete service account " + account.client_id + "?")) return;
+    setSaving(true); setError("");
+    try { await apiFetch("/auth/admin/service-accounts/" + encodeURIComponent(account.id), { method: "DELETE" }); onNotice?.({ title: "Service account deleted", message: account.client_id + " was removed.", source: "Admin", level: "warning" }); await loadAccounts(); }
+    catch (err) { setError(err?.message || "Failed to delete service account."); }
+    finally { setSaving(false); }
+  };
+  if (!canManageUsers) return <div className="settings_admin_panel"><fieldset><legend>Service Accounts</legend><p className="settings_hint">You need users:manage to manage service accounts.</p></fieldset></div>;
+  return (
+    <div className="settings_admin_panel">
+      <ServiceSecretNotice secret={newSecret} onClear={() => setNewSecret("")} />{error && <div className="settings_error">{error}</div>}
+      <fieldset><legend>Create Service Account</legend><div className="service_account_form_grid"><label>Client ID<input className="settings_textinput" value={draft.client_id} maxLength={80} onChange={(event) => setDraft((prev) => ({ ...prev, client_id: sanitizeIdentifier(event.target.value, { maxLength: 80 }) }))} /></label><label>Display name<input className="settings_textinput" value={draft.display_name} maxLength={120} onChange={(event) => setDraft((prev) => ({ ...prev, display_name: sanitizeText(event.target.value, { maxLength: 120 }) }))} /></label><label>Client secret<input className="settings_textinput" value={draft.client_secret} maxLength={128} onChange={(event) => setDraft((prev) => ({ ...prev, client_secret: sanitizeSecret(event.target.value, { maxLength: 128 }) }))} /></label><label className="settings_inline_check"><input type="checkbox" checked={draft.is_active} onChange={(event) => setDraft((prev) => ({ ...prev, is_active: event.target.checked }))} /> Active</label></div><PermissionEditor value={draft.permissions} onChange={(permissions) => setDraft((prev) => ({ ...prev, permissions: sanitizePermissionList(permissions) }))} idPrefix="new_service_permissions" /><div className="settings_action_row"><button type="button" onClick={createAccount} disabled={saving}>Create service account</button></div></fieldset>
+      <fieldset><legend>Existing Service Accounts</legend><div className="settings_action_row"><button type="button" onClick={loadAccounts} disabled={loading}>{loading ? "Refreshing..." : "Refresh"}</button></div>{accounts.length === 0 && <p className="settings_hint">No service accounts found.</p>}{accounts.map((account) => { const editDraft = editDrafts[String(account.id)] || { display_name: account.display_name, is_active: account.is_active, permissions: account.permissions }; return <div className="service_account_card" key={account.id}><div className="service_account_card_header"><div><b>{account.client_id}</b><span>{account.is_active ? "Active" : "Inactive"}</span></div><div className="service_account_actions"><button type="button" onClick={() => saveAccount(account)} disabled={saving}>Save</button><button type="button" onClick={() => rotateSecret(account)} disabled={saving}>Rotate secret</button><button type="button" className="critical_btns" onClick={() => deleteAccount(account)} disabled={saving}>Delete</button></div></div><label>Display name<input className="settings_textinput" value={editDraft.display_name || ""} maxLength={120} onChange={(event) => updateEditDraft(account.id, { display_name: sanitizeText(event.target.value, { maxLength: 120 }) })} /></label><label className="settings_inline_check"><input type="checkbox" checked={!!editDraft.is_active} onChange={(event) => updateEditDraft(account.id, { is_active: event.target.checked })} /> Active</label><PermissionEditor value={editDraft.permissions || []} onChange={(permissions) => updateEditDraft(account.id, { permissions: sanitizePermissionList(permissions) })} idPrefix={"service_" + account.id + "_permissions"} /></div>; })}</fieldset>
+    </div>
+  );
+}
+
+function IntegrationContractPanel() {
+  const integrationDocHref = `docs/integration_contract.md`;
+  return <div className="settings_admin_panel"><fieldset><legend>Integration Contract</legend><p className="settings_hint">Backend service account API details are documented for sibling-service developers.</p><a className="settings_doc_link" href={integrationDocHref} target="_blank" rel="noreferrer">Open integration_contract.md</a></fieldset><fieldset><legend>Frontend Contract Notes</legend><div className="profile_grid"><span>Auth token</span><b>Stored separately as linkx_auth_token</b><span>Linkx session</span><b>Stored separately as session</b><span>Socket auth</span><b>io(API_URL, auth token)</b><span>Forbidden handling</span><b>Central apiFetch shows 403 notices</b></div></fieldset></div>;
+}
+
+function Settings({ isSettingsOpen, toggleAction, actor, roles = [], permissions = [], canAccess, apiFetch, sessionId, onNotice, onLogout }) {
+  const [activeSettingsTab, setActiveSettingsTab] = useState("profile");
+  const [rememberLayout, setRememberLayout] = useState(true);
+  const [enableNotifications, setEnableNotifications] = useState(true);
+  const canManageUsers = canAccess("users:manage");
+  const canManageSuperusers = canAccess("superuser:manage");
+  const tabs = [
+    { id: "profile", label: "Profile" },
+    { id: "preferences", label: "Preferences" },
+    { id: "users", label: "Users", permission: "users:manage" },
+    { id: "service_accounts", label: "Service Accounts", permission: "users:manage" },
+    { id: "integration", label: "Integration" },
+  ];
+
+  useEffect(() => {
+    if ((activeSettingsTab === "service_accounts" || activeSettingsTab === "users") && !canManageUsers) {
+      setActiveSettingsTab("profile");
+    }
+  }, [activeSettingsTab, canManageUsers]);
+
+  return (
+    <div id="configurations_container" style={{ display: isSettingsOpen ? "block" : "none" }}>
+      <div className="configurations_options_container settings_options_container">
         <div className="configurations_options_container_bar">
           <span onClick={() => toggleAction("settings")}>x</span>
           <label>Settings</label>
         </div>
-
         <div className="configurations_options">
           <div className="configurations_tabs">
-            <button
-              type="button"
-              className={activeSettingsTab === "preferences" ? "active" : ""}
-              onClick={() => setActiveSettingsTab("preferences")}
-            >
-              Preferences
-            </button>
+            {tabs.filter((tab) => !tab.permission || canAccess(tab.permission)).map((tab) => (
+              <button key={tab.id} type="button" className={activeSettingsTab === tab.id ? "active" : ""} onClick={() => setActiveSettingsTab(tab.id)}>
+                {tab.label}
+              </button>
+            ))}
           </div>
-
-          <form
-            className="configurations_tab_form"
-            onSubmit={(event) => event.preventDefault()}
-          >
-            <div
-              className="configurations_options_panel"
-              style={{ display: activeSettingsTab === "preferences" ? "block" : "none" }}
-            >
+          <form className="configurations_tab_form" onSubmit={(event) => event.preventDefault()}>
+            <div className="configurations_options_panel" style={{ display: activeSettingsTab === "profile" ? "block" : "none" }}>
+              <CurrentActorPanel actor={actor} roles={roles} permissions={permissions} sessionId={sessionId} onLogout={onLogout} />
+            </div>
+            <div className="configurations_options_panel" style={{ display: activeSettingsTab === "preferences" ? "block" : "none" }}>
               <fieldset>
                 <legend>Preferences</legend>
                 <label>Workspace</label>
-                <input
-                  type="checkbox"
-                  id="pref_remember_layout"
-                  className="input_checkbox"
-                  checked={rememberLayout}
-                  onChange={() => setRememberLayout((prev) => !prev)}
-                />
+                <input type="checkbox" id="pref_remember_layout" className="input_checkbox" checked={rememberLayout} onChange={() => setRememberLayout((prev) => !prev)} />
                 <label htmlFor="pref_remember_layout" className="sublabel">Remember window layout</label>
-
-                <input
-                  type="checkbox"
-                  id="pref_enable_notifications"
-                  className="input_checkbox"
-                  checked={enableNotifications}
-                  onChange={() => setEnableNotifications((prev) => !prev)}
-                />
+                <input type="checkbox" id="pref_enable_notifications" className="input_checkbox" checked={enableNotifications} onChange={() => setEnableNotifications((prev) => !prev)} />
                 <label htmlFor="pref_enable_notifications" className="sublabel">Enable notifications</label>
               </fieldset>
+            </div>
+            <div className="configurations_options_panel" style={{ display: activeSettingsTab === "users" ? "block" : "none" }}>
+              <PermissionGate permission="users:manage" canAccess={canAccess} fallback={<p className="settings_hint">You need users:manage to open this panel.</p>}>
+                <UserManagementPanel apiFetch={apiFetch} canManageUsers={canManageUsers} canManageSuperusers={canManageSuperusers} onNotice={onNotice} isActive={activeSettingsTab === "users"} />
+              </PermissionGate>
+            </div>
+            <div className="configurations_options_panel" style={{ display: activeSettingsTab === "service_accounts" ? "block" : "none" }}>
+              <PermissionGate permission="users:manage" canAccess={canAccess} fallback={<p className="settings_hint">You need users:manage to open this panel.</p>}>
+                <ServiceAccountsPanel apiFetch={apiFetch} canManageUsers={canManageUsers} onNotice={onNotice} isActive={activeSettingsTab === "service_accounts"} />
+              </PermissionGate>
+            </div>
+            <div className="configurations_options_panel" style={{ display: activeSettingsTab === "integration" ? "block" : "none" }}>
+              <IntegrationContractPanel />
             </div>
           </form>
         </div>
@@ -1604,7 +1986,8 @@ function WindowVerticalSplitPanels({id, type, sourceId, initialTopHeight, minTop
   );
 }
 function IframeEmbed({wId,id,fileName,title,activeGraph,graphAction,iframeRef,BASE_URL}) {
-  const iframeBasePath = '/linkxDS2026/temp_placeholders';
+  const normalizedBaseUrl = String(BASE_URL || import.meta.env.BASE_URL || "").replace(/\/+$/, "");
+  const iframeBasePath = `${normalizedBaseUrl}/linkxDS2026/temp_placeholders`;
   const frameIdentity = String(activeGraph || id || "").toLowerCase();
   const isPlaceholderFrame = frameIdentity.includes("placeholder");
   const shouldShowFitGraphControl = frameIdentity.includes("graph") && !isPlaceholderFrame;
@@ -1634,6 +2017,7 @@ function IframeEmbed({wId,id,fileName,title,activeGraph,graphAction,iframeRef,BA
       <div className="iframe_graph">
         <iframe
           ref={iframeRef}
+          sandbox="allow-scripts allow-same-origin allow-downloads allow-modals"
           src={`${iframeBasePath}/source_placeholder.html`}
           width="100%"
           height="98%"
@@ -1648,6 +2032,7 @@ function IframeEmbed({wId,id,fileName,title,activeGraph,graphAction,iframeRef,BA
       <div className="iframe_graph">
         <iframe
           ref={iframeRef}
+          sandbox="allow-scripts allow-same-origin allow-downloads allow-modals"
           src={`${iframeBasePath}/graph_placeholder.html`}
           width="100%"
           height="98%"
@@ -1662,6 +2047,7 @@ function IframeEmbed({wId,id,fileName,title,activeGraph,graphAction,iframeRef,BA
       <div className="iframe_graph">
         <iframe
           ref={iframeRef}
+          sandbox="allow-scripts allow-same-origin allow-downloads allow-modals"
           src={`${iframeBasePath}/charts_basic.html`}
           width="100%"
           height="98%"
@@ -1676,6 +2062,7 @@ function IframeEmbed({wId,id,fileName,title,activeGraph,graphAction,iframeRef,BA
       <div className="iframe_graph">
         <iframe
           ref={iframeRef}
+          sandbox="allow-scripts allow-same-origin allow-downloads allow-modals"
           src={`${iframeBasePath}/${activeGraph}.html`}
           width="100%"
           height="98%"
@@ -1977,10 +2364,10 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
                           </form>
                           <form onSubmit={(e) => { e.preventDefault();
                             if (windowRealtimeResponseI === "Connection established!" && formRealtimeToolResponse !== "Connected!" ) {
-                              const toolUrl = document.getElementById("realtime_tool_url").value;
-                              const toolUsername = document.getElementById("realtime_tool_username").value;
-                              const toolPassword = document.getElementById("realtime_tool_password").value;
-                              const toolDatabase = document.getElementById("realtime_tool_database").value;
+                              const toolUrl = sanitizeConnectionValue(document.getElementById("realtime_tool_url").value, { maxLength: 300 });
+                              const toolUsername = sanitizeIdentifier(document.getElementById("realtime_tool_username").value, { maxLength: 120 });
+                              const toolPassword = sanitizeSecret(document.getElementById("realtime_tool_password").value, { maxLength: 256 });
+                              const toolDatabase = sanitizeIdentifier(document.getElementById("realtime_tool_database").value, { maxLength: 120 });
                               windowAction(id, "real_time_tool_integration_form", "connect", {
                                 tool_name: 'neo4j',
                                 url: toolUrl,
@@ -2248,10 +2635,10 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
                           <form onSubmit={(e) => { e.preventDefault();
                             if (windowResponseI === "Connection established!" && formToolResponse !== "Connected!" || windowResponseI === "Dataset uploaded!" && formToolResponse !== "Connected!" ) {
                               // Disconnect logic
-                              const toolUrl = document.getElementById("tool_url").value;
-                              const toolUsername = document.getElementById("tool_username").value;
-                              const toolPassword = document.getElementById("tool_password").value;
-                              const toolDatabase = document.getElementById("tool_database").value;
+                              const toolUrl = sanitizeConnectionValue(document.getElementById("tool_url").value, { maxLength: 300 });
+                              const toolUsername = sanitizeIdentifier(document.getElementById("tool_username").value, { maxLength: 120 });
+                              const toolPassword = sanitizeSecret(document.getElementById("tool_password").value, { maxLength: 256 });
+                              const toolDatabase = sanitizeIdentifier(document.getElementById("tool_database").value, { maxLength: 120 });
                               windowAction(id, "tool_integration_form", "connect", {
                                 tool_name: 'neo4j',
                                 url: toolUrl,
@@ -3025,7 +3412,7 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
                                 graphId: id
                               });
                             } else {
-                              const newGraphLinkId = document.getElementById(`graph_link_id_input_${id}`).value;
+                              const newGraphLinkId = sanitizeIdentifier(document.getElementById(`graph_link_id_input_${id}`).value, { maxLength: 120 });
                               windowAction(id, "graph_link_form", "link", {
                                 sourceId: newGraphLinkId,
                                 graphId: id,
@@ -3455,7 +3842,7 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
                                 chartId: id
                               });
                             } else {
-                              const newChartLinkId = document.getElementById(`chart_link_id_input_${id}`).value;
+                              const newChartLinkId = sanitizeIdentifier(document.getElementById(`chart_link_id_input_${id}`).value, { maxLength: 120 });
                               windowAction(id, "chart_link_form", "link", {
                                 graphId: newChartLinkId,
                                 chartId: id
@@ -3739,7 +4126,9 @@ function ConfirmationDialog({ items, onResolve }) {
     document.body
   );
 }
-function Root() {
+function LinkxWorkspace() {
+  const auth = useAuth();
+  const { token, user, actor, roles, permissions, logout, verifyToken, hasPermission, hasRole } = auth;
   const [windows, setWindows] = useState([]);
   const [orientation, setOrientation] = useState("tabs"); // "windows" | "tabs"
   const [activeWindowId, setActiveWindowId] = useState(null);
@@ -3802,6 +4191,8 @@ const fileInputRef = useRef(null);
   const logRef = useRef(''); // for accumulating logs    
   const textareaRefs = useRef({});
   const debounceRef = useRef(null);
+  const graphActionDebounceRef = useRef({});
+  const windowGraphActionDebounceRef = useRef({});
   const [isDragging, setIsDragging] = useState(false);
   const [graphLinkstate, setGraphLinkState] = useState(false);
   const [graphStatusListener, setGraphStatusListener] = useState(false);
@@ -3830,6 +4221,40 @@ const fileInputRef = useRef(null);
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean);
+
+  const runScopedDebounce = (bucketRef, scopedId, fn, delay = 300) => {
+    const key = String(scopedId);
+    if (bucketRef.current[key]) {
+      clearTimeout(bucketRef.current[key]);
+    }
+    bucketRef.current[key] = setTimeout(() => {
+      delete bucketRef.current[key];
+      fn();
+    }, delay);
+  };
+
+  const graphStatusSessionIds = useMemo(() => {
+    const sessionIds = new Set();
+
+    windows.forEach((w) => {
+      if (w.type === "graph" && w.graphLinkSource) {
+        sessionIds.add(String(w.graphLinkSource));
+      }
+    });
+
+    Object.entries(sourceStreams || {}).forEach(([sessionId, isStreaming]) => {
+      if (isStreaming) {
+        sessionIds.add(String(sessionId));
+      }
+    });
+
+    return Array.from(sessionIds);
+  }, [windows, sourceStreams]);
+
+  const graphStatusSessionKey = useMemo(
+    () => graphStatusSessionIds.join("|"),
+    [graphStatusSessionIds]
+  );
   //const BASE_URL = "http://localhost:5173"
   //const API_URL = "http://localhost:5000";
 
@@ -3871,7 +4296,7 @@ const fileInputRef = useRef(null);
     const sendThemeMode = (frameEl) => {
       frameEl?.contentWindow?.postMessage(
         { action: "theme_mode", payload: themeMode },
-        "*"
+        getTrustedMessageOrigin()
       );
     };
 
@@ -3888,7 +4313,7 @@ const fileInputRef = useRef(null);
 
       frameEl?.contentWindow?.postMessage(
         { action: "informations", payload: cachedPayload },
-        "*"
+        getTrustedMessageOrigin()
       );
     };
 
@@ -3954,8 +4379,49 @@ const fileInputRef = useRef(null);
     return id;
   }, [removeNotification, sanitizeNotificationMessage]);
 
+  const apiFetch = useMemo(() => createApiClient({
+    baseUrl: API_URL,
+    getToken: () => token,
+    onUnauthorized: () => {
+      pushNotification({
+        title: "Session expired",
+        message: "Please sign in again.",
+        source: "Auth",
+        level: "warning",
+      });
+      logout();
+    },
+    onForbidden: (data) => {
+      pushNotification({
+        title: "Permission denied",
+        message: data?.message || data?.error || "You do not have permission for this action.",
+        source: "RBAC",
+        level: "warning",
+      });
+    },
+  }), [API_URL, token, logout, pushNotification]);
+
+  const canAccess = useCallback((permission) => (
+    hasRole("admin") || hasPermission(permission)
+  ), [hasRole, hasPermission]);
+
+  const requirePermission = useCallback((permission, actionName = "this action") => {
+    if (canAccess(permission)) return true;
+    pushNotification({
+      title: "Permission denied",
+      message: "You need " + permission + " to use " + actionName + ".",
+      source: "RBAC",
+      level: "warning",
+    });
+    return false;
+  }, [canAccess, pushNotification]);
+
   pushNotificationRef.current = pushNotification;
   sessionIdRef.current = sessionId;
+
+  useEffect(() => {
+    setUserName(user?.display_name || user?.username || null);
+  }, [user]);
 
   const registerStrReportSocketReceiver = (browserSession) => {
     const socket = socketRef.current;
@@ -4043,12 +4509,11 @@ const fileInputRef = useRef(null);
           existing_session: oldSession,
           socket_id: socketRef.current?.id || null,
         };
-        fetch(`${API_URL}/init`, {
+        apiFetch("/init", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         })
-          .then(res => res.json())
           .then(data => {
             if (data.message === "success!") {
               const session = data.results;
@@ -4101,7 +4566,10 @@ const fileInputRef = useRef(null);
     windowsRef.current = windows;
   }, [windows]);
   useEffect(() => {
-    const socket = io(API_URL);
+    if (!token) return;
+    const socket = io(API_URL, {
+      auth: { token },
+    });
     socketRef.current = socket;
 
     const resolveAnalysisSessionId = (payload = {}) => {
@@ -4190,7 +4658,7 @@ const fileInputRef = useRef(null);
       socket.disconnect();
       socketRef.current = null;
     };
-  }, []);
+  }, [API_URL, token]);
   // ------------------------------------------------------- backend notifications socket ---
   const sourceNotificationIds = useMemo(() => {
     return windows
@@ -4302,21 +4770,20 @@ const fileInputRef = useRef(null);
 // ------------------------------------------------------- graph status socket ---
   useEffect(() => {
     const socket = socketRef.current;
-    if (!socket || !sourceStreamListener) return;
+    if (!socket || graphStatusSessionIds.length === 0) return;
 
-    let lastHash = null;
-    let sessionId = sourceStreams
-    const latestStreamingId = Object.entries(sourceStreams).filter(([_, isStreaming]) => isStreaming).at(-1)?.[0];
-    if (!latestStreamingId) return;
+    let lastHashBySession = {};
     const handleGraphStatus = (payload) => {
       const { type, data, error, session_id } = payload;
-      sessionId = session_id
+      const sessionKey = String(session_id || "").trim();
+      if (!sessionKey) return;
+
       const isGraphInfoPlaceholderPath = (pathname) => {
         const normalizedPath = String(pathname || "");
         return normalizedPath.endsWith("/temp_placeholders/graph_info_placeholder.html");
       };
 
-      const buildGraphInfoPayload = (metadata, sessionKey, relationships = []) => {
+      const buildGraphInfoPayload = (metadata, currentSessionKey, relationships = []) => {
         const base = metadata && typeof metadata === "object" ? metadata : {};
         const relationshipList = Array.isArray(relationships) ? relationships : [];
         const relationshipLabels = relationshipList
@@ -4324,8 +4791,8 @@ const fileInputRef = useRef(null);
           .filter((item) => item != null && String(item).trim() !== "");
         return {
           ...base,
-          session_id: String(sessionKey || ""),
-          analysisSessionId: String(sessionKey || ""),
+          session_id: String(currentSessionKey || ""),
+          analysisSessionId: String(currentSessionKey || ""),
           relationship_labels: relationshipLabels,
           total_relationships:
             base?.summary?.total_relationships != null
@@ -4333,8 +4800,8 @@ const fileInputRef = useRef(null);
               : relationshipList.length,
         };
       };
+
       if (error) {
-        const sessionKey = String(session_id || "").trim();
         const hasLinkedTarget = windowsRef.current.some(
           (w) => String(w.graphLinkSource || "") === sessionKey
         );
@@ -4350,43 +4817,37 @@ const fileInputRef = useRef(null);
         console.error("Graph status error:", error);
         return;
       }
-      console.log("recieved status socket log:",payload)
-      // Always get up-to-date target windows
+
       const targetWindows = windowsRef.current.filter(
-        w => w.graphLinkSource === String(session_id)
+        w => String(w.graphLinkSource || "") === sessionKey
       );
 
-      if (targetWindows.length === 0) { //Target windows are the children of this source window (linked)
-        console.warn("No target windows found for session:", session_id);
+      if (targetWindows.length === 0) {
+        return;
       }
 
       if (type === "metadata") {
-        const previousRelationships = graphStatus?.[session_id]?.relationships;
-        const infoPayload = buildGraphInfoPayload(data, session_id, previousRelationships);
-        graphInfoPayloadBySessionRef.current[String(session_id)] = infoPayload;
-        // Update local graph status
-        //the global GraphStatus is dictionary
+        const previousRelationships = graphStatus?.[sessionKey]?.relationships;
+        const infoPayload = buildGraphInfoPayload(data, sessionKey, previousRelationships);
+        graphInfoPayloadBySessionRef.current[sessionKey] = infoPayload;
+
         setGraphStatus(prev => ({
           ...prev,
-          [session_id]: {           // dynamic key
-            ...prev[session_id], // Keep the relationships
+          [sessionKey]: {
+            ...prev[sessionKey],
             status: data
           }
         }));
 
-        // Send payload to all target iframes
         targetWindows.forEach(w => {
           const iframe = iframeRefs.current[w.id];
           if (iframe?.current?.contentWindow) {
-            console.log("contentWindow:",iframe?.current?.contentWindow)
             if (isGraphInfoPlaceholderPath(iframe?.current?.contentWindow.location?.pathname)) {
               iframe.current.contentWindow.postMessage(
                 { action: "informations", payload: infoPayload },
-                "*"
+                getTrustedMessageOrigin()
               );
             }
-          } else {
-            console.warn("Iframe ref not avaiLabel for window:", w.id);
           }
         });
 
@@ -4394,21 +4855,18 @@ const fileInputRef = useRef(null);
       }
 
       if (type === "relationships") {
-        // Optional: prevent unnecessary updates using a simple hash
-        console.log("recieved_rlns",sessionId,data)
-        const hash = JSON.stringify(data.map(r => [r.id, r.type, r.textcolor, r.bgcolor]));
-        if (hash === lastHash) return;
-        lastHash = hash;
-        //the global GraphStatus is dictionary
+        const hash = JSON.stringify((Array.isArray(data) ? data : []).map(r => [r.id, r.type, r.textcolor, r.bgcolor]));
+        if (lastHashBySession[sessionKey] === hash) return;
+        lastHashBySession[sessionKey] = hash;
+
         setGraphStatus(prev => ({
           ...prev,
-          [session_id]: {           // dynamic key
-            ...prev[session_id], 
-            relationships: data // Keep the status
+          [sessionKey]: {
+            ...prev[sessionKey],
+            relationships: data
           }
         }));
-        // Batch update windows in a single setWindows call
-        //the private GraphStatus is simple (doesent consist all the values)
+
         setWindows(prev =>
           prev.map(w =>
             targetWindows.find(tw => tw.id === w.id)
@@ -4417,16 +4875,16 @@ const fileInputRef = useRef(null);
           )
         );
 
-        const metadataPayload = graphStatus?.[session_id]?.status;
+        const metadataPayload = graphStatus?.[sessionKey]?.status;
         if (metadataPayload && typeof metadataPayload === "object") {
-          const infoPayload = buildGraphInfoPayload(metadataPayload, session_id, data);
-          graphInfoPayloadBySessionRef.current[String(session_id)] = infoPayload;
+          const infoPayload = buildGraphInfoPayload(metadataPayload, sessionKey, data);
+          graphInfoPayloadBySessionRef.current[sessionKey] = infoPayload;
           targetWindows.forEach((w) => {
             const iframe = iframeRefs.current[w.id];
             if (iframe?.current?.contentWindow && isGraphInfoPlaceholderPath(iframe?.current?.contentWindow.location?.pathname)) {
               iframe.current.contentWindow.postMessage(
                 { action: "informations", payload: infoPayload },
-                "*"
+                getTrustedMessageOrigin()
               );
             }
           });
@@ -4434,18 +4892,28 @@ const fileInputRef = useRef(null);
       }
     };
 
-    if (!graphStatusSubscribedSessionsRef.current.has(String(latestStreamingId))) {
-      socket.emit("graph_status_subscribe", { session_id: latestStreamingId });
-      graphStatusSubscribedSessionsRef.current.add(String(latestStreamingId));
-    }
+    graphStatusSessionIds.forEach((currentSessionId) => {
+      const normalizedSession = String(currentSessionId || "").trim();
+      if (!normalizedSession) return;
+      if (!graphStatusSubscribedSessionsRef.current.has(normalizedSession)) {
+        socket.emit("graph_status_subscribe", { session_id: normalizedSession });
+        graphStatusSubscribedSessionsRef.current.add(normalizedSession);
+      }
+    });
+
     socket.on("status", handleGraphStatus);
 
     return () => {
-      socket.emit("graph_status_unsubscribe", { session_id: latestStreamingId });
-      graphStatusSubscribedSessionsRef.current.delete(String(latestStreamingId));
+      graphStatusSessionIds.forEach((currentSessionId) => {
+        const normalizedSession = String(currentSessionId || "").trim();
+        if (!normalizedSession) return;
+        socket.emit("graph_status_unsubscribe", { session_id: normalizedSession });
+        graphStatusSubscribedSessionsRef.current.delete(normalizedSession);
+      });
       socket.off("status", handleGraphStatus);
+      lastHashBySession = {};
     };
-  }, [sourceStreamListener]); // depend only on the source/session
+  }, [graphStatusSessionKey]); // depend on linked session ids
   // ---------------------------------------------------------------------------- layout orientation ---
   useEffect(() => {
     if (orientation === "tabs" && windows.length > 0) {
@@ -4515,6 +4983,10 @@ const fileInputRef = useRef(null);
       if (debounceRef.current) {
         clearTimeout(debounceRef.current);
       }
+      Object.values(graphActionDebounceRef.current || {}).forEach((timerId) => clearTimeout(timerId));
+      Object.values(windowGraphActionDebounceRef.current || {}).forEach((timerId) => clearTimeout(timerId));
+      graphActionDebounceRef.current = {};
+      windowGraphActionDebounceRef.current = {};
     };
   }, []);
 
@@ -4522,6 +4994,18 @@ const fileInputRef = useRef(null);
   useEffect(() => {
     const handleIframeMessage = (event) => {
       console.log("event detected:",event)
+      const sourceWindow = event?.source || null;
+      const resolvedSourceWindowId = Object.keys(iframeRefs.current || {}).find((windowId) => {
+        const frameRef = iframeRefs.current[windowId];
+        return frameRef?.current?.contentWindow === sourceWindow;
+      });
+      const iframeAction = getIframeMessageAction(event.data);
+      const isKnownIframeMessage = TRUSTED_IFRAME_MESSAGE_TYPES.has(iframeAction) || event.data?.action === "notify";
+      if (isKnownIframeMessage && (!isTrustedMessageOrigin(event) || !resolvedSourceWindowId)) {
+        console.warn("[iframe-message] blocked", { origin: event.origin, action: iframeAction, hasFrame: !!resolvedSourceWindowId });
+        return;
+      }
+
       // ---------------- Header trigger (revertable block) ----------------
       // Contract:
       // event.data = {
@@ -4600,79 +5084,63 @@ const fileInputRef = useRef(null);
         });
         return;
       }
-      // --- JWT authentication message with no verification---
       if (event.data?.action === "authenticate") {
-        // check origin for security
-        if (event.origin !== "http://localhost:3000") return;
+        const authOrigin = String(event.origin || "");
+        const sameOrigin = authOrigin === window.location.origin;
+        const allowedOrigin = HEADER_TRIGGER_ALLOWED_ORIGINS.includes(authOrigin);
+        if (!sameOrigin && !allowedOrigin) return;
 
-        // JWT may be inside payload
-        const token = event.data.token || event.data.payload?.token;
-        if (!token) {
+        const iframeToken = event.data.token || event.data.payload?.token;
+        if (!iframeToken) {
           console.warn("No token found in message");
           return;
         }
 
-        console.log("Received JWT:", token);
-
-        // decode payload
-        try {
-          const payload = JSON.parse(
-            atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))
-          );
-          console.log("JWT payload:", payload);
-          //alert(`Linkx: Authentication request received! Welcome '${payload.Name}'`);
-          // store the name in state
-          setUserName(payload.Name);
-          // store for app
-          // setAuthToken(token);
-          // setAuthPayload(payload);
-        } catch (err) {
-          console.error("Failed to decode JWT:", err);
-        }
+        verifyToken(iframeToken)
+          .then((verifiedUser) => {
+            setUserName(verifiedUser?.display_name || verifiedUser?.username || null);
+            pushNotification({
+              title: "Authenticated",
+              message: `Signed in as ${verifiedUser?.display_name || verifiedUser?.username || "user"}.`,
+              source: "Auth",
+              level: "success",
+            });
+          })
+          .catch((err) => {
+            console.error("Failed to verify iframe token:", err);
+            pushNotification({
+              title: "Authentication failed",
+              message: err?.message || "Invalid token received from iframe.",
+              source: "Auth",
+              level: "error",
+            });
+          });
       }
-      // --- JWT authentication message with verification ---
-      // if (event.data?.action === "authenticate") {
-      //   const token = event.data.payload?.token;
-        
-      //   // Step 3 → send JWT to server for verification
-      //   const res = await fetch("/api/verify-token", {
-      //     method: "POST",
-      //     headers: { "Content-Type": "application/json" },
-      //     body: JSON.stringify({ token })
-      //   });
-
-      //   const result = await res.json();
-
-      //   if (result.valid) {
-      //     console.log("JWT verified! Payload:", result.payload);
-      //   } else {
-      //     console.error("Invalid token!", result.error);
-      //   }
-      // }
       if (event.data?.type === "nodeProperties") {
         const properties = event.data.payload; // unpack the payload
-        const mostTopGraphWindow=windowIdRef.current;
-        //alert(mostTopGraphWindow,properties)
+        const targetGraphWindow = event.data?.payload?.id ?? resolvedSourceWindowId ?? windowIdRef.current;
         setWindows(prev =>
-            prev.map(w => w.type === "graph" && w.id === mostTopGraphWindow ? { ...w, nodeProperties: properties } : w)
+            prev.map(w => w.type === "graph" && w.id === targetGraphWindow ? { ...w, nodeProperties: properties } : w)
         );
       }
       if (event.data?.type === "all_property_keys_response") {
         const { id, keys } = event.data.payload; // unpack the payload
+        const targetGraphWindowId = id ?? resolvedSourceWindowId;
         //console.log(`Got keys from iframe ${id}:`, keys); // ["label", "group", ...]
         // Update your state with just the keys
         // Update the specific window that matches this iframe id
         setWindows(prev =>
-          prev.map(w => w.type === "graph" && w.id === id ? { ...w, filterPropertyKeys: keys } : w)
+          prev.map(w => w.type === "graph" && w.id === targetGraphWindowId ? { ...w, filterPropertyKeys: keys } : w)
         );
         console.log("IframeSettings:",iframeSettings)
       }    
       if (event.data?.type === "graph_search_results") {        
         const { id, nodes, edges } = event.data.payload; // unpack the payload
+        const targetGraphWindowId = id ?? resolvedSourceWindowId;
         console.log("graph_search_results:",id,nodes, edges)
         setWindows(prev =>
           prev.map(w => {
-            if (w.type !== "graph" || w.id !== id) return w;
+            if (w.type !== "graph" || w.id !== targetGraphWindowId) return w;
             const oldSearch = Array.isArray(w.iframeSearch) ? w.iframeSearch : ["", false, {}, { nodes: 0, edges: 0 }];
             const newSearch = [...oldSearch];
             newSearch[3] = {
@@ -4683,7 +5151,7 @@ const fileInputRef = useRef(null);
           })
         );
         setIframeSearch(prev => {
-          const oldSearch = Array.isArray(prev[id]) ? prev[id] : ["", false, {}, { nodes: 0, edges: 0 }];
+          const oldSearch = Array.isArray(prev[targetGraphWindowId]) ? prev[targetGraphWindowId] : ["", false, {}, { nodes: 0, edges: 0 }];
           const newSearch = [...oldSearch];
           newSearch[3] = {
             nodes: nodes ?? 0,
@@ -4691,7 +5159,7 @@ const fileInputRef = useRef(null);
           };
           return {
             ...prev,
-            [id]: newSearch
+            [targetGraphWindowId]: newSearch
           };
         });
       }
@@ -4706,8 +5174,9 @@ const fileInputRef = useRef(null);
         console.log(22)
         //Note: this id is not a chart window id but the sourse graph window id 
         const { id, selectedNodes, selectedEdges } = event.data.payload; // unpack the payload
+        const sourceGraphId = id ?? resolvedSourceWindowId;
         //set selected entities for alllinked chart window to the top graph window
-        handleChartActions(id,"updateNetwork","selection",event.data.payload);
+        handleChartActions(sourceGraphId,"updateNetwork","selection", { ...event.data.payload, id: sourceGraphId, selectedNodes, selectedEdges });
         console.log(23)
       }
       //1 Listen what is selected from the graph window
@@ -4748,6 +5217,8 @@ const fileInputRef = useRef(null);
     return windowIdRef.current;
   };
   const handleCreateWindows = (sessionId, type, iframeRef) => {
+    if (type === "source" && !requirePermission(PERMISSIONS.SOURCE_CREATE, "source windows")) return null;
+    if (type === "graph" && !requirePermission(PERMISSIONS.GRAPH_CREATE, "graph windows")) return null;
     const id = generateWindowId();
     // if (windowIdRef[id]){
     //   const id = generateWindowId();
@@ -4756,12 +5227,11 @@ const fileInputRef = useRef(null);
       const windowsId = id+"_"+sessionId;
       debounceRef.current = setTimeout(() => {
           const payload = { id: "source_window", session_id: sessionId, window_id:id};
-          fetch(`${API_URL}/init_source`, {
+          apiFetch("/init_source", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload),
           })
-            .then(res => res.json())
             .then(data => {
               if (data.message === "success!") {
                 iframeRefs.current[windowsId] = React.createRef();
@@ -5004,12 +5474,11 @@ const fileInputRef = useRef(null);
     );
 
     const linkPayload = { id: "link", source_id: analysisKey, LinkedTo: graphWindowId };
-    fetch(`${API_URL}/graph_link`, {
+    apiFetch("/graph_link", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(linkPayload),
     })
-      .then((res) => res.json())
       .then((data) => {
         if (data?.message !== "success!") {
           console.warn("str_report graph_link:", data?.message || data);
@@ -5049,14 +5518,20 @@ const fileInputRef = useRef(null);
       const socket = socketRef.current;
       if (closingWindow?.type === "graph" && closingWindow.graphLinkSource) {
         const analysisKey = String(closingWindow.graphLinkSource);
-        if (strReportGraphByAnalysisRef.current[analysisKey] === id) {
-          delete strReportGraphByAnalysisRef.current[analysisKey];
-        }
-        strReportOpenInFlightRef.current.delete(analysisKey);
-        strReportSubscribedSessionsRef.current.delete(analysisKey);
-        graphStatusSubscribedSessionsRef.current.delete(analysisKey);
-        if (socket && socket.connected) {
-          socket.emit("graph_status_unsubscribe", { session_id: analysisKey });
+        const hasSiblingLinkedGraph = newWindows.some((w) =>
+          w.type === "graph" && String(w.graphLinkSource || "") === analysisKey
+        );
+
+        if (!hasSiblingLinkedGraph) {
+          if (strReportGraphByAnalysisRef.current[analysisKey] === id) {
+            delete strReportGraphByAnalysisRef.current[analysisKey];
+          }
+          strReportOpenInFlightRef.current.delete(analysisKey);
+          strReportSubscribedSessionsRef.current.delete(analysisKey);
+          graphStatusSubscribedSessionsRef.current.delete(analysisKey);
+          if (socket && socket.connected) {
+            socket.emit("graph_status_unsubscribe", { session_id: analysisKey });
+          }
         }
       }
       if (socket && socket.connected && closingWindow.type == "source") {
@@ -5110,7 +5585,7 @@ const fileInputRef = useRef(null);
         if (iframe?.current?.contentWindow) {
           iframe.current.contentWindow.postMessage(
             { action: "network_components", payload: id}, // Requesting for the nodes and egdes of that specific graph (request is sent to the graph window itself), #id is the graph window id
-              "*"
+              getTrustedMessageOrigin()
           );
         }
         else{
@@ -5133,7 +5608,7 @@ const fileInputRef = useRef(null);
           console.log(9);
           iframe.current.contentWindow.postMessage(
             { action: "network_components", payload: { nodes, edges } },
-            "*"
+            getTrustedMessageOrigin()
           );
         } else {
           console.log(10, iframe?.current);
@@ -5157,7 +5632,7 @@ const fileInputRef = useRef(null);
                 // Example: send message or trigger chart update
                 chartIframeRef.current.contentWindow.postMessage(
                   { action: "updateSelection", payload:{selectedNodes, selectedEdges} },
-                  "*"
+                  getTrustedMessageOrigin()
                 );
               }
             });
@@ -5174,6 +5649,7 @@ const fileInputRef = useRef(null);
   }
   const handleGraphActions = (id, menuId, action, payload) => {
     console.log("GraphAction:", id, menuId, action, payload);
+    if (menuId === "get_graph" && !requirePermission(PERMISSIONS.GRAPH_READ, "graph data")) return;
 
     const sendToIframe = (iframe, msgAction, msgPayload) => {
       if (!iframe?.current) {
@@ -5184,7 +5660,7 @@ const fileInputRef = useRef(null);
       const send = () => {
         iframe.current.contentWindow?.postMessage(
           { action: msgAction, payload: msgPayload },
-          "*"
+          getTrustedMessageOrigin()
         );
       };
 
@@ -5195,11 +5671,8 @@ const fileInputRef = useRef(null);
         iframe.current.onload = send;
       }
     };
-    // Clear previous debounce if exists
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-
     // Debounce wrapper for actions that need delay
-    debounceRef.current = setTimeout(() => {
+    runScopedDebounce(graphActionDebounceRef, id, () => {
       setWindows(prev =>
         prev.map(w => {
           if (w.id !== id) return w;
@@ -5224,13 +5697,12 @@ const fileInputRef = useRef(null);
             updates.loadscreenState = true;
             updates.loadscreenText = "Staging graph";
 
-            fetch(`${API_URL}/get_graph`, {
+            apiFetch("/get_graph", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify(newPayload),
               signal: controller.signal
             })
-              .then(res => res.json())
               .then(data => {
                 if (!graphFetchAbortControllersRef.current[id] || graphFetchAbortControllersRef.current[id] !== controller) return;
                 setWindows(prev =>
@@ -5413,6 +5885,8 @@ const fileInputRef = useRef(null);
 
   // --- Basic Windows actions ---
   const handleWindowActions = (id, menuId, action, payload, options = {}) => {
+    const requiredPermission = getWindowActionPermission(menuId, action);
+    if (requiredPermission && !requirePermission(requiredPermission, menuId)) return;
     //console.log("id:",id," Menuid:", menuId," action:", action," payload:", payload)
     // --- Handling sidebar menus
     if (!options?.skipSideBarToggle && menuId !== "cancel_graph_staging") {
@@ -5490,11 +5964,10 @@ const fileInputRef = useRef(null);
                 formData.append("file", validFiles[i]);
               }   
               formData.append("session_id",sessionId)
-              fetch(`${API_URL}/upload_batch_files`, {
+              apiFetch("/upload_batch_files", {
                 method: "POST",
                 body: formData,
               })
-              .then((res) => res.json())
               .then((data) => {
                 if (data.message === "success!") {
                   alert("Dataset uploaded!")
@@ -5572,7 +6045,7 @@ const fileInputRef = useRef(null);
           console.log("address_change:",payload);
           setWindows(prev =>
             prev.map(w =>
-              w.id === id ? { ...w, sourceAddressText: payload ?? "" } : w
+              w.id === id ? { ...w, sourceAddressText: sanitizeConnectionValue(payload, { maxLength: 300 }) } : w
             )
           );
         }
@@ -5580,7 +6053,7 @@ const fileInputRef = useRef(null);
           console.log("storage_change:",payload);
           setWindows(prev =>
             prev.map(w =>
-              w.id === id ? { ...w, sourceStorageText: payload ?? "" } : w
+              w.id === id ? { ...w, sourceStorageText: sanitizeConnectionValue(payload, { maxLength: 300 }) } : w
             )
           );
         }
@@ -5588,7 +6061,7 @@ const fileInputRef = useRef(null);
           console.log("topic_change:",payload);
           setWindows(prev =>
             prev.map(w =>
-              w.id === id ? { ...w, sourceTopicText: payload ?? "" } : w
+              w.id === id ? { ...w, sourceTopicText: sanitizeKafkaTopic(payload) } : w
             )
           );
         }
@@ -5604,7 +6077,7 @@ const fileInputRef = useRef(null);
           console.log("address_change:",payload);
           setWindows(prev =>
             prev.map(w =>
-              w.id === id ? { ...w, sourceRealtimeAddressText: payload ?? "" } : w
+              w.id === id ? { ...w, sourceRealtimeAddressText: sanitizeConnectionValue(payload, { maxLength: 300 }) } : w
             )
           );
         }
@@ -5612,7 +6085,7 @@ const fileInputRef = useRef(null);
           console.log("topic_change:",payload);
           setWindows(prev =>
             prev.map(w =>
-              w.id === id ? { ...w, sourceRealtimeTopicText: payload ?? "" } : w
+              w.id === id ? { ...w, sourceRealtimeTopicText: sanitizeKafkaTopic(payload) } : w
             )
           );
         }
@@ -5623,12 +6096,11 @@ const fileInputRef = useRef(null);
               w.id === id ? { ...w, windowRealtimeResponseI: "Connecting..." } : w
             )
           );
-          fetch(`${API_URL}/connect_to_source`, {
+          apiFetch("/connect_to_source", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload),
           })
-          .then((res) => res.json())
           .then((data) => {
             setWindows(prev =>
               prev.map(w =>
@@ -5657,12 +6129,11 @@ const fileInputRef = useRef(null);
             hdfs: payload?.hdfs ?? payload?.storage ?? "",
             session_id: payload?.session_id ?? id,
           };
-          fetch(`${API_URL}/disconnect_source`, {
+          apiFetch("/disconnect_source", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(disconnectPayload),
           })
-            .then((res) => res.json())
             .then((data) => {
               setWindows(prev =>
                 prev.map(w =>
@@ -5685,12 +6156,11 @@ const fileInputRef = useRef(null);
               w.id === id ? { ...w, formRealtimeToolResponse: "Connecting..." } : w
             )
           );
-          fetch(`${API_URL}/connect_to_tool`, {
+          apiFetch("/connect_to_tool", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload),
           })
-            .then((res) => res.json())
             .then((data) => {
               setWindows(prev =>
                 prev.map(w =>
@@ -5713,12 +6183,11 @@ const fileInputRef = useRef(null);
               w.id === id ? { ...w, formRealtimeToolResponse: "Disconnecting..." } : w
             )
           );
-          fetch(`${API_URL}/disconnect_tool`, {
+          apiFetch("/disconnect_tool", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload),
           })
-            .then((res) => res.json())
             .then((data) => {
               setWindows(prev =>
                 prev.map(w =>
@@ -5742,12 +6211,11 @@ const fileInputRef = useRef(null);
               w.id === id ? { ...w, windowResponseI: "Connecting..." } : w
             )
           );
-          fetch(`${API_URL}/connect_to_source`, {
+          apiFetch("/connect_to_source", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload),
           })
-          .then((res) => res.json())
           .then((data) => {
             setWindows(prev =>
               prev.map(w =>
@@ -5770,12 +6238,11 @@ const fileInputRef = useRef(null);
               w.id === id ? { ...w, windowResponseI: "Disconnecting..." } : w
             )
           );
-          fetch(`${API_URL}/disconnect_source`, {
+          apiFetch("/disconnect_source", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload),
           })
-            .then((res) => res.json())
             .then((data) => {
               setWindows(prev =>
                 prev.map(w =>
@@ -5798,12 +6265,11 @@ const fileInputRef = useRef(null);
               w.id === id ? { ...w, formToolResponse: "Connecting..." } : w
             )
           );
-          fetch(`${API_URL}/connect_to_tool`, {
+          apiFetch("/connect_to_tool", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload),
           })
-            .then((res) => res.json())
             .then((data) => {              
               setWindows(prev =>
                 prev.map(w =>
@@ -5826,12 +6292,11 @@ const fileInputRef = useRef(null);
               w.id === id ? { ...w, formToolResponse: "Disconnecting..." } : w
             )
           );
-          fetch(`${API_URL}/disconnect_tool`, {
+          apiFetch("/disconnect_tool", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload),
           })
-            .then((res) => res.json())
             .then((data) => {              
               setWindows(prev =>
                 prev.map(w =>
@@ -5884,17 +6349,10 @@ const fileInputRef = useRef(null);
                     broker_url: payloadAddress,
                     topic: payloadTopic,
                   };
-                fetch(`${API_URL}/live_batch_files`, {
+                apiFetch("/live_batch_files", {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify(payload1),
-                })
-                .then(async (res) => {
-                  const data = await res.json().catch(() => ({}));
-                  if (!res.ok) {
-                    throw new Error(`live_batch_files ${res.status}: ${JSON.stringify(data)}`);
-                  }
-                  return data;
                 })
                 .then((data) => { 
                     console.log("public source data:",data, "payload:", payload1, "api:", `${API_URL}/live_batch_files`)   
@@ -6003,11 +6461,11 @@ const fileInputRef = useRef(null);
             ));
         }
         if (menuId === "batch_files_search_input") {
-            const keyword = String(payload?.[0] || "").trim();
+            const keyword = sanitizeText(payload?.[0] || "", { maxLength: 500 }).trim();
             const selectedDateRaw = String(payload?.[1] || "").trim();
             const selectedDate = selectedDateRaw || null;
             const hybrid = !!payload?.[2];
-            const search_column = String(payload?.[3] || "").trim();
+            const search_column = sanitizeText(payload?.[3] || "", { maxLength: 120 }).trim();
             const strict_mood = !!payload?.[4];
             const isStrictHybridSearch = hybrid && strict_mood;
 
@@ -6094,12 +6552,11 @@ const fileInputRef = useRef(null);
                   )
                 );
 
-                fetch(API_URL + "/live_batch_files", {
+                apiFetch("/live_batch_files", {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify(buildPayload(0))
                 })
-                  .then(res => res.json())
                   .then(data => {
                     const results = Array.isArray(data?.results) ? data.results : [];
                     const hasMore = !!data?.has_more;
@@ -6158,12 +6615,11 @@ const fileInputRef = useRef(null);
                 )
               );
 
-              fetch(API_URL + "/live_batch_files", {
+              apiFetch("/live_batch_files", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(buildPayload(offset))
               })
-                .then(res => res.json())
                 .then(data => {
                   const results = Array.isArray(data?.results) ? data.results : [];
                   const hasMore = !!data?.has_more;
@@ -6248,12 +6704,11 @@ const fileInputRef = useRef(null);
                 session_id: id,//Source window id
                 value: newBatchFilesCollection, //Explodes at back end
               };
-            fetch(`${API_URL}/live_batch_files`, {
+            apiFetch("/live_batch_files", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify(payload),
             })
-            .then((res) => res.json())
             .then((data) => { 
                 console.log("searchdata:",data)   
                 var arrayData=Object.values(data.results)
@@ -6356,7 +6811,7 @@ const fileInputRef = useRef(null);
               w.id === id
                 ? { ...w,                       
                   batchFilesDataframeInfoI:w.batchFilesDataframeInfoI,
-                  batchFilesDataframeRelationshipValue: payload }
+                  batchFilesDataframeRelationshipValue: sanitizeRelationshipName(payload) }
                 : w
             )
           );
@@ -6416,12 +6871,11 @@ const fileInputRef = useRef(null);
                 session_id: id,
                 value:{"window_id":id,"session_id":id,"tool":tool,"action":action,"source":source,"target":target,"relationship":relationship,"rule":rule}// Add filter request here
               };
-            fetch(`${API_URL}/live_batch_files`, {
+            apiFetch("/live_batch_files", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify(payload),
             })
-            .then((res) => res.json())
             .then((data) => { 
               //var response=Object.values(data.results)
               if (data!=null){
@@ -6510,12 +6964,11 @@ const fileInputRef = useRef(null);
                   session_id: id,
                 value:{"window_id":id,"session_id":id,"log_file":sourceSessionLogFile}
               };
-            fetch(`${API_URL}/live_batch_files`, {
+            apiFetch("/live_batch_files", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify(payload),
             }) 
-            .then((res) => res.json())
             .then((data) => { 
               if (data!=null){
                 if (data.message==="success"){
@@ -6606,7 +7059,7 @@ const fileInputRef = useRef(null);
               const settingsToApply = normalizeGraphIframeSettings(iframeSettings[id] || targetWindow?.iframeSettings);
               iframe.current.contentWindow.postMessage(
                 { action: menuId, payload: { id, settings: settingsToApply } },
-                "*"
+                getTrustedMessageOrigin()
               );
               // Store the link in the target window
               setWindows(prev =>
@@ -6631,7 +7084,7 @@ const fileInputRef = useRef(null);
           }
         }
         if (menuId === "graph_link_form" && action === "link") {
-          debounceRef.current = setTimeout(() => {
+          runScopedDebounce(windowGraphActionDebounceRef, id, () => {
             const newLoadscreenText = "Linking window ";
 
             // Show loadscreen for the window being linked
@@ -6648,12 +7101,11 @@ const fileInputRef = useRef(null);
             const newPayload = { id: "link", source_id: sourceId, LinkedTo: id };
 
             // Send link request to backend
-            fetch(`${API_URL}/graph_link`, {
+            apiFetch("/graph_link", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify(newPayload),
             })
-              .then(res => res.json())
               .then(data => {
                 if (data?.message === "success!") {
                   // Link succeeded
@@ -6704,20 +7156,11 @@ const fileInputRef = useRef(null);
                   // -----------------------------
                   // 3️⃣ Subscribe socket for streaming (doesnt over lap or duplicates)
                   // -----------------------------
-                  const latestStreamingId = Object.entries(sourceStreams)
-                    .filter(([_, isStreaming]) => isStreaming)
-                    .at(-1)?.[0];
-                  if (latestStreamingId) {
-                    socketRef.current.emit("graph_status_subscribe", { session_id: latestStreamingId });
+                  const sessionKey = String(sourceId || "").trim();
+                  if (sessionKey && socketRef.current) {
+                    socketRef.current.emit("graph_status_subscribe", { session_id: sessionKey });
+                    graphStatusSubscribedSessionsRef.current.add(sessionKey);
                   }
-                  console.log("latestStreamingId",latestStreamingId)
-                  // Initiate new socket
-                  const socket = socketRef.current;
-                  if (!socket || !sourceStreamListener){
-                    alert ("Cannot initiate socket")
-                    return;
-                  }
-                  socket.emit("graph_status_subscribe", { session_id: latestStreamingId });
                   // -----------------------------
                   // 4️⃣ Update new window state
                   // -----------------------------
@@ -6795,7 +7238,7 @@ const fileInputRef = useRef(null);
         }
         if (menuId === "load_graph_url") {
           const iframe=payload
-          debounceRef.current = setTimeout(() => {
+          runScopedDebounce(windowGraphActionDebounceRef, id, () => {
             const file = action;
             const targetWindow = windows.find(w => w.id === id);
             const settingsToApply = normalizeGraphIframeSettings(iframeSettings[id] || targetWindow?.iframeSettings);
@@ -6887,7 +7330,7 @@ const fileInputRef = useRef(null);
                           action: menuId,
                           payload: { id, file, settings: settingsToApply },
                         },
-                        "*"
+                        getTrustedMessageOrigin()
                       );
                     };
 
@@ -6945,7 +7388,7 @@ const fileInputRef = useRef(null);
                         action: menuId,
                         payload: { id, file, settings: settingsToApply },
                       },
-                      "*"
+                      getTrustedMessageOrigin()
                     );
                   };
 
@@ -6986,7 +7429,7 @@ const fileInputRef = useRef(null);
           if (iframe?.current && iframe.current.contentWindow) {
             iframe.current.contentWindow.postMessage(
               { action: menuId, payload: "" },
-              "*"
+              getTrustedMessageOrigin()
             );
           }          
         }
@@ -6995,7 +7438,7 @@ const fileInputRef = useRef(null);
           if (iframe?.current && iframe.current.contentWindow) {
             iframe.current.contentWindow.postMessage(
               { action: menuId, payload: "" },
-              "*"
+              getTrustedMessageOrigin()
             );
           }          
         }
@@ -7004,7 +7447,7 @@ const fileInputRef = useRef(null);
           if (iframe?.current && iframe.current.contentWindow) {
             iframe.current.contentWindow.postMessage(
               { action: menuId, payload: { id, format: action || "html" } },
-              "*"
+              getTrustedMessageOrigin()
             );
           }          
         }
@@ -7033,7 +7476,7 @@ const fileInputRef = useRef(null);
           if (iframe?.current && iframe.current.contentWindow) {
             iframe.current.contentWindow.postMessage(
               { action: menuId, payload: newSettings},
-              "*"
+              getTrustedMessageOrigin()
             );
           }   
         }
@@ -7042,7 +7485,7 @@ const fileInputRef = useRef(null);
           if (iframe?.current && iframe.current.contentWindow) {
             iframe.current.contentWindow.postMessage(
               { action: menuId, payload: action },
-              "*"
+              getTrustedMessageOrigin()
             );
           }          
         }
@@ -7053,7 +7496,7 @@ const fileInputRef = useRef(null);
             if (iframe?.current && iframe.current.contentWindow) {
               iframe.current.contentWindow.postMessage(
                 { action: menuId, payload: action },
-                "*"
+                getTrustedMessageOrigin()
               );
             }
         }      
@@ -7125,7 +7568,7 @@ const fileInputRef = useRef(null);
           if (iframe?.current && iframe.current.contentWindow) {
             iframe.current.contentWindow.postMessage(
               { action: menuId, payload: "" },
-              "*"
+              getTrustedMessageOrigin()
             );
           }          
         }
@@ -7134,7 +7577,7 @@ const fileInputRef = useRef(null);
           if (iframe?.current && iframe.current.contentWindow) {
             iframe.current.contentWindow.postMessage(
               { action: menuId, payload: "" },
-              "*"
+              getTrustedMessageOrigin()
             );
           }          
         }
@@ -7143,7 +7586,7 @@ const fileInputRef = useRef(null);
           if (iframe?.current && iframe.current.contentWindow) {
             iframe.current.contentWindow.postMessage(
               { action: menuId, payload: "" },
-              "*"
+              getTrustedMessageOrigin()
             );
           }          
         }
@@ -7167,14 +7610,22 @@ const fileInputRef = useRef(null);
       })
     );
   };
-  // --- Navigation Menu Actions ---
   const handleNavAction = (action) => {
-    //alert("nav_menu")
-    // handle specific nav actions here
+    if (action !== "logout") return;
+    socketRef.current?.disconnect();
+    socketRef.current = null;
+    setWindows([]);
+    setIsConfigurationsOpen(false);
+    setIsSettingsOpen(false);
+    setIsToggleMenuOpen(false);
+    setUserName(null);
+    logout();
   };
     // --- Configuration Actions ---
   const handleConfigurationActions = (id,payload) => {
     const resolvedSessionId = sessionId || localStorage.getItem('session') || "";
+    if (["save", "remove", "upload"].includes(id) && !requirePermission(PERMISSIONS.CONFIG_WRITE, "configuration changes")) return;
+    if (id === "load_default" && !requirePermission(PERMISSIONS.CONFIG_READ, "configuration loading")) return;
     if (id === "change"){
       const { name, value } = payload;
       setConfigurations(prev => ({
@@ -7196,11 +7647,10 @@ const fileInputRef = useRef(null);
         formData.set("id","save");
         formData.set("session_id",resolvedSessionId);
         setloadscreenState(true);
-        fetch(`${API_URL}/configuration`, {
+        apiFetch("/configuration", {
           method: "POST",
           body: formData,
         })
-        .then((res) => res.json())
         .then((data) => {
           if (data.message === "success!") {
             if (hasRuleUpload) {
@@ -7238,11 +7688,10 @@ const fileInputRef = useRef(null);
       formData.append("session_id", resolvedSessionId);
       formData.append("rule_name", activeRuleName);
       setloadscreenState(true);
-      fetch(`${API_URL}/configuration`, {
+      apiFetch("/configuration", {
         method: "POST",
         body: formData,
       })
-      .then((res) => res.json())
       .then((data) => {
         if (data.message === "success!") {
           alert("Rule removed!");
@@ -7269,11 +7718,10 @@ const fileInputRef = useRef(null);
       formData.append("session_id", resolvedSessionId);
       formData.append("import_config_file", importFile);
       setloadscreenState(true);
-      fetch(`${API_URL}/configuration`, {
+      apiFetch("/configuration", {
         method: "POST",
         body: formData,
       })
-      .then((res) => res.json())
       .then((data) => {
         if (data.message === "success!") {
           alert("Configuration uploaded!");
@@ -7294,12 +7742,11 @@ const fileInputRef = useRef(null);
       const newPayload = {"id":"load","session_id":session}
       debounceRef.current = setTimeout(() => {  
         setloadscreenState(true)    
-        fetch(`${API_URL}/configuration`, {
+        apiFetch("/configuration", {
           method: "POST",
           body: JSON.stringify(newPayload),
           headers: {"Content-Type": "application/json",},
         })
-        .then((res) => res.json())
         .then((data) => {
           if (data.message === "success!") {     
             try{
@@ -7328,6 +7775,9 @@ const fileInputRef = useRef(null);
   };
   // --- Toggle Menu Actions ---
   const handleToggleMenu = (id) => {
+    if (id === "toggle_menu_new_source_window" && !requirePermission(PERMISSIONS.SOURCE_CREATE, "source windows")) return;
+    if (id === "toggle_menu_new_graph_window" && !requirePermission(PERMISSIONS.GRAPH_CREATE, "graph windows")) return;
+    if (id === "configurations" && !requirePermission(PERMISSIONS.CONFIG_READ, "configurations")) return;
     if(id=="toggle_menu_new_source_window"){
       handleOpenWindows("source","");
       setIsToggleMenuOpen(false)
@@ -7378,7 +7828,7 @@ const fileInputRef = useRef(null);
     <div style={{ position: 'relative', minHeight: '100vh', overflow: 'hidden' }}>
       {/*<NetworkBackground />*/}
       <div style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, zIndex: 1 }}>
-        {themeMode !== "dark" && <NavBar onNavAction={handleNavAction} />}
+        {themeMode !== "dark" && <NavBar onNavAction={handleNavAction} user={user} />}
         {!(themeMode === "dark" && windows.length === 0) && (
           <ToggleMenu
             onToggle={handleToggleMenu}
@@ -7389,6 +7839,7 @@ const fileInputRef = useRef(null);
             orientation={orientation}
             menuRef={toggleMenuRef}
             themeMode={themeMode}
+            canAccess={canAccess}
           />
         )}
         {themeMode === "dark" &&
@@ -7409,13 +7860,14 @@ const fileInputRef = useRef(null);
           )}
         <Taskbar windows={windows} isTaskBarOpen={isTaskBarOpen} activeWindowId={activeWindowId} focusWindow={handleFocusWindow} toggleAction={handleToggleMenu} isCtrlHeld={isCtrlHeld}/>
         <Configurations sessionId={sessionId} actions={handleConfigurationActions} loadscreenState={loadscreenState} setloadscreenState={setloadscreenState} toggleAction={handleToggleMenu} configurations={configurations} isConfigurationsOpen={isConfigurationsOpen}/>
-        <Settings isSettingsOpen={isSettingsOpen} toggleAction={handleToggleMenu} />
+        <Settings isSettingsOpen={isSettingsOpen} toggleAction={handleToggleMenu} actor={actor || user} roles={roles} permissions={permissions} canAccess={canAccess} apiFetch={apiFetch} sessionId={sessionId} onNotice={pushNotification} onLogout={() => handleNavAction("logout")} />
         <Main userName={userName} setSessionId={setSessionId} API_URL={API_URL} debounceRef={debounceRef} setConfigurations={setConfigurations} configurations={configurations} windows={windows} setWindows={setWindows} openWindows={handleOpenWindows} themeMode={themeMode} />
         {themeMode === "dark" && windows.length === 0 && (
           <DarkHomeMenuOverlay
             orientation={orientation}
             themeMode={themeMode}
             toggleAction={handleToggleMenu}
+            canAccess={canAccess}
           />
         )}
         {/* ----------------------
@@ -7532,6 +7984,30 @@ const fileInputRef = useRef(null);
         <NotificationStack items={notifications} onDismiss={removeNotification} />
       </div>
     </div>
+  );
+}
+
+function AuthenticatedApp() {
+  const auth = useAuth();
+
+  if (!auth.isAuthReady) {
+    return <Loadscreen loadingText="Checking authentication" />;
+  }
+
+  if (!auth.isAuthenticated) {
+    return <LoginPage onLogin={auth.login} />;
+  }
+
+  return <LinkxWorkspace />;
+}
+
+function Root() {
+  const API_URL = import.meta.env.VITE_API_URL;
+
+  return (
+    <AuthProvider apiUrl={API_URL}>
+      <AuthenticatedApp />
+    </AuthProvider>
   );
 }
 

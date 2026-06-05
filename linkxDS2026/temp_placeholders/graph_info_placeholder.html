@@ -680,6 +680,7 @@
   }
 
   window.addEventListener("message", (event) => {
+  if (event.origin !== window.location.origin) return;
     console.log("message event received:", event.data);
 
     const { action, payload } = event.data || {};

@@ -1248,7 +1248,7 @@
 										}
 									}
 
-								    window.parent.postMessage({ type: "clipboard_get" }, "*");
+								    window.parent.postMessage({ type: "clipboard_get" }, window.location.origin);
 								    let localClipboard = readClipboardFromStorage();
 
 									let graphThemeMode = document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light";
@@ -1359,6 +1359,7 @@
 								if (typeof renderVisibleGraphBatch === "function") renderVisibleGraphBatch();
 							}
 							window.addEventListener("message", e => {
+  if (e.origin !== window.location.origin) return;
 										if (e.data.type === "clipboard_data") {
 									    	localClipboard = normalizeClipboardPayload(e.data.payload);
 									    	writeClipboardToStorage(localClipboard);
@@ -2169,7 +2170,7 @@ smooth: {
 								        selects.forEach(select => select.selectedIndex = 0);
 								        window.parent.postMessage(
 										  { type: "nodeProperties", payload: "" },
-										  "*"
+										  window.location.origin
 										);
 								    }
 								});

@@ -357,6 +357,7 @@
     updateControlsVisibility();
 
     window.addEventListener("message", (event) => {
+  if (event.origin !== window.location.origin) return;
       if (event?.data?.action === "theme_mode") {
         const nextMode = event.data.payload === "dark" ? "dark" : "light";
         document.documentElement.setAttribute("data-theme", nextMode);
