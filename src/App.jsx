@@ -281,9 +281,15 @@ window.addEventListener("message", e => {
     broadcastClipboard();
   }
 });
-/** Dark + zero windows: full menu on top of the network canvas (no slide rail / hamburger). */
+/** Dark + zero windows: upload dropzone and quick actions over the workspace background. */
 function DarkHomeMenuOverlay({ toggleAction, canAccess = () => true }) {
-  const actionCards = [
+  const openUploadSource = () => {
+    if (canAccess(PERMISSIONS.SOURCE_CREATE)) {
+      toggleAction("toggle_menu_upload_source_window");
+    }
+  };
+
+  const actionItems = [
     {
       label: "New source",
       icon: "+",
@@ -292,59 +298,88 @@ function DarkHomeMenuOverlay({ toggleAction, canAccess = () => true }) {
     },
     {
       label: "New Graph",
-      icon: "+",
+      icon: "✣",
       action: "toggle_menu_new_graph_window",
       permission: PERMISSIONS.GRAPH_CREATE,
     },
     {
-      label: "Configurations",
-      icon: "⚙",
-      action: "configurations",
-      permission: PERMISSIONS.CONFIG_READ,
+      label: "Saved Graphs",
+      icon: "▣",
+      action: "saved_graphs",
+      disabled: true,
     },
     {
       label: "Settings",
-      icon: "🛠",
+      icon: "⚙",
       action: "settings",
+    },
+    {
+      label: "Configurations",
+      icon: "☷",
+      action: "configurations",
+      permission: PERMISSIONS.CONFIG_READ,
     },
   ];
 
-  const reportsUnderProcess = [
-    "STR-2026-0412 | Data harmonization",
-    "STR-2026-0412 | Data harmonization",
-    "STR-2026-0412 | Data harmonization",
-    "STR-2026-0412 | Data harmonization",
-  ];
+  const handleUploadDrop = (event) => {
+    event.preventDefault();
+    openUploadSource();
+  };
 
   return (
     <div className="dark_home_menu_overlay" role="dialog" aria-label="Linkx menu">
       <div className="dark_home_menu_overlay__dock">
-        <div className="dark_home_menu_overlay__panel dark_home_menu_overlay__panel--actions">
-          <div className="dark_home_menu_overlay__actions_row">
-            {actionCards.filter((item) => !item.permission || canAccess(item.permission)).map((item) => (
-              <button
-                type="button"
-                key={item.label}
-                className="dark_home_menu_overlay__action_card"
-                onClick={() => toggleAction(item.action)}
-              >
-                <span className="dark_home_menu_overlay__action_icon">{item.icon}</span>
-                <span className="dark_home_menu_overlay__action_label">{item.label}</span>
-              </button>
-            ))}
+        <section
+          className="dark_home_menu_overlay__upload_card"
+          aria-label="Upload files"
+          onDragOver={(event) => event.preventDefault()}
+          onDrop={handleUploadDrop}
+        >
+          <span className="dark_home_menu_overlay__upload_icon" aria-hidden="true">
+            <svg viewBox="0 0 64 64" focusable="false">
+              <path d="M30 9h4v28h-4z" />
+              <path d="M18 23 32 9l14 14-3 3-9-9v20h-4V17l-9 9z" />
+              <path d="M14 39h6v10h24V39h6v16H14z" />
+            </svg>
+          </span>
+          <button
+            type="button"
+            className="dark_home_menu_overlay__upload_button"
+            onClick={openUploadSource}
+            disabled={!canAccess(PERMISSIONS.SOURCE_CREATE)}
+          >
+            Choose Files
+          </button>
+          <div className="dark_home_menu_overlay__upload_text">
+            <span>Drag and drop here or choose files to analyze</span>
+            <small>Excel | CSV | Parquet | Json</small>
+            <small>Max size 50Mb</small>
           </div>
-        </div>
-        <div className="dark_home_menu_overlay__panel dark_home_menu_overlay__panel--reports">
-          <div className="dark_home_menu_overlay__reports_title">Reports under process</div>
-          <ul className="dark_home_menu_overlay__reports_list">
-            {reportsUnderProcess.map((entry, idx) => (
-              <li className="dark_home_menu_overlay__reports_item" key={`${entry}-${idx}`}>
-                {entry}
-              </li>
-            ))}
-          </ul>
-        </div>
+        </section>
+
+        <nav className="dark_home_menu_overlay__quick_menu" aria-label="Main actions">
+          {actionItems.filter((item) => !item.permission || canAccess(item.permission)).map((item) => (
+            <button
+              type="button"
+              key={item.label}
+              className="dark_home_menu_overlay__quick_action"
+              onClick={() => !item.disabled && toggleAction(item.action)}
+              disabled={item.disabled}
+            >
+              <span className="dark_home_menu_overlay__quick_icon" aria-hidden="true">{item.icon}</span>
+              <span className="dark_home_menu_overlay__quick_label">{item.label}</span>
+            </button>
+          ))}
+        </nav>
       </div>
+      <footer className="dark_home_menu_overlay__footer" aria-label="Application footer">
+        <p>© Linkx Web Analyzer. All rights reserved.</p>
+        <nav aria-label="Footer links">
+          {["Privacy Policy", "Terms of Service", "Contact Us", "Help"].map((label) => (
+            <button type="button" key={label}>{label}</button>
+          ))}
+        </nav>
+      </footer>
     </div>
   );
 }
@@ -443,6 +478,7 @@ function ToggleMenu({ onToggle, isToggleMenuOpen, toggleAction, isMaximized, win
       </div>
     </div>
   );
+}
 function NavBar({ onNavAction, user }) {
   const label = user?.display_name || user?.username || "User";
   return (
@@ -451,7 +487,6 @@ function NavBar({ onNavAction, user }) {
       <span onClick={() => onNavAction("about")}>About</span>
     </nav>
   );
-}
 }
 function Taskbar({ windows, isTaskBarOpen, activeWindowId, focusWindow, toggleAction, isCtrlHeld}) {
   const thumbnailBaseUrl = `${import.meta.env.BASE_URL}thumbnails`;
@@ -1295,7 +1330,17 @@ function IntegrationContractPanel() {
   return <div className="settings_admin_panel"><fieldset><legend>Integration Contract</legend><p className="settings_hint">Backend service account API details are documented for sibling-service developers.</p><a className="settings_doc_link" href={integrationDocHref} target="_blank" rel="noreferrer">Open integration_contract.md</a></fieldset><fieldset><legend>Frontend Contract Notes</legend><div className="profile_grid"><span>Auth token</span><b>Stored separately as linkx_auth_token</b><span>Linkx session</span><b>Stored separately as session</b><span>Socket auth</span><b>io(API_URL, auth token)</b><span>Forbidden handling</span><b>Central apiFetch shows 403 notices</b></div></fieldset></div>;
 }
 
-function Settings({ isSettingsOpen, toggleAction, actor, roles = [], permissions = [], canAccess, apiFetch, sessionId, onNotice, onLogout }) {
+const backgroundAnimationPreferenceKey = "linkx_enable_background_animations";
+const backgroundAnimationPreferenceEvent = "linkx_background_animation_preference_change";
+const readBackgroundAnimationPreference = () => {
+  try {
+    return localStorage.getItem(backgroundAnimationPreferenceKey) !== "false";
+  } catch (_err) {
+    return true;
+  }
+};
+
+function Settings({ isSettingsOpen, toggleAction, actor, roles = [], permissions = [], canAccess, apiFetch, sessionId, onNotice, onLogout, areBackgroundAnimationsEnabled = true, onBackgroundAnimationsChange }) {
   const [activeSettingsTab, setActiveSettingsTab] = useState("profile");
   const [rememberLayout, setRememberLayout] = useState(true);
   const [enableNotifications, setEnableNotifications] = useState(true);
@@ -1342,6 +1387,8 @@ function Settings({ isSettingsOpen, toggleAction, actor, roles = [], permissions
                 <label htmlFor="pref_remember_layout" className="sublabel">Remember window layout</label>
                 <input type="checkbox" id="pref_enable_notifications" className="input_checkbox" checked={enableNotifications} onChange={() => setEnableNotifications((prev) => !prev)} />
                 <label htmlFor="pref_enable_notifications" className="sublabel">Enable notifications</label>
+                <input type="checkbox" id="pref_enable_background_animations" className="input_checkbox" checked={areBackgroundAnimationsEnabled} onChange={(event) => onBackgroundAnimationsChange?.(event.target.checked)} />
+                <label htmlFor="pref_enable_background_animations" className="sublabel">Enable background animations</label>
               </fieldset>
             </div>
             <div className="configurations_options_panel" style={{ display: activeSettingsTab === "users" ? "block" : "none" }}>
@@ -4005,9 +4052,51 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
     )
   }
 }
-function Main({userName,setSessionId, API_URL,debounceRef,setConfigurations, configurations,windows, setWindows, openWindows, themeMode }) {
+const workspaceBackgroundVideo = import.meta.env.BASE_URL + "site_videos/background.mp4";
+const fallbackWorkspaceBackgroundVideo = "/site_videos/background.mp4";
+const workspaceBackgroundImage = import.meta.env.BASE_URL + "site_images/Linkx_background_basic.webp";
+const fallbackWorkspaceBackgroundImage = "/site_images/Linkx_background_basic.webp";
+
+function Main({userName,setSessionId, API_URL,debounceRef,setConfigurations, configurations,windows, setWindows, openWindows, themeMode, areBackgroundAnimationsEnabled }) {
   const hasRunRef = useRef(false);
   const iframeRef = useRef(null);
+  const backgroundVideoRef = useRef(null);
+  const [backgroundVideoSrc, setBackgroundVideoSrc] = useState(workspaceBackgroundVideo);
+  const [isBackgroundVideoUnavailable, setIsBackgroundVideoUnavailable] = useState(false);
+  const [backgroundImageSrc, setBackgroundImageSrc] = useState(workspaceBackgroundImage);
+  const [isBackgroundImageLoaded, setIsBackgroundImageLoaded] = useState(false);
+
+  const playBackgroundVideo = (videoElement = backgroundVideoRef.current) => {
+    if (!videoElement) return;
+    videoElement.play?.().catch(() => {});
+  };
+
+  const handleBackgroundVideoError = () => {
+    if (backgroundVideoSrc === workspaceBackgroundVideo) {
+      setBackgroundVideoSrc(fallbackWorkspaceBackgroundVideo);
+      return;
+    }
+    setIsBackgroundVideoUnavailable(true);
+  };
+
+  const handleBackgroundImageError = () => {
+    if (backgroundImageSrc === workspaceBackgroundImage) {
+      setIsBackgroundImageLoaded(false);
+      setBackgroundImageSrc(fallbackWorkspaceBackgroundImage);
+    }
+  };
+
+  const handleBackgroundImageLoad = () => {
+    setIsBackgroundImageLoaded(true);
+  };
+  useEffect(() => {
+    if (!areBackgroundAnimationsEnabled) return;
+    setIsBackgroundVideoUnavailable(false);
+    setBackgroundVideoSrc(workspaceBackgroundVideo);
+    backgroundVideoRef.current?.load?.();
+    playBackgroundVideo();
+  }, [areBackgroundAnimationsEnabled]);
+
   useEffect(() => {
     if (hasRunRef.current) return;
     hasRunRef.current = true;
@@ -4016,9 +4105,47 @@ function Main({userName,setSessionId, API_URL,debounceRef,setConfigurations, con
 
     // openWindows('chart', '',iframeRef);
   }, []);
+  const shouldUseBackgroundVideo = areBackgroundAnimationsEnabled && !isBackgroundVideoUnavailable;
+
   return (
-    <main id='main'>
-      <NetworkBackground name={userName} themeMode={themeMode} />    
+    <main id="main" className={themeMode === "dark" ? "linkx_workspace_scene" : undefined}>
+      {themeMode === "dark" ? (
+        <>
+          {shouldUseBackgroundVideo ? (
+            <video
+              key={backgroundVideoSrc}
+              ref={backgroundVideoRef}
+              className="linkx_workspace_scene_video"
+              autoPlay
+              muted
+              loop
+              playsInline
+              preload="auto"
+              aria-hidden="true"
+              onCanPlay={(event) => playBackgroundVideo(event.currentTarget)}
+              onError={handleBackgroundVideoError}
+            >
+              <source src={backgroundVideoSrc} type="video/mp4" />
+            </video>
+          ) : (
+            <img
+              key={backgroundImageSrc}
+              className={`linkx_workspace_scene_image${isBackgroundImageLoaded ? " is-loaded" : ""}`}
+              src={backgroundImageSrc}
+              alt=""
+              aria-hidden="true"
+              decoding="async"
+              fetchPriority="high"
+              loading="eager"
+              onLoad={handleBackgroundImageLoad}
+              onError={handleBackgroundImageError}
+            />
+          )}
+          <div className="linkx_workspace_scene_overlay" aria-hidden="true" />
+        </>
+      ) : (
+        <NetworkBackground name={userName} themeMode={themeMode} />
+      )}
     </main>
   );
 }
@@ -4145,6 +4272,12 @@ function LinkxWorkspace() {
     const savedMode = localStorage.getItem("linkx_theme_mode");
     return savedMode === "dark" ? "dark" : "light";
   });
+  const [areBackgroundAnimationsEnabled, setAreBackgroundAnimationsEnabled] = useState(readBackgroundAnimationPreference);
+  const handleBackgroundAnimationsChange = (enabled) => {
+    setAreBackgroundAnimationsEnabled(enabled);
+    localStorage.setItem(backgroundAnimationPreferenceKey, String(enabled));
+    window.dispatchEvent(new CustomEvent(backgroundAnimationPreferenceEvent, { detail: { enabled } }));
+  };
   const [configurations, setConfigurations] = useState({});
   const [isConfigurationsOpen, setIsConfigurationsOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -5216,7 +5349,7 @@ const fileInputRef = useRef(null);
     windowIdRef.current += 1;
     return windowIdRef.current;
   };
-  const handleCreateWindows = (sessionId, type, iframeRef) => {
+  const handleCreateWindows = (sessionId, type, iframeRef, initialContent = null) => {
     if (type === "source" && !requirePermission(PERMISSIONS.SOURCE_CREATE, "source windows")) return null;
     if (type === "graph" && !requirePermission(PERMISSIONS.GRAPH_CREATE, "graph windows")) return null;
     const id = generateWindowId();
@@ -5247,7 +5380,7 @@ const fileInputRef = useRef(null);
                       type,
                       zIndex: maxZ + 1,
                       sessionId: sessionId,
-                      selectedContent: null,
+                      selectedContent: initialContent,
                       selectedSubContent: null,
                       formData: {},
                       windowResponseI: null,
@@ -5360,12 +5493,12 @@ const fileInputRef = useRef(null);
       setZIndexCounter(prev => prev + 1);
     }    
   };
-  const handleOpenWindows = (type, link, iframeRef) => {
+  const handleOpenWindows = (type, link, iframeRef, initialContent = null) => {
     const sessionId=localStorage.getItem('session'); //Already stored session
     if (type==="source"){
       if (link===""){
         //If theres no link just creates the window
-        handleCreateWindows(sessionId,type);
+        handleCreateWindows(sessionId,type,iframeRef,initialContent);
       }
       else{
         return;
@@ -7775,10 +7908,14 @@ const fileInputRef = useRef(null);
   };
   // --- Toggle Menu Actions ---
   const handleToggleMenu = (id) => {
-    if (id === "toggle_menu_new_source_window" && !requirePermission(PERMISSIONS.SOURCE_CREATE, "source windows")) return;
+    if (["toggle_menu_new_source_window", "toggle_menu_upload_source_window"].includes(id) && !requirePermission(PERMISSIONS.SOURCE_CREATE, "source windows")) return;
     if (id === "toggle_menu_new_graph_window" && !requirePermission(PERMISSIONS.GRAPH_CREATE, "graph windows")) return;
     if (id === "configurations" && !requirePermission(PERMISSIONS.CONFIG_READ, "configurations")) return;
-    if(id=="toggle_menu_new_source_window"){
+    if(id=="toggle_menu_upload_source_window"){
+      handleOpenWindows("source", "", null, "upload_source_options");
+      setIsToggleMenuOpen(false)
+    }
+    else if(id=="toggle_menu_new_source_window"){
       handleOpenWindows("source","");
       setIsToggleMenuOpen(false)
     }
@@ -7825,12 +7962,14 @@ const fileInputRef = useRef(null);
   // Rendering
   // ------------------------
   return (
-    <div style={{ position: 'relative', minHeight: '100vh', overflow: 'hidden' }}>
+    <div
+      className={themeMode === "dark" && windows.length === 0 ? "linkx_app_shell linkx_app_shell--dark_home" : "linkx_app_shell"}
+      style={{ position: 'relative', minHeight: '100vh', overflow: 'hidden' }}
+    >
       {/*<NetworkBackground />*/}
       <div style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, zIndex: 1 }}>
         {themeMode !== "dark" && <NavBar onNavAction={handleNavAction} user={user} />}
-        {!(themeMode === "dark" && windows.length === 0) && (
-          <ToggleMenu
+        <ToggleMenu
             onToggle={handleToggleMenu}
             isToggleMenuOpen={isToggleMenuOpen}
             toggleAction={handleToggleMenu}
@@ -7840,8 +7979,7 @@ const fileInputRef = useRef(null);
             menuRef={toggleMenuRef}
             themeMode={themeMode}
             canAccess={canAccess}
-          />
-        )}
+        />
         {themeMode === "dark" &&
           !isToggleMenuOpen &&
           windows.length > 0 &&
@@ -7860,8 +7998,8 @@ const fileInputRef = useRef(null);
           )}
         <Taskbar windows={windows} isTaskBarOpen={isTaskBarOpen} activeWindowId={activeWindowId} focusWindow={handleFocusWindow} toggleAction={handleToggleMenu} isCtrlHeld={isCtrlHeld}/>
         <Configurations sessionId={sessionId} actions={handleConfigurationActions} loadscreenState={loadscreenState} setloadscreenState={setloadscreenState} toggleAction={handleToggleMenu} configurations={configurations} isConfigurationsOpen={isConfigurationsOpen}/>
-        <Settings isSettingsOpen={isSettingsOpen} toggleAction={handleToggleMenu} actor={actor || user} roles={roles} permissions={permissions} canAccess={canAccess} apiFetch={apiFetch} sessionId={sessionId} onNotice={pushNotification} onLogout={() => handleNavAction("logout")} />
-        <Main userName={userName} setSessionId={setSessionId} API_URL={API_URL} debounceRef={debounceRef} setConfigurations={setConfigurations} configurations={configurations} windows={windows} setWindows={setWindows} openWindows={handleOpenWindows} themeMode={themeMode} />
+        <Settings isSettingsOpen={isSettingsOpen} toggleAction={handleToggleMenu} actor={actor || user} roles={roles} permissions={permissions} canAccess={canAccess} apiFetch={apiFetch} sessionId={sessionId} onNotice={pushNotification} onLogout={() => handleNavAction("logout")} areBackgroundAnimationsEnabled={areBackgroundAnimationsEnabled} onBackgroundAnimationsChange={handleBackgroundAnimationsChange} />
+        <Main userName={userName} setSessionId={setSessionId} API_URL={API_URL} debounceRef={debounceRef} setConfigurations={setConfigurations} configurations={configurations} windows={windows} setWindows={setWindows} openWindows={handleOpenWindows} themeMode={themeMode} areBackgroundAnimationsEnabled={areBackgroundAnimationsEnabled} />
         {themeMode === "dark" && windows.length === 0 && (
           <DarkHomeMenuOverlay
             orientation={orientation}
