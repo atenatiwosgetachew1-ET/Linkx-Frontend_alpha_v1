@@ -7,6 +7,7 @@ import NetworkBackground from './networkAnimation.jsx'
 import { createApiClient } from './api/client.js';
 import { AuthProvider, useAuth } from './auth/AuthContext.jsx';
 import LoginPage from './auth/LoginPage.jsx';
+import { useBackgroundAnimations } from "./utils/backgroundAnimations.js";
 import {
   compactValidationErrors,
   sanitizeConnectionValue,
@@ -282,7 +283,9 @@ window.addEventListener("message", e => {
   }
 });
 /** Dark + zero windows: upload dropzone and quick actions over the workspace background. */
-function DarkHomeMenuOverlay({ toggleAction, canAccess = () => true }) {
+function DarkHomeMenuOverlay({ toggleAction, canAccess = () => true, areBackgroundAnimationsEnabled = false }) {
+  const [isUploadDragActive, setIsUploadDragActive] = useState(false);
+  const uploadDragDepthRef = useRef(0);
   const openUploadSource = () => {
     if (canAccess(PERMISSIONS.SOURCE_CREATE)) {
       toggleAction("toggle_menu_upload_source_window");
@@ -321,25 +324,68 @@ function DarkHomeMenuOverlay({ toggleAction, canAccess = () => true }) {
     },
   ];
 
+  const handleUploadDragEnter = (event) => {
+    event.preventDefault();
+    uploadDragDepthRef.current += 1;
+    setIsUploadDragActive(true);
+  };
+
+  const handleUploadDragOver = (event) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+    if (!isUploadDragActive) setIsUploadDragActive(true);
+  };
+
+  const handleUploadDragLeave = (event) => {
+    event.preventDefault();
+    uploadDragDepthRef.current = Math.max(0, uploadDragDepthRef.current - 1);
+
+    if (uploadDragDepthRef.current === 0) {
+      setIsUploadDragActive(false);
+    }
+  };
+
   const handleUploadDrop = (event) => {
     event.preventDefault();
+    uploadDragDepthRef.current = 0;
+    setIsUploadDragActive(false);
     openUploadSource();
   };
 
   return (
-    <div className="dark_home_menu_overlay" role="dialog" aria-label="Linkx menu">
+    <div
+      className="dark_home_menu_overlay"
+      data-animations-enabled={areBackgroundAnimationsEnabled ? "true" : "false"}
+      role="dialog"
+      aria-label="Linkx menu"
+    >
       <div className="dark_home_menu_overlay__dock">
         <section
-          className="dark_home_menu_overlay__upload_card"
+          className={`dark_home_menu_overlay__upload_card${isUploadDragActive ? " is-drag-active" : ""}`}
           aria-label="Upload files"
-          onDragOver={(event) => event.preventDefault()}
+          onDragEnter={handleUploadDragEnter}
+          onDragOver={handleUploadDragOver}
+          onDragLeave={handleUploadDragLeave}
           onDrop={handleUploadDrop}
         >
           <span className="dark_home_menu_overlay__upload_icon" aria-hidden="true">
             <svg viewBox="0 0 64 64" focusable="false">
-              <path d="M30 9h4v28h-4z" />
-              <path d="M18 23 32 9l14 14-3 3-9-9v20h-4V17l-9 9z" />
-              <path d="M14 39h6v10h24V39h6v16H14z" />
+              <path
+                d="M32 12v28M24 22l8-10 8 10"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="3"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              <path
+                d="M18 40v10h28V40M18 50h28"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="3"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
             </svg>
           </span>
           <button
@@ -1330,16 +1376,6 @@ function IntegrationContractPanel() {
   return <div className="settings_admin_panel"><fieldset><legend>Integration Contract</legend><p className="settings_hint">Backend service account API details are documented for sibling-service developers.</p><a className="settings_doc_link" href={integrationDocHref} target="_blank" rel="noreferrer">Open integration_contract.md</a></fieldset><fieldset><legend>Frontend Contract Notes</legend><div className="profile_grid"><span>Auth token</span><b>Stored separately as linkx_auth_token</b><span>Linkx session</span><b>Stored separately as session</b><span>Socket auth</span><b>io(API_URL, auth token)</b><span>Forbidden handling</span><b>Central apiFetch shows 403 notices</b></div></fieldset></div>;
 }
 
-const backgroundAnimationPreferenceKey = "linkx_enable_background_animations";
-const backgroundAnimationPreferenceEvent = "linkx_background_animation_preference_change";
-const readBackgroundAnimationPreference = () => {
-  try {
-    return localStorage.getItem(backgroundAnimationPreferenceKey) !== "false";
-  } catch (_err) {
-    return true;
-  }
-};
-
 function Settings({ isSettingsOpen, toggleAction, actor, roles = [], permissions = [], canAccess, apiFetch, sessionId, onNotice, onLogout, areBackgroundAnimationsEnabled = true, onBackgroundAnimationsChange }) {
   const [activeSettingsTab, setActiveSettingsTab] = useState("profile");
   const [rememberLayout, setRememberLayout] = useState(true);
@@ -1388,7 +1424,7 @@ function Settings({ isSettingsOpen, toggleAction, actor, roles = [], permissions
                 <input type="checkbox" id="pref_enable_notifications" className="input_checkbox" checked={enableNotifications} onChange={() => setEnableNotifications((prev) => !prev)} />
                 <label htmlFor="pref_enable_notifications" className="sublabel">Enable notifications</label>
                 <input type="checkbox" id="pref_enable_background_animations" className="input_checkbox" checked={areBackgroundAnimationsEnabled} onChange={(event) => onBackgroundAnimationsChange?.(event.target.checked)} />
-                <label htmlFor="pref_enable_background_animations" className="sublabel">Enable background animations</label>
+                <label htmlFor="pref_enable_background_animations" className="sublabel">Enable animations</label>
               </fieldset>
             </div>
             <div className="configurations_options_panel" style={{ display: activeSettingsTab === "users" ? "block" : "none" }}>
@@ -4272,12 +4308,7 @@ function LinkxWorkspace() {
     const savedMode = localStorage.getItem("linkx_theme_mode");
     return savedMode === "dark" ? "dark" : "light";
   });
-  const [areBackgroundAnimationsEnabled, setAreBackgroundAnimationsEnabled] = useState(readBackgroundAnimationPreference);
-  const handleBackgroundAnimationsChange = (enabled) => {
-    setAreBackgroundAnimationsEnabled(enabled);
-    localStorage.setItem(backgroundAnimationPreferenceKey, String(enabled));
-    window.dispatchEvent(new CustomEvent(backgroundAnimationPreferenceEvent, { detail: { enabled } }));
-  };
+  const { areBackgroundAnimationsEnabled, setBackgroundAnimationsEnabled } = useBackgroundAnimations();
   const [configurations, setConfigurations] = useState({});
   const [isConfigurationsOpen, setIsConfigurationsOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -7998,7 +8029,7 @@ const fileInputRef = useRef(null);
           )}
         <Taskbar windows={windows} isTaskBarOpen={isTaskBarOpen} activeWindowId={activeWindowId} focusWindow={handleFocusWindow} toggleAction={handleToggleMenu} isCtrlHeld={isCtrlHeld}/>
         <Configurations sessionId={sessionId} actions={handleConfigurationActions} loadscreenState={loadscreenState} setloadscreenState={setloadscreenState} toggleAction={handleToggleMenu} configurations={configurations} isConfigurationsOpen={isConfigurationsOpen}/>
-        <Settings isSettingsOpen={isSettingsOpen} toggleAction={handleToggleMenu} actor={actor || user} roles={roles} permissions={permissions} canAccess={canAccess} apiFetch={apiFetch} sessionId={sessionId} onNotice={pushNotification} onLogout={() => handleNavAction("logout")} areBackgroundAnimationsEnabled={areBackgroundAnimationsEnabled} onBackgroundAnimationsChange={handleBackgroundAnimationsChange} />
+        <Settings isSettingsOpen={isSettingsOpen} toggleAction={handleToggleMenu} actor={actor || user} roles={roles} permissions={permissions} canAccess={canAccess} apiFetch={apiFetch} sessionId={sessionId} onNotice={pushNotification} onLogout={() => handleNavAction("logout")} areBackgroundAnimationsEnabled={areBackgroundAnimationsEnabled} onBackgroundAnimationsChange={setBackgroundAnimationsEnabled} />
         <Main userName={userName} setSessionId={setSessionId} API_URL={API_URL} debounceRef={debounceRef} setConfigurations={setConfigurations} configurations={configurations} windows={windows} setWindows={setWindows} openWindows={handleOpenWindows} themeMode={themeMode} areBackgroundAnimationsEnabled={areBackgroundAnimationsEnabled} />
         {themeMode === "dark" && windows.length === 0 && (
           <DarkHomeMenuOverlay
@@ -8006,6 +8037,7 @@ const fileInputRef = useRef(null);
             themeMode={themeMode}
             toggleAction={handleToggleMenu}
             canAccess={canAccess}
+            areBackgroundAnimationsEnabled={areBackgroundAnimationsEnabled}
           />
         )}
         {/* ----------------------
@@ -8129,11 +8161,11 @@ function AuthenticatedApp() {
   const auth = useAuth();
 
   if (!auth.isAuthReady) {
-    return <Loadscreen loadingText="Checking authentication" />;
+    return <Loadscreen loadingText={auth.isSsoAuthenticating ? "Completing single sign-on" : "Checking authentication"} />;
   }
 
   if (!auth.isAuthenticated) {
-    return <LoginPage onLogin={auth.login} />;
+    return <LoginPage onLogin={auth.login} ssoError={auth.ssoError} isSsoAuthenticating={auth.isSsoAuthenticating} />;
   }
 
   return <LinkxWorkspace />;
@@ -8141,9 +8173,13 @@ function AuthenticatedApp() {
 
 function Root() {
   const API_URL = import.meta.env.VITE_API_URL;
+  const SSO_ALLOWED_ORIGINS = [
+    ...String(import.meta.env.VITE_SSO_ALLOWED_ORIGINS || "").split(","),
+    ...String(import.meta.env.VITE_HEADER_ALLOWED_ORIGINS || "").split(","),
+  ].map((item) => item.trim()).filter(Boolean);
 
   return (
-    <AuthProvider apiUrl={API_URL}>
+    <AuthProvider apiUrl={API_URL} allowedSsoOrigins={SSO_ALLOWED_ORIGINS}>
       <AuthenticatedApp />
     </AuthProvider>
   );

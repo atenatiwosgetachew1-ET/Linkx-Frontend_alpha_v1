@@ -346,7 +346,7 @@ body{
   display: block;
   top: 0;
   height: 100%;
-  width: 15vw;
+  width: 15.2vw;
   //padding: 0.5%;
   z-index: 9999;
   border-bottom: 0.1px solid var(--panel-border);
@@ -1276,7 +1276,8 @@ body{
   width: 100%;
   bottom: 0vh;
   overflow: hidden;
-  background-image: linear-gradient(rgba(29,95,159,0.1),rgba(29,95,159,0.1));
+  //background-image: linear-gradient(rgba(29,95,159,0.1),rgba(29,95,159,0.1));
+  background-color: #0a1623b8;
 }
 
 #toggle_menu #toggle_side_list .toggle_side_list_container .toogle_side_list_items ul .toogle_side_list_options_container li {
@@ -1369,7 +1370,7 @@ body{
 
 
 [data-theme="dark"] #toggle_menu {
-  background-color: var(--panel-bg);
+  background-image: linear-gradient(270deg, #0d1c30 0%, #060c1300 1%);
   filter: none;
 }
 
@@ -1384,7 +1385,7 @@ body{
 }
 
 [data-theme="dark"] #toggle_menu #toggle_side_list {
-  background-color: var(--panel-bg) !important;
+  background-color: #0a0f165e !important;
   backdrop-filter: blur(10px);
 }
 
@@ -1419,7 +1420,7 @@ body{
 
 [data-theme="dark"] #toggle_menu #toggle_side_list .toggle_side_list_container .toogle_side_list_items ul .toogle_side_list_options_container {
   background-image: none !important;
-  background-color: rgba(0, 0, 0, 0.2) !important;
+  background-color: #0a1623b8 !important;
 }
 
 [data-theme="dark"] #toggle_menu #toggle_side_list .toggle_side_list_container .toogle_side_list_items ul .toogle_side_list_options_container li .toggle_btn_conatiner {
@@ -6539,17 +6540,31 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   padding: 42px 28px;
   text-align: center;
   color: #e9f2f7;
+  transition: background-color 160ms ease, box-shadow 160ms ease;
+}
+[data-theme="dark"] .dark_home_menu_overlay__upload_card.is-drag-active {
+  background: radial-gradient(rgba(0, 0, 0, 0.2), rgba(0, 0, 0, 0.2));
+  backdrop-filter: blur(4px);
+  border: 1px dashed rgb(173 194 214 / 33%);
 }
 [data-theme="dark"] .dark_home_menu_overlay__upload_icon {
   display: inline-flex;
   width: 92px;
   height: 92px;
   color: #ffffff;
+  filter: drop-shadow(0 14px 24px rgba(0, 0, 0, 0.28));
 }
 [data-theme="dark"] .dark_home_menu_overlay__upload_icon svg {
   width: 100%;
   height: 100%;
   fill: currentColor;
+}
+[data-theme="dark"] .dark_home_menu_overlay[data-animations-enabled="true"] .dark_home_menu_overlay__upload_icon {
+  animation: uploadIconFloat 2600ms ease-in-out infinite;
+}
+@keyframes uploadIconFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
 }
 [data-theme="dark"] .dark_home_menu_overlay__upload_button {
   min-width: 192px;

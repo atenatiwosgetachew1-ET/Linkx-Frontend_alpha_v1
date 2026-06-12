@@ -1,6 +1,8 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
 const AUTH_TOKEN_KEY = "linkx_auth_token";
+const SSO_CODE_PARAM = "sso_code";
+const SSO_STATE_PARAM = "sso_state";
 const AuthContext = createContext(null);
 
 const normalizeUser = (value) => {
@@ -33,10 +35,39 @@ const authRequest = async (apiUrl, path, options = {}) => {
   return data;
 };
 
-export function AuthProvider({ apiUrl, children }) {
+const normalizeAllowedOrigins = (origins = []) => (
+  Array.isArray(origins) ? origins : String(origins || "").split(",")
+).map((origin) => String(origin || "").trim()).filter(Boolean);
+
+const isTrustedSsoOrigin = (event, allowedOrigins = []) => {
+  const origin = String(event?.origin || "");
+  return origin && (origin === window.location.origin || allowedOrigins.includes(origin));
+};
+
+const readSsoParams = () => {
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get(SSO_CODE_PARAM) || "";
+  const state = params.get(SSO_STATE_PARAM) || params.get("state") || "";
+  return { code, state };
+};
+
+const clearSsoParams = () => {
+  const url = new URL(window.location.href);
+  url.searchParams.delete(SSO_CODE_PARAM);
+  url.searchParams.delete(SSO_STATE_PARAM);
+  url.searchParams.delete("state");
+  url.searchParams.delete("sso_error");
+  window.history.replaceState({}, document.title, `${url.pathname}${url.search}${url.hash}`);
+};
+
+export function AuthProvider({ apiUrl, allowedSsoOrigins = [], children }) {
   const [token, setToken] = useState(() => localStorage.getItem(AUTH_TOKEN_KEY) || "");
   const [user, setUser] = useState(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
+  const [isSsoAuthenticating, setIsSsoAuthenticating] = useState(false);
+  const [ssoError, setSsoError] = useState("");
+
+  const trustedSsoOrigins = useMemo(() => normalizeAllowedOrigins(allowedSsoOrigins), [allowedSsoOrigins]);
 
   const applyAuth = useCallback((nextToken, nextUser) => {
     const normalizedUser = normalizeUser(nextUser);
@@ -50,6 +81,7 @@ export function AuthProvider({ apiUrl, children }) {
     localStorage.setItem(AUTH_TOKEN_KEY, nextToken);
     setToken(nextToken);
     setUser(normalizedUser);
+    setSsoError("");
   }, []);
 
   const logout = useCallback(() => {
@@ -67,6 +99,35 @@ export function AuthProvider({ apiUrl, children }) {
     const auth = parseAuthResponse(data);
     applyAuth(auth.token, auth.user);
     return auth.user;
+  }, [apiUrl, applyAuth]);
+
+  const exchangeSsoCode = useCallback(async (code, state = "") => {
+    const cleanCode = String(code || "").trim();
+    const cleanState = String(state || "").trim();
+    if (!cleanCode) return null;
+
+    setIsSsoAuthenticating(true);
+    setSsoError("");
+    try {
+      const data = await authRequest(apiUrl, "/auth/sso/exchange", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          code: cleanCode,
+          state: cleanState,
+          client: "linkx_frontend",
+          redirect_uri: `${window.location.origin}${window.location.pathname}`,
+        }),
+      });
+      const auth = parseAuthResponse(data);
+      applyAuth(auth.token, auth.user);
+      return auth.user;
+    } catch (err) {
+      setSsoError(err?.message || "Single sign-on failed.");
+      throw err;
+    } finally {
+      setIsSsoAuthenticating(false);
+    }
   }, [apiUrl, applyAuth]);
 
   const verifyToken = useCallback(async (incomingToken) => {
@@ -90,6 +151,19 @@ export function AuthProvider({ apiUrl, children }) {
     let cancelled = false;
 
     const restoreAuth = async () => {
+      const sso = readSsoParams();
+      if (sso.code) {
+        try {
+          await exchangeSsoCode(sso.code, sso.state);
+        } catch {
+          if (!cancelled) logout();
+        } finally {
+          clearSsoParams();
+          if (!cancelled) setIsAuthReady(true);
+        }
+        return;
+      }
+
       if (!token) {
         setIsAuthReady(true);
         return;
@@ -115,6 +189,36 @@ export function AuthProvider({ apiUrl, children }) {
     };
   }, [apiUrl]);
 
+  useEffect(() => {
+    const handleSsoMessage = async (event) => {
+      const data = event?.data || {};
+      const messageType = data.type || data.action || "";
+      if (!["linkx_sso", "linkx_sso_code", "authenticate"].includes(messageType)) return;
+      if (!isTrustedSsoOrigin(event, trustedSsoOrigins)) return;
+
+      const payload = data.payload && typeof data.payload === "object" ? data.payload : data;
+      const code = payload.sso_code || payload.code || "";
+      const state = payload.sso_state || payload.state || "";
+      const incomingToken = payload.token || "";
+
+      try {
+        const verifiedUser = code ? await exchangeSsoCode(code, state) : await verifyToken(incomingToken);
+        event.source?.postMessage(
+          { type: "linkx_sso_result", payload: { ok: !!verifiedUser, username: verifiedUser?.username || null } },
+          event.origin
+        );
+      } catch (err) {
+        event.source?.postMessage(
+          { type: "linkx_sso_result", payload: { ok: false, message: err?.message || "Single sign-on failed." } },
+          event.origin
+        );
+      }
+    };
+
+    window.addEventListener("message", handleSsoMessage);
+    return () => window.removeEventListener("message", handleSsoMessage);
+  }, [exchangeSsoCode, trustedSsoOrigins, verifyToken]);
+
   const roles = user?.roles || [];
   const permissions = user?.permissions || [];
 
@@ -126,12 +230,15 @@ export function AuthProvider({ apiUrl, children }) {
     permissions,
     isAuthenticated: Boolean(token && user),
     isAuthReady,
+    isSsoAuthenticating,
+    ssoError,
     login,
     logout,
     verifyToken,
+    exchangeSsoCode,
     hasRole: (role) => roles.includes(role),
     hasPermission: (permission) => permissions.includes(permission),
-  }), [user, token, roles, permissions, isAuthReady, login, logout, verifyToken]);
+  }), [user, token, roles, permissions, isAuthReady, isSsoAuthenticating, ssoError, login, logout, verifyToken, exchangeSsoCode]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

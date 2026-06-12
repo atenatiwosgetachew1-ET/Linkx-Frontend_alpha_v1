@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useBackgroundAnimations } from "../utils/backgroundAnimations.js";
 import {
   compactValidationErrors,
   sanitizeIdentifier,
@@ -11,19 +12,10 @@ const loginBackgroundVideo = import.meta.env.BASE_URL + "site_videos/background.
 const fallbackLoginBackgroundVideo = "/site_videos/background.mp4";
 const loginBackgroundImage = import.meta.env.BASE_URL + "site_images/Linkx_background_basic.webp";
 const fallbackLoginBackgroundImage = "/site_images/Linkx_background_basic.webp";
-const backgroundAnimationPreferenceKey = "linkx_enable_background_animations";
-const backgroundAnimationPreferenceEvent = "linkx_background_animation_preference_change";
-const readBackgroundAnimationPreference = () => {
-  try {
-    return localStorage.getItem(backgroundAnimationPreferenceKey) !== "false";
-  } catch (_err) {
-    return true;
-  }
-};
 const loginLogo = import.meta.env.BASE_URL + "site_images/Linkx square Icon (256x256).png";
 const genericLoginError = "Unable to sign in at this time. Please try again later.";
 
-export default function LoginPage({ onLogin }) {
+export default function LoginPage({ onLogin, ssoError = "", isSsoAuthenticating = false }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -33,7 +25,7 @@ export default function LoginPage({ onLogin }) {
   const [isVideoUnavailable, setIsVideoUnavailable] = useState(false);
   const [imageSrc, setImageSrc] = useState(loginBackgroundImage);
   const [isImageLoaded, setIsImageLoaded] = useState(false);
-  const [areBackgroundAnimationsEnabled, setAreBackgroundAnimationsEnabled] = useState(readBackgroundAnimationPreference);
+  const { areBackgroundAnimationsEnabled } = useBackgroundAnimations();
 
   const playBackgroundVideo = (videoElement = videoRef.current) => {
     if (!videoElement) return;
@@ -63,22 +55,6 @@ export default function LoginPage({ onLogin }) {
     playBackgroundVideo();
   }, [areBackgroundAnimationsEnabled]);
 
-  useEffect(() => {
-    const syncBackgroundPreference = (event) => {
-      const enabled = typeof event?.detail?.enabled === "boolean"
-        ? event.detail.enabled
-        : readBackgroundAnimationPreference();
-      setAreBackgroundAnimationsEnabled(enabled);
-    };
-
-    window.addEventListener("storage", syncBackgroundPreference);
-    window.addEventListener(backgroundAnimationPreferenceEvent, syncBackgroundPreference);
-
-    return () => {
-      window.removeEventListener("storage", syncBackgroundPreference);
-      window.removeEventListener(backgroundAnimationPreferenceEvent, syncBackgroundPreference);
-    };
-  }, []);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -174,9 +150,9 @@ export default function LoginPage({ onLogin }) {
               required
             />
           </label>
-          {error && <div className="linkx_login_error">{error}</div>}
-          <button type="submit" disabled={isSubmitting}>
-            {isSubmitting ? "Signing in..." : "Sign in"}
+          {(error || ssoError) && <div className="linkx_login_error">{error || ssoError}</div>}
+          <button type="submit" disabled={isSubmitting || isSsoAuthenticating}>
+            {isSsoAuthenticating ? "Completing SSO..." : isSubmitting ? "Signing in..." : "Sign in"}
           </button>
         </form>
       </section>
