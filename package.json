@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "rm -f linkxDS2026/assets/index-*.js linkxDS2026/assets/index-*.css && vite build",
     "lint": "eslint .",
     "preview": "vite preview"
   },
