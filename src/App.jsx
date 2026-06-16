@@ -556,7 +556,7 @@ function Taskbar({ windows, isTaskBarOpen, activeWindowId, focusWindow, toggleAc
     </div>
   );
 }
-function Configurations({sessionId,actions,loadscreenState,setloadscreenState,toggleAction,configurations,isConfigurationsOpen}) {
+function Configurations({sessionId,actions,loadscreenState,setloadscreenState,toggleAction,configurations,isConfigurationsOpen,apiFetch,canAccess}) {
   const [remote, setRemote] = useState(false);
   const [automation, setAutomation] = useState(false);
   const [parsedConfig, setParsedConfig] = useState(null);
@@ -649,6 +649,7 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
             <button type="button" className={activeConfigTab === "connections" ? "active" : ""} onClick={() => setActiveConfigTab("connections")}>Connections</button>
             <button type="button" className={activeConfigTab === "tools" ? "active" : ""} onClick={() => setActiveConfigTab("tools")}>Tools</button>
             <button type="button" className={activeConfigTab === "rules" ? "active" : ""} onClick={() => setActiveConfigTab("rules")}>Rules</button>
+            <button type="button" className={activeConfigTab === "activity" ? "active" : ""} onClick={() => setActiveConfigTab("activity")}>Activity Log</button>
           </div>
 
           <form
@@ -660,6 +661,8 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
               actions("save", formData);
             }}
           >
+            <ActivityAuditPanel apiFetch={apiFetch} canAccess={canAccess} isActive={activeConfigTab === "activity"} />
+
             {/* ───────── Left Panel ───────── */}
             <div className="configurations_options_panel" style={{ display: activeConfigTab === "connections" || activeConfigTab === "system" ? "block" : "none" }}>
               {/* Broker Configuration */}
@@ -1025,7 +1028,7 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
               </fieldset>
             </div>
           </form>
-          <div className="configurations_actions_bar">
+          <div className="configurations_actions_bar" style={{ display: activeConfigTab === "activity" ? "none" : "flex" }}>
             <button className="action_btns" type="button" onClick={() => actions("load_default")} title="Reset">⟳ Reset</button>
             <a
               className="action_btns"
@@ -1060,6 +1063,123 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+const formatAuditDate = (value) => {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleString();
+};
+
+const normalizeCleanupAuditResults = (data) => {
+  const results = data?.results || {};
+  const items = Array.isArray(results.items) ? results.items : [];
+  return {
+    items,
+    total: Number(results.total) || items.length,
+    limit: Number(results.limit) || 20,
+    offset: Number(results.offset) || 0,
+  };
+};
+
+function ActivityAuditPanel({ apiFetch, canAccess, isActive }) {
+  const [filters, setFilters] = useState({ session_id: "", cleanup_type: "", status: "", limit: "20" });
+  const [audit, setAudit] = useState({ items: [], total: 0, limit: 20, offset: 0 });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const loadedRef = useRef(false);
+  const canManageUsers = typeof canAccess === "function" && canAccess("users:manage");
+
+  const updateFilter = (name, value) => {
+    setFilters((prev) => ({ ...prev, [name]: sanitizeText(value, { maxLength: 120 }) }));
+  };
+
+  const loadAudit = useCallback(async (nextOffset = 0, nextFilters = filters) => {
+    if (!apiFetch || !canManageUsers) return;
+    const limit = Math.max(1, Math.min(Number.parseInt(nextFilters.limit, 10) || 20, 100));
+    const offset = Math.max(0, Number.parseInt(nextOffset, 10) || 0);
+    const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+    ["session_id", "cleanup_type", "status"].forEach((key) => {
+      const value = String(nextFilters[key] || "").trim();
+      if (value) params.set(key, value);
+    });
+
+    setLoading(true);
+    setError("");
+    try {
+      const data = await apiFetch("/admin/audit/cleanup?" + params.toString(), { method: "GET" });
+      setAudit(normalizeCleanupAuditResults(data));
+      loadedRef.current = true;
+    } catch (err) {
+      setError(err?.message || "Could not load cleanup activity logs.");
+    } finally {
+      setLoading(false);
+    }
+  }, [apiFetch, canManageUsers, filters]);
+
+  useEffect(() => {
+    if (!isActive || !canManageUsers || loadedRef.current) return;
+    loadAudit(0, filters);
+  }, [isActive, canManageUsers, loadAudit, filters]);
+
+  if (!isActive) return null;
+
+  if (!canManageUsers) {
+    return (
+      <div className="configurations_options_panel cleanup_audit_panel">
+        <fieldset>
+          <legend>Activity Log</legend>
+          <p className="settings_hint">You need users:manage to view cleanup activity logs.</p>
+        </fieldset>
+      </div>
+    );
+  }
+
+  const canGoPrev = audit.offset > 0 && !loading;
+  const canGoNext = audit.offset + audit.items.length < audit.total && !loading;
+
+  return (
+    <div className="configurations_options_panel cleanup_audit_panel">
+      <fieldset>
+        <legend>Activity Log</legend>
+        <div className="cleanup_audit_filters">
+          <label>Session ID<input type="text" value={filters.session_id} onChange={(event) => updateFilter("session_id", event.target.value)} placeholder="1_895258" /></label>
+          <label>Cleanup type<input type="text" value={filters.cleanup_type} onChange={(event) => updateFilter("cleanup_type", event.target.value)} placeholder="window" /></label>
+          <label>Status<input type="text" value={filters.status} onChange={(event) => updateFilter("status", event.target.value)} placeholder="succeeded" /></label>
+          <label>Limit<input type="number" min="1" max="100" value={filters.limit} onChange={(event) => updateFilter("limit", event.target.value)} /></label>
+        </div>
+        <div className="cleanup_audit_actions">
+          <button type="button" className="action_btns" onClick={() => loadAudit(0, filters)} disabled={loading}>{loading ? "Loading..." : "Refresh"}</button>
+          <button type="button" className="action_btns" onClick={() => loadAudit(Math.max(0, audit.offset - audit.limit), filters)} disabled={!canGoPrev}>Prev</button>
+          <button type="button" className="action_btns" onClick={() => loadAudit(audit.offset + audit.limit, filters)} disabled={!canGoNext}>Next</button>
+          <span>{audit.total ? audit.offset + 1 : 0}-{audit.offset + audit.items.length} of {audit.total}</span>
+        </div>
+        {error && <div className="settings_error">{error}</div>}
+        <div className="cleanup_audit_table_wrap">
+          <table className="cleanup_audit_table">
+            <thead>
+              <tr><th>Created</th><th>Session</th><th>Type</th><th>Status</th><th>Owner</th><th>Artifacts</th><th>Error</th></tr>
+            </thead>
+            <tbody>
+              {audit.items.length === 0 && !loading ? (
+                <tr><td colSpan="7">No cleanup activity found.</td></tr>
+              ) : audit.items.map((item) => (
+                <tr key={item.id || item.created_at || item.session_id}>
+                  <td>{formatAuditDate(item.created_at || item.started_at)}</td>
+                  <td title={item.session_id || ""}>{item.session_id || "-"}</td>
+                  <td>{item.cleanup_type || "-"}</td>
+                  <td><span className={'cleanup_audit_status cleanup_audit_status_' + String(item.status || "unknown").toLowerCase()}>{item.status || "unknown"}</span></td>
+                  <td>{item.session?.owner_user_id ?? "-"}</td>
+                  <td>{item.artifacts?.deleted_count ?? 0}/{item.artifacts?.count ?? 0}</td>
+                  <td title={item.error_message || ""}>{item.error_message || "-"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </fieldset>
     </div>
   );
 }
@@ -4426,11 +4546,16 @@ const fileInputRef = useRef(null);
   //   console.log("orientation:",orientation)
   // }, [orientation]);
 
+  const hasOpenWindows = windows.length > 0;
+  const hasVisibleWorkspacePanel = hasOpenWindows || isConfigurationsOpen || isSettingsOpen;
+  const showDarkHomeOverlay = themeMode === "dark" && !hasVisibleWorkspacePanel;
+  const showDarkFloatingMenu = themeMode === "dark" && !isToggleMenuOpen && hasOpenWindows && orientation === "windows";
+
   useEffect(() => {
-    if (themeMode === "dark" && windows.length === 0) {
+    if (showDarkHomeOverlay) {
       setIsToggleMenuOpen(false);
     }
-  }, [themeMode, windows.length]);
+  }, [showDarkHomeOverlay]);
 
   useEffect(() => {
     if (!isToggleMenuOpen) return;
@@ -5666,8 +5791,41 @@ const fileInputRef = useRef(null);
 
   openStrReportGraphAndBindRef.current = openStrReportGraphAndBind;
 
+  const resolveSourceWindowClosePayload = (windowState, id) => {
+    if (windowState?.type !== "source") return null;
+
+    const rawId = String(id ?? windowState.id ?? "");
+    const [rawWindowId, ...sessionParts] = rawId.split("_");
+    const parsedWindowId = Number.parseInt(rawWindowId, 10);
+    const resolvedSessionId = String(windowState.sessionId ?? sessionParts.join("_") ?? "").trim();
+
+    if (!Number.isFinite(parsedWindowId) || !resolvedSessionId) return null;
+
+    return {
+      id: "close_source_window",
+      session_id: resolvedSessionId,
+      window_id: parsedWindowId,
+      reason: "user_closed_window",
+    };
+  };
+
+  const requestSourceWindowCleanup = (windowState, id) => {
+    const payload = resolveSourceWindowClosePayload(windowState, id);
+    if (!payload) return;
+
+    apiFetch("/close_source_window", {
+      method: "POST",
+      body: payload,
+    }).catch((err) => {
+      console.error("close_source_window failed:", err, "payload:", payload);
+    });
+  };
+
     // --- Bring window to front ---
   const handleCloseWindow = (id) => {
+    const closingWindowSnapshot = windowsRef.current.find(w => w.id === id);
+    requestSourceWindowCleanup(closingWindowSnapshot, id);
+
     setWindows(prev => {
       const closingWindow = prev.find(w => w.id === id);
       const newWindows = prev.filter(w => w.id !== id);
@@ -5698,7 +5856,7 @@ const fileInputRef = useRef(null);
           }
         }
       }
-      if (socket && socket.connected && closingWindow.type == "source") {
+      if (socket && socket.connected && closingWindow?.type == "source") {
         socket.emit("log_stream_unplug", {filename: closingWindow.sourceSessionLogFile,session_id: id});
         socket.emit("graph_status_unsubscribe", { session_id: id });
         graphStatusSubscribedSessionsRef.current.delete(String(id));
@@ -7994,7 +8152,7 @@ const fileInputRef = useRef(null);
   // ------------------------
   return (
     <div
-      className={themeMode === "dark" && windows.length === 0 ? "linkx_app_shell linkx_app_shell--dark_home" : "linkx_app_shell"}
+      className={showDarkHomeOverlay ? "linkx_app_shell linkx_app_shell--dark_home" : "linkx_app_shell"}
       style={{ position: 'relative', minHeight: '100vh', overflow: 'hidden' }}
     >
       {/*<NetworkBackground />*/}
@@ -8011,10 +8169,7 @@ const fileInputRef = useRef(null);
             themeMode={themeMode}
             canAccess={canAccess}
         />
-        {themeMode === "dark" &&
-          !isToggleMenuOpen &&
-          windows.length > 0 &&
-          orientation === "windows" && (
+        {showDarkFloatingMenu && (
             <div
               className="dark_float_menu_handle"
               ref={darkFloatMenuToggleRef}
@@ -8028,10 +8183,10 @@ const fileInputRef = useRef(null);
             </div>
           )}
         <Taskbar windows={windows} isTaskBarOpen={isTaskBarOpen} activeWindowId={activeWindowId} focusWindow={handleFocusWindow} toggleAction={handleToggleMenu} isCtrlHeld={isCtrlHeld}/>
-        <Configurations sessionId={sessionId} actions={handleConfigurationActions} loadscreenState={loadscreenState} setloadscreenState={setloadscreenState} toggleAction={handleToggleMenu} configurations={configurations} isConfigurationsOpen={isConfigurationsOpen}/>
+        <Configurations sessionId={sessionId} actions={handleConfigurationActions} loadscreenState={loadscreenState} setloadscreenState={setloadscreenState} toggleAction={handleToggleMenu} configurations={configurations} isConfigurationsOpen={isConfigurationsOpen} apiFetch={apiFetch} canAccess={canAccess}/>
         <Settings isSettingsOpen={isSettingsOpen} toggleAction={handleToggleMenu} actor={actor || user} roles={roles} permissions={permissions} canAccess={canAccess} apiFetch={apiFetch} sessionId={sessionId} onNotice={pushNotification} onLogout={() => handleNavAction("logout")} areBackgroundAnimationsEnabled={areBackgroundAnimationsEnabled} onBackgroundAnimationsChange={setBackgroundAnimationsEnabled} />
         <Main userName={userName} setSessionId={setSessionId} API_URL={API_URL} debounceRef={debounceRef} setConfigurations={setConfigurations} configurations={configurations} windows={windows} setWindows={setWindows} openWindows={handleOpenWindows} themeMode={themeMode} areBackgroundAnimationsEnabled={areBackgroundAnimationsEnabled} />
-        {themeMode === "dark" && windows.length === 0 && (
+        {showDarkHomeOverlay && (
           <DarkHomeMenuOverlay
             orientation={orientation}
             themeMode={themeMode}
