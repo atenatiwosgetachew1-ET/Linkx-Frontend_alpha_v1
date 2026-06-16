@@ -6345,6 +6345,36 @@ const fileInputRef = useRef(null);
         if (menuId === "batch_input" && action === "update") {
           newContent = "batch_input";
           newSubContent = "batch_input_form_pageI";
+          const isSwitchingFromRealtime = w.selectedContent === "real_time_input";
+
+          if (isSwitchingFromRealtime) {
+            return {
+              ...w,
+              loadscreenState: false,
+              loadscreenText: null,
+              selectedContent: newContent,
+              selectedSubContent: newSubContent,
+              windowResponseI: null,
+              formToolResponse: null,
+              sourceAddressType: "broker",
+              sourceAddressText: "",
+              sourceStorageText: "",
+              sourceTopicText: "",
+              batchFilesCollection: [],
+              batchFilesSearchResults: null,
+              batchFilesSearchMoreFiles: true,
+              searchResultsVisible: null,
+              searchPlaceholder: "",
+              batchFilesDataframeInfoI: null,
+              batchFilesDataframeInfoII: null,
+              batchFilesDataframeActionValue: null,
+              batchFilesDataframeSourceValue: null,
+              batchFilesDataframeTargetValue: null,
+              batchFilesDataframeRelationshipValue: null,
+              batchFilesDataframeRuleValue: null,
+            };
+          }
+
           //setting page for batch (default)
           if (windowResponseI === "Dataset uploaded!"){
             setWindows(prev =>
