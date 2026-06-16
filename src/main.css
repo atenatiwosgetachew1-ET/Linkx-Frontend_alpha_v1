@@ -3421,8 +3421,12 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 	color:#AAA;
 	resize: none;
 	border: none;
-	font-size: calc(0.4vh + 0.5vw);
-	line-height: 1vh;
+	font-family: Consolas, "Courier New", monospace;
+	font-size: calc(.42vh + .4vw);
+	line-height: 1;
+	padding: 0.9vh 0.75vw;
+	white-space: pre-wrap;
+	word-break: normal;
 	cursor: default;
 }
 .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_form_fieldset .batch_files_dataframe_filter_log_textarea:focus{
