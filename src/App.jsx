@@ -2352,6 +2352,8 @@ function DraggableWindow({ children, initialPos = { top: 0, left: 0 }, orientati
 }
 function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText, loadscreenState, isSideBarMenuOpen, orientation, configurations, windowAction, graphAction, chartAction, selectedContent, selectedSubContent, selectedNodes, selectedEdges,windowResponseI,windowResponseII,windowRealtimeResponseI,formToolResponse,formRealtimeToolResponse,sourceAddressType,sourceAddressText,sourceStorageText,sourceTopicText,sourceRealtimeAddressType,sourceRealtimeAddressText,sourceRealtimeTopicText,batchFilesSearchHybrid,batchFilesSearchHybridQuery,batchFilesSearchStrict,searchText,batchFilesSearchLimit,batchFilesSearchResults,batchFilesSearchMoreFiles,searchResultsVisible,searchPlaceholder,batchFilesCollection, batchFilesDataframeInfoI, batchFilesDataframeInfoII, batchFilesDataframeActionValue, batchFilesDataframeSourceValue, batchFilesDataframeTargetValue, batchFilesDataframeRelationshipValue, batchFilesDataframeRuleValue, sourceSessionLog, sourceStreams , sourceStreamListener, fileInputRef, textareaRefs, onClose, onMove, zIndex, onFocus, covered, graphLink, graphLinkId, graphLinkSource, graphStatus, activeGraph, chartLink, chartLinkId, activechart, iframeRef, iframeFilters, iframeSettings, iframeSearch, iframePerformanceMood, selectedPropertyTab, filterPropertyKeys, filterResults, nodeProperties, BASE_URL, searchButtonRef, resultContainerRef, requestConfirmation }) {
   const canCancelGraphStaging = type === "graph" && typeof loadscreenText === "string" && loadscreenText.toLowerCase().startsWith("staging graph");
+  const isRealtimeSourceWorkflow = selectedContent === "real_time_input";
+  const isSharedSourceWorkflowPage = selectedContent === "batch_input" || (isRealtimeSourceWorkflow && String(selectedSubContent || "").startsWith("batch_input_form_page"));
   if (type === "source") {
     return (
       <DraggableWindow initialPos={{ top: 0, left: 0}} zIndex={zIndex} orientation={orientation}>
@@ -2444,7 +2446,7 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
                     </div>
                   </div>
                 )}
-                {selectedContent === "real_time_input" && (
+                {selectedContent === "real_time_input" && selectedSubContent === "real_time_input_form_pageI" && (
                   <div className="live_source_options_container">
                     <div className="" style={{fontSize:'2.5vh',borderBottom:'1px solid var(--input-border)', color:'var(--app-text)', padding:'2vh',textAlign:'left',paddingLeft:'0vw',margin:'1.5vw',marginBottom:0}}>Pick a source input</div>
                     <div className="live_source_option_passive" style={{position:'absolute',top:'calc( 3vh - 3vw)',left:'0vw'}}>
@@ -2690,16 +2692,16 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
                     </div>
                   </div>
                 )}
-                {selectedContent === "batch_input" && (
+                {isSharedSourceWorkflowPage && (
                   <div className="live_source_options_container">
                     <div className="" style={{fontSize:'2.5vh',borderBottom:'1px solid var(--input-border)', color:'var(--app-text)', padding:'2vh',textAlign:'left',paddingLeft:'0vw',margin:'1.5vw',marginBottom:0}}>Pick a source input</div>
                     <div className="live_source_option_passive" style={{position:'absolute',top:'calc( 3vh - 3vw)',left:'0vw'}}>
                       <span className="live_source_option_icon">
-                        <Icons id="window_live_source_option" type="batch_input" condition="True"/> 
+                        <Icons id="window_live_source_option" type={isRealtimeSourceWorkflow ? "realTime_input" : "batch_input"} condition="True"/> 
                       </span>
                       <span className="live_source_option_details">
-                        <label style={sourceOptionTitleStyle}>Batch input</label>
-                        <p style={sourceOptionBodyStyle}>Connect to a Broker/API or upload datasets and fetch for data in batch.</p>
+                        <label style={sourceOptionTitleStyle}>{isRealtimeSourceWorkflow ? "Real-time input" : "Batch input"}</label>
+                        <p style={sourceOptionBodyStyle}>{isRealtimeSourceWorkflow ? "Connect to a Broker/API and consume data as Real-time messages." : "Connect to a Broker/API or upload datasets and fetch for data in batch."}</p>
                       </span>
                     </div>
                     <div className="batch_connection_form_container">
@@ -3434,7 +3436,10 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
                     <div className="batch_connection_form_pager_container">
                       <button onClick={() => {
                           if (selectedSubContent === "batch_input_form_pageII"){
-                            windowAction(id, "batch_input_form_swap_passive", "page_I",null);
+                            windowAction(id, "batch_input_form_swap_passive", "page_I", isRealtimeSourceWorkflow ? { mode: "realtime" } : null);
+                          }
+                          else if (selectedSubContent === "batch_input_form_pageIII" && isRealtimeSourceWorkflow){
+                            windowAction(id, "batch_input_form_swap_passive", "page_I", { mode: "realtime" });
                           }
                           else if (selectedSubContent === "batch_input_form_pageIII" && windowResponseI === "Connection established!"){
                             windowAction(id, "batch_input_form_swap_passive", "page_II",null);
@@ -3443,7 +3448,7 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
                             windowAction(id, "batch_input_form_swap_passive", "page_I",null);
                           }
                           else if (selectedSubContent === "batch_input_form_pageIV"){
-                            windowAction(id, "batch_input_form_swap_passive", "page_III",null);
+                            windowAction(id, "batch_input_form_swap_passive", "page_III", isRealtimeSourceWorkflow ? { mode: "realtime" } : null);
                           }
                           else{
                             return null;
@@ -6226,6 +6231,8 @@ const fileInputRef = useRef(null);
         let windowResponseI = w.windowResponseI 
         let windowRealtimeResponseI = w.windowRealtimeResponseI 
         let formRealtimeToolResponse = w.formRealtimeToolResponse 
+        const sourceWorkflowContent = payload?.mode === "realtime" || w.selectedContent === "real_time_input" ? "real_time_input" : "batch_input";
+        const sourceWorkflowReadyResponse = sourceWorkflowContent === "real_time_input" ? "Connection established!" : "Dataset uploaded!";
         if (menuId === "cancel_graph_staging") {
           const controller = graphFetchAbortControllersRef.current[id];
           if (controller) {
@@ -6636,13 +6643,13 @@ const fileInputRef = useRef(null);
             });        
         }
         if (menuId === "batch_input_form_swap" && action === "page_I") {
-          newContent = "batch_input";
-          newSubContent = "batch_input_form_pageI";
+          newContent = sourceWorkflowContent;
+          newSubContent = sourceWorkflowContent === "real_time_input" ? "real_time_input_form_pageI" : "batch_input_form_pageI";
           //console.log("here", newSubContent); // Debugging
         }
         if (menuId === "batch_input_form_swap_passive" && action === "page_I") {
-          newContent = "batch_input";
-          newSubContent = "batch_input_form_pageI";
+          newContent = sourceWorkflowContent;
+          newSubContent = sourceWorkflowContent === "real_time_input" ? "real_time_input_form_pageI" : "batch_input_form_pageI";
         }
         if (menuId === "batch_input_form_swap" && action === "page_II") {
           if (payload){ //For Broker and API jumps to dataframe creation
@@ -6686,12 +6693,12 @@ const fileInputRef = useRef(null);
                       //Changing window content
                       alert("Dataframe created")
                       console.log("arrayData:",arrayData)
-                      newContent = "batch_input";
+                      newContent = sourceWorkflowContent;
                       newSubContent = "batch_input_form_pageIII";
                       //Setting DataframeInfoI        
                       setWindows(prev =>
                         prev.map(w =>
-                          w.id === id ? { ...w, batchFilesDataframeInfoI:arrayData,loadscreenState: false, loadscreenText:null, selectedContent:newContent,selectedSubContent:newSubContent,batchFilesDataframeActionValue:null } : w
+                          w.id === id ? { ...w, batchFilesDataframeInfoI:arrayData,loadscreenState: false, loadscreenText:null, selectedContent:newContent,selectedSubContent:newSubContent,windowResponseI:sourceWorkflowReadyResponse,batchFilesDataframeActionValue:null } : w
                         )
                       );
                     }
@@ -6716,7 +6723,7 @@ const fileInputRef = useRef(null);
               }, 300); // debounce delay   
             }
             else{ //For storage goes to searching and filtering datas
-              newContent = "batch_input";
+              newContent = sourceWorkflowContent;
               newSubContent = "batch_input_form_pageII";
               setWindows(prev =>
                 prev.map(w =>
@@ -6726,8 +6733,8 @@ const fileInputRef = useRef(null);
             } 
           }
           else{ //If no payload is passed it takes nochange 
-            newContent = "batch_input";
-            newSubContent = "batch_input_form_pageI";
+            newContent = sourceWorkflowContent;
+            newSubContent = sourceWorkflowContent === "real_time_input" ? "real_time_input_form_pageI" : "batch_input_form_pageI";
             setWindows(prev =>
             prev.map(w =>
               w.id === id ? { ...w, batchFilesCollection: [] } : w
@@ -6736,7 +6743,7 @@ const fileInputRef = useRef(null);
           }              
         }
         if (menuId === "batch_input_form_swap_passive" && action === "page_II") {
-          newContent = "batch_input";
+          newContent = sourceWorkflowContent;
           const targetWindow = windowsRef.current.find(w => w.id === String(id) || w.id === Number(id));        
           if (targetWindow.sourceAddressType === "api" || targetWindow.sourceAddressType === "broker"){
             newSubContent = "batch_input_form_pageI";  
@@ -7072,7 +7079,7 @@ const fileInputRef = useRef(null);
             prev.map(w =>
               w.id === id ? { ...w, batchFilesDataframeActionValue:null,batchFilesDataframeSourceValue:null,batchFilesDataframeTargetValue:null,batchFilesDataframeRelationshipValue:null,batchFilesDataframeRuleValue:null} : w
             ))
-          newContent = "batch_input";
+          newContent = sourceWorkflowContent;
           newSubContent = "batch_input_form_pageIII";
         }
         if (menuId === "batch_files_actions_select" && action === "change") {
@@ -7186,13 +7193,25 @@ const fileInputRef = useRef(null);
               console.log("Action, Source, Target from window:", action, source, target, relationship, tool, rule);
             }            
             //Template stance if failed to start the session (keeps the page from swaping)
-            newContent = "batch_input";
+            newContent = sourceWorkflowContent;
             newSubContent = "batch_input_form_pageIII";
+            const sourceMode = sourceWorkflowContent === "real_time_input" ? "realtime" : "batch";
             const payload = {
                 id: "stream",
                 session_id: id,
-                value:{"window_id":id,"session_id":id,"tool":tool,"action":action,"source":source,"target":target,"relationship":relationship,"rule":rule}// Add filter request here
+                mode: sourceMode,
+                source_mode: sourceMode,
+                value:{"window_id":id,"session_id":id,"mode":sourceMode,"source_mode":sourceMode,"tool":tool,"action":action,"source":source,"target":target,"relationship":relationship,"rule":rule}// Add filter request here
               };
+            console.log("[stream request]", {
+              sourceMode,
+              action,
+              source,
+              target,
+              relationship,
+              rule,
+              payload,
+            });
             apiFetch("/live_batch_files", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -7209,7 +7228,7 @@ const fileInputRef = useRef(null);
                   setSourceStreamListener(true);
                   setSourceSessionLogFile({logFile,session_id: id});
                   setSourceStreams(prev => ({ ...prev, [id]: true }));
-                  newContent = "batch_input";
+                  newContent = sourceWorkflowContent;
                   newSubContent = "batch_input_form_pageIV";
                   setWindows(prev =>
                     prev.map(w =>
@@ -7239,7 +7258,7 @@ const fileInputRef = useRef(null);
                         ? {
                             ...w,
                             batchFilesDataframeInfoI:w.batchFilesDataframeInfoI,
-                            windowResponseI: "Dataset uploaded!",
+                            windowResponseI: sourceWorkflowReadyResponse,
                             loadscreenState: false,
                             sourceStreamListener: false
                           }
@@ -7318,12 +7337,12 @@ const fileInputRef = useRef(null);
                   alert("No streaming found!",data.results)
                 }
                 //Return to back page
-                newContent = "batch_input";
+                newContent = sourceWorkflowContent;
                 newSubContent = "batch_input_form_pageIII";
               }
               let newWindowResponseI
               if (setBatchFilesDataframeInfoI){
-                newWindowResponseI="Dataset uploaded!"
+                newWindowResponseI=sourceWorkflowReadyResponse
               }
               else{
                 newWindowResponseI="The dataset was lost. Please try with a new source window."
