@@ -38,6 +38,133 @@ const DEFAULT_GRAPH_IFRAME_SETTINGS = ["", "", { min: 0, max: 25 }, "", "", "", 
 const LINKX_IFRAME_CHANNEL = "linkx:iframe";
 const LINKX_IFRAME_VERSION = 1;
 const TRUSTED_IFRAME_MESSAGE_TYPES = new Set(["app_notification", "notification", "nodeProperties", "all_property_keys_response", "graph_search_results", "network_components", "entity_selection", "graph_alerts", "pinned_evidence_update", "clipboard_get", "clipboard_set"]);
+const IDLE_TIMEOUT_STORAGE_KEY = "linkx_idle_timeout_settings";
+const DEFAULT_IDLE_WARNING_MS = 14 * 60 * 1000;
+const DEFAULT_IDLE_TIMEOUT_MS = 15 * 60 * 1000;
+const MIN_IDLE_TIMEOUT_MS = 60 * 1000;
+const MAX_IDLE_TIMEOUT_MS = 24 * 60 * 60 * 1000;
+
+const parsePositiveMs = (value, fallback) => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
+  return parsed;
+};
+
+const clampMs = (value, min, max) => Math.max(min, Math.min(max, Math.round(Number(value) || min)));
+
+const normalizeIdleSettings = (value = {}, fallback = {}) => {
+  const fallbackTimeout = clampMs(fallback.timeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS, MIN_IDLE_TIMEOUT_MS, MAX_IDLE_TIMEOUT_MS);
+  const timeoutMs = clampMs(value.timeoutMs ?? fallbackTimeout, MIN_IDLE_TIMEOUT_MS, MAX_IDLE_TIMEOUT_MS);
+  const fallbackWarning = clampMs(fallback.warningMs ?? DEFAULT_IDLE_WARNING_MS, 0, Math.max(0, timeoutMs - 1000));
+  const warningMs = clampMs(value.warningMs ?? fallbackWarning, 0, Math.max(0, timeoutMs - 1000));
+
+  return {
+    enabled: value.enabled !== false,
+    warningMs,
+    timeoutMs,
+  };
+};
+
+const getDefaultIdleSettings = () => normalizeIdleSettings({
+  enabled: String(import.meta.env.VITE_IDLE_TIMEOUT_ENABLED || "true").toLowerCase() !== "false",
+  warningMs: parsePositiveMs(import.meta.env.VITE_IDLE_WARNING_MS, DEFAULT_IDLE_WARNING_MS),
+  timeoutMs: parsePositiveMs(import.meta.env.VITE_IDLE_TIMEOUT_MS, DEFAULT_IDLE_TIMEOUT_MS),
+});
+
+const readStoredIdleSettings = (fallback) => {
+  try {
+    const raw = localStorage.getItem(IDLE_TIMEOUT_STORAGE_KEY);
+    if (!raw) return fallback;
+    return normalizeIdleSettings(JSON.parse(raw), fallback);
+  } catch {
+    return fallback;
+  }
+};
+
+const persistIdleSettings = (settings) => {
+  try {
+    localStorage.setItem(IDLE_TIMEOUT_STORAGE_KEY, JSON.stringify(settings));
+  } catch {
+    // Ignore storage failures; the active session still uses the selected value.
+  }
+};
+
+function useIdleTimeout({ enabled, warningMs, timeoutMs, isLocked = false, resetKey = 0, onWarn, onTimeout }) {
+  const warningTimerRef = useRef(null);
+  const timeoutTimerRef = useRef(null);
+  const onWarnRef = useRef(onWarn);
+  const onTimeoutRef = useRef(onTimeout);
+  const isLockedRef = useRef(isLocked);
+
+  useEffect(() => {
+    onWarnRef.current = onWarn;
+  }, [onWarn]);
+
+  useEffect(() => {
+    onTimeoutRef.current = onTimeout;
+  }, [onTimeout]);
+
+  useEffect(() => {
+    isLockedRef.current = isLocked;
+  }, [isLocked]);
+
+  const clearIdleTimers = useCallback(() => {
+    if (warningTimerRef.current) {
+      clearTimeout(warningTimerRef.current);
+      warningTimerRef.current = null;
+    }
+    if (timeoutTimerRef.current) {
+      clearTimeout(timeoutTimerRef.current);
+      timeoutTimerRef.current = null;
+    }
+  }, []);
+
+  const resetIdleTimers = useCallback(() => {
+    clearIdleTimers();
+    if (!enabled || !Number.isFinite(timeoutMs) || timeoutMs <= 0) return;
+
+    if (Number.isFinite(warningMs) && warningMs > 0 && warningMs < timeoutMs) {
+      warningTimerRef.current = setTimeout(() => {
+        onWarnRef.current?.();
+      }, warningMs);
+    }
+
+    timeoutTimerRef.current = setTimeout(() => {
+      onTimeoutRef.current?.();
+    }, timeoutMs);
+  }, [clearIdleTimers, enabled, timeoutMs, warningMs]);
+
+  useEffect(() => {
+    if (!enabled) {
+      clearIdleTimers();
+      return clearIdleTimers;
+    }
+
+    const activityEvents = ["pointerdown", "mousemove", "keydown", "wheel", "scroll", "touchstart"];
+    const handleActivity = () => {
+      if (isLockedRef.current) return;
+      resetIdleTimers();
+    };
+    const handleVisibilityChange = () => {
+      if (isLockedRef.current) return;
+      if (document.visibilityState === "visible") resetIdleTimers();
+    };
+
+    activityEvents.forEach((eventName) => {
+      window.addEventListener(eventName, handleActivity, { passive: true });
+    });
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    resetIdleTimers();
+
+    return () => {
+      activityEvents.forEach((eventName) => {
+        window.removeEventListener(eventName, handleActivity);
+      });
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      clearIdleTimers();
+    };
+  }, [clearIdleTimers, enabled, resetIdleTimers, resetKey]);
+}
 
 const getTrustedMessageOrigin = () => window.location.origin;
 const buildIframeMessage = (action, payload = {}) => ({ channel: LINKX_IFRAME_CHANNEL, version: LINKX_IFRAME_VERSION, action, payload });
@@ -260,7 +387,7 @@ const broadcastClipboard = () => {
         { type: "clipboard_data", payload },
         getTrustedMessageOrigin()
       );
-    } catch (_err) {
+    } catch {
       // Ignore inaccessible frames.
     }
   }
@@ -556,7 +683,7 @@ function Taskbar({ windows, isTaskBarOpen, activeWindowId, focusWindow, toggleAc
     </div>
   );
 }
-function Configurations({sessionId,actions,loadscreenState,setloadscreenState,toggleAction,configurations,isConfigurationsOpen,apiFetch,canAccess}) {
+function Configurations({sessionId,actions,loadscreenState,setloadscreenState,toggleAction,configurations,isConfigurationsOpen,apiFetch,canAccess,idleSettings,onIdleSettingsChange}) {
   const [remote, setRemote] = useState(false);
   const [automation, setAutomation] = useState(false);
   const [parsedConfig, setParsedConfig] = useState(null);
@@ -573,6 +700,16 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
   const activeRuleValue = normalizeActiveRuleValue(parsedConfig?.active_rule);
   const ruleNames = Array.isArray(parsedConfig?.rule_names) ? parsedConfig.rule_names : [];
   const canRemoveRule = ruleNames.length > 0 && selectedRuleForRemoval !== "";
+  const idleTimeoutMinutes = Math.max(1, Math.round((idleSettings?.timeoutMs || DEFAULT_IDLE_TIMEOUT_MS) / 60000));
+  const idleWarningMinutes = Math.max(0, Math.round((idleSettings?.warningMs || DEFAULT_IDLE_WARNING_MS) / 60000));
+
+  const updateIdleMinutes = (key, value) => {
+    const minutes = Math.max(key === "warningMs" ? 0 : 1, Math.min(1440, Number.parseInt(value, 10) || 0));
+    onIdleSettingsChange?.((previous) => normalizeIdleSettings({
+      ...previous,
+      [key]: minutes * 60 * 1000,
+    }, getDefaultIdleSettings()));
+  };
 
   useEffect(() => {
     if (configurations) {
@@ -1001,6 +1138,42 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
                 <label>
                   Get latest sample <a href="/linkxDS2026/temp_rules/Linkx_Rules_Template.zip" download> Template</a>
                 </label>
+              </fieldset>
+
+              <fieldset style={{ display: activeConfigTab === "system" ? "block" : "none" }}>
+                <legend>Interaction timeout</legend>
+                <input
+                  type="checkbox"
+                  id="idle_timeout_enabled"
+                  className="input_checkbox"
+                  checked={idleSettings?.enabled !== false}
+                  onChange={(event) => onIdleSettingsChange?.((previous) => ({ ...previous, enabled: event.target.checked }))}
+                />
+                <label htmlFor="idle_timeout_enabled" className="sublabel">Lock inactive users</label>
+
+                <div className="idle_timeout_grid">
+                  <label>Lock after
+                    <input
+                      type="number"
+                      min="0"
+                      max="1439"
+                      value={idleWarningMinutes}
+                      onChange={(event) => updateIdleMinutes("warningMs", event.target.value)}
+                      disabled={idleSettings?.enabled === false}
+                    />
+                  </label>
+                  <label>Logout after
+                    <input
+                      type="number"
+                      min="1"
+                      max="1440"
+                      value={idleTimeoutMinutes}
+                      onChange={(event) => updateIdleMinutes("timeoutMs", event.target.value)}
+                      disabled={idleSettings?.enabled === false}
+                    />
+                  </label>
+                </div>
+                <label className="idle_timeout_hint">Lock preserves the workspace. Logout clears it only if the user stays away.</label>
               </fieldset>
 
               {/* Miscellaneous */}
@@ -4437,6 +4610,9 @@ function LinkxWorkspace() {
   const [configurations, setConfigurations] = useState({});
   const [isConfigurationsOpen, setIsConfigurationsOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isWorkspaceLocked, setIsWorkspaceLocked] = useState(false);
+  const [isUnlockingWorkspace, setIsUnlockingWorkspace] = useState(false);
+  const [idleResetSeq, setIdleResetSeq] = useState(0);
   const [loadscreenState, setloadscreenState] = useState(false);
   const [loadscreenText, setloadscreenText] = useState('');
   const [isSideBarMenuOpen, setIsSideBarMenuOpen] = useState(false);
@@ -4506,6 +4682,10 @@ const fileInputRef = useRef(null);
   const darkFloatMenuToggleRef = useRef(null);
   const API_URL = import.meta.env.VITE_API_URL
   const BASE_URL = import.meta.env.VITE_BASE_URL
+  const defaultIdleSettings = useMemo(() => getDefaultIdleSettings(), []);
+  const [idleSettings, setIdleSettings] = useState(() => readStoredIdleSettings(defaultIdleSettings));
+  const workspaceIdleLockMinutes = Math.max(1, Math.round((idleSettings?.warningMs || DEFAULT_IDLE_WARNING_MS) / 60000));
+  const workspaceIdleLogoutMinutes = Math.max(1, Math.round((idleSettings?.timeoutMs || DEFAULT_IDLE_TIMEOUT_MS) / 60000));
   const HEADER_TRIGGER_ALLOWED_ORIGINS = String(import.meta.env.VITE_HEADER_ALLOWED_ORIGINS || "")
     .split(",")
     .map((item) => item.trim())
@@ -4698,6 +4878,17 @@ const fileInputRef = useRef(null);
   const canAccess = useCallback((permission) => (
     hasRole("admin") || hasPermission(permission)
   ), [hasRole, hasPermission]);
+
+  const updateIdleSettings = useCallback((nextSettings) => {
+    setIdleSettings((previous) => normalizeIdleSettings(
+      typeof nextSettings === "function" ? nextSettings(previous) : nextSettings,
+      defaultIdleSettings
+    ));
+  }, [defaultIdleSettings]);
+
+  useEffect(() => {
+    persistIdleSettings(idleSettings);
+  }, [idleSettings]);
 
   const requirePermission = useCallback((permission, actionName = "this action") => {
     if (canAccess(permission)) return true;
@@ -7989,9 +8180,100 @@ const fileInputRef = useRef(null);
     setIsConfigurationsOpen(false);
     setIsSettingsOpen(false);
     setIsToggleMenuOpen(false);
+    setIsWorkspaceLocked(false);
     setUserName(null);
     logout();
   };
+
+  const handleUnlockWorkspace = async () => {
+    if (isUnlockingWorkspace) return;
+    setIsUnlockingWorkspace(true);
+    try {
+      const resolvedSessionId = sessionIdRef.current || localStorage.getItem('session') || "";
+      try {
+        const data = await apiFetch("/auth/unlock", {
+          method: "POST",
+          body: {
+            id: "unlock_session",
+            session_id: resolvedSessionId,
+            reason: "idle_lock",
+          },
+        });
+        const refreshedToken = data?.results?.token || data?.token || data?.access_token || "";
+        if (refreshedToken) await verifyToken(refreshedToken);
+      } catch (unlockErr) {
+        if (![404, 405].includes(Number(unlockErr?.status))) throw unlockErr;
+        await verifyToken();
+      }
+      setIsWorkspaceLocked(false);
+      setIdleResetSeq((value) => value + 1);
+      pushNotification({
+        title: "Session unlocked",
+        message: "Your workspace is ready.",
+        source: "Auth",
+        level: "success",
+        durationMs: 3500,
+      });
+    } catch (err) {
+      pushNotification({
+        title: "Unlock failed",
+        message: err?.message || "Please sign in again.",
+        source: "Auth",
+        level: "warning",
+        durationMs: 8000,
+      });
+      handleNavAction("logout");
+    } finally {
+      setIsUnlockingWorkspace(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!token) setIsWorkspaceLocked(false);
+  }, [token]);
+
+  useIdleTimeout({
+    enabled: Boolean(token) && idleSettings.enabled,
+    warningMs: idleSettings.warningMs,
+    timeoutMs: idleSettings.timeoutMs,
+    isLocked: isWorkspaceLocked,
+    resetKey: idleResetSeq,
+    onWarn: () => {
+      setIsWorkspaceLocked(true);
+      const minutesRemaining = Math.max(1, Math.ceil((idleSettings.timeoutMs - idleSettings.warningMs) / 60000));
+      pushNotification({
+        title: "Workspace locked",
+        message: "Your workspace is preserved. It will sign out in about " + minutesRemaining + " minute" + (minutesRemaining === 1 ? "" : "s") + " if it remains locked.",
+        source: "Auth",
+        level: "warning",
+        durationMs: 10000,
+      });
+    },
+    onTimeout: async () => {
+      try {
+        const resolvedSessionId = sessionIdRef.current || localStorage.getItem('session') || "";
+        await apiFetch("/auth/idle-timeout", {
+          method: "POST",
+          body: {
+            id: "idle_timeout",
+            session_id: resolvedSessionId,
+            reason: "max_idle_expired",
+            cleanup: true,
+          },
+        });
+      } catch (err) {
+        console.warn("Idle timeout notification failed", err);
+      }
+      pushNotification({
+        title: "Signed out",
+        message: "You were signed out after inactivity.",
+        source: "Auth",
+        level: "warning",
+        durationMs: 8000,
+      });
+      handleNavAction("logout");
+    },
+  });
     // --- Configuration Actions ---
   const handleConfigurationActions = (id,payload) => {
     const resolvedSessionId = sessionId || localStorage.getItem('session') || "";
@@ -8232,9 +8514,19 @@ const fileInputRef = useRef(null);
             </div>
           )}
         <Taskbar windows={windows} isTaskBarOpen={isTaskBarOpen} activeWindowId={activeWindowId} focusWindow={handleFocusWindow} toggleAction={handleToggleMenu} isCtrlHeld={isCtrlHeld}/>
-        <Configurations sessionId={sessionId} actions={handleConfigurationActions} loadscreenState={loadscreenState} setloadscreenState={setloadscreenState} toggleAction={handleToggleMenu} configurations={configurations} isConfigurationsOpen={isConfigurationsOpen} apiFetch={apiFetch} canAccess={canAccess}/>
+        <Configurations sessionId={sessionId} actions={handleConfigurationActions} loadscreenState={loadscreenState} setloadscreenState={setloadscreenState} toggleAction={handleToggleMenu} configurations={configurations} isConfigurationsOpen={isConfigurationsOpen} apiFetch={apiFetch} canAccess={canAccess} idleSettings={idleSettings} onIdleSettingsChange={updateIdleSettings}/>
         <Settings isSettingsOpen={isSettingsOpen} toggleAction={handleToggleMenu} actor={actor || user} roles={roles} permissions={permissions} canAccess={canAccess} apiFetch={apiFetch} sessionId={sessionId} onNotice={pushNotification} onLogout={() => handleNavAction("logout")} areBackgroundAnimationsEnabled={areBackgroundAnimationsEnabled} onBackgroundAnimationsChange={setBackgroundAnimationsEnabled} />
         <Main userName={userName} setSessionId={setSessionId} API_URL={API_URL} debounceRef={debounceRef} setConfigurations={setConfigurations} configurations={configurations} windows={windows} setWindows={setWindows} openWindows={handleOpenWindows} themeMode={themeMode} areBackgroundAnimationsEnabled={areBackgroundAnimationsEnabled} />
+        {isWorkspaceLocked && (
+          <WorkspaceLockOverlay
+            user={actor || user}
+            isUnlocking={isUnlockingWorkspace}
+            lockMinutes={workspaceIdleLockMinutes}
+            logoutMinutes={workspaceIdleLogoutMinutes}
+            onUnlock={handleUnlockWorkspace}
+            onLogout={() => handleNavAction("logout")}
+          />
+        )}
         {showDarkHomeOverlay && (
           <DarkHomeMenuOverlay
             orientation={orientation}
@@ -8356,6 +8648,25 @@ const fileInputRef = useRef(null);
         )}
         <ConfirmationDialog items={confirmations} onResolve={resolveConfirmation} />
         <NotificationStack items={notifications} onDismiss={removeNotification} />
+      </div>
+    </div>
+  );
+}
+
+function WorkspaceLockOverlay({ user, isUnlocking, lockMinutes, logoutMinutes, onUnlock, onLogout }) {
+  const displayName = user?.display_name || user?.username || user?.client_id || "User";
+
+  return (
+    <div className="workspace_lock_overlay" role="dialog" aria-modal="true" aria-label="Workspace locked">
+      <div className="workspace_lock_panel">
+        <div className="workspace_lock_icon" aria-hidden="true">◎</div>
+        <h2>Workspace locked</h2>
+        <p>{displayName}, your windows and activity are still here.</p>
+        <p className="workspace_lock_hint">Locked after {lockMinutes} minute{lockMinutes === 1 ? "" : "s"}. Automatic logout after {logoutMinutes} minute{logoutMinutes === 1 ? "" : "s"} of inactivity.</p>
+        <div className="workspace_lock_actions">
+          <button type="button" onClick={onUnlock} disabled={isUnlocking}>{isUnlocking ? "Unlocking..." : "Unlock"}</button>
+          <button type="button" onClick={onLogout} disabled={isUnlocking}>Log out</button>
+        </div>
       </div>
     </div>
   );
