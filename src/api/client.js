@@ -32,7 +32,7 @@ const parseResponse = async (response) => {
   }
 };
 
-export const createApiClient = ({ baseUrl, getToken, onUnauthorized, onForbidden } = {}) => {
+export const createApiClient = ({ baseUrl, getToken, onUnauthorized, onForbidden, onLocked } = {}) => {
   return async function apiFetch(path, options = {}) {
     const headers = new Headers(options.headers || {});
     const token = typeof getToken === "function" ? getToken() : null;
@@ -65,6 +65,9 @@ export const createApiClient = ({ baseUrl, getToken, onUnauthorized, onForbidden
       }
       if (response.status === 403 && typeof onForbidden === "function") {
         onForbidden(data);
+      }
+      if (response.status === 423 && typeof onLocked === "function") {
+        onLocked(data);
       }
 
       const message =

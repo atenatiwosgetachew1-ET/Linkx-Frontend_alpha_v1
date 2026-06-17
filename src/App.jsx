@@ -714,12 +714,7 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
   useEffect(() => {
     if (configurations) {
       // configurations may be a {value: string} object or already parsed
-      let cfg;
-      if (configurations.value) {
-        cfg = JSON.parse(configurations.value.replace(/'/g, '"'));
-      } else {
-        cfg = configurations;
-      }
+      let cfg = parseConfigurationValue(configurations);
       setParsedConfig(cfg);      
       setRemote(cfg.remote === "true" || cfg.remote === true);
       setAutomation(cfg.automation === "true" || cfg.automation === true);
@@ -1244,6 +1239,59 @@ const formatAuditDate = (value) => {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return String(value);
   return date.toLocaleString();
+};
+
+const isSuccessResponse = (data) => {
+  const message = String(data?.message || "").trim().toLowerCase();
+  return message === "success" || message === "success!";
+};
+
+const extractConfigurationPayload = (data) => (
+  data?.results?.data ?? data?.results?.configuration ?? data?.configuration ?? data?.data ?? null
+);
+
+const parseConfigurationValue = (value) => {
+  if (!value) return {};
+  if (value.value) {
+    try {
+      return JSON.parse(String(value.value).replace(/'/g, '"'));
+    } catch (_err) {
+      return {};
+    }
+  }
+  return value && typeof value === "object" ? value : {};
+};
+
+const normalizeConfigurationFieldValue = (name, value) => {
+  if (name === "storage_tables" || name === "active_tool_tables") {
+    return Array.isArray(value) ? value : String(value || "").split(",").map((item) => item.trim()).filter(Boolean);
+  }
+  return value;
+};
+
+const normalizeConfigurationStatePatch = (previous, name, value) => {
+  const normalizedValue = normalizeConfigurationFieldValue(name, value);
+  const baseConfig = parseConfigurationValue(previous);
+  const nextConfig = {
+    ...baseConfig,
+    [name]: normalizedValue,
+  };
+
+  if (previous?.value) {
+    return {
+      ...previous,
+      ...nextConfig,
+      value: JSON.stringify(nextConfig),
+    };
+  }
+
+  return nextConfig;
+};
+
+const normalizeLoadedConfiguration = (payload) => {
+  if (!payload) return {};
+  if (payload.value) return payload;
+  return payload;
 };
 
 const normalizeCleanupAuditResults = (data) => {
@@ -4653,6 +4701,7 @@ const fileInputRef = useRef(null);
   const openStrReportGraphAndBindRef = useRef(null);
   const pushNotificationRef = useRef(null);
   const sessionIdRef = useRef(null);
+  const postLoginUnlockKeyRef = useRef("");
   const logRef = useRef(''); // for accumulating logs    
   const textareaRefs = useRef({});
   const debounceRef = useRef(null);
@@ -4873,6 +4922,16 @@ const fileInputRef = useRef(null);
         level: "warning",
       });
     },
+    onLocked: (data) => {
+      setIsWorkspaceLocked(true);
+      pushNotification({
+        title: "Workspace locked",
+        message: data?.message || data?.error || "Unlock required before continuing.",
+        source: "Auth",
+        level: "warning",
+        durationMs: 8000,
+      });
+    },
   }), [API_URL, token, logout, pushNotification]);
 
   const canAccess = useCallback((permission) => (
@@ -4900,6 +4959,29 @@ const fileInputRef = useRef(null);
     });
     return false;
   }, [canAccess, pushNotification]);
+
+  const unlockBackendSession = useCallback(async ({ fallbackVerify = false } = {}) => {
+    const resolvedSessionId = sessionIdRef.current || localStorage.getItem('session') || "";
+    try {
+      const data = await apiFetch("/auth/unlock", {
+        method: "POST",
+        body: {
+          id: "unlock_session",
+          session_id: resolvedSessionId,
+          reason: "idle_lock",
+        },
+      });
+      const refreshedToken = data?.results?.token || data?.token || data?.access_token || "";
+      if (refreshedToken) await verifyToken(refreshedToken);
+      return data;
+    } catch (unlockErr) {
+      if (fallbackVerify && [404, 405].includes(Number(unlockErr?.status))) {
+        await verifyToken();
+        return null;
+      }
+      throw unlockErr;
+    }
+  }, [apiFetch, verifyToken]);
 
   pushNotificationRef.current = pushNotification;
   sessionIdRef.current = sessionId;
@@ -5000,7 +5082,7 @@ const fileInputRef = useRef(null);
           body: JSON.stringify(payload),
         })
           .then(data => {
-            if (data.message === "success!") {
+            if (isSuccessResponse(data)) {
               const session = data.results;
               try{
                 const configs= data.configurations;
@@ -5718,7 +5800,7 @@ const fileInputRef = useRef(null);
             body: JSON.stringify(payload),
           })
             .then(data => {
-              if (data.message === "success!") {
+              if (isSuccessResponse(data)) {
                 iframeRefs.current[windowsId] = React.createRef();
                 setActiveWindowId(windowsId);
                 setWindows(prev => {
@@ -6231,7 +6313,7 @@ const fileInputRef = useRef(null);
                   )
                 );
 
-                if (data.message === "success!") {
+                if (isSuccessResponse(data)) {
                   const settingsToApply = normalizeGraphIframeSettings(iframeSettings[id] || w.iframeSettings);
                   settingsToApply[2] = normalizeGraphLimitRange({ min: 0, max: 25 }, 25);
                   updateIframeSettings(id, 2, { min: 0, max: 25 });
@@ -6489,7 +6571,7 @@ const fileInputRef = useRef(null);
                 body: formData,
               })
               .then((data) => {
-                if (data.message === "success!") {
+                if (isSuccessResponse(data)) {
                   alert("Dataset uploaded!")
                   //calling the tool integration
                   newContent = "batch_input";
@@ -6910,7 +6992,7 @@ const fileInputRef = useRef(null);
                     if (payload["addressType"] === "broker" && payload["mode"] === "realtime") {
                       arrayData[4] = "Live";
                     }
-                    if (data.message == "success!"){
+                    if (isSuccessResponse(data)){
                       //Changing window content
                       alert("Dataframe created")
                       console.log("arrayData:",arrayData)
@@ -7262,7 +7344,7 @@ const fileInputRef = useRef(null);
             .then((data) => { 
                 console.log("searchdata:",data)   
                 var arrayData=Object.values(data.results)
-                if (data.message == "success!"){
+                if (isSuccessResponse(data)){
                   //Changing window content
                   alert("Dataframe created")
                   console.log("arrayData:",arrayData)
@@ -8189,22 +8271,7 @@ const fileInputRef = useRef(null);
     if (isUnlockingWorkspace) return;
     setIsUnlockingWorkspace(true);
     try {
-      const resolvedSessionId = sessionIdRef.current || localStorage.getItem('session') || "";
-      try {
-        const data = await apiFetch("/auth/unlock", {
-          method: "POST",
-          body: {
-            id: "unlock_session",
-            session_id: resolvedSessionId,
-            reason: "idle_lock",
-          },
-        });
-        const refreshedToken = data?.results?.token || data?.token || data?.access_token || "";
-        if (refreshedToken) await verifyToken(refreshedToken);
-      } catch (unlockErr) {
-        if (![404, 405].includes(Number(unlockErr?.status))) throw unlockErr;
-        await verifyToken();
-      }
+      await unlockBackendSession({ fallbackVerify: true });
       setIsWorkspaceLocked(false);
       setIdleResetSeq((value) => value + 1);
       pushNotification({
@@ -8232,6 +8299,25 @@ const fileInputRef = useRef(null);
     if (!token) setIsWorkspaceLocked(false);
   }, [token]);
 
+  useEffect(() => {
+    if (!token || !user || isWorkspaceLocked) return;
+    const resolvedSessionId = sessionIdRef.current || localStorage.getItem('session') || "";
+    if (!resolvedSessionId) return;
+    const unlockKey = token + ":" + resolvedSessionId;
+    if (postLoginUnlockKeyRef.current === unlockKey) return;
+    postLoginUnlockKeyRef.current = unlockKey;
+
+    unlockBackendSession()
+      .then(() => {
+        setIsWorkspaceLocked(false);
+        setIdleResetSeq((value) => value + 1);
+      })
+      .catch((err) => {
+        if ([404, 405].includes(Number(err?.status))) return;
+        console.warn("Post-login unlock failed", err);
+      });
+  }, [token, user, isWorkspaceLocked, unlockBackendSession]);
+
   useIdleTimeout({
     enabled: Boolean(token) && idleSettings.enabled,
     warningMs: idleSettings.warningMs,
@@ -8240,6 +8326,19 @@ const fileInputRef = useRef(null);
     resetKey: idleResetSeq,
     onWarn: () => {
       setIsWorkspaceLocked(true);
+      const resolvedSessionId = sessionIdRef.current || localStorage.getItem('session') || "";
+      apiFetch("/auth/lock", {
+        method: "POST",
+        body: {
+          id: "lock_session",
+          session_id: resolvedSessionId,
+          reason: "idle_lock",
+        },
+      }).catch((err) => {
+        if (![404, 405].includes(Number(err?.status))) {
+          console.warn("Idle lock notification failed", err);
+        }
+      });
       const minutesRemaining = Math.max(1, Math.ceil((idleSettings.timeoutMs - idleSettings.warningMs) / 60000));
       pushNotification({
         title: "Workspace locked",
@@ -8281,12 +8380,7 @@ const fileInputRef = useRef(null);
     if (id === "load_default" && !requirePermission(PERMISSIONS.CONFIG_READ, "configuration loading")) return;
     if (id === "change"){
       const { name, value } = payload;
-      setConfigurations(prev => ({
-        ...prev,
-        [name]: name === "storage_tables" || name === "active_tool_tables"
-          ? value.split(",").map(s => s.trim())  // convert string to array
-          : value
-      }));
+      setConfigurations(prev => normalizeConfigurationStatePatch(prev, name, value));
     }
     else if (id === "save"){
       if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -8305,7 +8399,7 @@ const fileInputRef = useRef(null);
           body: formData,
         })
         .then((data) => {
-          if (data.message === "success!") {
+          if (isSuccessResponse(data)) {
             if (hasRuleUpload) {
               const ruleUploadInput = document.getElementById("rule_to_upload");
               const ruleNameInput = document.querySelector('#configurations_form input[name="rule_name"]');
@@ -8316,6 +8410,7 @@ const fileInputRef = useRef(null);
               handleConfigurationActions("load_default");
             } else {
               alert("Configuration saved!");
+              handleConfigurationActions("load_default");
             }
             setloadscreenState(false);
           } 
@@ -8346,7 +8441,7 @@ const fileInputRef = useRef(null);
         body: formData,
       })
       .then((data) => {
-        if (data.message === "success!") {
+        if (isSuccessResponse(data)) {
           alert("Rule removed!");
           handleConfigurationActions("load_default");
         } else {
@@ -8376,7 +8471,7 @@ const fileInputRef = useRef(null);
         body: formData,
       })
       .then((data) => {
-        if (data.message === "success!") {
+        if (isSuccessResponse(data)) {
           alert("Configuration uploaded!");
           handleConfigurationActions("load_default");
         } else {
@@ -8401,12 +8496,10 @@ const fileInputRef = useRef(null);
           headers: {"Content-Type": "application/json",},
         })
         .then((data) => {
-          if (data.message === "success!") {     
+          if (isSuccessResponse(data)) {     
             try{
-                  const configs= data.results.data;
-                  // const jsonString = configs.replace(/'/g, '"');
-                  // const parsedConfig = JSON.parse(jsonString);
-                  console.log("defaultConfig:",configs)                 
+                  const configs = normalizeLoadedConfiguration(extractConfigurationPayload(data));
+                  console.log("defaultConfig:", configs)                 
                   setConfigurations(configs) 
                   setloadscreenState(false)
                 } 
@@ -8417,6 +8510,7 @@ const fileInputRef = useRef(null);
           } 
           else {
             alert(data.message)
+            setloadscreenState(false)
           }
         })
         .catch((err) => {
@@ -8487,7 +8581,11 @@ const fileInputRef = useRef(null);
       style={{ position: 'relative', minHeight: '100vh', overflow: 'hidden' }}
     >
       {/*<NetworkBackground />*/}
-      <div style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, zIndex: 1 }}>
+      <div
+        className={isWorkspaceLocked ? "linkx_workspace_layer linkx_workspace_layer--locked" : "linkx_workspace_layer"}
+        data-workspace-locked={isWorkspaceLocked ? "true" : "false"}
+        style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, zIndex: 1 }}
+      >
         {themeMode !== "dark" && <NavBar onNavAction={handleNavAction} user={user} />}
         <ToggleMenu
             onToggle={handleToggleMenu}
@@ -8523,6 +8621,8 @@ const fileInputRef = useRef(null);
             isUnlocking={isUnlockingWorkspace}
             lockMinutes={workspaceIdleLockMinutes}
             logoutMinutes={workspaceIdleLogoutMinutes}
+            themeMode={themeMode}
+            areBackgroundAnimationsEnabled={areBackgroundAnimationsEnabled}
             onUnlock={handleUnlockWorkspace}
             onLogout={() => handleNavAction("logout")}
           />
@@ -8653,13 +8753,83 @@ const fileInputRef = useRef(null);
   );
 }
 
-function WorkspaceLockOverlay({ user, isUnlocking, lockMinutes, logoutMinutes, onUnlock, onLogout }) {
+function WorkspaceLockOverlay({ user, isUnlocking, lockMinutes, logoutMinutes, themeMode, areBackgroundAnimationsEnabled, onUnlock, onLogout }) {
   const displayName = user?.display_name || user?.username || user?.client_id || "User";
+  const backgroundVideoRef = useRef(null);
+  const [backgroundVideoSrc, setBackgroundVideoSrc] = useState(workspaceBackgroundVideo);
+  const [isBackgroundVideoUnavailable, setIsBackgroundVideoUnavailable] = useState(false);
+  const [backgroundImageSrc, setBackgroundImageSrc] = useState(workspaceBackgroundImage);
+  const [isBackgroundImageLoaded, setIsBackgroundImageLoaded] = useState(false);
+  const shouldUseBackgroundVideo = themeMode === "dark" && areBackgroundAnimationsEnabled && !isBackgroundVideoUnavailable;
+
+  const playBackgroundVideo = (videoElement = backgroundVideoRef.current) => {
+    if (!videoElement) return;
+    videoElement.play?.().catch(() => {});
+  };
+
+  const handleBackgroundVideoError = () => {
+    if (backgroundVideoSrc === workspaceBackgroundVideo) {
+      setBackgroundVideoSrc(fallbackWorkspaceBackgroundVideo);
+      return;
+    }
+    setIsBackgroundVideoUnavailable(true);
+  };
+
+  const handleBackgroundImageError = () => {
+    if (backgroundImageSrc === workspaceBackgroundImage) {
+      setIsBackgroundImageLoaded(false);
+      setBackgroundImageSrc(fallbackWorkspaceBackgroundImage);
+    }
+  };
+
+  useEffect(() => {
+    if (!shouldUseBackgroundVideo) return;
+    backgroundVideoRef.current?.load?.();
+    playBackgroundVideo();
+  }, [shouldUseBackgroundVideo, backgroundVideoSrc]);
 
   return (
     <div className="workspace_lock_overlay" role="dialog" aria-modal="true" aria-label="Workspace locked">
+      {themeMode === "dark" ? (
+        <>
+          {shouldUseBackgroundVideo ? (
+            <video
+              key={backgroundVideoSrc}
+              ref={backgroundVideoRef}
+              className="workspace_lock_media workspace_lock_media_video"
+              autoPlay
+              muted
+              loop
+              playsInline
+              preload="auto"
+              aria-hidden="true"
+              onCanPlay={(event) => playBackgroundVideo(event.currentTarget)}
+              onError={handleBackgroundVideoError}
+            >
+              <source src={backgroundVideoSrc} type="video/mp4" />
+            </video>
+          ) : (
+            <img
+              key={backgroundImageSrc}
+              className={
+                "workspace_lock_media workspace_lock_media_image" +
+                (isBackgroundImageLoaded ? " is-loaded" : "")
+              }
+              src={backgroundImageSrc}
+              alt=""
+              aria-hidden="true"
+              decoding="async"
+              loading="eager"
+              onLoad={() => setIsBackgroundImageLoaded(true)}
+              onError={handleBackgroundImageError}
+            />
+          )}
+          <div className="workspace_lock_scene_overlay" aria-hidden="true" />
+        </>
+      ) : (
+        <NetworkBackground name={displayName} themeMode={themeMode} />
+      )}
       <div className="workspace_lock_panel">
-        <div className="workspace_lock_icon" aria-hidden="true">◎</div>
         <h2>Workspace locked</h2>
         <p>{displayName}, your windows and activity are still here.</p>
         <p className="workspace_lock_hint">Locked after {lockMinutes} minute{lockMinutes === 1 ? "" : "s"}. Automatic logout after {logoutMinutes} minute{logoutMinutes === 1 ? "" : "s"} of inactivity.</p>
