@@ -30,6 +30,8 @@ This is the frozen clean baseline for the Linkx frontend refactor incubation. Th
 - src/workspace/components/WorkspaceFrame.jsx
 - src/workspace/components/WorkspaceHome.jsx
 - src/workspace/components/WorkspaceContextPanel.jsx
+- src/workspace/components/WorkspaceWindow.jsx
+- src/workspace/components/WindowManager.jsx
 - src/workspace/hooks/useWorkspace.js
 - src/workspace/state/workspaceTypes.js
 - src/workspace/state/workspaceReducer.js
@@ -170,4 +172,47 @@ Still excluded:
 Verification:
 
 - focused lint passed for active app/workspace modules
+- npm run build passed
+
+
+## Phase 2.2 Window Manager Added
+
+The incubation workspace now has visual placeholder window rendering:
+
+- WindowManager renders the center landing area when no windows are open
+- WindowManager renders placeholder windows from workspace state when windows exist
+- WorkspaceWindow provides reusable title/status/close chrome
+- close and focus handlers are wired to workspace state actions
+
+Still excluded:
+
+- launcher buttons do not open windows yet
+- no draggable or resizable behavior is active
+- no source, graph, chart, configuration, settings, or chat backend calls are active
+
+Verification:
+
+- focused lint passed for active workspace window manager modules
+- npm run build passed
+
+
+## Phase 2.3 Launcher Actions Added
+
+The left launcher now opens placeholder windows through workspace state:
+
+- Source, Graph, Chart, Configuration, and Settings launcher buttons call workspace.openWindow
+- each launcher action sets an intended right-panel context tab
+- Graph opens the Info tab; Configuration and Settings open the Settings tab
+- existing window types are focused instead of duplicated
+- launcher actions remain frontend-only placeholders
+
+Still excluded:
+
+- no source, graph, chart, configuration, settings, or chat backend calls are active
+- placeholder windows do not contain real feature UI yet
+- no draggable or resizable behavior is active
+
+Verification:
+
+- focused lint passed for active launcher/window modules
 - npm run build passed

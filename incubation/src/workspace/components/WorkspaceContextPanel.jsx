@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 
 const contextTabs = [
   { id: 'overview', label: 'Overview', panelId: 'workspace-context-overview' },
@@ -85,6 +85,11 @@ export default function WorkspaceContextPanel({ displayName, workspace }) {
     ['Context tab', workspace?.contextTab || 'overview'],
   ];
   const trimmedMessage = message.trim();
+
+  useEffect(() => {
+    if (!workspace?.contextTab || workspace.contextTab === activeTab) return;
+    setActiveTab(workspace.contextTab);
+  }, [activeTab, workspace?.contextTab]);
   const isSubmitDisabled = !trimmedMessage || isAssistantResponding;
 
   const handleSubmit = (event) => {

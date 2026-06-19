@@ -3,7 +3,9 @@ import React, { useEffect, useState } from 'react';
 import { useBackgroundAnimations } from '../../utils/backgroundAnimations.js';
 import WorkspaceHome from './WorkspaceHome.jsx';
 import WorkspaceContextPanel from './WorkspaceContextPanel.jsx';
+import WindowManager from './WindowManager.jsx';
 import { useWorkspace } from '../hooks/useWorkspace.js';
+import { WORKSPACE_CONTEXT_TABS, WORKSPACE_WINDOW_TYPES } from '../state/workspaceTypes.js';
 
 const workspaceBackgroundVideo = import.meta.env.BASE_URL + 'site_videos/background.mp4';
 const fallbackWorkspaceBackgroundVideo = '/site_videos/background.mp4';
@@ -14,26 +16,36 @@ const launcherItems = [
   {
     id: 'source',
     label: 'Source',
+    windowType: WORKSPACE_WINDOW_TYPES.SOURCE,
+    contextTab: WORKSPACE_CONTEXT_TABS.OVERVIEW,
     path: 'M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v13a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 18.5v-13Zm4 2h8M8 12h8M8 16h5',
   },
   {
     id: 'graph',
     label: 'Graph',
+    windowType: WORKSPACE_WINDOW_TYPES.GRAPH,
+    contextTab: WORKSPACE_CONTEXT_TABS.INFO,
     path: 'M7 8.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Zm10 12a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5ZM7 20.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Zm2.2-4.2 5.6-7.6M9.5 7.3l5 8.2',
   },
   {
     id: 'chart',
     label: 'Chart',
+    windowType: WORKSPACE_WINDOW_TYPES.CHART,
+    contextTab: WORKSPACE_CONTEXT_TABS.OVERVIEW,
     path: 'M5 20V10m7 10V4m7 16v-7M3 20h18',
   },
   {
     id: 'configuration',
     label: 'Configuration',
+    windowType: WORKSPACE_WINDOW_TYPES.CONFIGURATION,
+    contextTab: WORKSPACE_CONTEXT_TABS.SETTINGS,
     path: 'M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Zm0-5v2M12 18.5v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4',
   },
   {
     id: 'settings',
     label: 'Settings',
+    windowType: WORKSPACE_WINDOW_TYPES.SETTINGS,
+    contextTab: WORKSPACE_CONTEXT_TABS.SETTINGS,
     path: 'M5 7h14M5 12h14M5 17h14M8 7v0M16 12v0M11 17v0',
   },
 ];
@@ -82,6 +94,15 @@ export default function WorkspaceFrame({ user, onSignOut, logoSrc }) {
       setIsImageLoaded(false);
       setImageSrc(fallbackWorkspaceBackgroundImage);
     }
+  };
+
+
+  const handleLauncherAction = (item) => {
+    workspace.openWindow(item.windowType, {
+      contextTab: item.contextTab,
+      title: item.label,
+    });
+    workspace.setContextTab(item.contextTab);
   };
 
   useEffect(() => {
@@ -149,7 +170,7 @@ export default function WorkspaceFrame({ user, onSignOut, logoSrc }) {
                   type="button"
                   title={item.label}
                   aria-label={item.label}
-                  aria-disabled="true"
+                  onClick={() => handleLauncherAction(item)}
                 >
                   <LauncherIcon path={item.path} />
                   <span className="workspace_launcher_label">{item.label}</span>
@@ -168,19 +189,22 @@ export default function WorkspaceFrame({ user, onSignOut, logoSrc }) {
             </button>
           </nav>
         </aside>
-        <section className="workspace_canvas" aria-label="Workspace canvas">
-          <div className="workspace_identity" aria-label="Current user">
-            <span className="workspace_avatar" aria-hidden="true">{avatarLetter}</span>
-            <span>{displayName}</span>
-          </div>
-          <WorkspaceHome openWindowsCount={workspace.windows.length} />
-        </section>
-        <aside className="workspace_zone workspace_zone_right" aria-label="Workspace context">
-          <WorkspaceContextPanel
-            displayName={displayName}
-            workspace={workspace}
-          />
-        </aside>
+        <div className="workspace_work_area">
+          <section className="workspace_canvas" aria-label="Workspace canvas">
+            <div className="workspace_identity" aria-label="Current user">
+              <span className="workspace_avatar" aria-hidden="true">{avatarLetter}</span>
+              <span>{displayName}</span>
+            </div>
+            {workspace.windows.length === 0 && <WorkspaceHome openWindowsCount={workspace.windows.length} />}
+          </section>
+          <aside className="workspace_zone workspace_zone_right" aria-label="Workspace context">
+            <WorkspaceContextPanel
+              displayName={displayName}
+              workspace={workspace}
+            />
+          </aside>
+          <WindowManager workspace={workspace} />
+        </div>
       </div>
     </main>
   );

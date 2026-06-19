@@ -31,7 +31,9 @@
     "src/workspace/state/workspaceContext.js",
     "src/workspace/state/workspaceReducer.js",
     "src/workspace/state/workspaceTypes.js",
-    "src/workspace/hooks/useWorkspace.js"
+    "src/workspace/hooks/useWorkspace.js",
+    "src/workspace/components/WindowManager.jsx",
+    "src/workspace/components/WorkspaceWindow.jsx"
   ],
   "liveBuildUntouched": "../linkxDS2026",
   "rule": "Future refactor work happens in incubation first.",
@@ -136,6 +138,41 @@
       "window manager rendering",
       "feature backend calls",
       "chat backend calls"
+    ],
+    "focusedLint": "passed",
+    "build": "passed"
+  },
+  "phase2_2": {
+    "status": "completed",
+    "scope": [
+      "WindowManager component",
+      "WorkspaceWindow component",
+      "placeholder window chrome",
+      "focus and close callbacks wired to workspace state",
+      "center landing remains visible when no windows are open"
+    ],
+    "excluded": [
+      "launcher-driven window opening",
+      "dragging",
+      "resizing",
+      "feature backend calls"
+    ],
+    "focusedLint": "passed",
+    "build": "passed"
+  },
+  "phase2_3": {
+    "status": "completed",
+    "scope": [
+      "launcher buttons open placeholder windows",
+      "launcher buttons focus existing placeholder windows by type",
+      "launcher buttons update right-panel context tab",
+      "window open/focus/close remains frontend-only"
+    ],
+    "excluded": [
+      "real feature UI",
+      "feature backend calls",
+      "dragging",
+      "resizing"
     ],
     "focusedLint": "passed",
     "build": "passed"
