@@ -1,0 +1,143 @@
+{
+  "date": "2026-06-18",
+  "purpose": "Clean login-only incubation baseline before modular rebuild",
+  "devServer": {
+    "host": "0.0.0.0",
+    "port": 7153,
+    "strictPort": true
+  },
+  "buildOutDir": "dist",
+  "activeFiles": [
+    "src/App.jsx",
+    "src/app/App.jsx",
+    "src/app/config.js",
+    "src/main.jsx",
+    "src/main.css",
+    "src/index.css",
+    "src/auth/AuthContext.jsx",
+    "src/auth/authContext.js",
+    "src/auth/useAuth.js",
+    "src/auth/LoginPage.jsx",
+    "src/services/authApi.js",
+    "src/workspace/components/WorkspaceFrame.jsx",
+    "src/workspace/components/WorkspaceContextPanel.jsx",
+    "src/workspace/components/WorkspaceHome.jsx",
+    "src/utils/backgroundAnimations.js",
+    "src/utils/inputSecurity.js",
+    "vite.config.js",
+    "package.json",
+    ".env",
+    "src/workspace/state/WorkspaceContext.jsx",
+    "src/workspace/state/workspaceContext.js",
+    "src/workspace/state/workspaceReducer.js",
+    "src/workspace/state/workspaceTypes.js",
+    "src/workspace/hooks/useWorkspace.js"
+  ],
+  "liveBuildUntouched": "../linkxDS2026",
+  "rule": "Future refactor work happens in incubation first.",
+  "plan2": {
+    "status": "completed",
+    "addedStructure": [
+      "app",
+      "shared",
+      "workspace",
+      "features/source",
+      "features/graph",
+      "features/chart",
+      "features/configuration",
+      "features/settings",
+      "services",
+      "styles"
+    ],
+    "appEntry": "src/app/App.jsx",
+    "compatibilityEntry": "src/App.jsx"
+  },
+  "plan3": {
+    "status": "completed",
+    "authModules": [
+      "src/auth/AuthContext.jsx",
+      "src/auth/authContext.js",
+      "src/auth/useAuth.js",
+      "src/services/authApi.js",
+      "src/app/config.js"
+    ],
+    "focusedLint": "passed",
+    "build": "passed"
+  },
+  "activePublicAssets": [
+    "public/site_images",
+    "public/site_videos"
+  ],
+  "generatedIgnored": [
+    "dist",
+    "node_modules",
+    ".vite"
+  ],
+  "preStep4Audit": {
+    "status": "passed",
+    "notes": [
+      "Incubation is login-only after authentication.",
+      "Old workspace/source/graph/configuration logic is not active.",
+      "Copied production public bundle assets were removed from incubation.",
+      "Future feature dependency packages remain installed but are not imported by active code."
+    ]
+  },
+  "step4_1": {
+    "status": "completed",
+    "scope": [
+      "background layer",
+      "main workspace canvas",
+      "empty left and right reserved zones",
+      "sign out remains available"
+    ],
+    "excluded": [
+      "top/header area",
+      "source behavior",
+      "graph behavior",
+      "configuration behavior",
+      "settings behavior",
+      "window manager behavior"
+    ]
+  },
+  "phase1": {
+    "status": "completed",
+    "scope": [
+      "authenticated workspace frame",
+      "left launcher rail with overlay expansion",
+      "center landing area with upload and source option placeholders",
+      "right context rail with Overview, Info, Filter, and Settings tabs",
+      "assistant chat placeholder with local-only input state",
+      "responsive cleanup",
+      "accessibility cleanup for right rail tabs",
+      "security pass confirming no feature backend calls or sensitive identifiers"
+    ],
+    "excluded": [
+      "real source behavior",
+      "real graph behavior",
+      "real configuration behavior",
+      "real settings behavior",
+      "chat backend integration",
+      "workspace window manager"
+    ],
+    "focusedLint": "passed",
+    "build": "passed"
+  },
+  "phase2_1": {
+    "status": "completed",
+    "scope": [
+      "WorkspaceProvider",
+      "useWorkspace hook",
+      "workspace reducer",
+      "workspace action/type constants",
+      "read-only workspace status in center and right panels"
+    ],
+    "excluded": [
+      "launcher-driven window opening",
+      "window manager rendering",
+      "feature backend calls",
+      "chat backend calls"
+    ],
+    "focusedLint": "passed",
+    "build": "passed"
+  }
+}

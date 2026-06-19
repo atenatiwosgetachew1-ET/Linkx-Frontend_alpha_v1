@@ -58,6 +58,9 @@ export const createApiClient = ({ baseUrl, getToken, onUnauthorized, onForbidden
       body: bodyIsPlainObject ? JSON.stringify(sanitizeJsonPayload(options.body)) : options.body,
     });
     const data = await parseResponse(response);
+    if (data && typeof data === "object") {
+      Object.defineProperty(data, "__httpStatus", { value: response.status, enumerable: false });
+    }
 
     if (!response.ok) {
       if (response.status === 401 && typeof onUnauthorized === "function") {

@@ -4,6 +4,7 @@ const AUTH_TOKEN_KEY = "linkx_auth_token";
 const SSO_CODE_PARAM = "sso_code";
 const SSO_STATE_PARAM = "sso_state";
 const AuthContext = createContext(null);
+const AUTH_REQUEST_TIMEOUT_MS = 20000;
 
 const normalizeUser = (value) => {
   if (!value || typeof value !== "object") return null;
@@ -24,17 +25,31 @@ const parseAuthResponse = (data, fallbackToken = null) => {
 };
 
 const authRequest = async (apiUrl, path, options = {}) => {
-  const response = await fetch(`${String(apiUrl || "").replace(/\/$/, "")}${path}`, options);
-  const text = await response.text();
-  const data = text ? JSON.parse(text) : null;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), AUTH_REQUEST_TIMEOUT_MS);
 
-  if (!response.ok) {
-    throw new Error(data?.message || data?.error || `Auth request failed with status ${response.status}`);
+  try {
+    const response = await fetch(`${String(apiUrl || "").replace(/\/$/, "")}${path}`, {
+      ...options,
+      signal: controller.signal,
+    });
+    const text = await response.text();
+    const data = text ? JSON.parse(text) : null;
+
+    if (!response.ok) {
+      throw new Error(data?.message || data?.error || `Auth request failed with status ${response.status}`);
+    }
+
+    return data;
+  } catch (err) {
+    if (err?.name === "AbortError") {
+      throw new Error("Authentication service did not respond. Please try again later.");
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
   }
-
-  return data;
 };
-
 const normalizeAllowedOrigins = (origins = []) => (
   Array.isArray(origins) ? origins : String(origins || "").split(",")
 ).map((origin) => String(origin || "").trim()).filter(Boolean);

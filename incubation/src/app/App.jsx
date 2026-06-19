@@ -1,0 +1,57 @@
+import React from 'react';
+
+import '../main.css';
+import { AuthProvider } from '../auth/AuthContext.jsx';
+import { useAuth } from '../auth/useAuth.js';
+import LoginPage from '../auth/LoginPage.jsx';
+import WorkspaceFrame from '../workspace/components/WorkspaceFrame.jsx';
+import { WorkspaceProvider } from '../workspace/state/WorkspaceContext.jsx';
+import { appConfig } from './config.js';
+
+const loginLogo = import.meta.env.BASE_URL + 'site_images/Linkx square Icon (256x256).png';
+
+function IncubationShell() {
+  const { user, logout } = useAuth();
+
+  return (
+    <WorkspaceProvider>
+      <WorkspaceFrame user={user} onSignOut={logout} logoSrc={loginLogo} />
+    </WorkspaceProvider>
+  );
+}
+function IncubationApp() {
+  const { isAuthReady, isAuthenticated, isSsoAuthenticating, ssoError, login } = useAuth();
+
+  if (!isAuthReady) {
+    return (
+      <main className="linkx_login_shell">
+        <div className="linkx_login_overlay" aria-hidden="true" />
+        <div className="linkx_login_content">
+          <section className="linkx_login_panel" aria-label="Loading">
+            <div className="linkx_login_brand">
+              <div className="linkx_login_brand_mark">
+                <img className="linkx_login_brand_logo" src={loginLogo} alt="Linkx logo" />
+                <span>Linkx</span>
+              </div>
+              <small>Preparing login</small>
+            </div>
+          </section>
+        </div>
+      </main>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <LoginPage onLogin={login} ssoError={ssoError} isSsoAuthenticating={isSsoAuthenticating} />;
+  }
+
+  return <IncubationShell />;
+}
+
+export default function App() {
+  return (
+    <AuthProvider apiUrl={appConfig.apiUrl} allowedSsoOrigins={appConfig.allowedSsoOrigins}>
+      <IncubationApp />
+    </AuthProvider>
+  );
+}

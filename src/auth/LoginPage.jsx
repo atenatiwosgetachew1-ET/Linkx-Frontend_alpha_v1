@@ -77,7 +77,7 @@ export default function LoginPage({ onLogin, ssoError = "", isSsoAuthenticating 
     try {
       await onLogin(cleanUsername, cleanPassword);
     } catch (err) {
-      setError(genericLoginError);
+      setError(err?.message || genericLoginError);
     } finally {
       setIsSubmitting(false);
     }

@@ -825,6 +825,8 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
   const activeRuleValue = normalizeActiveRuleValue(parsedConfig?.active_rule);
   const ruleNames = Array.isArray(parsedConfig?.rule_names) ? parsedConfig.rule_names : [];
   const canRemoveRule = ruleNames.length > 0 && selectedRuleForRemoval !== "";
+  const largeSearchBackend = normalizeLargeSearchBackend(parsedConfig?.large_search_backend);
+  const elasticScrollLimit = normalizeElasticScrollLimit(parsedConfig?.elastic_scroll_limit);
   const idleTimeoutMinutes = Math.max(1, Math.round((idleSettings?.timeoutMs || DEFAULT_IDLE_TIMEOUT_MS) / 60000));
   const idleWarningMinutes = Math.max(0, Math.round((idleSettings?.warningMs || DEFAULT_IDLE_WARNING_MS) / 60000));
 
@@ -1089,6 +1091,30 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
                   value={Array.isArray(parsedConfig?.storage_tables) ? parsedConfig.storage_tables.join(", ") : ""}
                   onChange={(e) => actions("change", { name: e.target.name, value: e.target.value })}
                 />
+
+                <label>Large search retrieval</label>
+                <select
+                  name="large_search_backend"
+                  className="input_text"
+                  value={largeSearchBackend}
+                  onChange={(e) => actions("change", { name: e.target.name, value: e.target.value })}
+                >
+                  <option value="hive">Hive/Spark query</option>
+                  <option value="elastic_scroll">Elasticsearch scroll</option>
+                </select>
+
+                <label>Elasticsearch scroll limit</label>
+                <input
+                  type="number"
+                  min="1"
+                  step="1000"
+                  name="elastic_scroll_limit"
+                  className="input_text"
+                  value={elasticScrollLimit}
+                  disabled={largeSearchBackend !== "elastic_scroll"}
+                  onChange={(e) => actions("change", { name: e.target.name, value: e.target.value })}
+                />
+                <label className="idle_timeout_hint">Used by the backend when large fuzzy search results are converted into a dataframe.</label>
               </fieldset>
 
               {/* Notes */}
@@ -1260,6 +1286,7 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
                 </label>
               </fieldset>
 
+
               <fieldset style={{ display: activeConfigTab === "system" ? "block" : "none" }}>
                 <legend>Interaction timeout</legend>
                 <input
@@ -1381,6 +1408,126 @@ const isSuccessResponse = (data) => {
   return message === "success" || message === "success!";
 };
 
+const DATAFRAME_JOB_POLL_INTERVAL_MS = 2000;
+const DATAFRAME_JOB_MAX_POLLS = 150;
+const DATAFRAME_JOB_PENDING_STATUSES = new Set(["queued", "pending", "running", "started", "processing", "in_progress"]);
+const DATAFRAME_JOB_SUCCESS_STATUSES = new Set(["succeeded", "success", "completed", "done"]);
+const DATAFRAME_JOB_FAILURE_STATUSES = new Set(["failed", "failure", "error", "cancelled", "canceled"]);
+
+const delay = (ms) => new Promise((resolve) => {
+  setTimeout(resolve, ms);
+});
+
+const getDataframeJobId = (data) => (
+  data?.job_id ??
+  data?.jobId ??
+  data?.results?.job_id ??
+  data?.results?.jobId ??
+  data?.result?.job_id ??
+  data?.result?.jobId ??
+  null
+);
+
+const getDataframeJobStatus = (data) => String(
+  data?.status ??
+  data?.results?.status ??
+  data?.result?.status ??
+  ""
+).trim().toLowerCase();
+
+const isQueuedDataframeJobResponse = (data) => (
+  Number(data?.__httpStatus) === 202 &&
+  isSuccessResponse(data) &&
+  data?.results?.accepted === true &&
+  !!getDataframeJobId(data)
+);
+
+const getDataframeJobMessage = (data) => (
+  data?.message ??
+  data?.error ??
+  data?.results?.message ??
+  data?.results?.error ??
+  data?.result?.message ??
+  data?.result?.error ??
+  "Dataframe job failed"
+);
+
+const normalizeCompletedDataframeJob = (data) => {
+  const nestedResponse =
+    data?.results?.result ??
+    data?.results?.response ??
+    data?.result?.result ??
+    data?.result?.response ??
+    data?.response;
+
+  if (nestedResponse && typeof nestedResponse === "object") {
+    if (nestedResponse.results || nestedResponse.message) {
+      return {
+        ...nestedResponse,
+        message: nestedResponse.message || "success",
+      };
+    }
+
+    return {
+      ...data,
+      message: data?.message || "success",
+      results: nestedResponse,
+    };
+  }
+
+  if (data?.results && !DATAFRAME_JOB_SUCCESS_STATUSES.has(getDataframeJobStatus(data?.results))) {
+    return {
+      ...data,
+      message: data.message || "success",
+    };
+  }
+
+  return {
+    ...data,
+    message: data?.message || "success",
+    results: data?.data ?? data?.result?.data ?? data?.result ?? data?.results,
+  };
+};
+
+const pollDataframeCreationJob = async (apiFetch, jobId) => {
+  for (let attempt = 0; attempt < DATAFRAME_JOB_MAX_POLLS; attempt += 1) {
+    const data = await apiFetch(`/jobs/${encodeURIComponent(jobId)}`, {
+      method: "GET",
+    });
+    const status = getDataframeJobStatus(data);
+
+    if (DATAFRAME_JOB_SUCCESS_STATUSES.has(status)) {
+      return normalizeCompletedDataframeJob(data);
+    }
+    if (DATAFRAME_JOB_FAILURE_STATUSES.has(status)) {
+      throw new Error(getDataframeJobMessage(data));
+    }
+    if (!DATAFRAME_JOB_PENDING_STATUSES.has(status) && isSuccessResponse(data)) {
+      return data;
+    }
+
+    await delay(DATAFRAME_JOB_POLL_INTERVAL_MS);
+  }
+
+  throw new Error(`Dataframe job ${jobId} did not finish in time`);
+};
+
+const requestDataframeCreation = async (apiFetch, payload) => {
+  const data = await apiFetch("/live_batch_files", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const jobId = getDataframeJobId(data);
+  const status = getDataframeJobStatus(data);
+
+  if (isQueuedDataframeJobResponse(data) || (jobId && DATAFRAME_JOB_PENDING_STATUSES.has(status))) {
+    return pollDataframeCreationJob(apiFetch, jobId);
+  }
+
+  return data;
+};
+
 const extractConfigurationPayload = (data) => (
   data?.results?.data ?? data?.results?.configuration ?? data?.configuration ?? data?.data ?? null
 );
@@ -1397,9 +1544,34 @@ const parseConfigurationValue = (value) => {
   return value && typeof value === "object" ? value : {};
 };
 
+const LARGE_SEARCH_BACKENDS = new Set(["hive", "elastic_scroll"]);
+const DEFAULT_LARGE_SEARCH_BACKEND = "hive";
+const DEFAULT_ELASTIC_SCROLL_LIMIT = 1000000;
+
+const normalizeBooleanConfigValue = (value) => value === true || value === "true";
+
+const normalizeElasticScrollLimit = (value) => {
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) return DEFAULT_ELASTIC_SCROLL_LIMIT;
+  return parsed;
+};
+
+const normalizeLargeSearchBackend = (value) => (
+  LARGE_SEARCH_BACKENDS.has(String(value || "")) ? String(value) : DEFAULT_LARGE_SEARCH_BACKEND
+);
+
 const normalizeConfigurationFieldValue = (name, value) => {
   if (name === "storage_tables" || name === "active_tool_tables") {
     return Array.isArray(value) ? value : String(value || "").split(",").map((item) => item.trim()).filter(Boolean);
+  }
+  if (name === "large_search_backend") {
+    return normalizeLargeSearchBackend(value);
+  }
+  if (name === "elastic_scroll_enabled") {
+    return normalizeBooleanConfigValue(value);
+  }
+  if (name === "elastic_scroll_limit") {
+    return normalizeElasticScrollLimit(value);
   }
   return value;
 };
@@ -1414,6 +1586,14 @@ const normalizeConfigurationStatePatch = (previous, name, value) => {
 
   if (name === "active_tool_url") {
     nextConfig.active_tool_protocol = normalizedValue;
+  }
+
+  if (name === "large_search_backend") {
+    nextConfig.elastic_scroll_enabled = normalizedValue === "elastic_scroll";
+  }
+
+  if (name === "elastic_scroll_enabled") {
+    nextConfig.large_search_backend = normalizedValue ? "elastic_scroll" : "hive";
   }
 
   if (previous?.value) {
@@ -1506,7 +1686,14 @@ const normalizeLoadedConfiguration = (payload) => {
 const buildConfigurationSavePayload = (configuration) => {
   const parsed = parseConfigurationValue(configuration);
   const { value: _value, ...rest } = parsed;
-  return rest;
+  const largeSearchBackend = normalizeLargeSearchBackend(rest.large_search_backend);
+
+  return {
+    ...rest,
+    large_search_backend: largeSearchBackend,
+    elastic_scroll_enabled: largeSearchBackend === "elastic_scroll",
+    elastic_scroll_limit: normalizeElasticScrollLimit(rest.elastic_scroll_limit),
+  };
 };
 
 const normalizeCleanupAuditResults = (data) => {
@@ -7332,11 +7519,7 @@ const fileInputRef = useRef(null);
                     broker_url: payloadAddress,
                     topic: payloadTopic,
                   };
-                apiFetch("/live_batch_files", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify(payload1),
-                })
+                requestDataframeCreation(apiFetch, payload1)
                 .then((data) => { 
                     console.log("public source data:",data, "payload:", payload1, "api:", `${API_URL}/live_batch_files`)   
                     var arrayData=Object.values(data.results)
@@ -7357,7 +7540,7 @@ const fileInputRef = useRef(null);
                       );
                     }
                     else {
-                      alert(`Failed to create dataframe: ${data.message || "Unknown response"}`)
+                      alert("We could not create the dataframe right now. Please check the selected source and try again.")
                       setWindows(prev =>
                         prev.map(w =>
                           w.id === id ? { ...w, batchFilesDataframeInfoI:[],loadscreenState: false,dataframeStatus: DATAFRAME_STATUSES.FAILED } : w
@@ -7367,7 +7550,7 @@ const fileInputRef = useRef(null);
                   })
                 .catch((err) => {
                   console.error("create_DF error:", err, "payload:", payload1, "api:", `${API_URL}/live_batch_files`);
-                  alert(`requestID8234690944 failed! ${err?.message || ""}\nBroker: ${payload1.value}\nTopic: ${payload1.topic || "<none>"}`);
+                  alert("We could not create the dataframe from this source. Please verify the source is reachable and try again.");
                   setWindows(prev =>
                     prev.map(w =>
                       w.id === id ? { ...w, batchFilesDataframeInfoI: null, loadscreenState: false,dataframeStatus: DATAFRAME_STATUSES.FAILED} : w
@@ -7687,11 +7870,7 @@ const fileInputRef = useRef(null);
                 session_id: id,//Source window id
                 value: newBatchFilesCollection, //Explodes at back end
               };
-            apiFetch("/live_batch_files", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(payload),
-            })
+            requestDataframeCreation(apiFetch, payload)
             .then((data) => { 
                 console.log("searchdata:",data)   
                 var arrayData=Object.values(data.results)
@@ -7709,7 +7888,7 @@ const fileInputRef = useRef(null);
                   );
                 }
                 else {
-                  alert("faild to create a dataframe1",data.message)
+                  alert("We could not create the dataframe from the selected files. Please review your selection and try again.")
                   setWindows(prev =>
                     prev.map(w =>
                       w.id === id ? { ...w, batchFilesDataframeInfoI:[],loadscreenState: false,dataframeStatus: DATAFRAME_STATUSES.FAILED } : w
@@ -7719,7 +7898,7 @@ const fileInputRef = useRef(null);
               })
             .catch((err) => {
               console.error(err);
-              alert("requestID823469312 failed!");
+              alert("We could not create the dataframe from the selected files. Please try again in a moment.");
               setWindows(prev =>
                 prev.map(w =>
                   w.id === id ? { ...w, batchFilesDataframeInfoI: null, loadscreenState: false,dataframeStatus: DATAFRAME_STATUSES.FAILED} : w
@@ -8034,7 +8213,7 @@ const fileInputRef = useRef(null);
             })
             .catch((err) => {
               console.error("err",err);
-              alert("requestID82346922 failed!");
+              alert("We could not update the stream state. Please try again in a moment.");
               setWindows(prev =>
                 prev.map(w =>
                   w.id === id ? { ...w, batchFilesDataframeInfoI:w.batchFilesDataframeInfoI, loadscreenState: false} : w
