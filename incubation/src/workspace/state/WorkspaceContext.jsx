@@ -25,6 +25,17 @@ export function WorkspaceProvider({ children }) {
         type: WORKSPACE_ACTIONS.FOCUS_WINDOW,
         payload: { id },
       }),
+      updateWindowCustomTitle: (id, customTitle) => dispatch({
+        type: WORKSPACE_ACTIONS.UPDATE_WINDOW_CUSTOM_TITLE,
+        payload: { id, customTitle },
+      }),
+      setOrientation: (orientation) => dispatch({
+        type: WORKSPACE_ACTIONS.SET_ORIENTATION,
+        payload: { orientation },
+      }),
+      toggleOrientation: () => dispatch({
+        type: WORKSPACE_ACTIONS.TOGGLE_ORIENTATION,
+      }),
       setContextTab: (tab) => dispatch({
         type: WORKSPACE_ACTIONS.SET_CONTEXT_TAB,
         payload: { tab },

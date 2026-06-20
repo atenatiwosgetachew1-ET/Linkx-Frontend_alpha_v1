@@ -1408,49 +1408,110 @@ const isSuccessResponse = (data) => {
   return message === "success" || message === "success!";
 };
 
-const DATAFRAME_JOB_POLL_INTERVAL_MS = 2000;
-const DATAFRAME_JOB_MAX_POLLS = 150;
-const DATAFRAME_JOB_PENDING_STATUSES = new Set(["queued", "pending", "running", "started", "processing", "in_progress"]);
-const DATAFRAME_JOB_SUCCESS_STATUSES = new Set(["succeeded", "success", "completed", "done"]);
-const DATAFRAME_JOB_FAILURE_STATUSES = new Set(["failed", "failure", "error", "cancelled", "canceled"]);
+const JOB_POLL_DEFAULT_INTERVAL_MS = 1000;
+const JOB_POLL_DEFAULT_TIMEOUT_MS = 15 * 60 * 1000;
+const JOB_SUCCESS_STATUSES = new Set(["succeeded", "success", "finished", "completed", "done"]);
+const JOB_PENDING_STATUSES = new Set(["queued", "pending", "running", "started", "processing", "in_progress"]);
+const JOB_FAILURE_STATUSES = new Set(["failed", "failure", "error", "cancelled", "canceled"]);
 
 const delay = (ms) => new Promise((resolve) => {
   setTimeout(resolve, ms);
 });
 
-const getDataframeJobId = (data) => (
-  data?.job_id ??
-  data?.jobId ??
+const getQueuedJobId = (data) => (
   data?.results?.job_id ??
   data?.results?.jobId ??
+  data?.job_id ??
+  data?.jobId ??
   data?.result?.job_id ??
   data?.result?.jobId ??
   null
 );
 
-const getDataframeJobStatus = (data) => String(
-  data?.status ??
-  data?.results?.status ??
-  data?.result?.status ??
+const getQueuedPollPath = (data) => {
+  const pollUrl = data?.results?.poll_url ?? data?.results?.pollUrl ?? data?.poll_url ?? data?.pollUrl ?? null;
+  if (pollUrl) return String(pollUrl);
+  const jobId = getQueuedJobId(data);
+  return jobId ? "/jobs/" + encodeURIComponent(jobId) : null;
+};
+
+const getJobStatus = (job) => String(
+  job?.results?.status ??
+  job?.status ??
+  job?.result?.status ??
+  job?.graph?.status ??
   ""
 ).trim().toLowerCase();
 
-const isQueuedDataframeJobResponse = (data) => (
+const getJobResult = (job) => (
+  job?.results?.result ??
+  job?.result ??
+  job?.results ??
+  job
+);
+
+const getJobErrorMessage = (job, fallback = "Job failed") => {
+  const result = getJobResult(job);
+  return result?.message ??
+    result?.error ??
+    job?.results?.message ??
+    job?.results?.error ??
+    job?.message ??
+    job?.error ??
+    fallback;
+};
+
+const isQueuedJobResponse = (data) => (
   Number(data?.__httpStatus) === 202 &&
   isSuccessResponse(data) &&
   data?.results?.accepted === true &&
-  !!getDataframeJobId(data)
+  !!getQueuedPollPath(data)
 );
 
-const getDataframeJobMessage = (data) => (
-  data?.message ??
-  data?.error ??
-  data?.results?.message ??
-  data?.results?.error ??
-  data?.result?.message ??
-  data?.result?.error ??
-  "Dataframe job failed"
-);
+const pollJob = async (apiFetch, jobIdOrPath, { intervalMs = JOB_POLL_DEFAULT_INTERVAL_MS, timeoutMs = JOB_POLL_DEFAULT_TIMEOUT_MS, signal } = {}) => {
+  const startedAt = Date.now();
+  const pollPath = String(jobIdOrPath || "").startsWith("/")
+    ? String(jobIdOrPath)
+    : "/jobs/" + encodeURIComponent(jobIdOrPath);
+
+  while (Date.now() - startedAt < timeoutMs) {
+    if (signal?.aborted) throw new DOMException("Job request was cancelled", "AbortError");
+
+    const job = await apiFetch(pollPath, {
+      method: "GET",
+      signal,
+    });
+    const status = getJobStatus(job);
+    const result = getJobResult(job);
+
+    if (JOB_SUCCESS_STATUSES.has(status)) {
+      return result;
+    }
+
+    if (JOB_FAILURE_STATUSES.has(status)) {
+      throw new Error(getJobErrorMessage(job));
+    }
+
+    await delay(intervalMs);
+  }
+
+  throw new Error("Job timed out");
+};
+
+const fetchMaybeQueued = async (apiFetch, url, options = {}, pollOptions = {}) => {
+  const response = await apiFetch(url, options);
+
+  if (isQueuedJobResponse(response)) {
+    return pollJob(apiFetch, getQueuedPollPath(response), {
+      ...pollOptions,
+      signal: pollOptions.signal ?? options.signal,
+    });
+  }
+
+  return response;
+};
+
+const getDataframeJobMessage = (data) => getJobErrorMessage(data, "Dataframe job failed");
 
 const normalizeCompletedDataframeJob = (data) => {
   const nestedResponse =
@@ -1475,7 +1536,7 @@ const normalizeCompletedDataframeJob = (data) => {
     };
   }
 
-  if (data?.results && !DATAFRAME_JOB_SUCCESS_STATUSES.has(getDataframeJobStatus(data?.results))) {
+  if (data?.results && !JOB_SUCCESS_STATUSES.has(getJobStatus(data?.results))) {
     return {
       ...data,
       message: data.message || "success",
@@ -1489,43 +1550,86 @@ const normalizeCompletedDataframeJob = (data) => {
   };
 };
 
-const pollDataframeCreationJob = async (apiFetch, jobId) => {
-  for (let attempt = 0; attempt < DATAFRAME_JOB_MAX_POLLS; attempt += 1) {
-    const data = await apiFetch(`/jobs/${encodeURIComponent(jobId)}`, {
-      method: "GET",
-    });
-    const status = getDataframeJobStatus(data);
-
-    if (DATAFRAME_JOB_SUCCESS_STATUSES.has(status)) {
-      return normalizeCompletedDataframeJob(data);
-    }
-    if (DATAFRAME_JOB_FAILURE_STATUSES.has(status)) {
-      throw new Error(getDataframeJobMessage(data));
-    }
-    if (!DATAFRAME_JOB_PENDING_STATUSES.has(status) && isSuccessResponse(data)) {
-      return data;
-    }
-
-    await delay(DATAFRAME_JOB_POLL_INTERVAL_MS);
-  }
-
-  throw new Error(`Dataframe job ${jobId} did not finish in time`);
-};
-
 const requestDataframeCreation = async (apiFetch, payload) => {
   const data = await apiFetch("/live_batch_files", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
-  const jobId = getDataframeJobId(data);
-  const status = getDataframeJobStatus(data);
 
-  if (isQueuedDataframeJobResponse(data) || (jobId && DATAFRAME_JOB_PENDING_STATUSES.has(status))) {
-    return pollDataframeCreationJob(apiFetch, jobId);
+  if (isQueuedJobResponse(data)) {
+    const result = await pollJob(apiFetch, getQueuedPollPath(data), { intervalMs: 2000 });
+    return normalizeCompletedDataframeJob(result);
   }
 
   return data;
+};
+
+const getGraphJobMessage = (data) => getJobErrorMessage(data, "Graph request failed");
+
+const getGraphPayloadCandidate = (data) => {
+  if (data?.results?.result && typeof data.results.result === "object") return data.results.result;
+  if (Array.isArray(data?.results?.nodes) || Array.isArray(data?.results?.edges)) return data.results;
+  if (Array.isArray(data?.nodes) || Array.isArray(data?.edges)) return data;
+  if (data?.graph && (Array.isArray(data.graph.nodes) || Array.isArray(data.graph.edges))) return data.graph;
+  if (data?.results?.graph && (Array.isArray(data.results.graph.nodes) || Array.isArray(data.results.graph.edges))) return data.results.graph;
+  return data?.results ?? data;
+};
+
+const hasGraphPayload = (data) => {
+  const payload = getGraphPayloadCandidate(data);
+  const graphPayload = payload?.graph && typeof payload.graph === "object" ? payload.graph : data?.graph;
+  return Array.isArray(payload?.nodes) || Array.isArray(payload?.edges) || Array.isArray(graphPayload?.nodes) || Array.isArray(graphPayload?.edges);
+};
+
+const normalizeGraphFetchResponse = (data) => {
+  const payload = getGraphPayloadCandidate(data) || {};
+  const graphPayload = payload.graph && typeof payload.graph === "object" ? payload.graph : data?.graph;
+  const nodes = Array.isArray(payload.nodes)
+    ? payload.nodes
+    : Array.isArray(graphPayload?.nodes)
+      ? graphPayload.nodes
+      : [];
+  const edges = Array.isArray(payload.edges)
+    ? payload.edges
+    : Array.isArray(graphPayload?.edges)
+      ? graphPayload.edges
+      : [];
+
+  return {
+    ...data,
+    message: payload.message || data?.message || "success",
+    results: {
+      ...payload,
+      nodes,
+      edges,
+      file: payload.file ?? graphPayload?.file ?? data?.file,
+      source_id: payload.source_id ?? data?.source_id,
+      graph_session_id: payload.graph_session_id ?? data?.graph_session_id,
+      relationship: payload.relationship ?? data?.relationship,
+      graph: graphPayload ?? { nodes, edges, file: payload.file ?? data?.file, status: payload.status ?? data?.status, message: payload.message ?? data?.message },
+    },
+  };
+};
+
+const requestGraphFetch = async (apiFetch, payload, signal) => {
+  const data = await fetchMaybeQueued(apiFetch, "/get_graph", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+    signal,
+  }, { signal });
+
+  const status = getJobStatus(data);
+  if (JOB_FAILURE_STATUSES.has(status) || data?.error || data?.results?.error || data?.result?.error) {
+    throw new Error(getGraphJobMessage(data));
+  }
+
+  if (!hasGraphPayload(data)) {
+    throw new Error(getGraphJobMessage(data));
+  }
+
+  return normalizeGraphFetchResponse(data);
 };
 
 const extractConfigurationPayload = (data) => (
@@ -1709,6 +1813,10 @@ const normalizeCleanupAuditResults = (data) => {
 
 function ActivityAuditPanel({ apiFetch, canAccess, isActive }) {
   const [filters, setFilters] = useState({ session_id: "", cleanup_type: "", status: "", limit: "20" });
+  const [cleanupDraft, setCleanupDraft] = useState({ session_id: "", cleanup_type: "", run_id: "", preserve_session_config: true });
+  const [cleanupPreview, setCleanupPreview] = useState(null);
+  const [cleanupMessage, setCleanupMessage] = useState("");
+  const [cleanupLoading, setCleanupLoading] = useState(false);
   const [audit, setAudit] = useState({ items: [], total: 0, limit: 20, offset: 0 });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -1717,6 +1825,61 @@ function ActivityAuditPanel({ apiFetch, canAccess, isActive }) {
 
   const updateFilter = (name, value) => {
     setFilters((prev) => ({ ...prev, [name]: sanitizeText(value, { maxLength: 120 }) }));
+  };
+
+  const updateCleanupDraft = (name, value) => {
+    setCleanupDraft((prev) => ({
+      ...prev,
+      [name]: name === "preserve_session_config" ? !!value : sanitizeText(value, { maxLength: 160 }),
+    }));
+    setCleanupMessage("");
+  };
+
+  const buildCleanupPayload = (dryRun) => {
+    const sessionId = sanitizeGraphEndpointId(cleanupDraft.session_id, { maxLength: 128 });
+    const runId = sanitizeGraphEndpointId(cleanupDraft.run_id, { maxLength: 128 });
+    const cleanupType = sanitizeGraphEndpointId(cleanupDraft.cleanup_type, { maxLength: 40 });
+    const payload = {
+      id: "cleanup_session",
+      session_id: sessionId,
+      reason: dryRun ? "admin_cleanup_preview" : "admin_manual_cleanup",
+      dry_run: dryRun,
+      preserve_session_config: cleanupDraft.preserve_session_config !== false,
+    };
+
+    if (cleanupType) payload.cleanup_type = cleanupType;
+    if (runId) payload.run_id = runId;
+    return payload;
+  };
+
+  const submitCleanup = async (dryRun) => {
+    if (!apiFetch || !canManageUsers) return;
+    const payload = buildCleanupPayload(dryRun);
+    if (!payload.session_id) {
+      setError("Provide a session ID before cleanup.");
+      return;
+    }
+    if (!dryRun && !window.confirm("Queue cleanup for " + (payload.run_id || payload.session_id) + "?")) return;
+
+    setCleanupLoading(true);
+    setError("");
+    setCleanupMessage("");
+    try {
+      const data = await apiFetch("/admin/cleanup/session", {
+        method: "POST",
+        body: payload,
+      });
+      const results = data?.results || data || {};
+      setCleanupPreview(results);
+      setCleanupMessage(dryRun ? "Cleanup preview completed." : "Cleanup queued.");
+      const nextFilters = { ...filters, session_id: payload.session_id || filters.session_id };
+      setFilters(nextFilters);
+      await loadAudit(0, nextFilters);
+    } catch (err) {
+      setError(err?.message || "Cleanup request failed.");
+    } finally {
+      setCleanupLoading(false);
+    }
   };
 
   const loadAudit = useCallback(async (nextOffset = 0, nextFilters = filters) => {
@@ -1767,6 +1930,27 @@ function ActivityAuditPanel({ apiFetch, canAccess, isActive }) {
     <div className="configurations_options_panel cleanup_audit_panel">
       <fieldset>
         <legend>Activity Log</legend>
+        <div className="cleanup_manual_form">
+          <label>Session ID<input type="text" value={cleanupDraft.session_id} onChange={(event) => updateCleanupDraft("session_id", event.target.value)} placeholder="1_815493" /></label>
+          <label>Cleanup type
+            <select value={cleanupDraft.cleanup_type} onChange={(event) => updateCleanupDraft("cleanup_type", event.target.value)}>
+              <option value="">Auto</option>
+              <option value="session">Session</option>
+              <option value="session_tree">Session tree</option>
+              <option value="window">Window</option>
+              <option value="run">Run</option>
+              <option value="neo4j_session">Neo4j session</option>
+            </select>
+          </label>
+          <label>Run ID<input type="text" value={cleanupDraft.run_id} onChange={(event) => updateCleanupDraft("run_id", event.target.value)} placeholder="Optional" /></label>
+          <label className="settings_inline_check"><input type="checkbox" checked={cleanupDraft.preserve_session_config !== false} onChange={(event) => updateCleanupDraft("preserve_session_config", event.target.checked)} /> Preserve config</label>
+        </div>
+        <div className="cleanup_audit_actions">
+          <button type="button" className="action_btns" onClick={() => submitCleanup(true)} disabled={cleanupLoading}>{cleanupLoading ? "Working..." : "Preview cleanup"}</button>
+          <button type="button" className="critical_btns" onClick={() => submitCleanup(false)} disabled={cleanupLoading}>{cleanupLoading ? "Working..." : "Queue cleanup"}</button>
+          {cleanupMessage && <span>{cleanupMessage}</span>}
+        </div>
+        {cleanupPreview && <div className="cleanup_preview_result"><span>Type: <b>{cleanupPreview.cleanup_type || "auto"}</b></span><span>Status: <b>{cleanupPreview.status || "unknown"}</b></span><span>Dry run: <b>{cleanupPreview.dry_run ? "yes" : "no"}</b></span>{cleanupPreview.cleanup_id && <span>Cleanup ID: <b>{cleanupPreview.cleanup_id}</b></span>}</div>}
         <div className="cleanup_audit_filters">
           <label>Session ID<input type="text" value={filters.session_id} onChange={(event) => updateFilter("session_id", event.target.value)} placeholder="1_895258" /></label>
           <label>Cleanup type<input type="text" value={filters.cleanup_type} onChange={(event) => updateFilter("cleanup_type", event.target.value)} placeholder="window" /></label>
@@ -6800,14 +6984,9 @@ const fileInputRef = useRef(null);
             graphFetchAbortControllersRef.current[id] = controller;
 
             updates.loadscreenState = true;
-            updates.loadscreenText = "Staging graph";
+            updates.loadscreenText = "Fetching graph...";
 
-            apiFetch("/get_graph", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(newPayload),
-              signal: controller.signal
-            })
+            requestGraphFetch(apiFetch, newPayload, controller.signal)
               .then(data => {
                 if (!graphFetchAbortControllersRef.current[id] || graphFetchAbortControllersRef.current[id] !== controller) return;
                 setWindows(prev =>
@@ -6842,7 +7021,7 @@ const fileInputRef = useRef(null);
                       : win
                   )
                 );
-                alert(err);
+                alert(err?.message || "Graph request failed");
               })
               .finally(() => {
                 if (graphFetchAbortControllersRef.current[id] === controller) {
@@ -7718,7 +7897,7 @@ const fileInputRef = useRef(null);
                   )
                 );
 
-                apiFetch("/live_batch_files", {
+                fetchMaybeQueued(apiFetch, "/live_batch_files", {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify(buildPayload(0))
@@ -7753,7 +7932,16 @@ const fileInputRef = useRef(null);
                       alert(data.message);
                     }
                   })
-                  .catch(console.error);
+                  .catch((err) => {
+                  console.error(err);
+                  setWindows(prev =>
+                    prev.map(w =>
+                      w.id === id
+                        ? { ...w, searchText: false, searchPlaceholder: "Search failed" }
+                        : w
+                    )
+                  );
+                });
               }, 300);
             }
 
@@ -7781,7 +7969,7 @@ const fileInputRef = useRef(null);
                 )
               );
 
-              apiFetch("/live_batch_files", {
+              fetchMaybeQueued(apiFetch, "/live_batch_files", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(buildPayload(offset))
@@ -7809,7 +7997,16 @@ const fileInputRef = useRef(null);
                     )
                   );
                 })
-                .catch(console.error);
+                .catch((err) => {
+                  console.error(err);
+                  setWindows(prev =>
+                    prev.map(w =>
+                      w.id === id
+                        ? { ...w, searchText: false, searchPlaceholder: "Search failed" }
+                        : w
+                    )
+                  );
+                });
             }
         }
         if (menuId === "batch_files_select_file" && action === "toggle_select") {

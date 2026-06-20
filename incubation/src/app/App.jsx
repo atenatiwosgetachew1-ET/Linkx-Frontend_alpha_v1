@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 
 import '../main.css';
 import { AuthProvider } from '../auth/AuthContext.jsx';
@@ -6,16 +6,47 @@ import { useAuth } from '../auth/useAuth.js';
 import LoginPage from '../auth/LoginPage.jsx';
 import WorkspaceFrame from '../workspace/components/WorkspaceFrame.jsx';
 import { WorkspaceProvider } from '../workspace/state/WorkspaceContext.jsx';
+import { initializeMainSession } from '../services/sessionApi.js';
 import { appConfig } from './config.js';
 
 const loginLogo = import.meta.env.BASE_URL + 'site_images/Linkx square Icon (256x256).png';
 
 function IncubationShell() {
-  const { user, logout } = useAuth();
+  const { user, token, logout } = useAuth();
+  const [mainSessionId, setMainSessionId] = useState(() => localStorage.getItem('session') || '');
+  const [sessionError, setSessionError] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!token) return undefined;
+
+    initializeMainSession(appConfig.apiUrl, token)
+      .then(({ sessionId }) => {
+        if (!cancelled) {
+          setMainSessionId(sessionId);
+          setSessionError('');
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) setSessionError(error?.message || 'Session initialization failed.');
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
 
   return (
     <WorkspaceProvider>
-      <WorkspaceFrame user={user} onSignOut={logout} logoSrc={loginLogo} />
+      <WorkspaceFrame
+        user={user}
+        token={token}
+        apiUrl={appConfig.apiUrl}
+        mainSessionId={mainSessionId}
+        sessionError={sessionError}
+        onSignOut={logout}
+        logoSrc={loginLogo}
+      />
     </WorkspaceProvider>
   );
 }

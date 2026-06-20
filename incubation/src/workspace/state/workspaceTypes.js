@@ -13,10 +13,18 @@ export const WORKSPACE_CONTEXT_TABS = Object.freeze({
   SETTINGS: 'settings',
 });
 
+export const WORKSPACE_ORIENTATIONS = Object.freeze({
+  FLOATING: 'floating',
+  DOCKED: 'docked',
+});
+
 export const WORKSPACE_ACTIONS = Object.freeze({
   OPEN_WINDOW: 'workspace/openWindow',
   CLOSE_WINDOW: 'workspace/closeWindow',
   FOCUS_WINDOW: 'workspace/focusWindow',
+  UPDATE_WINDOW_CUSTOM_TITLE: 'workspace/updateWindowCustomTitle',
+  SET_ORIENTATION: 'workspace/setOrientation',
+  TOGGLE_ORIENTATION: 'workspace/toggleOrientation',
   SET_CONTEXT_TAB: 'workspace/setContextTab',
   CLEAR_WINDOWS: 'workspace/clearWindows',
 });

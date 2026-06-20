@@ -996,6 +996,34 @@ body{
   width: 100%;
   margin: 0.25vh 0 0;
 }
+#configurations_container .cleanup_manual_form{
+  display: grid;
+  grid-template-columns: repeat(4, minmax(120px, 1fr));
+  gap: 0.7vh 0.7vw;
+  align-items: end;
+  margin-bottom: 0.8vh;
+}
+#configurations_container .cleanup_manual_form label{
+  padding: 0;
+}
+#configurations_container .cleanup_manual_form select,
+#configurations_container .cleanup_manual_form input{
+  width: 100%;
+  margin: 0.25vh 0 0;
+}
+#configurations_container .cleanup_preview_result{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35vw;
+  margin: 0.5vh 0 1vh;
+  color: #46637c;
+  font-size: calc(0.4vh + 0.5vw);
+}
+#configurations_container .cleanup_preview_result span{
+  padding: 0.25rem 0.45rem;
+  border: 1px solid #d6e4ef;
+  border-radius: 0.35rem;
+}
 #configurations_container .cleanup_audit_actions{
   display: flex;
   flex-wrap: wrap;

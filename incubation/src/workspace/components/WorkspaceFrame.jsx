@@ -5,7 +5,8 @@ import WorkspaceHome from './WorkspaceHome.jsx';
 import WorkspaceContextPanel from './WorkspaceContextPanel.jsx';
 import WindowManager from './WindowManager.jsx';
 import { useWorkspace } from '../hooks/useWorkspace.js';
-import { WORKSPACE_CONTEXT_TABS, WORKSPACE_WINDOW_TYPES } from '../state/workspaceTypes.js';
+import { initializeSourceWindow } from '../../services/sourceApi.js';
+import { WORKSPACE_CONTEXT_TABS, WORKSPACE_ORIENTATIONS, WORKSPACE_WINDOW_TYPES } from '../state/workspaceTypes.js';
 
 const workspaceBackgroundVideo = import.meta.env.BASE_URL + 'site_videos/background.mp4';
 const fallbackWorkspaceBackgroundVideo = '/site_videos/background.mp4';
@@ -50,6 +51,11 @@ const launcherItems = [
   },
 ];
 
+const orientationItem = {
+  id: 'orientation',
+  path: 'M4 5h16v5H4V5Zm0 9h7v5H4v-5Zm11 0h5v5h-5v-5Z',
+};
+
 const signOutItem = {
   id: 'sign-out',
   label: 'Sign out',
@@ -64,7 +70,7 @@ function LauncherIcon({ path }) {
   );
 }
 
-export default function WorkspaceFrame({ user, onSignOut, logoSrc }) {
+export default function WorkspaceFrame({ user, token, apiUrl, mainSessionId, sessionError, onSignOut, logoSrc }) {
   const displayName = user?.display_name || user?.username || user?.client_id || 'Analyst';
   const avatarLetter = displayName.trim().charAt(0).toUpperCase() || 'A';
   const videoRef = React.useRef(null);
@@ -73,6 +79,8 @@ export default function WorkspaceFrame({ user, onSignOut, logoSrc }) {
   const [imageSrc, setImageSrc] = useState(workspaceBackgroundImage);
   const [isImageLoaded, setIsImageLoaded] = useState(false);
   const [isLauncherExpanded, setIsLauncherExpanded] = useState(false);
+  const [sourceOpenError, setSourceOpenError] = useState('');
+  const [isOpeningSource, setIsOpeningSource] = useState(false);
   const { areBackgroundAnimationsEnabled } = useBackgroundAnimations();
   const workspace = useWorkspace();
 
@@ -97,7 +105,38 @@ export default function WorkspaceFrame({ user, onSignOut, logoSrc }) {
   };
 
 
-  const handleLauncherAction = (item) => {
+  const handleLauncherAction = async (item) => {
+    setSourceOpenError('');
+
+    if (item.windowType === WORKSPACE_WINDOW_TYPES.SOURCE) {
+      if (!mainSessionId || !token) {
+        setSourceOpenError('Session is not ready yet.');
+        return;
+      }
+
+      const sourceWindowId = workspace.nextSourceWindowId;
+      setIsOpeningSource(true);
+      try {
+        const identity = await initializeSourceWindow(apiUrl, token, {
+          sessionId: mainSessionId,
+          windowId: sourceWindowId,
+        });
+        workspace.openWindow(item.windowType, {
+          contextTab: item.contextTab,
+          title: item.label,
+          backendWindowId: identity.windowId,
+          parentSessionId: identity.parentSessionId,
+          sourceSessionId: identity.sourceSessionId,
+        });
+        workspace.setContextTab(item.contextTab);
+      } catch (error) {
+        setSourceOpenError(error?.message || 'Source window could not be initialized.');
+      } finally {
+        setIsOpeningSource(false);
+      }
+      return;
+    }
+
     workspace.openWindow(item.windowType, {
       contextTab: item.contextTab,
       title: item.label,
@@ -170,6 +209,7 @@ export default function WorkspaceFrame({ user, onSignOut, logoSrc }) {
                   type="button"
                   title={item.label}
                   aria-label={item.label}
+                  disabled={item.windowType === WORKSPACE_WINDOW_TYPES.SOURCE && isOpeningSource}
                   onClick={() => handleLauncherAction(item)}
                 >
                   <LauncherIcon path={item.path} />
@@ -177,6 +217,19 @@ export default function WorkspaceFrame({ user, onSignOut, logoSrc }) {
                 </button>
               ))}
             </div>
+            <button
+              className="workspace_launcher_button workspace_launcher_orientation"
+              type="button"
+              title={workspace.orientation === WORKSPACE_ORIENTATIONS.FLOATING ? 'Switch to docked tabs' : 'Switch to floating windows'}
+              aria-label={workspace.orientation === WORKSPACE_ORIENTATIONS.FLOATING ? 'Switch to docked tabs' : 'Switch to floating windows'}
+              aria-pressed={workspace.orientation === WORKSPACE_ORIENTATIONS.DOCKED}
+              onClick={workspace.toggleOrientation}
+            >
+              <LauncherIcon path={orientationItem.path} />
+              <span className="workspace_launcher_label">
+                {workspace.orientation === WORKSPACE_ORIENTATIONS.FLOATING ? 'Dock' : 'Float'}
+              </span>
+            </button>
             <button
               className="workspace_launcher_button workspace_launcher_signout"
               type="button"
@@ -196,6 +249,12 @@ export default function WorkspaceFrame({ user, onSignOut, logoSrc }) {
               <span>{displayName}</span>
             </div>
             {workspace.windows.length === 0 && <WorkspaceHome openWindowsCount={workspace.windows.length} />}
+            {(sessionError || sourceOpenError) && (
+              <div className="workspace_session_notice" role="status">
+                {sourceOpenError || sessionError}
+              </div>
+            )}
+            {workspace.orientation === WORKSPACE_ORIENTATIONS.DOCKED && <WindowManager workspace={workspace} />}
           </section>
           <aside className="workspace_zone workspace_zone_right" aria-label="Workspace context">
             <WorkspaceContextPanel
@@ -203,7 +262,7 @@ export default function WorkspaceFrame({ user, onSignOut, logoSrc }) {
               workspace={workspace}
             />
           </aside>
-          <WindowManager workspace={workspace} />
+          {workspace.orientation === WORKSPACE_ORIENTATIONS.FLOATING && <WindowManager workspace={workspace} />}
         </div>
       </div>
     </main>

@@ -1,5 +1,7 @@
 import React, { useCallback, useRef, useState } from 'react';
 
+import WorkspaceWindowBody from './WorkspaceWindowBody.jsx';
+
 const DRAG_START_OFFSET = {
   x: 22,
   y: 74,
@@ -12,7 +14,7 @@ const WINDOW_STAGGER = {
 
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 
-export default function WorkspaceWindow({ windowItem, stackIndex = 0, isActive, onFocus, onClose }) {
+export default function WorkspaceWindow({ windowItem, stackIndex = 0, isActive, onFocus, onCustomTitleChange, onClose }) {
   const windowRef = useRef(null);
   const dragRef = useRef(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -81,6 +83,14 @@ export default function WorkspaceWindow({ windowItem, stackIndex = 0, isActive, 
     }
   }, []);
 
+  const handleCustomTitleChange = useCallback((event) => {
+    onCustomTitleChange(windowItem.id, event.target.value);
+  }, [onCustomTitleChange, windowItem.id]);
+
+  const stopHeaderControlDrag = useCallback((event) => {
+    event.stopPropagation();
+  }, []);
+
   const handleClose = useCallback((event) => {
     event.stopPropagation();
     onClose(windowItem.id);
@@ -89,11 +99,11 @@ export default function WorkspaceWindow({ windowItem, stackIndex = 0, isActive, 
   return (
     <article
       ref={windowRef}
-      className={`workspace_window${isActive ? ' is-active' : ''}${isDragging ? ' is-dragging' : ''}`}
-      aria-label={windowItem.title}
+      className={'workspace_window' + (isActive ? ' is-active' : '') + (isDragging ? ' is-dragging' : '')}
+      aria-label={windowItem.customTitle ? `${windowItem.title}: ${windowItem.customTitle}` : windowItem.title}
       onMouseDown={() => onFocus(windowItem.id)}
       style={{
-        transform: `translate3d(${position.x}px, ${position.y}px, 0)`,
+        transform: 'translate3d(' + position.x + 'px, ' + position.y + 'px, 0)',
         zIndex: isActive ? 100 + stackIndex : 20 + stackIndex,
       }}
     >
@@ -106,20 +116,28 @@ export default function WorkspaceWindow({ windowItem, stackIndex = 0, isActive, 
       >
         <div className="workspace_window_title">
           <span>{windowItem.title}</span>
-          <small>{windowItem.status}</small>
+          <input
+            className="workspace_window_custom_title_input"
+            type="text"
+            value={windowItem.customTitle ?? windowItem.status ?? 'Placeholder'}
+            placeholder="Placeholder"
+            aria-label="Window custom title"
+            maxLength={120}
+            onPointerDown={stopHeaderControlDrag}
+            onClick={stopHeaderControlDrag}
+            onChange={handleCustomTitleChange}
+          />
         </div>
         <button
           type="button"
-          aria-label={`Close ${windowItem.title}`}
-          onPointerDown={(event) => event.stopPropagation()}
+          aria-label={'Close ' + windowItem.title}
+          onPointerDown={stopHeaderControlDrag}
           onClick={handleClose}
         >
           ×
         </button>
       </header>
-      <div className="workspace_window_body">
-        <p>{windowItem.title} workspace placeholder</p>
-      </div>
+      <WorkspaceWindowBody windowItem={windowItem} />
     </article>
   );
 }
