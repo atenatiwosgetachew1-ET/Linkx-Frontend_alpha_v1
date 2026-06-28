@@ -178,6 +178,8 @@ const normalizeSessionId = (value) => (isRealSessionId(value) ? String(value).tr
 
 const readStoredSessionId = () => normalizeSessionId(localStorage.getItem("session"));
 
+const CLIENT_DEV_LOGS_ENABLED = !import.meta.env.PROD || import.meta.env.VITE_ENABLE_CLIENT_LOGS === "true";
+
 const extractMainSessionId = (data) => normalizeSessionId(
   data?.results?.session_id ??
   data?.results?.sessionId ??
@@ -2092,6 +2094,29 @@ const buildConfigurationSavePayload = (configuration) => {
   };
 };
 
+const buildRealtimeToolConfigurationPayload = (configuration, windowState) => {
+  const baseConfiguration = buildConfigurationSavePayload(configuration);
+  const realtimeToolUrl = sanitizeConnectionValue(windowState?.realtimeToolUrl, { maxLength: 300 });
+  const realtimeToolUsername = sanitizeIdentifier(windowState?.realtimeToolUsername, { maxLength: 120 });
+  const realtimeToolDatabase = sanitizeIdentifier(windowState?.realtimeToolDatabase, { maxLength: 120 });
+  const realtimeToolPassword = sanitizeSecret(windowState?.realtimeToolPassword, { maxLength: 256 });
+
+  const nextConfiguration = {
+    ...baseConfiguration,
+    session_id: normalizeSessionId(windowState?.id || windowState?.sessionId),
+    active_tool_url: realtimeToolUrl,
+    active_tool_protocol: realtimeToolUrl,
+    active_tool_username: realtimeToolUsername,
+    active_tool_database: realtimeToolDatabase,
+  };
+
+  if (realtimeToolPassword && !CONFIG_SECRET_MASK_PATTERN.test(realtimeToolPassword)) {
+    nextConfiguration.active_tool_password = realtimeToolPassword;
+  }
+
+  return nextConfiguration;
+};
+
 const sourceConnectionSchema = {
   session_id: { label: "Session ID", required: true, sanitize: (value) => sanitizeGraphEndpointId(value, { maxLength: 128 }) },
   addressType: { label: "Source type", sanitize: (value) => sanitizeIdentifier(value, { maxLength: 40 }), pattern: /^$|^(broker|api|storage)$/i, message: "Source type must be broker, api, or storage." },
@@ -3500,7 +3525,7 @@ function DraggableWindow({ children, initialPos = { top: 0, left: 0 }, orientati
     </div>
   );
 }
-function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText, loadscreenState, isSideBarMenuOpen, orientation, configurations, windowAction, graphAction, chartAction, selectedContent, selectedSubContent, selectedNodes, selectedEdges,windowResponseI,windowResponseII,windowRealtimeResponseI,formToolResponse,formRealtimeToolResponse,sourceAddressType,sourceAddressText,sourceStorageText,sourceTopicText,sourceKind,sourceStatus,toolStatus,dataframeStatus,streamStatus,sourceStep,sourceRealtimeAddressType,sourceRealtimeAddressText,sourceRealtimeTopicText,toolUrl,toolUsername,toolPassword,toolDatabase,realtimeToolUrl,realtimeToolUsername,realtimeToolPassword,realtimeToolDatabase,batchFilesSearchHybrid,batchFilesSearchHybridQuery,batchFilesSearchStrict,searchText,batchFilesSearchLimit,batchFilesSearchResults,batchFilesSearchMoreFiles,searchResultsVisible,searchPlaceholder,batchFilesCollection, batchFilesDataframeInfoI, batchFilesDataframeInfoII, batchFilesDataframeActionValue, batchFilesDataframeSourceValue, batchFilesDataframeTargetValue, batchFilesDataframeRelationshipValue, batchFilesDataframeRuleValue, sourceSessionLog, sourceStreams , sourceStreamListener, fileInputRef, textareaRefs, onClose, onMove, zIndex, onFocus, covered, graphLink, graphLinkId, graphLinkSource, graphStatus, activeGraph, chartLink, chartLinkId, activechart, iframeRef, iframeFilters, iframeSettings, iframeSearch, iframePerformanceMood, selectedPropertyTab, filterPropertyKeys, filterResults, nodeProperties, BASE_URL, searchButtonRef, resultContainerRef, requestConfirmation }) {
+function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText, loadscreenState, isSideBarMenuOpen, orientation, configurations, windowAction, graphAction, chartAction, selectedContent, selectedSubContent, selectedNodes, selectedEdges,windowResponseI,windowResponseII,windowRealtimeResponseI,formToolResponse,formRealtimeToolResponse,sourceAddressType,sourceAddressText,sourceStorageText,sourceTopicText,sourceKind,sourceStatus,toolStatus,dataframeStatus,streamStatus,sourceStep,sourceRealtimeAddressType,sourceRealtimeAddressText,sourceRealtimeTopicText,toolUrl,toolUsername,toolPassword,toolDatabase,realtimeToolUrl,realtimeToolUsername,realtimeToolPassword,realtimeToolDatabase,realtimeNeo4jConnectedSessionId,realtimeConfigPersistStatus,realtimeConfigPersistedSessionId,realtimeConfigPersistMessage,realtimeStartGuardMessage,batchFilesSearchHybrid,batchFilesSearchHybridQuery,batchFilesSearchStrict,searchText,batchFilesSearchLimit,batchFilesSearchResults,batchFilesSearchMoreFiles,searchResultsVisible,searchPlaceholder,batchFilesCollection, batchFilesDataframeInfoI, batchFilesDataframeInfoII, batchFilesDataframeActionValue, batchFilesDataframeSourceValue, batchFilesDataframeTargetValue, batchFilesDataframeRelationshipValue, batchFilesDataframeRuleValue, sourceSessionLog, sourceStreams , sourceStreamListener, fileInputRef, textareaRefs, onClose, onMove, zIndex, onFocus, covered, graphLink, graphLinkId, graphLinkSource, graphStatus, activeGraph, chartLink, chartLinkId, activechart, iframeRef, iframeFilters, iframeSettings, iframeSearch, iframePerformanceMood, selectedPropertyTab, filterPropertyKeys, filterResults, nodeProperties, BASE_URL, searchButtonRef, resultContainerRef, requestConfirmation }) {
   const canCancelGraphStaging = type === "graph" && typeof loadscreenText === "string" && (
     loadscreenText.toLowerCase().startsWith("staging graph") ||
     loadscreenText.toLowerCase().startsWith("fetching graph")
@@ -3525,6 +3550,16 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
   const isBatchSourceUploaded = isSourceUploadedState(batchSourceFlow);
   const isBatchToolConnected = isToolConnectedState(batchSourceFlow);
   const isBatchSourceBusy = batchSourceFlow.sourceStatus === SOURCE_STATUSES.CONNECTING || batchSourceFlow.sourceStatus === SOURCE_STATUSES.DISCONNECTING;
+  const hasRealtimeNeo4jConnection = String(realtimeNeo4jConnectedSessionId || "") === String(id) && formRealtimeToolResponse === "Connected!";
+  const hasRealtimePersistedToolConfig = realtimeConfigPersistStatus === "saved" && String(realtimeConfigPersistedSessionId || "") === String(id);
+  const realtimeStartBlockedMessage = realtimeStartGuardMessage || (
+    !hasRealtimeNeo4jConnection
+      ? `Connect Neo4j successfully for session ${id} before starting realtime.`
+      : !hasRealtimePersistedToolConfig
+        ? `Save Neo4j credentials for session ${id} before starting realtime.`
+        : ""
+  );
+  const canStartRealtimeStream = !isRealtimeSourceWorkflow || (hasRealtimeNeo4jConnection && hasRealtimePersistedToolConfig);
   if (type === "source") {
     return (
       <DraggableWindow initialPos={{ top: 0, left: 0}} zIndex={zIndex} orientation={orientation}>
@@ -3826,6 +3861,16 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
                                   formRealtimeToolResponse === "Connecting..." ? "Connecting..." : "Disconnecting..."
                                 }
                               </button>
+                              {isRealtimeSourceWorkflow && realtimeConfigPersistMessage ? (
+                                <div className="tool_form_response">
+                                  <Icons
+                                    id="window_live_source_option"
+                                    type={realtimeConfigPersistStatus === "saved" ? "correctx" : realtimeConfigPersistStatus === "saving" ? "loadingx" : "warningx"}
+                                    condition="True"
+                                  />
+                                  <span style={getToolStatusTextStyle(realtimeConfigPersistStatus === "saved" ? "Connected!" : realtimeConfigPersistStatus === "saving" ? "Connecting..." : "Not connected!")}>{realtimeConfigPersistMessage}</span>
+                                </div>
+                              ) : null}
                             </fieldset>
                           </form>
                         </div>
@@ -4605,6 +4650,12 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
                       )}
                     </div>
                     <div className="batch_connection_form_pager_container">
+                      {isRealtimeSourceWorkflow && selectedSubContent === "batch_input_form_pageIII" && !canStartRealtimeStream ? (
+                        <div className="tool_form_response">
+                          <Icons id="window_live_source_option" type="warningx" condition="True" />
+                          <span style={getToolStatusTextStyle("Not connected!")}>{realtimeStartBlockedMessage}</span>
+                        </div>
+                      ) : null}
                       <button onClick={() => {
                           const previousStep = getPreviousBatchSourceStep(batchSourceFlow);
                           if (isRealtimeSourceWorkflow && selectedSubContent === "batch_input_form_pageIII") {
@@ -4646,12 +4697,20 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
                             windowAction(id, "batch_input_form_swap", "page_III",null);
                           }
                           else if (selectedSubContent === "batch_input_form_pageIII"){
+                            if (isRealtimeSourceWorkflow && !canStartRealtimeStream) {
+                              alert(realtimeStartBlockedMessage);
+                              return null;
+                            }
                             windowAction(id, "batch_input_form_swap", "page_IV",null);
                           }
                           else if (selectedSubContent === "batch_input_form_pageIV" && sourceStreamListener){
                             windowAction(id, "batch_input_stream_terminate", "page_IV",null);
                           }
                           else if (selectedSubContent === "batch_input_form_pageIV" && !sourceStreamListener){
+                            if (isRealtimeSourceWorkflow && !canStartRealtimeStream) {
+                              alert(realtimeStartBlockedMessage);
+                              return null;
+                            }
                             windowAction(id, "batch_input_form_swap", "page_IV",null);
                           }
                           else{
@@ -4664,6 +4723,7 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
                           selectedSubContent === "batch_input_form_pageI" && isBatchSourceUploaded && isBatchToolConnected ||
                           selectedSubContent === "batch_input_form_pageII" && isBatchSourceUploaded && isBatchToolConnected ||
                           selectedSubContent === "batch_input_form_pageII" && batchFilesCollection.length> 0  || 
+                          selectedSubContent === "batch_input_form_pageIII" && isRealtimeSourceWorkflow && !canStartRealtimeStream ||
                           selectedSubContent !== "batch_input_form_pageIV" && batchFilesDataframeActionValue === "Store data" || 
                           selectedSubContent !== "batch_input_form_pageIV" && batchFilesDataframeActionValue === "Source / Target Relationship" && batchFilesDataframeSourceValue && batchFilesDataframeTargetValue ||
                           selectedSubContent !== "batch_input_form_pageIV" && batchFilesDataframeActionValue === "Link Analysis" && batchFilesDataframeRuleValue || 
@@ -5707,6 +5767,176 @@ const fileInputRef = useRef(null);
       delete bucketRef.current[key];
       fn();
     }, delay);
+  };
+
+  const updateSourceWindowState = (targetWindowId, patch) => {
+    const sessionKey = String(targetWindowId || "").trim();
+    if (!sessionKey) return;
+    setWindows((prev) =>
+      prev.map((windowState) => {
+        if (String(windowState.id) !== sessionKey) return windowState;
+        const nextPatch = typeof patch === "function" ? patch(windowState) : patch;
+        return nextPatch ? { ...windowState, ...nextPatch } : windowState;
+      })
+    );
+  };
+
+  const resolveConfigurationSessionId = (preferredWindowId = null) => {
+    const preferredSessionId = normalizeSessionId(preferredWindowId);
+    if (preferredSessionId) return preferredSessionId;
+
+    const activeSourceWindow = windowsRef.current.find(
+      (windowState) => windowState.type === "source" && String(windowState.id) === String(activeWindowId)
+    );
+
+    return normalizeSessionId(
+      activeSourceWindow?.id || sessionId || sessionIdRef.current || readStoredSessionId()
+    );
+  };
+
+  const fetchConfigurationForSession = (targetSessionId) => {
+    const sessionKey = normalizeSessionId(targetSessionId);
+    if (!sessionKey) {
+      return Promise.resolve({ ok: false, message: "Session is still initializing." });
+    }
+
+    return apiFetch("/configuration", {
+      method: "POST",
+      body: { id: "load", session_id: sessionKey },
+    }).then((data) => {
+      if (!isSuccessResponse(data)) {
+        return {
+          ok: false,
+          sessionId: sessionKey,
+          message: data?.message || "Configuration load failed.",
+          data,
+        };
+      }
+
+      return {
+        ok: true,
+        sessionId: sessionKey,
+        configuration: normalizeLoadedConfiguration(extractConfigurationPayload(data)),
+        data,
+      };
+    });
+  };
+
+  const persistRealtimeToolConfigurationForWindow = (targetSessionId, overrides = {}) => {
+    const sessionKey = normalizeSessionId(targetSessionId);
+    const targetWindow = windowsRef.current.find((windowState) => String(windowState.id) === sessionKey);
+
+    if (!sessionKey || !targetWindow) {
+      return Promise.resolve({
+        ok: false,
+        sessionId: sessionKey,
+        message: "The realtime session is not available for configuration persistence.",
+      });
+    }
+
+    const realtimeWindowState = { ...targetWindow, ...overrides, id: sessionKey };
+    const configurationPayload = buildRealtimeToolConfigurationPayload(configurations, realtimeWindowState);
+    const passwordRef =
+      configurationPayload.active_tool_password_ref ||
+      configurationPayload.tool_password_ref ||
+      configurationPayload.password_ref ||
+      "";
+
+    updateSourceWindowState(sessionKey, {
+      realtimeConfigPersistStatus: "saving",
+      realtimeConfigPersistedSessionId: null,
+      realtimeConfigPersistMessage: "Saving Neo4j credentials for this session...",
+      realtimeStartGuardMessage: null,
+    });
+
+    if (CLIENT_DEV_LOGS_ENABLED) {
+      console.info("[realtime config save]", {
+        session_id: sessionKey,
+        has_password: Boolean(configurationPayload.active_tool_password),
+        has_password_ref: Boolean(passwordRef),
+      });
+    }
+
+    return apiFetch("/configuration", {
+      method: "POST",
+      body: {
+        id: "save",
+        session_id: sessionKey,
+        configuration: configurationPayload,
+      },
+    })
+      .then((data) => {
+        if (!isSuccessResponse(data)) {
+          const message = data?.message || "Neo4j credentials could not be saved for this session.";
+          updateSourceWindowState(sessionKey, {
+            realtimeConfigPersistStatus: "failed",
+            realtimeConfigPersistedSessionId: null,
+            realtimeConfigPersistMessage: message,
+            realtimeStartGuardMessage: message,
+          });
+          return { ok: false, sessionId: sessionKey, message, data };
+        }
+
+        return fetchConfigurationForSession(sessionKey).then((loadResult) => {
+          if (!loadResult.ok) {
+            const message = loadResult.message || "Neo4j credentials were saved, but the session configuration could not be reloaded.";
+            updateSourceWindowState(sessionKey, {
+              realtimeConfigPersistStatus: "failed",
+              realtimeConfigPersistedSessionId: null,
+              realtimeConfigPersistMessage: message,
+              realtimeStartGuardMessage: message,
+            });
+            return { ok: false, sessionId: sessionKey, message, data };
+          }
+
+          const loadedConfiguration = loadResult.configuration || {};
+          const confirmedPasswordRef =
+            loadedConfiguration.active_tool_password_ref ||
+            loadedConfiguration.tool_password_ref ||
+            loadedConfiguration.password_ref ||
+            "";
+          const hasPersistedToolCredentials = Boolean(
+            sanitizeConnectionValue(loadedConfiguration.active_tool_url, { maxLength: 300 }) &&
+            sanitizeIdentifier(loadedConfiguration.active_tool_username, { maxLength: 120 }) &&
+            (confirmedPasswordRef || loadedConfiguration.active_tool_password)
+          );
+
+          if (!hasPersistedToolCredentials) {
+            const message = "Neo4j connected, but this session does not yet have confirmed persisted tool credentials.";
+            updateSourceWindowState(sessionKey, {
+              realtimeConfigPersistStatus: "failed",
+              realtimeConfigPersistedSessionId: null,
+              realtimeConfigPersistMessage: message,
+              realtimeStartGuardMessage: message,
+            });
+            return { ok: false, sessionId: sessionKey, message, data };
+          }
+
+          updateSourceWindowState(sessionKey, {
+            realtimeConfigPersistStatus: "saved",
+            realtimeConfigPersistedSessionId: sessionKey,
+            realtimeConfigPersistMessage: "Neo4j credentials saved for this session.",
+            realtimeStartGuardMessage: null,
+          });
+
+          return {
+            ok: true,
+            sessionId: sessionKey,
+            configuration: loadedConfiguration,
+            data,
+          };
+        });
+      })
+      .catch((error) => {
+        const message = error?.message || "Neo4j credentials could not be saved for this session.";
+        updateSourceWindowState(sessionKey, {
+          realtimeConfigPersistStatus: "failed",
+          realtimeConfigPersistedSessionId: null,
+          realtimeConfigPersistMessage: message,
+          realtimeStartGuardMessage: message,
+        });
+        return { ok: false, sessionId: sessionKey, message, error };
+      });
   };
 
   const graphStatusSessionIds = useMemo(() => {
@@ -7069,6 +7299,12 @@ const fileInputRef = useRef(null);
                       realtimeToolDatabase: sourceAutofillDefaults.realtimeToolDatabase,
                       formToolResponse: null,
                       formRealtimeToolResponse: null,
+                      realtimeNeo4jConnectedSessionId: null,
+                      realtimeConfigPersistStatus: "idle",
+                      realtimeConfigPersistedSessionId: null,
+                      realtimeConfigPersistMessage: null,
+                      realtimeStartGuardMessage: null,
+                      realtimeLastConnectSessionId: null,
                       batchFilesSearchResults: null,
                     },
                   ];
@@ -8054,7 +8290,7 @@ const fileInputRef = useRef(null);
           console.log("address_change:",payload);
           setWindows(prev =>
             prev.map(w =>
-              w.id === id ? { ...w, sourceRealtimeAddressType: payload } : w
+              w.id === id ? { ...w, sourceRealtimeAddressType: payload, realtimeStartGuardMessage: null } : w
             )
           );
         }
@@ -8062,7 +8298,7 @@ const fileInputRef = useRef(null);
           console.log("address_change:",payload);
           setWindows(prev =>
             prev.map(w =>
-              w.id === id ? { ...w, sourceRealtimeAddressText: sanitizeConnectionValue(payload, { maxLength: 300 }) } : w
+              w.id === id ? { ...w, sourceRealtimeAddressText: sanitizeConnectionValue(payload, { maxLength: 300 }), realtimeStartGuardMessage: null } : w
             )
           );
         }
@@ -8070,7 +8306,7 @@ const fileInputRef = useRef(null);
           console.log("topic_change:",payload);
           setWindows(prev =>
             prev.map(w =>
-              w.id === id ? { ...w, sourceRealtimeTopicText: sanitizeKafkaTopic(payload) } : w
+              w.id === id ? { ...w, sourceRealtimeTopicText: sanitizeKafkaTopic(payload), realtimeStartGuardMessage: null } : w
             )
           );
         }
@@ -8086,9 +8322,20 @@ const fileInputRef = useRef(null);
         };
         if (action === "change" && toolFieldMap[menuId]) {
           const [fieldName, normalizeValue] = toolFieldMap[menuId];
+          const isRealtimeToolField = fieldName.startsWith("realtimeTool");
           setWindows(prev =>
             prev.map(w =>
-              w.id === id ? { ...w, [fieldName]: normalizeValue(payload) } : w
+              w.id === id ? {
+                ...w,
+                [fieldName]: normalizeValue(payload),
+                ...(isRealtimeToolField ? {
+                  realtimeNeo4jConnectedSessionId: null,
+                  realtimeConfigPersistStatus: "idle",
+                  realtimeConfigPersistedSessionId: null,
+                  realtimeConfigPersistMessage: null,
+                  realtimeStartGuardMessage: null,
+                } : {}),
+              } : w
             )
           );
         }
@@ -8100,7 +8347,11 @@ const fileInputRef = useRef(null);
           const connectPayload = { ...payload, ...sourceValidation.value };
           setWindows(prev =>
             prev.map(w =>
-              w.id === id ? { ...w, windowRealtimeResponseI: "Connecting..." } : w
+              w.id === id ? {
+                ...w,
+                windowRealtimeResponseI: "Connecting...",
+                realtimeStartGuardMessage: null,
+              } : w
             )
           );
           apiFetch("/connect_to_source", {
@@ -8111,7 +8362,7 @@ const fileInputRef = useRef(null);
           .then((data) => {
             setWindows(prev =>
               prev.map(w =>
-                w.id === id ? { ...w, windowRealtimeResponseI: data.message } : w
+                w.id === id ? { ...w, windowRealtimeResponseI: data.message, realtimeStartGuardMessage: isSuccessResponse(data) ? null : (data?.message || w.realtimeStartGuardMessage) } : w
               )
             );
           })
@@ -8127,7 +8378,15 @@ const fileInputRef = useRef(null);
         if (menuId === "real_time_input_form" && action === "disconnect" && payload) {
           setWindows(prev =>
             prev.map(w =>
-              w.id === id ? { ...w, windowRealtimeResponseI: "Disconnecting..." } : w
+              w.id === id ? {
+                ...w,
+                windowRealtimeResponseI: "Disconnecting...",
+                realtimeNeo4jConnectedSessionId: null,
+                realtimeConfigPersistStatus: "idle",
+                realtimeConfigPersistedSessionId: null,
+                realtimeConfigPersistMessage: null,
+                realtimeStartGuardMessage: null,
+              } : w
             )
           );
           const disconnectPayload = {
@@ -8162,29 +8421,63 @@ const fileInputRef = useRef(null);
           if (!toolValidation.ok) {
             return { ...w, formRealtimeToolResponse: toolValidation.message || "Tool connection details are invalid." };
           }
-          const toolPayload = { ...payload, ...toolValidation.value };
+          const sessionKey = normalizeSessionId(id);
+          const toolPayload = { ...payload, ...toolValidation.value, source_id: sessionKey, session_id: sessionKey };
           setWindows(prev =>
             prev.map(w =>
-              w.id === id ? { ...w, formRealtimeToolResponse: "Connecting...", realtimeToolPassword: "" } : w
+              w.id === id ? {
+                ...w,
+                formRealtimeToolResponse: "Connecting...",
+                realtimeToolPassword: "",
+                realtimeNeo4jConnectedSessionId: null,
+                realtimeConfigPersistStatus: "idle",
+                realtimeConfigPersistedSessionId: null,
+                realtimeConfigPersistMessage: null,
+                realtimeStartGuardMessage: null,
+                realtimeLastConnectSessionId: sessionKey,
+              } : w
             )
           );
+          if (CLIENT_DEV_LOGS_ENABLED) {
+            console.info("[realtime tool connect]", {
+              session_id: sessionKey,
+              source_id: toolPayload.source_id,
+              matches: sessionKey === String(toolPayload.source_id || "") && sessionKey === String(toolPayload.session_id || ""),
+            });
+          }
           apiFetch("/connect_to_tool", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(toolPayload),
           })
             .then((data) => {
+              const connected = toolStatusFromResponse(data?.message) === TOOL_STATUSES.CONNECTED;
               setWindows(prev =>
                 prev.map(w =>
-                  w.id === id ? { ...w, formRealtimeToolResponse: data.message } : w
+                  w.id === id ? {
+                    ...w,
+                    formRealtimeToolResponse: data.message,
+                    realtimeNeo4jConnectedSessionId: connected ? sessionKey : null,
+                    realtimeStartGuardMessage: connected ? null : (data?.message || "Neo4j connection failed for this session."),
+                  } : w
                 )
               );
+              if (connected) {
+                persistRealtimeToolConfigurationForWindow(sessionKey).then((persistResult) => {
+                  if (!persistResult.ok) {
+                    console.warn("[realtime config save failed]", {
+                      session_id: sessionKey,
+                      message: persistResult.message,
+                    });
+                  }
+                });
+              }
             })
             .catch((err) => {
               console.error(err);
               setWindows(prev =>
                 prev.map(w =>
-                  w.id === id ? { ...w, formRealtimeToolResponse: "Connecting failed!" } : w
+                  w.id === id ? { ...w, formRealtimeToolResponse: "Connecting failed!", realtimeStartGuardMessage: "Neo4j connection failed for this session." } : w
                 )
               );
             });
@@ -8192,13 +8485,21 @@ const fileInputRef = useRef(null);
         if (menuId === "real_time_tool_integration_form" && action === "disconnect" && payload) {
           setWindows(prev =>
             prev.map(w =>
-              w.id === id ? { ...w, formRealtimeToolResponse: "Disconnecting..." } : w
+              w.id === id ? {
+                ...w,
+                formRealtimeToolResponse: "Disconnecting...",
+                realtimeNeo4jConnectedSessionId: null,
+                realtimeConfigPersistStatus: "idle",
+                realtimeConfigPersistedSessionId: null,
+                realtimeConfigPersistMessage: null,
+                realtimeStartGuardMessage: null,
+              } : w
             )
           );
           apiFetch("/disconnect_tool", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
+            body: JSON.stringify({ ...payload, source_id: normalizeSessionId(id), session_id: normalizeSessionId(id) }),
           })
             .then((data) => {
               setWindows(prev =>
@@ -8903,27 +9204,8 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
 
   debounceRef.current = setTimeout(() => {
     const newLoadscreenText = "Initalizing ";
-
-    setSourceStreams(prev => ({ ...prev, [id]: false }));
-
-    setWindows(prev =>
-      prev.map(w =>
-        w.id === id
-          ? {
-              ...w,
-              windowResponseI: null,
-              sourceSessionLog: null,
-              sourceStreamListener: true,
-              loadscreenState: false,
-              loadscreenText: newLoadscreenText,
-              streamStatus: STREAM_STATUSES.STARTING,
-              sourceStep: SOURCE_FLOW_STEPS.STREAM,
-            }
-          : w
-      )
-    );
-
-    const targetWindow = windows.find(w => w.id === id);
+    const sessionKey = normalizeSessionId(id);
+    const targetWindow = windowsRef.current.find((windowState) => String(windowState.id) === sessionKey);
 
     if (!targetWindow) {
       console.warn("Window not found:", id);
@@ -8942,6 +9224,47 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
       );
       return;
     }
+
+    const isRealtimeMode = targetWindow.selectedContent === "real_time_input";
+    const hasRealtimeNeo4jConnection = String(targetWindow.realtimeNeo4jConnectedSessionId || "") === sessionKey;
+    const hasRealtimePersistedToolConfig = targetWindow.realtimeConfigPersistStatus === "saved" && String(targetWindow.realtimeConfigPersistedSessionId || "") === sessionKey;
+    const realtimeBlockedMessage =
+      targetWindow.realtimeStartGuardMessage ||
+      (!hasRealtimeNeo4jConnection
+        ? `Connect Neo4j successfully for session ${sessionKey} before starting realtime.`
+        : `Save Neo4j credentials for session ${sessionKey} before starting realtime.`);
+
+    if (isRealtimeMode && (!hasRealtimeNeo4jConnection || !hasRealtimePersistedToolConfig)) {
+      alert(realtimeBlockedMessage);
+      updateSourceWindowState(sessionKey, {
+        sourceStreamListener: false,
+        streamStatus: STREAM_STATUSES.FAILED,
+        loadscreenState: false,
+        realtimeStartGuardMessage: realtimeBlockedMessage,
+        windowResponseI: realtimeBlockedMessage,
+      });
+      return;
+    }
+
+    setSourceStreams(prev => ({ ...prev, [sessionKey]: false }));
+
+    setWindows(prev =>
+      prev.map(w =>
+        w.id === id
+          ? {
+              ...w,
+              windowResponseI: null,
+              sourceSessionLog: null,
+              sourceStreamListener: true,
+              loadscreenState: false,
+              loadscreenText: newLoadscreenText,
+              streamStatus: STREAM_STATUSES.STARTING,
+              sourceStep: SOURCE_FLOW_STEPS.STREAM,
+              realtimeStartGuardMessage: null,
+            }
+          : w
+      )
+    );
 
     let selectedAction = targetWindow.batchFilesDataframeActionValue;
     const needsSourceTarget = selectedAction === "Source / Target Relationship";
@@ -9035,6 +9358,9 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
 
     console.log("[stream request]", {
       sourceMode,
+      session_id: sessionKey,
+      last_tool_connect_session_id: targetWindow.realtimeLastConnectSessionId || null,
+      same_session: !isRealtimeMode || String(targetWindow.realtimeLastConnectSessionId || "") === sessionKey,
       action: selectedAction,
       source,
       target,
@@ -9044,6 +9370,14 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
       payload,
     });
 
+    if (CLIENT_DEV_LOGS_ENABLED && isRealtimeMode) {
+      console.info("[realtime stream start]", {
+        session_id: sessionKey,
+        connect_session_id: targetWindow.realtimeLastConnectSessionId || null,
+        same_session: String(targetWindow.realtimeLastConnectSessionId || "") === sessionKey,
+      });
+    }
+
     apiFetch("/live_batch_files", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -9051,8 +9385,6 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
     })
       .then(async data => {
         if (data == null) return;
-
-        const sessionKey = String(id);
 
         const applyStreamState = (logFile, response, streamStatus = STREAM_STATUSES.RUNNING) => {
           if (!logFile) return;
@@ -10187,7 +10519,7 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
   });
     // --- Configuration Actions ---
   const handleConfigurationActions = (id,payload) => {
-    const resolvedSessionId = normalizeSessionId(sessionId || sessionIdRef.current || readStoredSessionId());
+    const resolvedSessionId = resolveConfigurationSessionId();
     if (["save", "remove", "upload"].includes(id) && !requirePermission(PERMISSIONS.CONFIG_WRITE, "configuration changes")) return;
     if (id === "load_default" && !requirePermission(PERMISSIONS.CONFIG_READ, "configuration loading")) return;
     if (id === "change"){
@@ -10225,6 +10557,14 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
         })
         .then((data) => {
           if (isSuccessResponse(data)) {
+            if (windowsRef.current.some((windowState) => windowState.type === "source" && String(windowState.id) === String(resolvedSessionId))) {
+              updateSourceWindowState(resolvedSessionId, {
+                realtimeConfigPersistStatus: "saved",
+                realtimeConfigPersistedSessionId: resolvedSessionId,
+                realtimeConfigPersistMessage: "Session configuration saved.",
+                realtimeStartGuardMessage: null,
+              });
+            }
             if (hasRuleUpload) {
               const ruleUploadInput = document.getElementById("rule_to_upload");
               const ruleNameInput = document.querySelector('#configurations_form input[name="rule_name"]');
@@ -10319,40 +10659,28 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
       });
     }
     else if (id === "load_default"){
-      const session = normalizeSessionId(sessionId || sessionIdRef.current || readStoredSessionId()); // Stored main session
+      const session = resolveConfigurationSessionId();
       if (!session) {
         setloadscreenState(false);
         return;
       }
-      const newPayload = { id: "load", session_id: session }
       debounceRef.current = setTimeout(() => {  
-        setloadscreenState(true)    
-        apiFetch("/configuration", {
-          method: "POST",
-          body: newPayload,
-        })
-        .then((data) => {
-          if (isSuccessResponse(data)) {     
-            try{
-                  const configs = normalizeLoadedConfiguration(extractConfigurationPayload(data));
-                  console.log("defaultConfig:", configs)                 
-                  setConfigurations(configs) 
-                  setloadscreenState(false)
-                } 
-                catch (error) {
-                  console.error('Error parsing configurations:', error);
-                  setloadscreenState(false)        
-                }             
-          } 
-          else {
-            alert(data.message)
-            setloadscreenState(false)
-          }
-        })
-        .catch((err) => {
-          console.error("ConfigErr",err);  
-          setloadscreenState(false)        
-        });    
+        setloadscreenState(true);
+        fetchConfigurationForSession(session)
+          .then((result) => {
+            if (!result.ok) {
+              alert(result.message);
+              setloadscreenState(false);
+              return;
+            }
+            console.log("defaultConfig:", result.configuration);
+            setConfigurations(result.configuration);
+            setloadscreenState(false);
+          })
+          .catch((err) => {
+            console.error("ConfigErr",err);
+            setloadscreenState(false);
+          });
       }, 300);
     }
   };
@@ -10525,6 +10853,11 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
               realtimeToolUsername={window.realtimeToolUsername}
               realtimeToolPassword={window.realtimeToolPassword}
               realtimeToolDatabase={window.realtimeToolDatabase}
+              realtimeNeo4jConnectedSessionId={window.realtimeNeo4jConnectedSessionId}
+              realtimeConfigPersistStatus={window.realtimeConfigPersistStatus}
+              realtimeConfigPersistedSessionId={window.realtimeConfigPersistedSessionId}
+              realtimeConfigPersistMessage={window.realtimeConfigPersistMessage}
+              realtimeStartGuardMessage={window.realtimeStartGuardMessage}
               batchFilesSearchHybrid={window.batchFilesSearchHybrid}
               batchFilesSearchHiveQuery={window.batchFilesSearchHiveQuery}
               batchFilesSearchStrict={window.batchFilesSearchStrict}
