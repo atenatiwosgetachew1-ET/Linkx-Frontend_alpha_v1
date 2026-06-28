@@ -3436,6 +3436,7 @@ function IframeEmbed({wId,id,fileName,title,activeGraph,graphAction,iframeRef,BA
     );
   }
   if (id == "graph_placeholder"){//graphs_basic
+    console.log("GRAPH PLACEHOLDER SRC:", `${iframeBasePath}/graph_placeholder.html`);
     return (
       <div className="iframe_graph">
         <iframe
@@ -3465,18 +3466,28 @@ function IframeEmbed({wId,id,fileName,title,activeGraph,graphAction,iframeRef,BA
       </div>
     );
   }
-  else{
+  else {
+    const iframeFile = fileName || activeGraph;
+
+    console.log("IframeEmbed", {
+      id,
+      fileName,
+      activeGraph,
+      iframeFile,
+      src: `${iframeBasePath}/${iframeFile}.html`,
+    });
+
     return (
       <div className="iframe_graph">
         <iframe
           ref={iframeRef}
           sandbox="allow-scripts allow-downloads allow-modals"
-          src={`${iframeBasePath}/${activeGraph}.html`}
+          src={`${iframeBasePath}/${iframeFile}.html`}
           width="100%"
           height="98%"
-          style={{ border: 'none' }}
-          title={`${title}`}
-        />     
+          style={{ border: "none" }}
+          title={title}
+        />
         {shouldShowFitGraphControl ? fitGraphControl : null}
       </div>
     );
@@ -5434,21 +5445,20 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
               </div>
             </div>
             <div id={`window_content_${type}_${id}`} className="content_container">
-            {/* Graph iframe: show placeholder or actual graph */}            
-            {(selectedContent === "chart_content" || selectedContent === null) && 
-            (
-              <div className="placeholder">
-                <IframeEmbed
-                  wId={id} 
-                  id={activechart || "chart_placeholder"}
-                  fileName={activechart || "chart_placeholder"}
-                  activeGraph={activechart}
-                  chartaction={chartAction} 
-                  iframeRef={iframeRef}
-                  BASE_URL={BASE_URL}
-                />
-              </div>
-            )}
+            {/* Graph iframe: show placeholder or actual graph */}
+              {(selectedContent === "graph_content" || selectedContent === null) && (
+                <div className="placeholder">
+                  <IframeEmbed
+                    wId={id}
+                    id={selectedContent === null ? "graph_placeholder" : activeGraph}
+                    fileName={selectedContent === null ? "graph_placeholder" : activeGraph}
+                    activeGraph={selectedContent === null ? null : activeGraph}
+                    graphAction={graphAction}
+                    iframeRef={iframeRef}
+                    BASE_URL={BASE_URL}
+                  />
+                </div>
+              )}
           </div>
           <div id={`window_properties_${type}_${id}`} className="properties_container">
             {/* Settings panel: only show when a chart iframe is present */}
