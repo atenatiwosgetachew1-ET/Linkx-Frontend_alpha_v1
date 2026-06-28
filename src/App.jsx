@@ -5122,16 +5122,15 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
               </div> 
             </div>
             <div id={`window_content_${type}_${id}`} className="content_container">
-            {/* Graph iframe: show placeholder or actual graph */}            
-            {(selectedContent === "graph_content" || selectedContent === null) && 
-            (
+           {/* Graph iframe: show placeholder or actual graph */}
+            {(selectedContent === "graph_content" || selectedContent === null) && (
               <div className="placeholder">
                 <IframeEmbed
-                  wId={id} 
-                  id={activeGraph || "graph_placeholder"}
-                  fileName={activeGraph || "graph_placeholder"}
-                  activeGraph={activeGraph}
-                  graphAction={graphAction} 
+                  wId={id}
+                  id={selectedContent === null ? "graph_placeholder" : activeGraph}
+                  fileName={selectedContent === null ? "graph_placeholder" : activeGraph}
+                  activeGraph={selectedContent === null ? null : activeGraph}
+                  graphAction={graphAction}
                   iframeRef={iframeRef}
                   BASE_URL={BASE_URL}
                 />
