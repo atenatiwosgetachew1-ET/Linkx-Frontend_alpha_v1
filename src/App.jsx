@@ -3350,8 +3350,20 @@ function WindowVerticalSplitPanels({id, type, sourceId, initialTopHeight, minTop
         <label className="bottom_panel_title">Graph Relationships</label>
         <ul>
           <li>
-            <input id="allrelationships" name="relationship" type="radio" />
-            <label htmlFor="allrelationships">*</label>
+            <input
+              id={`window_${id}_all_relationships`}
+              name={`window_${id}_relationship`}
+              type="radio"
+              onChange={() =>
+                graphAction(id, "get_graph", "relationship", {
+                  graphId: id,
+                  sourceId: sourceId,
+                  relationship: "*",
+                  iframe: iframeRef,
+                })
+              }
+            />
+            <label htmlFor={`window_${id}_all_relationships`}>*</label>
           </li>
           {relationships.map((rel, index) => (
             <li key={`${rel.type}-${index}`}>
@@ -5737,6 +5749,7 @@ const fileInputRef = useRef(null);
   const activeGraphJobsRef = useRef({});
   const activeDataframeJobsRef = useRef({});
   const activeSearchJobsRef = useRef({});
+  const graphAutoRequestedRef = useRef({});
   const streamTerminateRequestedRef = useRef({});
   const textareaRefs = useRef({});
   const debounceRef = useRef(null);
@@ -6218,6 +6231,11 @@ const fileInputRef = useRef(null);
       body,
       session_id: sessionKey,
     });
+  };
+
+  const logGraphWindowDebug = (label, payload) => {
+    if (!CLIENT_DEV_LOGS_ENABLED) return;
+    console.info(`[graph debug] ${label}`, payload);
   };
 
   const canAccess = useCallback((permission) => (
@@ -6733,6 +6751,7 @@ const fileInputRef = useRef(null);
 
     let lastHashBySession = {};
     const handleGraphStatus = (payload) => {
+      logGraphWindowDebug("graph status event", payload);
       console.log("[graph status payload]", payload);
       const { type, data, error, session_id } = payload;
       const sessionKey = String(session_id || "").trim();
@@ -6893,6 +6912,11 @@ const fileInputRef = useRef(null);
           }
         };
         console.log("[graph relationships updated]", { session_id: sessionKey, count: relationships.length, relationships });
+        logGraphWindowDebug("graph relationships updated", {
+          session_id: sessionKey,
+          relationship_count: relationships.length,
+          target_window_ids: targetWindows.map((windowState) => windowState.id),
+        });
 
         setGraphStatus(prev => ({
           ...prev,
@@ -6924,6 +6948,29 @@ const fileInputRef = useRef(null);
             }
           });
         }
+
+        targetWindows.forEach((windowState) => {
+          const graphWindowId = String(windowState.id || "").trim();
+          if (!graphWindowId) return;
+          if (String(windowState.activeGraph || "") !== "graph_info_placeholder") return;
+          if (!Array.isArray(relationships) || relationships.length === 0) return;
+          if (graphAutoRequestedRef.current[graphWindowId]) return;
+
+          graphAutoRequestedRef.current[graphWindowId] = true;
+          logGraphWindowDebug("graph auto-fetch scheduled", {
+            graph_window_id: graphWindowId,
+            session_id: sessionKey,
+            relationship: "*",
+          });
+          requestRelationshipGraph(graphWindowId, {
+            graphId: graphWindowId,
+            sourceId: sessionKey,
+            relationship: "*",
+            iframe: iframeRefs.current[graphWindowId],
+          }, {
+            requestOrigin: "auto_relationships",
+          });
+        });
       }
     };
 
@@ -6933,10 +6980,12 @@ const fileInputRef = useRef(null);
       const normalizedSession = String(currentSessionId || "").trim();
       if (!normalizedSession) return;
       if (!graphStatusSubscribedSessionsRef.current.has(normalizedSession)) {
+        logGraphWindowDebug("graph status subscribe", { session_id: normalizedSession });
         console.log("[graph status subscribe emit]", { session_id: normalizedSession });
         socket.emit("graph_status_subscribe", { session_id: normalizedSession });
         graphStatusSubscribedSessionsRef.current.add(normalizedSession);
       } else {
+        logGraphWindowDebug("graph status subscribe skipped", { session_id: normalizedSession });
         console.log("[graph status subscribe skipped] already subscribed", { session_id: normalizedSession });
       }
     });
@@ -7691,6 +7740,150 @@ const fileInputRef = useRef(null);
       };
     });
   }
+  const sendGraphMessageToIframe = (iframe, msgAction, msgPayload) => {
+    if (!iframe?.current) {
+      alert("Iframe not found!");
+      return;
+    }
+
+    const send = () => {
+      iframe.current.contentWindow?.postMessage(
+        { action: msgAction, payload: msgPayload },
+        getTrustedMessageOrigin()
+      );
+    };
+
+    const iframeSrc = iframe.current.src;
+    if (iframeSrc.includes("graphs_basic")) {
+      send();
+    } else {
+      iframe.current.onload = send;
+    }
+  };
+  const requestRelationshipGraph = (windowId, payload, options = {}) => {
+    const iframe = payload?.iframe || null;
+    const relationship = sanitizeGraphEndpointId(payload?.relationship, { maxLength: 128 });
+    const sourceId = String(payload?.sourceId || "").trim();
+    const requestOrigin = options.requestOrigin || "manual";
+    const graphWindowId = String(windowId || "").trim();
+
+    if (!graphWindowId || !sourceId || !relationship) {
+      logGraphWindowDebug("graph fetch skipped", {
+        reason: "missing_required_payload",
+        graph_window_id: graphWindowId,
+        session_id: sourceId,
+        relationship,
+        request_origin: requestOrigin,
+      });
+      return;
+    }
+
+    const newPayload = {
+      id: "relationship",
+      source_id: sourceId,
+      relationship,
+    };
+
+    if (graphFetchAbortControllersRef.current[graphWindowId]) {
+      graphFetchAbortControllersRef.current[graphWindowId].abort();
+      delete graphFetchAbortControllersRef.current[graphWindowId];
+    }
+    const controller = new AbortController();
+    graphFetchAbortControllersRef.current[graphWindowId] = controller;
+    graphAutoRequestedRef.current[graphWindowId] = requestOrigin === "auto_relationships";
+
+    setWindows((prev) =>
+      prev.map((windowState) =>
+        String(windowState.id) === graphWindowId
+          ? { ...windowState, loadscreenState: true, loadscreenText: "Fetching graph..." }
+          : windowState
+      )
+    );
+
+    logGraphWindowDebug("graph fetch request", {
+      graph_window_id: graphWindowId,
+      session_id: sourceId,
+      request_origin: requestOrigin,
+      payload: newPayload,
+    });
+
+    requestGraphFetch(apiFetch, newPayload, controller.signal, {
+      onQueued: (queuedData) => {
+        const jobId = getQueuedJobId(queuedData);
+        const status = getJobStatus(queuedData);
+        if (jobId) {
+          activeGraphJobsRef.current[graphWindowId] = jobId;
+        }
+        logGraphWindowDebug("graph fetch queued", {
+          graph_window_id: graphWindowId,
+          session_id: sourceId,
+          request_origin: requestOrigin,
+          job_id: jobId || null,
+          status: status || null,
+        });
+      }
+    })
+      .then((data) => {
+        if (!graphFetchAbortControllersRef.current[graphWindowId] || graphFetchAbortControllersRef.current[graphWindowId] !== controller) return;
+        const normalizedResults = data?.results || {};
+        const nodes = Array.isArray(normalizedResults.nodes) ? normalizedResults.nodes : [];
+        const edges = Array.isArray(normalizedResults.edges) ? normalizedResults.edges : [];
+
+        setWindows((prev) =>
+          prev.map((windowState) =>
+            String(windowState.id) === graphWindowId
+              ? { ...windowState, loadscreenState: false, loadscreenText: null, activeGraph: isSuccessResponse(data) ? "graphs_basic" : null }
+              : windowState
+          )
+        );
+
+        logGraphWindowDebug("graph fetch response", {
+          graph_window_id: graphWindowId,
+          session_id: sourceId,
+          request_origin: requestOrigin,
+          node_count: nodes.length,
+          edge_count: edges.length,
+          ok: isSuccessResponse(data),
+        });
+
+        if (isSuccessResponse(data)) {
+          delete activeGraphJobsRef.current[graphWindowId];
+          const sourceWindowState = windowsRef.current.find((windowState) => String(windowState.id) === graphWindowId);
+          const settingsToApply = normalizeGraphIframeSettings(iframeSettings[graphWindowId] || sourceWindowState?.iframeSettings);
+          settingsToApply[2] = normalizeGraphLimitRange({ min: 0, max: 25 }, 25);
+          updateIframeSettings(graphWindowId, 2, { min: 0, max: 25 });
+          sendGraphMessageToIframe(iframe, "new_graph", {
+            id: graphWindowId,
+            nodes,
+            edges,
+            settings: settingsToApply
+          });
+        } else {
+          delete graphAutoRequestedRef.current[graphWindowId];
+          alert(data.message);
+        }
+      })
+      .catch((err) => {
+        if (err?.name === "AbortError") return;
+        delete activeGraphJobsRef.current[graphWindowId];
+        delete graphAutoRequestedRef.current[graphWindowId];
+        console.error(err);
+        setWindows((prev) =>
+          prev.map((windowState) =>
+            String(windowState.id) === graphWindowId
+              ? { ...windowState, windowResponseI: "Connection failed!", loadscreenState: false, loadscreenText: null }
+              : windowState
+          )
+        );
+        alert(err?.message || "Graph request failed");
+      })
+      .finally(() => {
+        if (graphFetchAbortControllersRef.current[graphWindowId] === controller) {
+          delete graphFetchAbortControllersRef.current[graphWindowId];
+          delete activeGraphJobsRef.current[graphWindowId];
+        }
+      });
+  };
   const handleChartActions = (id, menuId, action, payload) => {
     console.log(6,id, menuId, action, payload)
     setWindows(prev =>
@@ -7787,6 +7980,12 @@ const fileInputRef = useRef(null);
     };
 
     delete graphInfoPayloadBySessionRef.current[sessionKey];
+    Object.keys(graphAutoRequestedRef.current).forEach((windowId) => {
+      const linkedWindow = windowsRef.current.find((windowState) => String(windowState.id) === String(windowId));
+      if (String(linkedWindow?.graphLinkSource || "") === sessionKey) {
+        delete graphAutoRequestedRef.current[windowId];
+      }
+    });
     graphStatusSubscribedSessionsRef.current.delete(sessionKey);
     graphStatusRef.current = {
       ...graphStatusRef.current,
@@ -7832,26 +8031,6 @@ const fileInputRef = useRef(null);
     console.log("GraphAction:", id, menuId, action, payload);
     if (menuId === "get_graph" && !requirePermission(PERMISSIONS.GRAPH_READ, "graph data")) return;
 
-    const sendToIframe = (iframe, msgAction, msgPayload) => {
-      if (!iframe?.current) {
-        alert("Iframe not found!");
-        return;
-      }
-
-      const send = () => {
-        iframe.current.contentWindow?.postMessage(
-          { action: msgAction, payload: msgPayload },
-          getTrustedMessageOrigin()
-        );
-      };
-
-      const iframeSrc = iframe.current.src;
-      if (iframeSrc.includes("graphs_basic")) {
-        send();
-      } else {
-        iframe.current.onload = send;
-      }
-    };
     // Debounce wrapper for actions that need delay
     runScopedDebounce(graphActionDebounceRef, id, () => {
       setWindows(prev =>
@@ -7863,74 +8042,9 @@ const fileInputRef = useRef(null);
 
           // ------------------ Graph generation ------------------
           if (menuId === "get_graph" && action === "relationship") {
-            const newPayload = {
-              id: action,
-              source_id: payload.sourceId,
-              relationship: sanitizeGraphEndpointId(payload.relationship, { maxLength: 128 }),
-            };
-            if (graphFetchAbortControllersRef.current[id]) {
-              graphFetchAbortControllersRef.current[id].abort();
-              delete graphFetchAbortControllersRef.current[id];
-            }
-            const controller = new AbortController();
-            graphFetchAbortControllersRef.current[id] = controller;
-
+            requestRelationshipGraph(id, payload, { requestOrigin: "manual" });
             updates.loadscreenState = true;
             updates.loadscreenText = "Fetching graph...";
-
-            requestGraphFetch(apiFetch, newPayload, controller.signal, {
-              onQueued: (queuedData) => {
-                const jobId = getQueuedJobId(queuedData);
-                if (jobId) {
-                  activeGraphJobsRef.current[String(id)] = jobId;
-                  console.log("[graph job active]", { graph_window_id: String(id), session_id: payload.sourceId, job_id: jobId, relationship: payload.relationship });
-                }
-              }
-            })
-              .then(data => {
-                if (!graphFetchAbortControllersRef.current[id] || graphFetchAbortControllersRef.current[id] !== controller) return;
-                setWindows(prev =>
-                  prev.map(win =>
-                    win.id === id
-                      ? { ...win, loadscreenState: false, activeGraph: isSuccessResponse(data) ? "graphs_basic" : null }
-                      : win
-                  )
-                );
-
-                if (isSuccessResponse(data)) {
-                  delete activeGraphJobsRef.current[String(id)];
-                  const settingsToApply = normalizeGraphIframeSettings(iframeSettings[id] || w.iframeSettings);
-                  settingsToApply[2] = normalizeGraphLimitRange({ min: 0, max: 25 }, 25);
-                  updateIframeSettings(id, 2, { min: 0, max: 25 });
-                  sendToIframe(iframe, "new_graph", {
-                    id,
-                    nodes: data.results.nodes,
-                    edges: data.results.edges,
-                    settings: settingsToApply
-                  });
-                } else {
-                  alert(data.message);
-                }
-              })
-              .catch(err => {
-                if (err?.name === "AbortError") return;
-                delete activeGraphJobsRef.current[String(id)];
-                console.error(err);
-                setWindows(prev =>
-                  prev.map(win =>
-                    win.id === id
-                      ? { ...win, windowResponseI: "Connection failed!", loadscreenState: false, loadscreenText: null }
-                      : win
-                  )
-                );
-                alert(err?.message || "Graph request failed");
-              })
-              .finally(() => {
-                if (graphFetchAbortControllersRef.current[id] === controller) {
-                  delete graphFetchAbortControllersRef.current[id];
-                  delete activeGraphJobsRef.current[String(id)];
-                }
-              });
           }
 
           // ------------------ Property tabs ------------------
@@ -9871,6 +9985,7 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
 
             const sourceId = payload["sourceId"];
             const iframe = payload["iframe"];
+            delete graphAutoRequestedRef.current[String(id)];
             const sessionKey = sanitizeGraphEndpointId(sourceId);
             const graphWindowId = sanitizeGraphEndpointId(id);
             const newPayload = { id: "link", source_id: sessionKey, graph_window_id: graphWindowId };
@@ -10044,6 +10159,7 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
                 console.warn("Graph unlink request failed", { message: err?.message, field: err?.data?.field, hasData: Boolean(err?.data) });
               })
               .finally(() => {
+                delete graphAutoRequestedRef.current[String(id)];
                 setGraphLinkState(false);
                 setGraphLinkSource(null);
                 setGraphStatusListener(false);
