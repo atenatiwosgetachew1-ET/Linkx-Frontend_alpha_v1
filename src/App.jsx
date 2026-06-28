@@ -5136,6 +5136,14 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
            {/* Graph iframe: show placeholder or actual graph */}
             {(selectedContent === "graph_content" || selectedContent === null) && (
               <div className="placeholder">
+                {console.log("GRAPH RENDER BLOCK:", {
+                  selectedContent,
+                  id,
+                  activeGraph,
+                  iframeId: selectedContent === null ? "graph_placeholder" : activeGraph,
+                  fileName: selectedContent === null ? "graph_placeholder" : activeGraph,
+                })}
+
                 <IframeEmbed
                   wId={id}
                   id={selectedContent === null ? "graph_placeholder" : activeGraph}
