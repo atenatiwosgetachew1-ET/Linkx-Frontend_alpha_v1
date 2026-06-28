@@ -2117,6 +2117,24 @@ const buildRealtimeToolConfigurationPayload = (configuration, windowState) => {
   return nextConfiguration;
 };
 
+const redactRequestHeadersForLog = (headersLike) => {
+  const headers = new Headers(headersLike || {});
+  const redacted = {};
+  headers.forEach((value, key) => {
+    const lowerKey = String(key || "").toLowerCase();
+    if (lowerKey === "authorization") {
+      redacted[key] = value ? "Bearer <redacted>" : "<redacted>";
+      return;
+    }
+    if (lowerKey.includes("token")) {
+      redacted[key] = "<redacted>";
+      return;
+    }
+    redacted[key] = value;
+  });
+  return redacted;
+};
+
 const sourceConnectionSchema = {
   session_id: { label: "Session ID", required: true, sanitize: (value) => sanitizeGraphEndpointId(value, { maxLength: 128 }) },
   addressType: { label: "Source type", sanitize: (value) => sanitizeIdentifier(value, { maxLength: 40 }), pattern: /^$|^(broker|api|storage)$/i, message: "Source type must be broker, api, or storage." },
@@ -6186,6 +6204,22 @@ const fileInputRef = useRef(null);
     },
   }), [API_URL, token, logout, pushNotification]);
 
+  const logConnectToToolRequest = (body, { method = "POST", path = "/connect_to_tool" } = {}) => {
+    const url = `${String(API_URL || "").replace(/\/$/, "")}${path.startsWith("/") ? path : `/${path}`}`;
+    const headers = new Headers({ "Content-Type": "application/json" });
+    if (token) {
+      headers.set("Authorization", `Bearer ${token}`);
+    }
+    const sessionKey = normalizeSessionId(body?.session_id || body?.source_id);
+    console.info("[connect_to_tool request]", {
+      method,
+      url,
+      headers: redactRequestHeadersForLog(headers),
+      body,
+      session_id: sessionKey,
+    });
+  };
+
   const canAccess = useCallback((permission) => (
     hasRole("admin") || hasPermission(permission)
   ), [hasRole, hasPermission]);
@@ -8423,6 +8457,9 @@ const fileInputRef = useRef(null);
           }
           const sessionKey = normalizeSessionId(id);
           const toolPayload = { ...payload, ...toolValidation.value, source_id: sessionKey, session_id: sessionKey };
+          if (CONFIG_SECRET_MASK_PATTERN.test(String(toolPayload.password || "").trim())) {
+            return { ...w, formRealtimeToolResponse: "Enter the real Neo4j password before connecting." };
+          }
           setWindows(prev =>
             prev.map(w =>
               w.id === id ? {
@@ -8444,6 +8481,7 @@ const fileInputRef = useRef(null);
               source_id: toolPayload.source_id,
               matches: sessionKey === String(toolPayload.source_id || "") && sessionKey === String(toolPayload.session_id || ""),
             });
+            logConnectToToolRequest(toolPayload);
           }
           apiFetch("/connect_to_tool", {
             method: "POST",
@@ -8581,12 +8619,19 @@ const fileInputRef = useRef(null);
           if (!toolValidation.ok) {
             return { ...w, formToolResponse: toolValidation.message || "Tool connection details are invalid.", toolStatus: TOOL_STATUSES.FAILED };
           }
-          const toolPayload = { ...payload, ...toolValidation.value };
+          const sessionKey = normalizeSessionId(id);
+          const toolPayload = { ...payload, ...toolValidation.value, source_id: sessionKey, session_id: sessionKey };
+          if (CONFIG_SECRET_MASK_PATTERN.test(String(toolPayload.password || "").trim())) {
+            return { ...w, formToolResponse: "Enter the real Neo4j password before connecting.", toolStatus: TOOL_STATUSES.FAILED };
+          }
           setWindows(prev =>
             prev.map(w =>
               w.id === id ? { ...w, formToolResponse: "Connecting...", toolStatus: TOOL_STATUSES.CONNECTING, toolPassword: "" } : w
             )
           );
+          if (CLIENT_DEV_LOGS_ENABLED) {
+            logConnectToToolRequest(toolPayload);
+          }
           apiFetch("/connect_to_tool", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
