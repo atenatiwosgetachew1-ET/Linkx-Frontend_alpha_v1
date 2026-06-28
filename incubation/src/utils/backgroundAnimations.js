@@ -11,7 +11,7 @@ export function readBackgroundAnimationPreference() {
     if (storedPreference !== null) return storedPreference !== "false";
 
     return false;
-  } catch (_err) {
+  } catch {
     return false;
   }
 }
@@ -21,7 +21,7 @@ export function writeBackgroundAnimationPreference(enabled) {
     if (typeof localStorage !== "undefined") {
       localStorage.setItem(backgroundAnimationPreferenceKey, String(enabled));
     }
-  } catch (_err) {
+  } catch {
     // Ignore unavailable storage; still notify the current document.
   }
 

@@ -574,14 +574,19 @@
     }
 
     target.className = "";
-    target.innerHTML = entries
-      .map(([name, stats]) => {
-        const min = formatNumber(stats?.min);
-        const max = formatNumber(stats?.max);
-        const avg = formatNumber(stats?.avg);
-        return `<div class=\"kvline\"><b>${safeText(name)}:</b> min ${min}, max ${max}, avg ${avg}</div>`;
-      })
-      .join("");
+    while (target.firstChild) target.removeChild(target.firstChild);
+    entries.forEach(([name, stats]) => {
+      const min = formatNumber(stats?.min);
+      const max = formatNumber(stats?.max);
+      const avg = formatNumber(stats?.avg);
+      const row = document.createElement("div");
+      row.className = "kvline";
+      const label = document.createElement("b");
+      label.textContent = String(name || "") + ":";
+      row.appendChild(label);
+      row.appendChild(document.createTextNode(" min " + min + ", max " + max + ", avg " + avg));
+      target.appendChild(row);
+    });
 
     return true;
   };

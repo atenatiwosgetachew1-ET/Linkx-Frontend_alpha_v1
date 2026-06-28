@@ -29,6 +29,10 @@ export function WorkspaceProvider({ children }) {
         type: WORKSPACE_ACTIONS.UPDATE_WINDOW_CUSTOM_TITLE,
         payload: { id, customTitle },
       }),
+      updateWindowMetadata: (id, updates) => dispatch({
+        type: WORKSPACE_ACTIONS.UPDATE_WINDOW_METADATA,
+        payload: { id, updates },
+      }),
       setOrientation: (orientation) => dispatch({
         type: WORKSPACE_ACTIONS.SET_ORIENTATION,
         payload: { orientation },

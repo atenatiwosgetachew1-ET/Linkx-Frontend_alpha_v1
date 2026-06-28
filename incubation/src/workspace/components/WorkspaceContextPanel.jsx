@@ -169,7 +169,7 @@ export default function WorkspaceContextPanel({ displayName, workspace }) {
                   disabled={isAssistantResponding}
                   onChange={(event) => setMessage(event.target.value)}
                 />
-                <button type="submit" disabled={isSubmitDisabled} aria-label="Send message">
+                <button type="submit" className="linkx_tooltip_anchor" data-tooltip="Send message" disabled={isSubmitDisabled} aria-label="Send message">
                   <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                     <path d="M5 12h13m0 0-5-5m5 5-5 5" />
                   </svg>

@@ -3,8 +3,10 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 const AUTH_TOKEN_KEY = "linkx_auth_token";
 const SSO_CODE_PARAM = "sso_code";
 const SSO_STATE_PARAM = "sso_state";
+const PARENT_ACCESS_TOKEN_PARAM = "parent_access_token";
 const AuthContext = createContext(null);
 const AUTH_REQUEST_TIMEOUT_MS = 20000;
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const normalizeUser = (value) => {
   if (!value || typeof value !== "object") return null;
@@ -25,29 +27,49 @@ const parseAuthResponse = (data, fallbackToken = null) => {
 };
 
 const authRequest = async (apiUrl, path, options = {}) => {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), AUTH_REQUEST_TIMEOUT_MS);
+  const runRequest = async () => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), AUTH_REQUEST_TIMEOUT_MS);
+
+    try {
+      const response = await fetch(String(apiUrl || "").replace(/\/$/, "") + path, {
+        ...options,
+        signal: controller.signal,
+      });
+      const text = await response.text();
+      const data = text ? JSON.parse(text) : null;
+
+      if (!response.ok) {
+        const retryAfterSeconds = Number(data?.retry_after ?? response.headers.get("Retry-After") ?? 0) || 0;
+        const error = new Error(
+          response.status === 429
+            ? "Too many sign-in attempts. Retry after " + (retryAfterSeconds || "a few") + " seconds."
+            : data?.message || data?.error || "Auth request failed with status " + response.status
+        );
+        error.status = response.status;
+        error.retryAfter = retryAfterSeconds;
+        throw error;
+      }
+
+      return data;
+    } catch (err) {
+      if (err?.name === "AbortError") {
+        throw new Error("Authentication service did not respond. Please try again later.");
+      }
+      throw err;
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  };
 
   try {
-    const response = await fetch(`${String(apiUrl || "").replace(/\/$/, "")}${path}`, {
-      ...options,
-      signal: controller.signal,
-    });
-    const text = await response.text();
-    const data = text ? JSON.parse(text) : null;
-
-    if (!response.ok) {
-      throw new Error(data?.message || data?.error || `Auth request failed with status ${response.status}`);
-    }
-
-    return data;
+    return await runRequest();
   } catch (err) {
-    if (err?.name === "AbortError") {
-      throw new Error("Authentication service did not respond. Please try again later.");
+    if (err?.status === 429 && err.retryAfter > 0 && options.retryOnRateLimit !== false) {
+      await delay(Math.min(err.retryAfter, 30) * 1000);
+      return runRequest();
     }
     throw err;
-  } finally {
-    clearTimeout(timeoutId);
   }
 };
 const normalizeAllowedOrigins = (origins = []) => (
@@ -66,23 +88,35 @@ const readSsoParams = () => {
   return { code, state };
 };
 
+const readParentAccessTokenParam = () => {
+  const params = new URLSearchParams(window.location.search);
+  return params.get(PARENT_ACCESS_TOKEN_PARAM) || params.get("access_token") || "";
+};
+
 const clearSsoParams = () => {
   const url = new URL(window.location.href);
   url.searchParams.delete(SSO_CODE_PARAM);
   url.searchParams.delete(SSO_STATE_PARAM);
   url.searchParams.delete("state");
   url.searchParams.delete("sso_error");
+  url.searchParams.delete(PARENT_ACCESS_TOKEN_PARAM);
+  url.searchParams.delete("access_token");
   window.history.replaceState({}, document.title, `${url.pathname}${url.search}${url.hash}`);
 };
 
 export function AuthProvider({ apiUrl, allowedSsoOrigins = [], children }) {
-  const [token, setToken] = useState(() => localStorage.getItem(AUTH_TOKEN_KEY) || "");
+  const [token, setToken] = useState("");
   const [user, setUser] = useState(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [isSsoAuthenticating, setIsSsoAuthenticating] = useState(false);
   const [ssoError, setSsoError] = useState("");
 
   const trustedSsoOrigins = useMemo(() => normalizeAllowedOrigins(allowedSsoOrigins), [allowedSsoOrigins]);
+
+  useEffect(() => {
+    // Clear any access token persisted by older frontend builds.
+    localStorage.removeItem(AUTH_TOKEN_KEY);
+  }, []);
 
   const applyAuth = useCallback((nextToken, nextUser) => {
     const normalizedUser = normalizeUser(nextUser);
@@ -91,9 +125,7 @@ export function AuthProvider({ apiUrl, allowedSsoOrigins = [], children }) {
       setToken("");
       setUser(null);
       return;
-    }
-
-    localStorage.setItem(AUTH_TOKEN_KEY, nextToken);
+    }
     setToken(nextToken);
     setUser(normalizedUser);
     setSsoError("");
@@ -145,6 +177,31 @@ export function AuthProvider({ apiUrl, allowedSsoOrigins = [], children }) {
     }
   }, [apiUrl, applyAuth]);
 
+  const exchangeParentToken = useCallback(async (parentAccessToken, { useAuthorizationHeader = false } = {}) => {
+    const cleanToken = String(parentAccessToken || "").trim();
+    if (!cleanToken) return null;
+
+    setIsSsoAuthenticating(true);
+    setSsoError("");
+    try {
+      const data = await authRequest(apiUrl, "/auth/parent-token", {
+        method: "POST",
+        headers: useAuthorizationHeader
+          ? { Authorization: `Bearer ${cleanToken}` }
+          : { "Content-Type": "application/json" },
+        body: useAuthorizationHeader ? undefined : JSON.stringify({ access_token: cleanToken }),
+      });
+      const auth = parseAuthResponse(data);
+      applyAuth(auth.token, auth.user);
+      return auth.user;
+    } catch (err) {
+      setSsoError(err?.message || "Parent sign-on failed.");
+      throw err;
+    } finally {
+      setIsSsoAuthenticating(false);
+    }
+  }, [apiUrl, applyAuth]);
+
   const verifyToken = useCallback(async (incomingToken) => {
     const candidateToken = incomingToken || token;
     if (!candidateToken) return null;
@@ -166,6 +223,19 @@ export function AuthProvider({ apiUrl, allowedSsoOrigins = [], children }) {
     let cancelled = false;
 
     const restoreAuth = async () => {
+      const parentAccessToken = readParentAccessTokenParam();
+      if (parentAccessToken) {
+        try {
+          await exchangeParentToken(parentAccessToken);
+        } catch {
+          if (!cancelled) logout();
+        } finally {
+          clearSsoParams();
+          if (!cancelled) setIsAuthReady(true);
+        }
+        return;
+      }
+
       const sso = readSsoParams();
       if (sso.code) {
         try {
@@ -202,7 +272,7 @@ export function AuthProvider({ apiUrl, allowedSsoOrigins = [], children }) {
     return () => {
       cancelled = true;
     };
-  }, [apiUrl]);
+  }, [apiUrl, applyAuth, exchangeParentToken, exchangeSsoCode, logout, token]);
 
   useEffect(() => {
     const handleSsoMessage = async (event) => {
@@ -214,10 +284,16 @@ export function AuthProvider({ apiUrl, allowedSsoOrigins = [], children }) {
       const payload = data.payload && typeof data.payload === "object" ? data.payload : data;
       const code = payload.sso_code || payload.code || "";
       const state = payload.sso_state || payload.state || "";
+      const parentAccessToken = payload.parent_access_token || payload.access_token || "";
       const incomingToken = payload.token || "";
+      const tokenType = String(payload.token_type || payload.tokenType || "").toLowerCase();
 
       try {
-        const verifiedUser = code ? await exchangeSsoCode(code, state) : await verifyToken(incomingToken);
+        const verifiedUser = parentAccessToken || tokenType === "parent_access" || tokenType === "access"
+          ? await exchangeParentToken(parentAccessToken || incomingToken)
+          : code
+            ? await exchangeSsoCode(code, state)
+            : await verifyToken(incomingToken);
         event.source?.postMessage(
           { type: "linkx_sso_result", payload: { ok: !!verifiedUser, username: verifiedUser?.username || null } },
           event.origin
@@ -232,7 +308,7 @@ export function AuthProvider({ apiUrl, allowedSsoOrigins = [], children }) {
 
     window.addEventListener("message", handleSsoMessage);
     return () => window.removeEventListener("message", handleSsoMessage);
-  }, [exchangeSsoCode, trustedSsoOrigins, verifyToken]);
+  }, [exchangeParentToken, exchangeSsoCode, trustedSsoOrigins, verifyToken]);
 
   const roles = user?.roles || [];
   const permissions = user?.permissions || [];
@@ -251,9 +327,10 @@ export function AuthProvider({ apiUrl, allowedSsoOrigins = [], children }) {
     logout,
     verifyToken,
     exchangeSsoCode,
+    exchangeParentToken,
     hasRole: (role) => roles.includes(role),
     hasPermission: (permission) => permissions.includes(permission),
-  }), [user, token, roles, permissions, isAuthReady, isSsoAuthenticating, ssoError, login, logout, verifyToken, exchangeSsoCode]);
+  }), [user, token, roles, permissions, isAuthReady, isSsoAuthenticating, ssoError, login, logout, verifyToken, exchangeSsoCode, exchangeParentToken]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

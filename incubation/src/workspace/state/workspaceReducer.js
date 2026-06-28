@@ -23,6 +23,60 @@ const MULTI_INSTANCE_WINDOW_TYPES = new Set([
 
 const buildWindowId = (type, index) => `${type}-${index}`;
 
+const createInitialSourceState = (metadata = {}) => ({
+  mode: 'choose',
+  batch: {
+    step: 'connect',
+    sourceAddressType: 'broker',
+    brokerAddress: '',
+    topic: '',
+    storageAddress: '',
+    sourceStatus: 'idle',
+    sourceMessage: 'Not connected.',
+    toolStatus: 'idle',
+    toolMessage: 'Not connected.',
+    selectedFiles: [],
+    searchQuery: '',
+    searchDate: '',
+    searchMode: 'raw',
+    dataframeAction: '',
+    sourceColumn: '',
+    targetColumn: '',
+    relationship: '',
+    rule: '',
+    toolUrl: '',
+    toolUsername: '',
+    toolPassword: '',
+    toolDatabase: '',
+    streamStatus: 'idle',
+  },
+  realtime: {
+    step: 'connect',
+    sourceAddressType: 'broker',
+    brokerAddress: '',
+    topic: '',
+    sourceStatus: 'idle',
+    sourceMessage: 'Not connected.',
+    toolStatus: 'idle',
+    toolMessage: 'Not connected.',
+    dataframeAction: '',
+    sourceColumn: '',
+    targetColumn: '',
+    relationship: '',
+    rule: '',
+    toolUrl: '',
+    toolUsername: '',
+    toolPassword: '',
+    toolDatabase: '',
+    streamStatus: 'idle',
+  },
+  upload: {
+    selectedFiles: [],
+    status: 'idle',
+  },
+  ...metadata.sourceState,
+});
+
 const createWindow = (type, index, metadata = {}, instanceNumber = 1) => {
   const now = new Date().toISOString();
   const baseTitle = metadata.title || WORKSPACE_WINDOW_LABELS[type] || 'Workspace';
@@ -43,6 +97,7 @@ const createWindow = (type, index, metadata = {}, instanceNumber = 1) => {
     createdAt: now,
     updatedAt: now,
     metadata: metadata.metadata || {},
+    sourceState: type === WORKSPACE_WINDOW_TYPES.SOURCE ? createInitialSourceState(metadata) : undefined,
   };
 };
 
@@ -106,6 +161,27 @@ export function workspaceReducer(state, action) {
         windows: state.windows.map((windowItem) => (
           windowItem.id === windowId
             ? { ...windowItem, customTitle: nextCustomTitle, updatedAt: new Date().toISOString() }
+            : windowItem
+        )),
+      };
+    }
+
+    case WORKSPACE_ACTIONS.UPDATE_WINDOW_METADATA: {
+      const windowId = action.payload?.id;
+      if (!windowId) return state;
+      return {
+        ...state,
+        windows: state.windows.map((windowItem) => (
+          windowItem.id === windowId
+            ? {
+                ...windowItem,
+                ...action.payload?.updates,
+                metadata: {
+                  ...windowItem.metadata,
+                  ...(action.payload?.updates?.metadata || {}),
+                },
+                updatedAt: new Date().toISOString(),
+              }
             : windowItem
         )),
       };

@@ -1693,6 +1693,90 @@ smooth: {
 									return "";
 								}
 
+								function clearElement(el) {
+
+
+									if (!el) return;
+
+
+									while (el.firstChild) el.removeChild(el.firstChild);
+
+
+								}
+
+
+
+								function isSafeImageSource(value = "") {
+
+
+									const raw = String(value || "").trim();
+
+
+									if (!raw || /[\u0000-\u001F\u007F]/.test(raw)) return false;
+
+
+									if (/^data:image\/(png|jpe?g|gif|bmp|webp|svg\+xml|avif);base64,/i.test(raw)) return true;
+
+
+									try {
+
+
+										const parsed = new URL(raw, window.location.origin);
+
+
+										return ["http:", "https:"].includes(parsed.protocol);
+
+
+									} catch (_err) {
+
+
+										return false;
+
+
+									}
+
+
+								}
+
+
+
+								function appendSafeImage(target, src, { className = "", style = {}, alt = "" } = {}) {
+
+
+									if (!target) return false;
+
+
+									clearElement(target);
+
+
+									if (!isSafeImageSource(src)) return false;
+
+
+									const img = document.createElement("img");
+
+
+									if (className) img.className = className;
+
+
+									img.alt = alt;
+
+
+									Object.assign(img.style, style);
+
+
+									img.src = src;
+
+
+									target.appendChild(img);
+
+
+									return true;
+
+
+								}
+
+
+
 								function renderObjAttachmentPreview(nodeLike = {}) {
 									const previewBox = document.getElementById("objAdjustBox_media_preview");
 									if (!previewBox) return;
@@ -1713,12 +1797,12 @@ smooth: {
 									}
 
 									if (!source || !previewKind) {
-										previewBox.innerHTML = "";
+										clearElement(previewBox);
 										previewBox.style.display = "none";
 										return;
 									}
 
-									previewBox.innerHTML = "";
+									clearElement(previewBox);
 									previewBox.style.display = "block";
 
 									let mediaEl = null;
@@ -1739,13 +1823,17 @@ smooth: {
 									}
 
 									if (!mediaEl) {
-										previewBox.innerHTML = "";
+										clearElement(previewBox);
 										previewBox.style.display = "none";
 										return;
 									}
 
 									mediaEl.addEventListener("error", () => {
-										previewBox.innerHTML = `<div class="obj_media_preview_note">Preview is not available for this source.</div>`;
+										clearElement(previewBox);
+										const note = document.createElement("div");
+										note.className = "obj_media_preview_note";
+										note.textContent = "Preview is not available for this source.";
+										previewBox.appendChild(note);
 										previewBox.style.display = "block";
 									});
 									previewBox.appendChild(mediaEl);
@@ -2102,13 +2190,15 @@ smooth: {
 											const previewIconPath = String(node?.iconPath || "").trim();
 										if (previewIconPath) {
 											const previewIsBuiltinIcon = /graph_icons\/.+\.svg/i.test(previewIconPath) && previewIconPath.indexOf("data:") !== 0;
-											nodeImage.innerHTML = previewIsBuiltinIcon
-												? '<img class="iconGlyph" src="' + previewIconPath + '" style="width:100%; height:100%; object-fit:contain;">'
-												: '<img src="' + previewIconPath + '" style="width:100%; height:100%; object-fit:contain;">';
+											appendSafeImage(nodeImage, previewIconPath, {
+												className: previewIsBuiltinIcon ? "iconGlyph" : "",
+												style: { width: "100%", height: "100%", objectFit: "contain" },
+												alt: "Node icon",
+											});
 										} else if (node?.image) {
-											nodeImage.innerHTML = '<img src="' + node.image + '" style="width:100%; height:auto;">';
+											appendSafeImage(nodeImage, node.image, { style: { width: "100%", height: "auto" }, alt: "Node image" });
 										} else {
-											nodeImage.innerHTML = "";
+											clearElement(nodeImage);
 										}
 											const nodeNote = document.getElementById("nodeAdjustBox_node_note_text");
 											nodeNote.value = node?.note || "";
@@ -2489,7 +2579,7 @@ smooth: {
 								    selectedIconPath = `${iconFolder}${filename}.svg`;
 								    if (currentEntityId) {
 								      applyNodeIcon(currentEntityId, selectedIconPath);
-								      displayIcon.innerHTML = `<img class="iconGlyph" src="${selectedIconPath}" style="width:100%; height:100%; object-fit:contain;">`;
+								      appendSafeImage(displayIcon, selectedIconPath, { className: "iconGlyph", style: { width: "100%", height: "100%", objectFit: "contain" }, alt: "Selected icon" });
 								    }
 								  } else {
 								    // Handle Upload
@@ -2508,7 +2598,7 @@ smooth: {
 								        if (currentEntityId) {
 								          applyNodeIcon(currentEntityId, uploaded_icon);
 								        }
-								        displayIcon.innerHTML = `<img src="${uploaded_icon}" style="width:100%; height:auto;">`;
+								        appendSafeImage(displayIcon, uploaded_icon, { style: { width: "100%", height: "auto" }, alt: "Uploaded icon" });
 								      };
 								      reader.readAsDataURL(file);
 								    };

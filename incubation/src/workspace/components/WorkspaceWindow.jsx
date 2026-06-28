@@ -129,7 +129,9 @@ export default function WorkspaceWindow({ windowItem, stackIndex = 0, isActive, 
           />
         </div>
         <button
+          className="linkx_tooltip_anchor"
           type="button"
+          data-tooltip={'Close ' + windowItem.title}
           aria-label={'Close ' + windowItem.title}
           onPointerDown={stopHeaderControlDrag}
           onClick={handleClose}

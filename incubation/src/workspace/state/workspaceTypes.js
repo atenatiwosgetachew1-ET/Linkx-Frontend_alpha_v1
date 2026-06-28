@@ -23,6 +23,7 @@ export const WORKSPACE_ACTIONS = Object.freeze({
   CLOSE_WINDOW: 'workspace/closeWindow',
   FOCUS_WINDOW: 'workspace/focusWindow',
   UPDATE_WINDOW_CUSTOM_TITLE: 'workspace/updateWindowCustomTitle',
+  UPDATE_WINDOW_METADATA: 'workspace/updateWindowMetadata',
   SET_ORIENTATION: 'workspace/setOrientation',
   TOGGLE_ORIENTATION: 'workspace/toggleOrientation',
   SET_CONTEXT_TAB: 'workspace/setContextTab',

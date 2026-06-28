@@ -9,6 +9,21 @@ import {
 } from "../services/authApi.js";
 
 const AUTH_TOKEN_KEY = "linkx_auth_token";
+const SESSION_STORAGE_KEY = "session";
+
+const readStoredToken = () => {
+  const nextToken = sessionStorage.getItem(AUTH_TOKEN_KEY) || "";
+  if (localStorage.getItem(AUTH_TOKEN_KEY)) clearClientSessionState();
+  return nextToken;
+};
+
+const clearClientSessionState = () => {
+  sessionStorage.removeItem(AUTH_TOKEN_KEY);
+  sessionStorage.removeItem(SESSION_STORAGE_KEY);
+  localStorage.removeItem(AUTH_TOKEN_KEY);
+  localStorage.removeItem(SESSION_STORAGE_KEY);
+};
+
 const SSO_CODE_PARAM = "sso_code";
 const SSO_STATE_PARAM = "sso_state";
 
@@ -38,7 +53,7 @@ const clearSsoParams = () => {
 };
 
 export function AuthProvider({ apiUrl, allowedSsoOrigins = [], children }) {
-  const [token, setToken] = useState(() => localStorage.getItem(AUTH_TOKEN_KEY) || "");
+  const [token, setToken] = useState(readStoredToken);
   const [user, setUser] = useState(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [isSsoAuthenticating, setIsSsoAuthenticating] = useState(false);
@@ -49,20 +64,20 @@ export function AuthProvider({ apiUrl, allowedSsoOrigins = [], children }) {
   const applyAuth = useCallback((nextToken, nextUser) => {
     const normalizedUser = normalizeAuthUser(nextUser);
     if (!nextToken || !normalizedUser) {
-      localStorage.removeItem(AUTH_TOKEN_KEY);
+      clearClientSessionState();
       setToken("");
       setUser(null);
       return;
     }
 
-    localStorage.setItem(AUTH_TOKEN_KEY, nextToken);
+    sessionStorage.setItem(AUTH_TOKEN_KEY, nextToken);
     setToken(nextToken);
     setUser(normalizedUser);
     setSsoError("");
   }, []);
 
   const logout = useCallback(() => {
-    localStorage.removeItem(AUTH_TOKEN_KEY);
+    clearClientSessionState();
     setToken("");
     setUser(null);
   }, []);
@@ -153,10 +168,10 @@ export function AuthProvider({ apiUrl, allowedSsoOrigins = [], children }) {
       const payload = data.payload && typeof data.payload === "object" ? data.payload : data;
       const code = payload.sso_code || payload.code || "";
       const state = payload.sso_state || payload.state || "";
-      const incomingToken = payload.token || "";
 
       try {
-        const verifiedUser = code ? await exchangeSsoCode(code, state) : await verifyToken(incomingToken);
+        if (!code) throw new Error("Single sign-on code is required.");
+        const verifiedUser = await exchangeSsoCode(code, state);
         event.source?.postMessage(
           { type: "linkx_sso_result", payload: { ok: !!verifiedUser, username: verifiedUser?.username || null } },
           event.origin
@@ -171,7 +186,7 @@ export function AuthProvider({ apiUrl, allowedSsoOrigins = [], children }) {
 
     window.addEventListener("message", handleSsoMessage);
     return () => window.removeEventListener("message", handleSsoMessage);
-  }, [exchangeSsoCode, trustedSsoOrigins, verifyToken]);
+  }, [exchangeSsoCode, trustedSsoOrigins]);
 
   const value = useMemo(() => {
     const roles = user?.roles || [];

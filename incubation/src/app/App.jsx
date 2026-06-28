@@ -7,13 +7,14 @@ import LoginPage from '../auth/LoginPage.jsx';
 import WorkspaceFrame from '../workspace/components/WorkspaceFrame.jsx';
 import { WorkspaceProvider } from '../workspace/state/WorkspaceContext.jsx';
 import { initializeMainSession } from '../services/sessionApi.js';
+import { NotificationProvider } from '../shared/notifications/NotificationContext.jsx';
 import { appConfig } from './config.js';
 
 const loginLogo = import.meta.env.BASE_URL + 'site_images/Linkx square Icon (256x256).png';
 
 function IncubationShell() {
   const { user, token, logout } = useAuth();
-  const [mainSessionId, setMainSessionId] = useState(() => localStorage.getItem('session') || '');
+  const [mainSessionId, setMainSessionId] = useState(() => sessionStorage.getItem('session') || '');
   const [sessionError, setSessionError] = useState('');
 
   useEffect(() => {
@@ -82,7 +83,9 @@ function IncubationApp() {
 export default function App() {
   return (
     <AuthProvider apiUrl={appConfig.apiUrl} allowedSsoOrigins={appConfig.allowedSsoOrigins}>
-      <IncubationApp />
+      <NotificationProvider>
+        <IncubationApp />
+      </NotificationProvider>
     </AuthProvider>
   );
 }

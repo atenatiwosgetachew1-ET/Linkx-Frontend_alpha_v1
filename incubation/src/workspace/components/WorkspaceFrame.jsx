@@ -5,7 +5,7 @@ import WorkspaceHome from './WorkspaceHome.jsx';
 import WorkspaceContextPanel from './WorkspaceContextPanel.jsx';
 import WindowManager from './WindowManager.jsx';
 import { useWorkspace } from '../hooks/useWorkspace.js';
-import { initializeSourceWindow } from '../../services/sourceApi.js';
+import { closeSourceWindow, initializeSourceWindow } from '../../services/sourceApi.js';
 import { WORKSPACE_CONTEXT_TABS, WORKSPACE_ORIENTATIONS, WORKSPACE_WINDOW_TYPES } from '../state/workspaceTypes.js';
 
 const workspaceBackgroundVideo = import.meta.env.BASE_URL + 'site_videos/background.mp4';
@@ -51,6 +51,12 @@ const launcherItems = [
   },
 ];
 
+const overviewItem = {
+  id: 'overview',
+  label: 'Windows',
+  path: 'M4 5h6v6H4V5Zm10 0h6v6h-6V5ZM4 13h6v6H4v-6Zm10 0h6v6h-6v-6Z',
+};
+
 const orientationItem = {
   id: 'orientation',
   path: 'M4 5h16v5H4V5Zm0 9h7v5H4v-5Zm11 0h5v5h-5v-5Z',
@@ -62,9 +68,11 @@ const signOutItem = {
   path: 'M10 6H6.5A2.5 2.5 0 0 0 4 8.5v7A2.5 2.5 0 0 0 6.5 18H10m4-8 4 4-4 4m4-4H9',
 };
 
-function LauncherIcon({ path }) {
+const windowIconPaths = Object.fromEntries(launcherItems.map((item) => [item.windowType, item.path]));
+
+function LauncherIcon({ path, className = 'workspace_launcher_icon' }) {
   return (
-    <svg className="workspace_launcher_icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+    <svg className={className} viewBox="0 0 24 24" aria-hidden="true" focusable="false">
       <path d={path} />
     </svg>
   );
@@ -74,6 +82,7 @@ export default function WorkspaceFrame({ user, token, apiUrl, mainSessionId, ses
   const displayName = user?.display_name || user?.username || user?.client_id || 'Analyst';
   const avatarLetter = displayName.trim().charAt(0).toUpperCase() || 'A';
   const videoRef = React.useRef(null);
+  const launcherRef = React.useRef(null);
   const [videoSrc, setVideoSrc] = useState(workspaceBackgroundVideo);
   const [isVideoUnavailable, setIsVideoUnavailable] = useState(false);
   const [imageSrc, setImageSrc] = useState(workspaceBackgroundImage);
@@ -81,6 +90,7 @@ export default function WorkspaceFrame({ user, token, apiUrl, mainSessionId, ses
   const [isLauncherExpanded, setIsLauncherExpanded] = useState(false);
   const [sourceOpenError, setSourceOpenError] = useState('');
   const [isOpeningSource, setIsOpeningSource] = useState(false);
+  const [isSidebarOverviewOpen, setIsSidebarOverviewOpen] = useState(false);
   const { areBackgroundAnimationsEnabled } = useBackgroundAnimations();
   const workspace = useWorkspace();
 
@@ -104,9 +114,46 @@ export default function WorkspaceFrame({ user, token, apiUrl, mainSessionId, ses
     }
   };
 
+  useEffect(() => {
+    if (!isLauncherExpanded) return undefined;
+
+    const handleOutsidePointerDown = (event) => {
+      if (launcherRef.current?.contains(event.target)) return;
+      setIsLauncherExpanded(false);
+      setIsSidebarOverviewOpen(false);
+    };
+
+    document.addEventListener('pointerdown', handleOutsidePointerDown, true);
+    return () => document.removeEventListener('pointerdown', handleOutsidePointerDown, true);
+  }, [isLauncherExpanded]);
+
+  const collapseLauncher = () => {
+    setIsLauncherExpanded(false);
+    setIsSidebarOverviewOpen(false);
+  };
+
+  const handleCloseWindow = (windowId) => {
+    const targetWindow = workspace.windows.find((windowItem) => windowItem.id === windowId);
+    if (targetWindow?.type === WORKSPACE_WINDOW_TYPES.SOURCE && token) {
+      closeSourceWindow(apiUrl, token, {
+        sessionId: targetWindow.parentSessionId,
+        windowId: targetWindow.backendWindowId,
+        reason: 'user_closed_window',
+      }).catch((error) => {
+        console.error('Source window cleanup failed', { status: error?.status, message: error?.message });
+      });
+    }
+    workspace.closeWindow(windowId);
+  };
+
+  const windowWorkspace = {
+    ...workspace,
+    closeWindow: handleCloseWindow,
+  };
 
   const handleLauncherAction = async (item) => {
     setSourceOpenError('');
+    collapseLauncher();
 
     if (item.windowType === WORKSPACE_WINDOW_TYPES.SOURCE) {
       if (!mainSessionId || !token) {
@@ -186,13 +233,14 @@ export default function WorkspaceFrame({ user, token, apiUrl, mainSessionId, ses
       )}
       <div className="workspace_background_overlay" aria-hidden="true" />
       <div className={`workspace_frame${isLauncherExpanded ? ' is-launcher-expanded' : ''}`}>
-        <aside className="workspace_zone workspace_zone_left" aria-label="Workspace launcher">
+        <aside ref={launcherRef} className="workspace_zone workspace_zone_left" aria-label="Workspace launcher">
           <nav className="workspace_launcher" aria-label="Workspace launcher">
             <div className="workspace_launcher_main">
               <button
-                className="workspace_launcher_brand"
+                className="workspace_launcher_brand linkx_tooltip_anchor"
                 type="button"
                 aria-label={isLauncherExpanded ? 'Collapse launcher' : 'Expand launcher'}
+                data-tooltip={isLauncherExpanded ? 'Collapse launcher' : 'Expand launcher'}
                 aria-expanded={isLauncherExpanded}
                 onClick={() => setIsLauncherExpanded((current) => !current)}
               >
@@ -205,9 +253,9 @@ export default function WorkspaceFrame({ user, token, apiUrl, mainSessionId, ses
               {launcherItems.map((item) => (
                 <button
                   key={item.id}
-                  className="workspace_launcher_button"
+                  className="workspace_launcher_button linkx_tooltip_anchor"
                   type="button"
-                  title={item.label}
+                  data-tooltip={item.label}
                   aria-label={item.label}
                   disabled={item.windowType === WORKSPACE_WINDOW_TYPES.SOURCE && isOpeningSource}
                   onClick={() => handleLauncherAction(item)}
@@ -217,29 +265,77 @@ export default function WorkspaceFrame({ user, token, apiUrl, mainSessionId, ses
                 </button>
               ))}
             </div>
-            <button
-              className="workspace_launcher_button workspace_launcher_orientation"
+            <div className="workspace_launcher_bottom">
+              {workspace.orientation === WORKSPACE_ORIENTATIONS.FLOATING && workspace.windows.length > 0 && (
+                <div className="workspace_sidebar_overview_wrap">
+                <button
+                  className="workspace_launcher_button workspace_launcher_overview linkx_tooltip_anchor"
+                  type="button"
+                  data-tooltip="Show all windows"
+                  aria-label="Show all open windows"
+                  aria-expanded={isSidebarOverviewOpen}
+                  onClick={() => setIsSidebarOverviewOpen((current) => !current)}
+                >
+                  <LauncherIcon path={overviewItem.path} />
+                  <span className="workspace_launcher_label">Windows</span>
+                </button>
+                {isSidebarOverviewOpen && (
+                  <div className="workspace_sidebar_overview_menu" role="menu" aria-label="Open windows overview">
+                    {workspace.windows.map((windowItem) => (
+                      <button
+                        key={windowItem.id}
+                        className={'workspace_sidebar_overview_item' + (workspace.activeWindowId === windowItem.id ? ' is-active' : '')}
+                        type="button"
+                        role="menuitem"
+                        onClick={() => {
+                          workspace.focusWindow(windowItem.id);
+                          collapseLauncher();
+                        }}
+                      >
+                        <LauncherIcon
+                          className="workspace_sidebar_overview_icon"
+                          path={windowIconPaths[windowItem.type] || overviewItem.path}
+                        />
+                        <span>
+                          <strong>{windowItem.title}</strong>
+                          <small>{windowItem.customTitle || 'Placeholder'}</small>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                </div>
+              )}
+              <button
+                className="workspace_launcher_button workspace_launcher_orientation linkx_tooltip_anchor"
               type="button"
-              title={workspace.orientation === WORKSPACE_ORIENTATIONS.FLOATING ? 'Switch to docked tabs' : 'Switch to floating windows'}
+              data-tooltip={workspace.orientation === WORKSPACE_ORIENTATIONS.FLOATING ? 'Switch to docked tabs' : 'Switch to floating windows'}
               aria-label={workspace.orientation === WORKSPACE_ORIENTATIONS.FLOATING ? 'Switch to docked tabs' : 'Switch to floating windows'}
               aria-pressed={workspace.orientation === WORKSPACE_ORIENTATIONS.DOCKED}
-              onClick={workspace.toggleOrientation}
+              onClick={() => {
+                workspace.toggleOrientation();
+                collapseLauncher();
+              }}
             >
               <LauncherIcon path={orientationItem.path} />
               <span className="workspace_launcher_label">
                 {workspace.orientation === WORKSPACE_ORIENTATIONS.FLOATING ? 'Dock' : 'Float'}
               </span>
-            </button>
-            <button
-              className="workspace_launcher_button workspace_launcher_signout"
+              </button>
+              <button
+                className="workspace_launcher_button workspace_launcher_signout linkx_tooltip_anchor"
               type="button"
-              title={signOutItem.label}
+              data-tooltip={signOutItem.label}
               aria-label={signOutItem.label}
-              onClick={onSignOut}
+              onClick={() => {
+                collapseLauncher();
+                onSignOut();
+              }}
             >
-              <LauncherIcon path={signOutItem.path} />
-              <span className="workspace_launcher_label">{signOutItem.label}</span>
-            </button>
+                <LauncherIcon path={signOutItem.path} />
+                <span className="workspace_launcher_label">{signOutItem.label}</span>
+              </button>
+            </div>
           </nav>
         </aside>
         <div className="workspace_work_area">
@@ -254,7 +350,7 @@ export default function WorkspaceFrame({ user, token, apiUrl, mainSessionId, ses
                 {sourceOpenError || sessionError}
               </div>
             )}
-            {workspace.orientation === WORKSPACE_ORIENTATIONS.DOCKED && <WindowManager workspace={workspace} />}
+            {workspace.orientation === WORKSPACE_ORIENTATIONS.DOCKED && <WindowManager workspace={windowWorkspace} />}
           </section>
           <aside className="workspace_zone workspace_zone_right" aria-label="Workspace context">
             <WorkspaceContextPanel
@@ -262,7 +358,7 @@ export default function WorkspaceFrame({ user, token, apiUrl, mainSessionId, ses
               workspace={workspace}
             />
           </aside>
-          {workspace.orientation === WORKSPACE_ORIENTATIONS.FLOATING && <WindowManager workspace={workspace} />}
+          {workspace.orientation === WORKSPACE_ORIENTATIONS.FLOATING && <WindowManager workspace={windowWorkspace} />}
         </div>
       </div>
     </main>

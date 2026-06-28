@@ -80,10 +80,8 @@ export const verifyAuthToken = async (apiUrl, token) => {
   const data = await authRequest(apiUrl, '/auth/verify', {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json',
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({ token }),
   });
   return parseAuthResponse(data, token);
 };

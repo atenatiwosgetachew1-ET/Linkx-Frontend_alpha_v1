@@ -13,7 +13,7 @@ export const extractMainSessionId = (data = {}) => (
 );
 
 export const initializeMainSession = async (apiUrl, token, { socketId = null } = {}) => {
-  const existingSession = localStorage.getItem(SESSION_STORAGE_KEY) || null;
+  const existingSession = sessionStorage.getItem(SESSION_STORAGE_KEY) || null;
   const payload = {
     id: 'init',
     existing_session: existingSession,
@@ -29,7 +29,7 @@ export const initializeMainSession = async (apiUrl, token, { socketId = null } =
     body: JSON.stringify(payload),
   });
   const sessionId = extractMainSessionId(data);
-  if (sessionId) localStorage.setItem(SESSION_STORAGE_KEY, String(sessionId));
+  if (sessionId) sessionStorage.setItem(SESSION_STORAGE_KEY, String(sessionId));
 
   return { data, sessionId: sessionId ? String(sessionId) : '' };
 };

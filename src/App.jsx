@@ -23,6 +23,7 @@ import {
   validateDisplayName,
   validateNewPassword,
   validateRequiredIdentifier,
+  validateSchema,
 } from './utils/inputSecurity.js';
 //importing the icons function
 import Icons from './Icons.jsx'
@@ -1196,10 +1197,11 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
                   onChange={(e) => actions("change", { name: e.target.name, value: e.target.value })}
                 />
                 <input
-                  type="text"
+                  type="password"
+                  autoComplete="new-password"
                   name="active_tool_password"
                   className="input_text"
-                  placeholder="Password"
+                  placeholder="Leave masked value unchanged to keep current password"
                   value={parsedConfig?.active_tool_password || ""}
                   onChange={(e) => actions("change", { name: e.target.name, value: e.target.value })}
                 />
@@ -1410,9 +1412,15 @@ const isSuccessResponse = (data) => {
 
 const JOB_POLL_DEFAULT_INTERVAL_MS = 1000;
 const JOB_POLL_DEFAULT_TIMEOUT_MS = 15 * 60 * 1000;
+const GRAPH_STATUS_REFRESH_INTERVAL_MS = 5000;
+const UPLOAD_ALLOWED_EXTENSIONS = [".csv", ".json", ".parquet", ".xlsx"];
+const MAX_UPLOAD_FILE_COUNT = Number(import.meta.env.VITE_MAX_UPLOAD_FILE_COUNT || 25);
+const MAX_UPLOAD_BYTES = Number(import.meta.env.VITE_MAX_UPLOAD_BYTES || 10 * 1024 * 1024);
+const MAX_UPLOAD_TOTAL_BYTES = Number(import.meta.env.VITE_MAX_UPLOAD_TOTAL_BYTES || MAX_UPLOAD_BYTES * MAX_UPLOAD_FILE_COUNT);
 const JOB_SUCCESS_STATUSES = new Set(["succeeded", "success", "finished", "completed", "done"]);
 const JOB_PENDING_STATUSES = new Set(["queued", "pending", "running", "started", "processing", "in_progress"]);
-const JOB_FAILURE_STATUSES = new Set(["failed", "failure", "error", "cancelled", "canceled"]);
+const JOB_CANCEL_STATUSES = new Set(["cancel_requested", "cancellation_requested", "cancelled", "canceled"]);
+const JOB_FAILURE_STATUSES = new Set(["failed", "failure", "error", ...JOB_CANCEL_STATUSES]);
 
 const delay = (ms) => new Promise((resolve) => {
   setTimeout(resolve, ms);
@@ -1421,6 +1429,8 @@ const delay = (ms) => new Promise((resolve) => {
 const getQueuedJobId = (data) => (
   data?.results?.job_id ??
   data?.results?.jobId ??
+  data?.results?.job?.job_id ??
+  data?.results?.job?.jobId ??
   data?.job_id ??
   data?.jobId ??
   data?.result?.job_id ??
@@ -1454,6 +1464,7 @@ const getJobErrorMessage = (job, fallback = "Job failed") => {
   const result = getJobResult(job);
   return result?.message ??
     result?.error ??
+    job?.results?.error_message ??
     job?.results?.message ??
     job?.results?.error ??
     job?.message ??
@@ -1462,17 +1473,43 @@ const getJobErrorMessage = (job, fallback = "Job failed") => {
 };
 
 const isQueuedJobResponse = (data) => (
-  Number(data?.__httpStatus) === 202 &&
-  isSuccessResponse(data) &&
   data?.results?.accepted === true &&
   !!getQueuedPollPath(data)
 );
 
-const pollJob = async (apiFetch, jobIdOrPath, { intervalMs = JOB_POLL_DEFAULT_INTERVAL_MS, timeoutMs = JOB_POLL_DEFAULT_TIMEOUT_MS, signal } = {}) => {
+const resolveLogStreamFilename = (value) => {
+  if (typeof value === "string") return value.trim();
+  if (value && typeof value === "object") {
+    return String(value.logFile ?? value.log_file ?? value.filename ?? value.results ?? "").trim();
+  }
+  return "";
+};
+
+const resolveStreamResponseLogFilename = (response) => {
+  if (typeof response?.results === "string") return response.results.trim();
+  return String(
+    response?.results?.log_file ??
+    response?.results?.logFile ??
+    response?.job?.payload?.log_file ??
+    response?.job?.payload?.logFile ??
+    response?.results?.job?.payload?.log_file ??
+    response?.results?.job?.payload?.logFile ??
+    response?.payload?.log_file ??
+    response?.payload?.logFile ??
+    response?.log_file ??
+    response?.logFile ??
+    response?.result?.log_file ??
+    response?.result?.logFile ??
+    ""
+  ).trim();
+};
+
+const pollJob = async (apiFetch, jobIdOrPath, { intervalMs = JOB_POLL_DEFAULT_INTERVAL_MS, timeoutMs = JOB_POLL_DEFAULT_TIMEOUT_MS, signal, timeoutMessage = "Job timed out", cancelledMessage = "Job request cancelled", label = "job" } = {}) => {
   const startedAt = Date.now();
   const pollPath = String(jobIdOrPath || "").startsWith("/")
     ? String(jobIdOrPath)
     : "/jobs/" + encodeURIComponent(jobIdOrPath);
+  let attempt = 0;
 
   while (Date.now() - startedAt < timeoutMs) {
     if (signal?.aborted) throw new DOMException("Job request was cancelled", "AbortError");
@@ -1481,37 +1518,159 @@ const pollJob = async (apiFetch, jobIdOrPath, { intervalMs = JOB_POLL_DEFAULT_IN
       method: "GET",
       signal,
     });
+    attempt += 1;
     const status = getJobStatus(job);
     const result = getJobResult(job);
 
     if (JOB_SUCCESS_STATUSES.has(status)) {
+      console.log("[job poll succeeded]", { label, pollPath, attempt, status, result, response: job });
       return result;
     }
 
     if (JOB_FAILURE_STATUSES.has(status)) {
-      throw new Error(getJobErrorMessage(job));
+      const rawMessage = getJobErrorMessage(job);
+      const message = JOB_CANCEL_STATUSES.has(status) && (!rawMessage || String(rawMessage).toLowerCase() === "success")
+        ? cancelledMessage
+        : rawMessage;
+      const error = new Error(message);
+      error.jobResponse = job;
+      error.jobResult = result;
+      error.jobStatus = status;
+      error.pollPath = pollPath;
+      console.error("[job failed response]", { label, pollPath, attempt, status, result, response: job });
+      throw error;
+    }
+
+    if (attempt === 1 || attempt % 5 === 0 || !JOB_PENDING_STATUSES.has(status)) {
+      console.log("[job poll pending]", {
+        label,
+        pollPath,
+        attempt,
+        status: status || "unknown",
+        elapsedMs: Date.now() - startedAt,
+        result,
+        response: job,
+      });
     }
 
     await delay(intervalMs);
   }
 
-  throw new Error("Job timed out");
+  const timeoutError = new Error(timeoutMessage);
+  timeoutError.pollPath = pollPath;
+  console.error("[job poll timed out]", { label, pollPath, elapsedMs: Date.now() - startedAt });
+  throw timeoutError;
 };
 
 const fetchMaybeQueued = async (apiFetch, url, options = {}, pollOptions = {}) => {
   const response = await apiFetch(url, options);
+  console.log("[api response]", url, response);
 
   if (isQueuedJobResponse(response)) {
-    return pollJob(apiFetch, getQueuedPollPath(response), {
+    const pollPath = getQueuedPollPath(response);
+    pollOptions.onQueued?.({ url, pollPath, response });
+    console.log("[queued job response]", { label: pollOptions.label || url, url, pollPath, response });
+    const result = await pollJob(apiFetch, pollPath, {
       ...pollOptions,
       signal: pollOptions.signal ?? options.signal,
     });
+    console.log("[queued job result]", { label: pollOptions.label || url, url, pollPath, result });
+    return result;
   }
 
   return response;
 };
 
 const getDataframeJobMessage = (data) => getJobErrorMessage(data, "Dataframe job failed");
+
+const normalizeSearchResponse = (data) => {
+  const response = data?.results?.result && typeof data.results.result === "object"
+    ? data.results.result
+    : data?.result && typeof data.result === "object" && Array.isArray(data.result.results)
+      ? data.result
+      : data;
+
+  const results = Array.isArray(response?.results) ? response.results : [];
+  const hasMore = response?.has_more === true || response?.has_more === 1 || response?.has_more === "1";
+
+  return {
+    ...response,
+    results,
+    has_more: hasMore,
+    offset: Number(response?.offset || 0),
+    limit: Number(response?.limit || 0),
+    message: response?.message ?? data?.message ?? "",
+  };
+};
+
+const normalizeDataframeInfoList = (results) => {
+  const toList = (value) => {
+    if (Array.isArray(value)) return value;
+    if (value && typeof value === "object") return Object.values(value);
+    if (typeof value === "string" && value.trim()) return [value];
+    return [];
+  };
+  const pick = (...values) => values.find((value) => value !== undefined && value !== null && value !== "");
+
+  const source = results && typeof results === "object" ? results : {};
+  const legacy = Array.isArray(results) ? [...results] : Object.values(source);
+  const normalized = [...legacy];
+
+  const columns = toList(pick(
+    source.columns,
+    source.column_names,
+    source.dataframe_columns,
+    source.headers,
+    normalized[2]
+  ));
+
+  normalized[0] = toList(pick(source.actions, source.action_options, source.available_actions, normalized[0]));
+  normalized[1] = pick(
+    source.broker_api,
+    source.brokerApi,
+    source.broker,
+    source.api,
+    source.source,
+    source.source_name,
+    source.sourceName,
+    normalized[1]
+  );
+  normalized[2] = columns;
+  normalized[3] = pick(
+    source.total_columns,
+    source.totalColumns,
+    source.column_count,
+    source.columnCount,
+    source.columns_count,
+    source.num_columns,
+    normalized[3],
+    columns.length || undefined
+  );
+  normalized[4] = pick(
+    source.total_rows,
+    source.totalRows,
+    source.row_count,
+    source.rowCount,
+    source.rows_count,
+    source.num_rows,
+    source.rows,
+    normalized[4]
+  );
+  normalized[5] = toList(pick(source.rules, source.analysis_rules, source.link_analysis_rules, normalized[5]));
+  normalized[6] = pick(
+    source.storage,
+    source.storage_name,
+    source.storageName,
+    source.dataset,
+    source.dataframe,
+    source.dataframe_name,
+    source.dataframeName,
+    normalized[6]
+  );
+  normalized[7] = pick(source.tool, source.tool_name, source.toolName, source.graph_tool, normalized[7]);
+
+  return normalized;
+};
 
 const normalizeCompletedDataframeJob = (data) => {
   const nestedResponse =
@@ -1550,7 +1709,27 @@ const normalizeCompletedDataframeJob = (data) => {
   };
 };
 
-const requestDataframeCreation = async (apiFetch, payload) => {
+const formatDataframeFailureMessage = (errorOrData, fallback) => {
+  const data = errorOrData?.jobResult ?? errorOrData?.data ?? errorOrData;
+  const results = data?.results ?? data?.result ?? data;
+  const failedSources = Array.isArray(results?.failed_sources)
+    ? results.failed_sources
+    : Array.isArray(results?.failedSources)
+      ? results.failedSources
+      : [];
+  const base = errorOrData?.message && String(errorOrData.message).toLowerCase() !== "success"
+    ? errorOrData.message
+    : data?.message || fallback;
+  if (failedSources.length === 0) return base || fallback;
+  const sourceText = failedSources
+    .slice(0, 5)
+    .map((item) => typeof item === "string" ? item : (item?.name || item?.source || item?.path || JSON.stringify(item)))
+    .join("; ");
+  const suffix = failedSources.length > 5 ? "; and " + (failedSources.length - 5) + " more" : "";
+  return (base || fallback) + " Failed sources: " + sourceText + suffix;
+};
+
+const requestDataframeCreation = async (apiFetch, payload, options = {}) => {
   const data = await apiFetch("/live_batch_files", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -1558,7 +1737,8 @@ const requestDataframeCreation = async (apiFetch, payload) => {
   });
 
   if (isQueuedJobResponse(data)) {
-    const result = await pollJob(apiFetch, getQueuedPollPath(data), { intervalMs: 2000 });
+    options.onQueued?.(data);
+    const result = await pollJob(apiFetch, getQueuedPollPath(data), { intervalMs: 2000, label: options.label || "dataframe" });
     return normalizeCompletedDataframeJob(result);
   }
 
@@ -1567,13 +1747,85 @@ const requestDataframeCreation = async (apiFetch, payload) => {
 
 const getGraphJobMessage = (data) => getJobErrorMessage(data, "Graph request failed");
 
+const parseMaybeSerializedGraphPayload = (value) => {
+  if (typeof value !== "string") return value;
+  const trimmed = value.trim();
+  if (!trimmed || !/^[{[]/.test(trimmed)) return value;
+
+  try {
+    return JSON.parse(trimmed);
+  } catch (_) {
+    // Some worker responses currently arrive as a Python dict repr. Keep this
+    // narrow and only use it as a graph payload compatibility fallback.
+  }
+
+  try {
+    const stringifyPythonConstructor = (match) => JSON.stringify(match);
+    const jsonish = trimmed
+      .replace(/\bNone\b/g, "null")
+      .replace(/\bTrue\b/g, "true")
+      .replace(/\bFalse\b/g, "false")
+      .replace(/'([^'\\]*(?:\\.[^'\\]*)*)'/g, (_match, inner) => JSON.stringify(
+        inner
+          .replace(/\\'/g, "'")
+          .replace(/\\\\/g, "\\")
+      ))
+      .replace(/\bneo4j\.time\.[A-Za-z_][\w.]*\((?:[^()]|\([^()]*\))*\)/g, stringifyPythonConstructor)
+      .replace(/\b(?:datetime\.)?(?:datetime|date|time|timedelta)\((?:[^()]|\([^()]*\))*\)/g, stringifyPythonConstructor)
+      .replace(/\bNaN\b/g, "null")
+      .replace(/\bInfinity\b/g, "null")
+      .replace(/-\s*null\b/g, "null");
+    return JSON.parse(jsonish);
+  } catch (error) {
+    console.warn("[graph payload parse failed]", { error, value: trimmed.slice(0, 500) });
+    return value;
+  }
+};
+
+const normalizeGraphRelationships = (value) => {
+  const source =
+    Array.isArray(value)
+      ? value
+      : value?.relationships ??
+        value?.results?.relationships ??
+        value?.result?.relationships ??
+        value?.data?.relationships ??
+        value?.items ??
+        [];
+
+  if (!Array.isArray(source)) return [];
+
+  return source
+    .map((item, index) => {
+      if (typeof item === "string" || typeof item === "number") {
+        const type = String(item);
+        return { id: type, type };
+      }
+      if (!item || typeof item !== "object") return null;
+      const type = String(item.type ?? item.relationship ?? item.name ?? item.label ?? item.id ?? "").trim();
+      if (!type) return null;
+      return {
+        ...item,
+        id: item.id ?? type ?? index,
+        type,
+        textcolor: item.textcolor ?? item.textColor ?? item.color,
+        bgcolor: item.bgcolor ?? item.bgColor ?? item.backgroundColor,
+      };
+    })
+    .filter(Boolean);
+};
+
 const getGraphPayloadCandidate = (data) => {
-  if (data?.results?.result && typeof data.results.result === "object") return data.results.result;
-  if (Array.isArray(data?.results?.nodes) || Array.isArray(data?.results?.edges)) return data.results;
-  if (Array.isArray(data?.nodes) || Array.isArray(data?.edges)) return data;
-  if (data?.graph && (Array.isArray(data.graph.nodes) || Array.isArray(data.graph.edges))) return data.graph;
-  if (data?.results?.graph && (Array.isArray(data.results.graph.nodes) || Array.isArray(data.results.graph.edges))) return data.results.graph;
-  return data?.results ?? data;
+  const parsedData = parseMaybeSerializedGraphPayload(data);
+  const source = parsedData === data ? data : parsedData;
+  const parsedResult = parseMaybeSerializedGraphPayload(source?.results?.result);
+  if (parsedResult && typeof parsedResult === "object") return parsedResult;
+  if (source?.results?.result && typeof source.results.result === "object") return source.results.result;
+  if (Array.isArray(source?.results?.nodes) || Array.isArray(source?.results?.edges)) return source.results;
+  if (Array.isArray(source?.nodes) || Array.isArray(source?.edges)) return source;
+  if (source?.graph && (Array.isArray(source.graph.nodes) || Array.isArray(source.graph.edges))) return source.graph;
+  if (source?.results?.graph && (Array.isArray(source.results.graph.nodes) || Array.isArray(source.results.graph.edges))) return source.results.graph;
+  return source?.results ?? source;
 };
 
 const hasGraphPayload = (data) => {
@@ -1612,20 +1864,30 @@ const normalizeGraphFetchResponse = (data) => {
   };
 };
 
-const requestGraphFetch = async (apiFetch, payload, signal) => {
+const requestGraphFetch = async (apiFetch, payload, signal, options = {}) => {
   const data = await fetchMaybeQueued(apiFetch, "/get_graph", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
     signal,
-  }, { signal });
+  }, {
+    signal,
+    timeoutMs: 120 * 1000,
+    timeoutMessage: "Graph request timed out. Retry graph load.",
+    cancelledMessage: "Graph request cancelled.",
+    label: "graph",
+    onQueued: options.onQueued,
+  });
 
   const status = getJobStatus(data);
   if (JOB_FAILURE_STATUSES.has(status) || data?.error || data?.results?.error || data?.result?.error) {
-    throw new Error(getGraphJobMessage(data));
+    const message = JOB_CANCEL_STATUSES.has(status) ? "Graph request cancelled." : getGraphJobMessage(data);
+    console.error("[graph fetch failed]", { status, data });
+    throw new Error(message);
   }
 
   if (!hasGraphPayload(data)) {
+    console.error("[graph fetch missing payload]", { data, candidate: getGraphPayloadCandidate(data) });
     throw new Error(getGraphJobMessage(data));
   }
 
@@ -1758,7 +2020,6 @@ const getSourceWindowAutofillDefaults = (configurations) => {
 
   const toolUrl = getConfigValue(configurations, ["active_tool_url", "active_tool_protocol"]);
   const toolUsername = getConfigValue(configurations, "active_tool_username");
-  const toolPassword = getConfigValue(configurations, "active_tool_password");
   const toolDatabase = getConfigValue(configurations, ["active_tool_database", "custom_tool_database"]);
 
   return {
@@ -1771,25 +2032,56 @@ const getSourceWindowAutofillDefaults = (configurations) => {
     sourceRealtimeTopicText: "",
     toolUrl,
     toolUsername,
-    toolPassword,
+    toolPassword: "",
     toolDatabase,
     realtimeToolUrl: toolUrl,
     realtimeToolUsername: toolUsername,
-    realtimeToolPassword: toolPassword,
+    realtimeToolPassword: "",
     realtimeToolDatabase: toolDatabase,
   };
 };
 
 
+const CONFIG_SECRET_FIELD_KEYS = ["active_tool_password", "tool_password", "neo4j_password", "postgres_password", "api_secret", "api_key"];
+const CONFIG_SECRET_REF_KEYS = {
+  active_tool_password: ["active_tool_password_ref", "tool_password_ref", "password_ref"],
+  tool_password: ["tool_password_ref", "active_tool_password_ref", "password_ref"],
+  neo4j_password: ["neo4j_password_ref", "password_ref"],
+  postgres_password: ["postgres_password_ref", "password_ref"],
+  api_secret: ["api_secret_ref", "secret_ref"],
+  api_key: ["api_key_ref", "key_ref"],
+};
+const CONFIG_SECRET_MASK_PATTERN = /^\*+$/;
+
 const normalizeLoadedConfiguration = (payload) => {
   if (!payload) return {};
-  if (payload.value) return payload;
-  return payload;
+  const parsed = payload.value ? parseConfigurationValue(payload) : { ...payload };
+  if (parsed && typeof parsed === "object") {
+    CONFIG_SECRET_FIELD_KEYS.forEach((key) => {
+      const value = parsed[key];
+      if (value && typeof value === "object") {
+        const refValue = value.password_ref || value.passwordRef || value.secret_ref || value.secretRef || value.ref;
+        const refKey = CONFIG_SECRET_REF_KEYS[key]?.[0];
+        if (refValue && refKey && !parsed[refKey]) parsed[refKey] = refValue;
+        parsed[key] = String(value.value || value.masked || value.mask || "***");
+      } else if (value !== undefined && value !== null) {
+        parsed[key] = String(value);
+      }
+    });
+  }
+  return parsed;
 };
 
 const buildConfigurationSavePayload = (configuration) => {
   const parsed = parseConfigurationValue(configuration);
   const { value: _value, ...rest } = parsed;
+  CONFIG_SECRET_FIELD_KEYS.forEach((key) => {
+    const value = rest[key];
+    const textValue = String(value ?? "").trim();
+    if (value === undefined || value === null || textValue === "" || CONFIG_SECRET_MASK_PATTERN.test(textValue)) {
+      delete rest[key];
+    }
+  });
   const largeSearchBackend = normalizeLargeSearchBackend(rest.large_search_backend);
 
   return {
@@ -1798,6 +2090,50 @@ const buildConfigurationSavePayload = (configuration) => {
     elastic_scroll_enabled: largeSearchBackend === "elastic_scroll",
     elastic_scroll_limit: normalizeElasticScrollLimit(rest.elastic_scroll_limit),
   };
+};
+
+const sourceConnectionSchema = {
+  session_id: { label: "Session ID", required: true, sanitize: (value) => sanitizeGraphEndpointId(value, { maxLength: 128 }) },
+  addressType: { label: "Source type", sanitize: (value) => sanitizeIdentifier(value, { maxLength: 40 }), pattern: /^$|^(broker|api|storage)$/i, message: "Source type must be broker, api, or storage." },
+  address: { label: "Source address", sanitize: (value) => sanitizeConnectionValue(value, { maxLength: 300 }) },
+  broker: { label: "Broker", sanitize: (value) => sanitizeConnectionValue(value, { maxLength: 300 }) },
+  hdfs: { label: "Storage address", sanitize: (value) => sanitizeConnectionValue(value, { maxLength: 300 }) },
+  topic: { label: "Topic", sanitize: (value) => sanitizeKafkaTopic(value, { maxLength: 249 }) },
+  storage: { label: "Storage address", sanitize: (value) => sanitizeConnectionValue(value, { maxLength: 300 }) },
+};
+
+const toolConnectionSchema = {
+  source_id: { label: "Source ID", required: true, sanitize: (value) => sanitizeGraphEndpointId(value, { maxLength: 128 }) },
+  session_id: { label: "Session ID", sanitize: (value) => sanitizeGraphEndpointId(value, { maxLength: 128 }) },
+  url: { label: "Tool URL", required: true, sanitize: (value) => sanitizeConnectionValue(value, { maxLength: 300 }) },
+  username: { label: "Tool username", required: true, sanitize: (value) => sanitizeIdentifier(value, { maxLength: 120 }) },
+  password: { label: "Tool password", required: true, sanitize: (value) => sanitizeSecret(value, { maxLength: 256 }) },
+  database: { label: "Tool database", sanitize: (value) => sanitizeIdentifier(value, { maxLength: 120 }) },
+};
+
+const searchRequestSchema = {
+  keyword: { label: "Search keyword", required: true, sanitize: (value) => sanitizeText(value, { maxLength: 500 }).trim(), maxLength: 500 },
+  date: { label: "Search date", sanitize: (value) => String(value || "").trim(), pattern: /^$|^\d{4}-\d{2}-\d{2}$/ },
+  search_column: { label: "Search column", sanitize: (value) => sanitizeText(value, { maxLength: 120 }).trim(), maxLength: 120 },
+};
+
+const cleanupRequestSchema = {
+  session_id: { label: "Session ID", required: true, sanitize: (value) => sanitizeGraphEndpointId(value, { maxLength: 128 }) },
+  cleanup_type: { label: "Cleanup type", sanitize: (value) => sanitizeGraphEndpointId(value, { maxLength: 40 }), pattern: /^$|^(session|session_tree|window|run|neo4j_session)$/ },
+  run_id: { label: "Run ID", sanitize: (value) => sanitizeGraphEndpointId(value, { maxLength: 128 }) },
+};
+
+const streamRequestSchema = {
+  action: { label: "Analysis action", required: true, sanitize: (value) => sanitizeText(value, { maxLength: 120 }).trim() },
+  source: { label: "Source column", required: true, sanitize: (value) => sanitizeText(value, { maxLength: 120 }).trim() },
+  target: { label: "Target column", required: true, sanitize: (value) => sanitizeText(value, { maxLength: 120 }).trim() },
+  relationship: { label: "Relationship", required: true, sanitize: (value) => sanitizeRelationshipName(value || "HAS_RELATIONSHIP", { maxLength: 80 }), pattern: /^[A-Z][A-Z0-9_]*$/ },
+  tool: { label: "Analysis tool", required: true, sanitize: (value) => sanitizeIdentifier(value, { maxLength: 80 }) },
+  rule: { label: "Rule", sanitize: (value) => sanitizeText(value, { maxLength: 160 }).trim() },
+};
+
+const showValidationFailure = (message) => {
+  alert(message || "Please review the highlighted fields and try again.");
 };
 
 const normalizeCleanupAuditResults = (data) => {
@@ -1855,10 +2191,16 @@ function ActivityAuditPanel({ apiFetch, canAccess, isActive }) {
   const submitCleanup = async (dryRun) => {
     if (!apiFetch || !canManageUsers) return;
     const payload = buildCleanupPayload(dryRun);
-    if (!payload.session_id) {
-      setError("Provide a session ID before cleanup.");
+    const cleanupValidation = validateSchema(payload, cleanupRequestSchema);
+    if (!cleanupValidation.ok) {
+      setError(cleanupValidation.message || "Provide a valid session ID before cleanup.");
       return;
     }
+    payload.session_id = cleanupValidation.value.session_id;
+    if (cleanupValidation.value.cleanup_type) payload.cleanup_type = cleanupValidation.value.cleanup_type;
+    else delete payload.cleanup_type;
+    if (cleanupValidation.value.run_id) payload.run_id = cleanupValidation.value.run_id;
+    else delete payload.run_id;
     if (!dryRun && !window.confirm("Queue cleanup for " + (payload.run_id || payload.session_id) + "?")) return;
 
     setCleanupLoading(true);
@@ -2383,6 +2725,7 @@ function WindowVerticalSplitPanels({id, type, sourceId, initialTopHeight, minTop
 
   const settings = normalizeGraphIframeSettings(iframeSettings[id]);
   const search = Array.isArray(iframeSearch[id]) ? iframeSearch[id] : ["", false, {}, { nodes: 0, edges: 0 }];
+  const relationships = normalizeGraphRelationships(graphStatus);
   const selectedSearchKeysCount = Object.values(search[2] || {}).filter(Boolean).length;
   console.log("search:",search,"activeGraph:",activeGraph)
 
@@ -2967,7 +3310,7 @@ function WindowVerticalSplitPanels({id, type, sourceId, initialTopHeight, minTop
             <input id="allrelationships" name="relationship" type="radio" />
             <label htmlFor="allrelationships">*</label>
           </li>
-          {graphStatus && graphStatus.map((rel, index) => (
+          {relationships.map((rel, index) => (
             <li key={`${rel.type}-${index}`}>
               <input
                 id={`window_${id}_${rel.type}_relationship_${index}`}
@@ -3027,7 +3370,7 @@ function IframeEmbed({wId,id,fileName,title,activeGraph,graphAction,iframeRef,BA
       <div className="iframe_graph">
         <iframe
           ref={iframeRef}
-          sandbox="allow-scripts allow-same-origin allow-downloads allow-modals"
+          sandbox="allow-scripts allow-downloads allow-modals"
           src={`${iframeBasePath}/source_placeholder.html`}
           width="100%"
           height="98%"
@@ -3042,7 +3385,7 @@ function IframeEmbed({wId,id,fileName,title,activeGraph,graphAction,iframeRef,BA
       <div className="iframe_graph">
         <iframe
           ref={iframeRef}
-          sandbox="allow-scripts allow-same-origin allow-downloads allow-modals"
+          sandbox="allow-scripts allow-downloads allow-modals"
           src={`${iframeBasePath}/graph_placeholder.html`}
           width="100%"
           height="98%"
@@ -3057,7 +3400,7 @@ function IframeEmbed({wId,id,fileName,title,activeGraph,graphAction,iframeRef,BA
       <div className="iframe_graph">
         <iframe
           ref={iframeRef}
-          sandbox="allow-scripts allow-same-origin allow-downloads allow-modals"
+          sandbox="allow-scripts allow-downloads allow-modals"
           src={`${iframeBasePath}/charts_basic.html`}
           width="100%"
           height="98%"
@@ -3072,7 +3415,7 @@ function IframeEmbed({wId,id,fileName,title,activeGraph,graphAction,iframeRef,BA
       <div className="iframe_graph">
         <iframe
           ref={iframeRef}
-          sandbox="allow-scripts allow-same-origin allow-downloads allow-modals"
+          sandbox="allow-scripts allow-downloads allow-modals"
           src={`${iframeBasePath}/${activeGraph}.html`}
           width="100%"
           height="98%"
@@ -3158,7 +3501,10 @@ function DraggableWindow({ children, initialPos = { top: 0, left: 0 }, orientati
   );
 }
 function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText, loadscreenState, isSideBarMenuOpen, orientation, configurations, windowAction, graphAction, chartAction, selectedContent, selectedSubContent, selectedNodes, selectedEdges,windowResponseI,windowResponseII,windowRealtimeResponseI,formToolResponse,formRealtimeToolResponse,sourceAddressType,sourceAddressText,sourceStorageText,sourceTopicText,sourceKind,sourceStatus,toolStatus,dataframeStatus,streamStatus,sourceStep,sourceRealtimeAddressType,sourceRealtimeAddressText,sourceRealtimeTopicText,toolUrl,toolUsername,toolPassword,toolDatabase,realtimeToolUrl,realtimeToolUsername,realtimeToolPassword,realtimeToolDatabase,batchFilesSearchHybrid,batchFilesSearchHybridQuery,batchFilesSearchStrict,searchText,batchFilesSearchLimit,batchFilesSearchResults,batchFilesSearchMoreFiles,searchResultsVisible,searchPlaceholder,batchFilesCollection, batchFilesDataframeInfoI, batchFilesDataframeInfoII, batchFilesDataframeActionValue, batchFilesDataframeSourceValue, batchFilesDataframeTargetValue, batchFilesDataframeRelationshipValue, batchFilesDataframeRuleValue, sourceSessionLog, sourceStreams , sourceStreamListener, fileInputRef, textareaRefs, onClose, onMove, zIndex, onFocus, covered, graphLink, graphLinkId, graphLinkSource, graphStatus, activeGraph, chartLink, chartLinkId, activechart, iframeRef, iframeFilters, iframeSettings, iframeSearch, iframePerformanceMood, selectedPropertyTab, filterPropertyKeys, filterResults, nodeProperties, BASE_URL, searchButtonRef, resultContainerRef, requestConfirmation }) {
-  const canCancelGraphStaging = type === "graph" && typeof loadscreenText === "string" && loadscreenText.toLowerCase().startsWith("staging graph");
+  const canCancelGraphStaging = type === "graph" && typeof loadscreenText === "string" && (
+    loadscreenText.toLowerCase().startsWith("staging graph") ||
+    loadscreenText.toLowerCase().startsWith("fetching graph")
+  );
   const isRealtimeSourceWorkflow = selectedContent === "real_time_input";
   const isSharedSourceWorkflowPage = selectedContent === "batch_input" || (isRealtimeSourceWorkflow && String(selectedSubContent || "").startsWith("batch_input_form_page"));
   const batchSourceFlow = getSourceFlowState({
@@ -5239,7 +5585,7 @@ function ConfirmationDialog({ items, onResolve }) {
 }
 function LinkxWorkspace() {
   const auth = useAuth();
-  const { token, user, actor, roles, permissions, logout, verifyToken, hasPermission, hasRole } = auth;
+  const { token, user, actor, roles, permissions, logout, verifyToken, exchangeParentToken, hasPermission, hasRole } = auth;
   const [windows, setWindows] = useState([]);
   const [orientation, setOrientation] = useState("tabs"); // "windows" | "tabs"
   const [activeWindowId, setActiveWindowId] = useState(null);
@@ -5289,7 +5635,8 @@ function LinkxWorkspace() {
   const [sourceStreams, setSourceStreams] = useState({});  
   const [sourceStreamListener, setSourceStreamListener] = useState(false);
   const [sourceSessionLog, setSourceSessionLog] = useState('');
-  const [sourceSessionLogFile, setSourceSessionLogFile] = useState(null);     
+  const [sourceSessionLogFile, setSourceSessionLogFile] = useState(null);
+  const [sourceSessionLogFiles, setSourceSessionLogFiles] = useState({});     
 const fileInputRef = useRef(null);  
   const sourceRef = useRef(null);
   const socketRef = useRef(null);
@@ -5305,7 +5652,14 @@ const fileInputRef = useRef(null);
   const sessionIdRef = useRef(null);
   const lockedSessionIdRef = useRef("");
   const terminalUnlockFailureRef = useRef(false);
-  const logRef = useRef(''); // for accumulating logs    
+  const logRef = useRef(''); // for accumulating logs
+  const logBuffersRef = useRef({});
+  const activeLogStreamsRef = useRef({});
+  const activeStreamJobsRef = useRef({});
+  const activeGraphJobsRef = useRef({});
+  const activeDataframeJobsRef = useRef({});
+  const activeSearchJobsRef = useRef({});
+  const streamTerminateRequestedRef = useRef({});
   const textareaRefs = useRef({});
   const debounceRef = useRef(null);
   const graphActionDebounceRef = useRef({});
@@ -5314,6 +5668,7 @@ const fileInputRef = useRef(null);
   const [graphLinkstate, setGraphLinkState] = useState(false);
   const [graphStatusListener, setGraphStatusListener] = useState(false);
   const [graphStatus, setGraphStatus] = useState({});
+  const graphStatusRef = useRef({});
   const [graphLinkSource, setGraphLinkSource] = useState(null);   
   const [activeGraph, setActiveGraph] = useState(''); 
   const iframeRefs = useRef({}); //to communicate across the iframe boundary  
@@ -5376,6 +5731,28 @@ const fileInputRef = useRef(null);
     () => graphStatusSessionIds.join("|"),
     [graphStatusSessionIds]
   );
+  const graphInfoReplayKey = useMemo(() => (
+    windows
+      .filter((w) => w.type === "graph")
+      .map((w) => [w.id, w.activeGraph || "", w.graphLinkSource || w.sessionId || ""].join(":"))
+      .sort()
+      .join("|")
+  ), [windows]);
+  const sourceLogStreamKey = useMemo(() => (
+    Object.entries(sourceSessionLogFiles || {})
+      .map(([sessionId, entry]) => sessionId + ":" + resolveLogStreamFilename(entry))
+      .sort()
+      .join("|")
+  ), [sourceSessionLogFiles]);
+  const graphStatusCacheKey = useMemo(() => (
+    Object.entries(graphStatus || {})
+      .map(([sessionId, entry]) => {
+        const relationships = normalizeGraphRelationships(entry?.relationships);
+        return sessionId + ":" + relationships.map((item) => item.type).join(",");
+      })
+      .sort()
+      .join("|")
+  ), [graphStatus]);
   //const BASE_URL = "http://localhost:5173"
   //const API_URL = "http://localhost:5000";
 
@@ -5459,7 +5836,29 @@ const fileInputRef = useRef(null);
     return () => {
       listeners.forEach((dispose) => dispose());
     };
-  }, [themeMode, windows.length]);
+  }, [themeMode, graphInfoReplayKey]);
+
+  useEffect(() => {
+    setWindows((prev) => {
+      let changed = false;
+      const next = prev.map((w) => {
+        if (w.type !== "graph") return w;
+        const sessionKey = String(w.graphLinkSource || w.sessionId || "").trim();
+        if (!sessionKey) return w;
+        const cachedEntry = graphStatusRef.current?.[sessionKey];
+        if (!cachedEntry || !Object.prototype.hasOwnProperty.call(cachedEntry, "relationships")) return w;
+        const cachedRelationships = normalizeGraphRelationships(cachedEntry.relationships);
+        const currentRelationships = normalizeGraphRelationships(w.graphStatus);
+        const cachedHash = JSON.stringify(cachedRelationships.map((item) => [item.id, item.type, item.textcolor, item.bgcolor]));
+        const currentHash = JSON.stringify(currentRelationships.map((item) => [item.id, item.type, item.textcolor, item.bgcolor]));
+        if (cachedHash === currentHash) return w;
+        changed = true;
+        console.log("[graph relationships cache applied]", { session_id: sessionKey, graph_window_id: w.id, count: cachedRelationships.length });
+        return { ...w, graphStatus: cachedRelationships };
+      });
+      return changed ? next : prev;
+    });
+  }, [graphInfoReplayKey, graphStatusCacheKey]);
 
   const removeNotification = useCallback((id) => {
     setNotifications((prev) => prev.filter((item) => item.id !== id));
@@ -5520,9 +5919,29 @@ const fileInputRef = useRef(null);
     onForbidden: (data) => {
       pushNotification({
         title: "Permission denied",
-        message: data?.message || data?.error || "You do not have permission for this action.",
+        message: data?.permission ? "Missing permission: " + data.permission : (data?.message || data?.error || "You do not have permission for this action."),
         source: "RBAC",
         level: "warning",
+      });
+    },
+    onSecurityPolicyBlocked: (data) => {
+      const detail = String(data?.detail || "").replace(/_/g, " ");
+      pushNotification({
+        title: "Connection blocked",
+        message: detail ? "The connection target was blocked: " + detail + "." : "The connection target was blocked by security policy.",
+        source: "Security",
+        level: "warning",
+        durationMs: 8000,
+      });
+    },
+    onRateLimited: (data) => {
+      const retryAfter = Number(data?.retry_after || 0);
+      pushNotification({
+        title: "Rate limited",
+        message: "Too many requests." + (retryAfter ? " Retry after " + retryAfter + " seconds." : " Please try again shortly."),
+        source: "Security",
+        level: "warning",
+        durationMs: 8000,
       });
     },
     onLocked: (data) => {
@@ -5629,7 +6048,8 @@ const fileInputRef = useRef(null);
   const registerStrReportSocketReceiver = (browserSession) => {
     const socket = socketRef.current;
     const resolvedSession = String(browserSession || "").trim();
-    if (!socket?.connected || !resolvedSession) {      return;
+    if (!socket?.connected || !resolvedSession) {
+      return;
     }
     const payload = { session_id: resolvedSession, socket_id: socket.id };
     socket.emit("notification_subscribe", { session_id: resolvedSession });
@@ -5772,6 +6192,10 @@ const fileInputRef = useRef(null);
   useEffect(() => {  // Sync windowsRef on every update
     windowsRef.current = windows;
   }, [windows]);
+
+  useEffect(() => {
+    graphStatusRef.current = graphStatus;
+  }, [graphStatus]);
   useEffect(() => {
     if (!isConfigAutoFillEnabled(configurations)) return;
     const defaults = getSourceWindowAutofillDefaults(configurations);
@@ -5788,7 +6212,6 @@ const fileInputRef = useRef(null);
         if (!win.sourceAddressType) updates.sourceAddressType = defaults.sourceAddressType;
         if (!win.toolUrl && defaults.toolUrl) updates.toolUrl = defaults.toolUrl;
         if (!win.toolUsername && defaults.toolUsername) updates.toolUsername = defaults.toolUsername;
-        if (!win.toolPassword && defaults.toolPassword) updates.toolPassword = defaults.toolPassword;
         if (!win.toolDatabase && defaults.toolDatabase) updates.toolDatabase = defaults.toolDatabase;
       }
 
@@ -5798,7 +6221,6 @@ const fileInputRef = useRef(null);
         if (!win.sourceRealtimeAddressType) updates.sourceRealtimeAddressType = defaults.sourceRealtimeAddressType;
         if (!win.realtimeToolUrl && defaults.realtimeToolUrl) updates.realtimeToolUrl = defaults.realtimeToolUrl;
         if (!win.realtimeToolUsername && defaults.realtimeToolUsername) updates.realtimeToolUsername = defaults.realtimeToolUsername;
-        if (!win.realtimeToolPassword && defaults.realtimeToolPassword) updates.realtimeToolPassword = defaults.realtimeToolPassword;
         if (!win.realtimeToolDatabase && defaults.realtimeToolDatabase) updates.realtimeToolDatabase = defaults.realtimeToolDatabase;
       }
 
@@ -5922,6 +6344,7 @@ const fileInputRef = useRef(null);
     const subscribedIds = new Set(sourceIds);
     sourceIds.forEach((sid) => {
       socket.emit("notification_subscribe", { session_id: sid });
+      socket.emit(STR_REPORT_SOCKET_EMIT_REGISTER_RECEIVER, { session_id: sid, socket_id: socket.id });
     });
 
     const formatBackendNotificationMessage = (payload = {}) => {
@@ -5966,31 +6389,30 @@ const fileInputRef = useRef(null);
       });
       socket.off("notification", handleNotification);
     };
-  }, [sourceNotificationKey, pushNotification, sanitizeNotificationMessage]);
+  }, [sourceNotificationKey, token, pushNotification, sanitizeNotificationMessage]);
   // ------------------------------------------------------------------ logger ---
   useEffect(() => {
-    if (!sourceSessionLogFile) return;
-    const logFile = sourceSessionLogFile?.logFile;
-    const logSessionId = sourceSessionLogFile?.session_id;
-    if (!logFile || logSessionId == null || logSessionId === "") return;
-
-    logRef.current = '';
     const socket = socketRef.current;
     if (!socket) return;
 
-    const handleLogs = (data) => {
-      const id = String(data.session_id);
-      if (data.error) return;
+    const handleLogs = (payload = {}) => {
+      const id = String(payload.session_id ?? "").trim();
+      if (!id || !activeLogStreamsRef.current[id]) return;
 
-      logRef.current += '\n' + data.data;
+      if (payload.error) {
+        console.warn("[stream log error]", { session_id: id, error: payload.error });
+        return;
+      }
+
+      const line = payload.data == null ? "" : String(payload.data);
+      logBuffersRef.current[id] = (logBuffersRef.current[id] || "") + "\n" + line;
       setWindows(prev =>
         prev.map(w =>
-          w.id === id
-            ? { ...w, sourceSessionLog: logRef.current }
+          String(w.id) === id
+            ? { ...w, sourceSessionLog: logBuffersRef.current[id] }
             : w
         )
       );
-      // ⬇️ autoscroll AFTER React paints
       requestAnimationFrame(() => {
         const textarea = textareaRefs.current[id];
         if (textarea) {
@@ -6000,24 +6422,60 @@ const fileInputRef = useRef(null);
     };
 
     socket.on("stream_logs", handleLogs);
-    socket.emit("log_stream_plug", { filename: logFile, session_id: logSessionId });
-
     return () => {
-      socket.emit("log_stream_unplug", { filename: logFile, session_id: logSessionId });
       socket.off("stream_logs", handleLogs);
     };
-  }, [sourceSessionLogFile]);
+  }, [token]);
+
+  useEffect(() => {
+    const socket = socketRef.current;
+    if (!socket) return;
+
+    const desiredStreams = {};
+    Object.entries(sourceSessionLogFiles || {}).forEach(([sessionId, entry]) => {
+      const filename = resolveLogStreamFilename(entry);
+      const normalizedSessionId = String(sessionId || entry?.session_id || "").trim();
+      if (normalizedSessionId && filename) {
+        desiredStreams[normalizedSessionId] = filename;
+      }
+    });
+
+    Object.entries(desiredStreams).forEach(([sessionId, filename]) => {
+      const activeFilename = activeLogStreamsRef.current[sessionId];
+      if (activeFilename === filename) return;
+      if (activeFilename) {
+        console.log("[log stream unplug]", { session_id: sessionId, filename: activeFilename });
+        socket.emit("log_stream_unplug", { session_id: sessionId, filename: activeFilename });
+      }
+      logBuffersRef.current[sessionId] = "";
+      console.log("[log stream plug]", { session_id: sessionId, filename });
+      socket.emit("log_stream_plug", { session_id: sessionId, filename });
+      activeLogStreamsRef.current[sessionId] = filename;
+    });
+
+    Object.entries(activeLogStreamsRef.current).forEach(([sessionId, filename]) => {
+      if (desiredStreams[sessionId]) return;
+      console.log("[log stream unplug]", { session_id: sessionId, filename });
+      socket.emit("log_stream_unplug", { session_id: sessionId, filename });
+      delete activeLogStreamsRef.current[sessionId];
+      delete logBuffersRef.current[sessionId];
+    });
+  }, [sourceLogStreamKey, token]);
 
 // ------------------------------------------------------- graph status socket ---
   useEffect(() => {
     const socket = socketRef.current;
-    if (!socket || graphStatusSessionIds.length === 0) return;
+    if (!socket) return;
 
     let lastHashBySession = {};
     const handleGraphStatus = (payload) => {
+      console.log("[graph status payload]", payload);
       const { type, data, error, session_id } = payload;
       const sessionKey = String(session_id || "").trim();
-      if (!sessionKey) return;
+      if (!sessionKey) {
+        console.warn("[graph status ignored] missing session_id", payload);
+        return;
+      }
 
       const isGraphInfoPlaceholderPath = (pathname) => {
         const normalizedPath = String(pathname || "");
@@ -6026,19 +6484,66 @@ const fileInputRef = useRef(null);
 
       const buildGraphInfoPayload = (metadata, currentSessionKey, relationships = []) => {
         const base = metadata && typeof metadata === "object" ? metadata : {};
+        const summary = base.summary && typeof base.summary === "object" ? base.summary : {};
+        const graph = base.graph && typeof base.graph === "object" ? base.graph : {};
+        const pickFirst = (...values) => values.find((value) => value !== undefined && value !== null && value !== "");
         const relationshipList = Array.isArray(relationships) ? relationships : [];
         const relationshipLabels = relationshipList
           .map((item) => item?.type)
           .filter((item) => item != null && String(item).trim() !== "");
+        const totalNodes = pickFirst(
+          base.total_nodes,
+          base.totalNodes,
+          base.node_count,
+          base.nodeCount,
+          base.nodes_count,
+          base.nodesCount,
+          base.number_of_nodes,
+          base.nodes_total,
+          summary.total_nodes,
+          summary.totalNodes,
+          summary.node_count,
+          summary.nodeCount,
+          summary.nodes_count,
+          summary.nodesCount,
+          Array.isArray(base.nodes) ? base.nodes.length : undefined,
+          Array.isArray(graph.nodes) ? graph.nodes.length : undefined,
+          (summary.clean_nodes != null && summary.flagged_nodes != null)
+            ? Number(summary.clean_nodes) + Number(summary.flagged_nodes)
+            : undefined
+        );
+        const totalRelationships = pickFirst(
+          base.total_relationships,
+          base.totalRelationships,
+          base.relationship_count,
+          base.relationshipCount,
+          base.relationships_count,
+          base.relationshipsCount,
+          base.edges_count,
+          base.edge_count,
+          summary.total_relationships,
+          summary.totalRelationships,
+          summary.relationship_count,
+          summary.relationshipCount,
+          summary.relationships_count,
+          summary.relationshipsCount,
+          Array.isArray(base.relationships) ? base.relationships.length : undefined,
+          Array.isArray(base.edges) ? base.edges.length : undefined,
+          Array.isArray(graph.edges) ? graph.edges.length : undefined,
+          relationshipList.length
+        );
         return {
           ...base,
           session_id: String(currentSessionKey || ""),
           analysisSessionId: String(currentSessionKey || ""),
           relationship_labels: relationshipLabels,
-          total_relationships:
-            base?.summary?.total_relationships != null
-              ? base.summary.total_relationships
-              : relationshipList.length,
+          total_nodes: totalNodes,
+          total_relationships: totalRelationships,
+          summary: {
+            ...summary,
+            total_nodes: pickFirst(summary.total_nodes, totalNodes),
+            total_relationships: pickFirst(summary.total_relationships, totalRelationships),
+          },
         };
       };
 
@@ -6056,6 +6561,13 @@ const fileInputRef = useRef(null);
         graphStatusErrorNoticeRef.current[dedupeKey] = now;
 
         console.error("Graph status error:", error);
+        pushNotificationRef.current?.({
+          title: "Graph status update",
+          message: "Graph status is temporarily unavailable for this source.",
+          source: `Session ${sessionKey}`,
+          level: "warning",
+          durationMs: 6000,
+        });
         return;
       }
 
@@ -6064,19 +6576,27 @@ const fileInputRef = useRef(null);
       );
 
       if (targetWindows.length === 0) {
-        return;
+        console.warn("[graph status cached] no linked graph window yet", { sessionKey, payload });
       }
 
       if (type === "metadata") {
-        const previousRelationships = graphStatus?.[sessionKey]?.relationships;
-        const infoPayload = buildGraphInfoPayload(data, sessionKey, previousRelationships);
+        const metadata = data?.metadata ?? data?.results?.metadata ?? data?.result?.metadata ?? data?.status ?? data;
+        const previousRelationships = normalizeGraphRelationships(graphStatusRef.current?.[sessionKey]?.relationships);
+        const infoPayload = buildGraphInfoPayload(metadata, sessionKey, previousRelationships);
         graphInfoPayloadBySessionRef.current[sessionKey] = infoPayload;
+        graphStatusRef.current = {
+          ...graphStatusRef.current,
+          [sessionKey]: {
+            ...graphStatusRef.current[sessionKey],
+            status: metadata
+          }
+        };
 
         setGraphStatus(prev => ({
           ...prev,
           [sessionKey]: {
             ...prev[sessionKey],
-            status: data
+            status: metadata
           }
         }));
 
@@ -6096,29 +6616,39 @@ const fileInputRef = useRef(null);
       }
 
       if (type === "relationships") {
-        const hash = JSON.stringify((Array.isArray(data) ? data : []).map(r => [r.id, r.type, r.textcolor, r.bgcolor]));
+        const relationships = normalizeGraphRelationships(data);
+        const hash = JSON.stringify(relationships.map(r => [r.id, r.type, r.textcolor, r.bgcolor]));
         if (lastHashBySession[sessionKey] === hash) return;
         lastHashBySession[sessionKey] = hash;
+
+        graphStatusRef.current = {
+          ...graphStatusRef.current,
+          [sessionKey]: {
+            ...graphStatusRef.current[sessionKey],
+            relationships
+          }
+        };
+        console.log("[graph relationships updated]", { session_id: sessionKey, count: relationships.length, relationships });
 
         setGraphStatus(prev => ({
           ...prev,
           [sessionKey]: {
             ...prev[sessionKey],
-            relationships: data
+            relationships
           }
         }));
 
         setWindows(prev =>
           prev.map(w =>
             targetWindows.find(tw => tw.id === w.id)
-              ? { ...w, graphStatus: data }
+              ? { ...w, graphStatus: relationships }
               : w
           )
         );
 
-        const metadataPayload = graphStatus?.[sessionKey]?.status;
+        const metadataPayload = graphStatusRef.current?.[sessionKey]?.status;
         if (metadataPayload && typeof metadataPayload === "object") {
-          const infoPayload = buildGraphInfoPayload(metadataPayload, sessionKey, data);
+          const infoPayload = buildGraphInfoPayload(metadataPayload, sessionKey, relationships);
           graphInfoPayloadBySessionRef.current[sessionKey] = infoPayload;
           targetWindows.forEach((w) => {
             const iframe = iframeRefs.current[w.id];
@@ -6133,28 +6663,42 @@ const fileInputRef = useRef(null);
       }
     };
 
+    socket.on("status", handleGraphStatus);
+
     graphStatusSessionIds.forEach((currentSessionId) => {
       const normalizedSession = String(currentSessionId || "").trim();
       if (!normalizedSession) return;
       if (!graphStatusSubscribedSessionsRef.current.has(normalizedSession)) {
+        console.log("[graph status subscribe emit]", { session_id: normalizedSession });
         socket.emit("graph_status_subscribe", { session_id: normalizedSession });
         graphStatusSubscribedSessionsRef.current.add(normalizedSession);
+      } else {
+        console.log("[graph status subscribe skipped] already subscribed", { session_id: normalizedSession });
       }
     });
 
-    socket.on("status", handleGraphStatus);
-
-    return () => {
+    const refreshTimer = window.setInterval(() => {
       graphStatusSessionIds.forEach((currentSessionId) => {
         const normalizedSession = String(currentSessionId || "").trim();
         if (!normalizedSession) return;
+        console.log("[graph status refresh emit]", { session_id: normalizedSession });
+        socket.emit("graph_status_subscribe", { session_id: normalizedSession });
+      });
+    }, GRAPH_STATUS_REFRESH_INTERVAL_MS);
+
+    return () => {
+      window.clearInterval(refreshTimer);
+      graphStatusSessionIds.forEach((currentSessionId) => {
+        const normalizedSession = String(currentSessionId || "").trim();
+        if (!normalizedSession) return;
+        console.log("[graph status unsubscribe]", { session_id: normalizedSession });
         socket.emit("graph_status_unsubscribe", { session_id: normalizedSession });
         graphStatusSubscribedSessionsRef.current.delete(normalizedSession);
       });
       socket.off("status", handleGraphStatus);
       lastHashBySession = {};
     };
-  }, [graphStatusSessionKey]); // depend on linked session ids
+  }, [graphStatusSessionKey, token]); // depend on linked session ids and socket auth
   // ---------------------------------------------------------------------------- layout orientation ---
   useEffect(() => {
     if (orientation === "tabs" && windows.length > 0) {
@@ -6242,7 +6786,8 @@ const fileInputRef = useRef(null);
       });
       const iframeAction = getIframeMessageAction(event.data);
       const isKnownIframeMessage = TRUSTED_IFRAME_MESSAGE_TYPES.has(iframeAction) || event.data?.action === "notify";
-      if (isKnownIframeMessage && (!isTrustedMessageOrigin(event) || !resolvedSourceWindowId)) {
+      const isRegisteredSandboxedIframe = String(event.origin || "") === "null" && !!resolvedSourceWindowId;
+      if (isKnownIframeMessage && ((!isTrustedMessageOrigin(event) && !isRegisteredSandboxedIframe) || !resolvedSourceWindowId)) {
         console.warn("[iframe-message] blocked", { origin: event.origin, action: iframeAction, hasFrame: !!resolvedSourceWindowId });
         return;
       }
@@ -6331,13 +6876,20 @@ const fileInputRef = useRef(null);
         const allowedOrigin = HEADER_TRIGGER_ALLOWED_ORIGINS.includes(authOrigin);
         if (!sameOrigin && !allowedOrigin) return;
 
-        const iframeToken = event.data.token || event.data.payload?.token;
-        if (!iframeToken) {
+        const payload = event.data?.payload && typeof event.data.payload === "object" ? event.data.payload : event.data;
+        const parentAccessToken = payload?.parent_access_token || payload?.access_token || "";
+        const iframeToken = payload?.token || "";
+        const tokenType = String(payload?.token_type || payload?.tokenType || "").toLowerCase();
+        if (!parentAccessToken && !iframeToken) {
           console.warn("No token found in message");
           return;
         }
 
-        verifyToken(iframeToken)
+        const authenticateFromMessage = parentAccessToken || tokenType === "parent_access" || tokenType === "access"
+          ? exchangeParentToken(parentAccessToken || iframeToken)
+          : verifyToken(iframeToken);
+
+        authenticateFromMessage
           .then((verifiedUser) => {
             setUserName(verifiedUser?.display_name || verifiedUser?.username || null);
             pushNotification({
@@ -6427,7 +6979,7 @@ const fileInputRef = useRef(null);
 
       window.addEventListener("message", handleIframeMessage);
       return () => window.removeEventListener("message", handleIframeMessage);
-  }, [pushNotification]);
+  }, [pushNotification, verifyToken, exchangeParentToken]);
 
   // ---------------------------------------------------------------------------- Windows management ---
   const handleFocusWindow = (id) => {
@@ -6509,11 +7061,11 @@ const fileInputRef = useRef(null);
                       sourceRealtimeTopicText: sourceAutofillDefaults.sourceRealtimeTopicText,
                       toolUrl: sourceAutofillDefaults.toolUrl,
                       toolUsername: sourceAutofillDefaults.toolUsername,
-                      toolPassword: sourceAutofillDefaults.toolPassword,
+                      toolPassword: "",
                       toolDatabase: sourceAutofillDefaults.toolDatabase,
                       realtimeToolUrl: sourceAutofillDefaults.realtimeToolUrl,
                       realtimeToolUsername: sourceAutofillDefaults.realtimeToolUsername,
-                      realtimeToolPassword: sourceAutofillDefaults.realtimeToolPassword,
+                      realtimeToolPassword: "",
                       realtimeToolDatabase: sourceAutofillDefaults.realtimeToolDatabase,
                       formToolResponse: null,
                       formRealtimeToolResponse: null,
@@ -6662,7 +7214,7 @@ const fileInputRef = useRef(null);
 
     if (!strReportSubscribedSessionsRef.current.has(analysisSessionId)) {
       applyStrReportSocketEmitList(socket, analysisSessionId, socketEmit);
-      socket.emit("graph_status_subscribe", { session_id: analysisSessionId });
+      console.log("[str report receiver registered]", { session_id: analysisSessionId });
       strReportSubscribedSessionsRef.current.add(analysisSessionId);
     }
 
@@ -6730,12 +7282,14 @@ const fileInputRef = useRef(null);
     );
 
     const linkPayload = { id: "link", source_id: sanitizeGraphEndpointId(analysisKey), graph_window_id: sanitizeGraphEndpointId(graphWindowId) };
+    console.log("[graph link request]", linkPayload);
     apiFetch("/graph_link", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(linkPayload),
     })
       .then((data) => {
+        console.log("[graph link response]", { payload: linkPayload, response: data });
         if (!isSuccessResponse(data)) {
           console.warn("str_report graph_link:", data?.message || data);
         }
@@ -6824,7 +7378,18 @@ const fileInputRef = useRef(null);
         }
       }
       if (socket && socket.connected && closingWindow?.type == "source") {
-        socket.emit("log_stream_unplug", {filename: closingWindow.sourceSessionLogFile,session_id: id});
+        const sessionKey = String(id);
+        const filename = activeLogStreamsRef.current[sessionKey] || resolveLogStreamFilename(closingWindow.sourceSessionLogFile);
+        if (filename) {
+          socket.emit("log_stream_unplug", { session_id: sessionKey, filename });
+        }
+        delete activeLogStreamsRef.current[sessionKey];
+        delete logBuffersRef.current[sessionKey];
+        setSourceSessionLogFiles(prevStreams => {
+          const nextStreams = { ...prevStreams };
+          delete nextStreams[sessionKey];
+          return nextStreams;
+        });
         socket.emit("graph_status_unsubscribe", { session_id: id });
         graphStatusSubscribedSessionsRef.current.delete(String(id));
       }
@@ -6936,6 +7501,63 @@ const fileInputRef = useRef(null);
       })
     )
   }
+  const clearLinkedGraphStatusForSession = (sessionId, reason = "source_status_cleared") => {
+    const sessionKey = String(sessionId || "").trim();
+    if (!sessionKey) return;
+
+    const clearedPayload = {
+      session_id: sessionKey,
+      analysisSessionId: sessionKey,
+      status: "terminated",
+      relationship_labels: [],
+      total_relationships: 0,
+      summary: {
+        total_relationships: 0,
+      },
+    };
+
+    delete graphInfoPayloadBySessionRef.current[sessionKey];
+    graphStatusSubscribedSessionsRef.current.delete(sessionKey);
+    graphStatusRef.current = {
+      ...graphStatusRef.current,
+      [sessionKey]: {
+        status: clearedPayload,
+        relationships: [],
+      },
+    };
+
+    setGraphStatus((prev) => ({
+      ...prev,
+      [sessionKey]: {
+        status: clearedPayload,
+        relationships: [],
+      },
+    }));
+
+    setWindows((prev) => prev.map((w) => {
+      if (String(w.graphLinkSource || "") !== sessionKey) return w;
+      const iframe = iframeRefs.current[w.id];
+      iframe?.current?.contentWindow?.postMessage(
+        { action: "informations", payload: clearedPayload },
+        getTrustedMessageOrigin()
+      );
+      return {
+        ...w,
+        graphLink: false,
+        graphLinkSource: null,
+        sessionId: null,
+        graphStatus: [],
+        nodeProperties: null,
+        filterPropertyKeys: null,
+        filterResults: null,
+        selectedNodes: [],
+        selectedEdges: [],
+      };
+    }));
+
+    console.log("[graph status cleared for terminated source]", { session_id: sessionKey, reason });
+  };
+
   const handleGraphActions = (id, menuId, action, payload) => {
     console.log("GraphAction:", id, menuId, action, payload);
     if (menuId === "get_graph" && !requirePermission(PERMISSIONS.GRAPH_READ, "graph data")) return;
@@ -6986,7 +7608,15 @@ const fileInputRef = useRef(null);
             updates.loadscreenState = true;
             updates.loadscreenText = "Fetching graph...";
 
-            requestGraphFetch(apiFetch, newPayload, controller.signal)
+            requestGraphFetch(apiFetch, newPayload, controller.signal, {
+              onQueued: (queuedData) => {
+                const jobId = getQueuedJobId(queuedData);
+                if (jobId) {
+                  activeGraphJobsRef.current[String(id)] = jobId;
+                  console.log("[graph job active]", { graph_window_id: String(id), session_id: payload.sourceId, job_id: jobId, relationship: payload.relationship });
+                }
+              }
+            })
               .then(data => {
                 if (!graphFetchAbortControllersRef.current[id] || graphFetchAbortControllersRef.current[id] !== controller) return;
                 setWindows(prev =>
@@ -6998,6 +7628,7 @@ const fileInputRef = useRef(null);
                 );
 
                 if (isSuccessResponse(data)) {
+                  delete activeGraphJobsRef.current[String(id)];
                   const settingsToApply = normalizeGraphIframeSettings(iframeSettings[id] || w.iframeSettings);
                   settingsToApply[2] = normalizeGraphLimitRange({ min: 0, max: 25 }, 25);
                   updateIframeSettings(id, 2, { min: 0, max: 25 });
@@ -7013,11 +7644,12 @@ const fileInputRef = useRef(null);
               })
               .catch(err => {
                 if (err?.name === "AbortError") return;
+                delete activeGraphJobsRef.current[String(id)];
                 console.error(err);
                 setWindows(prev =>
                   prev.map(win =>
                     win.id === id
-                      ? { ...win, windowResponseI: "Connection failed!" }
+                      ? { ...win, windowResponseI: "Connection failed!", loadscreenState: false, loadscreenText: null }
                       : win
                   )
                 );
@@ -7026,6 +7658,7 @@ const fileInputRef = useRef(null);
               .finally(() => {
                 if (graphFetchAbortControllersRef.current[id] === controller) {
                   delete graphFetchAbortControllersRef.current[id];
+                  delete activeGraphJobsRef.current[String(id)];
                 }
               });
           }
@@ -7225,22 +7858,43 @@ const fileInputRef = useRef(null);
                 w.id === id ? { ...w,loadscreenState: true,loadscreenText:newLoadscreenText} : w
               )
             );
-            const allowedExtensions = [".csv", ".json", ".parquet", ".xlsx"];
-            const uploadedFiles = payload.files;
+            const uploadedFiles = Array.from(payload?.files || []);
             const invalidFiles = [];
+            const oversizedFiles = [];
             const validFiles = [];
             const sessionId = id //That specific source window id
+            const totalUploadBytes = uploadedFiles.reduce((sum, file) => sum + Number(file?.size || 0), 0);
             for (const file of uploadedFiles) {
-              const fileName = file.name.toLowerCase();
-              const isValid = allowedExtensions.some(ext => fileName.endsWith(ext));
-              if (isValid) {
-                validFiles.push(file);
-              } else {
+              const fileName = String(file?.name || "").toLowerCase();
+              const isValid = UPLOAD_ALLOWED_EXTENSIONS.some(ext => fileName.endsWith(ext));
+              if (!isValid) {
                 invalidFiles.push(file.name);
+                continue;
               }
+              if (Number(file?.size || 0) > MAX_UPLOAD_BYTES) {
+                oversizedFiles.push(file.name);
+                continue;
+              }
+              validFiles.push(file);
             }
-            if (invalidFiles.length > 0) { // IF invalid files found
-              alert(`Unsupported file types:\n\n${invalidFiles.join("\n")}\n\nAllowed types: CSV, JSON, Parquet.`);
+            const uploadValidationMessages = [];
+            if (uploadedFiles.length > MAX_UPLOAD_FILE_COUNT) {
+              uploadValidationMessages.push(`Select up to ${MAX_UPLOAD_FILE_COUNT} files per upload.`);
+            }
+            if (totalUploadBytes > MAX_UPLOAD_TOTAL_BYTES) {
+              uploadValidationMessages.push(`The selected files are too large for one upload.`);
+            }
+            if (invalidFiles.length > 0) {
+              uploadValidationMessages.push(`Unsupported file types:\n${invalidFiles.join("\n")}`);
+            }
+            if (oversizedFiles.length > 0) {
+              uploadValidationMessages.push(`Files exceed the upload size limit:\n${oversizedFiles.join("\n")}`);
+            }
+            if (validFiles.length === 0 && uploadValidationMessages.length === 0) {
+              uploadValidationMessages.push("Choose at least one dataset file to upload.");
+            }
+            if (uploadValidationMessages.length > 0) {
+              alert(`Upload blocked:\n\n${uploadValidationMessages.join("\n\n")}\n\nAllowed types: CSV, JSON, Parquet, XLSX.`);
               setWindows(prev =>
                 prev.map(w =>
                   w.id === id ? { ...w,loadscreenState: false ,loadscreenText:null} : w
@@ -7330,7 +7984,7 @@ const fileInputRef = useRef(null);
               sourceTopicText: sourceAutofillDefaults.sourceTopicText,
               toolUrl: sourceAutofillDefaults.toolUrl,
               toolUsername: sourceAutofillDefaults.toolUsername,
-              toolPassword: sourceAutofillDefaults.toolPassword,
+              toolPassword: "",
               toolDatabase: sourceAutofillDefaults.toolDatabase,
               batchFilesCollection: [],
               batchFilesSearchResults: null,
@@ -7439,7 +8093,11 @@ const fileInputRef = useRef(null);
           );
         }
         if (menuId === "real_time_input_form" && action === "connect" && payload) {
-          console.log("realtime_connection_payload:",payload);
+          const sourceValidation = validateSchema(payload, sourceConnectionSchema);
+          if (!sourceValidation.ok) {
+            return { ...w, windowRealtimeResponseI: sourceValidation.message || "Connection details are invalid." };
+          }
+          const connectPayload = { ...payload, ...sourceValidation.value };
           setWindows(prev =>
             prev.map(w =>
               w.id === id ? { ...w, windowRealtimeResponseI: "Connecting..." } : w
@@ -7448,7 +8106,7 @@ const fileInputRef = useRef(null);
           apiFetch("/connect_to_source", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
+            body: JSON.stringify(connectPayload),
           })
           .then((data) => {
             setWindows(prev =>
@@ -7500,15 +8158,20 @@ const fileInputRef = useRef(null);
             });
         }
         if (menuId === "real_time_tool_integration_form" && action === "connect" && payload) {
+          const toolValidation = validateSchema(payload, toolConnectionSchema);
+          if (!toolValidation.ok) {
+            return { ...w, formRealtimeToolResponse: toolValidation.message || "Tool connection details are invalid." };
+          }
+          const toolPayload = { ...payload, ...toolValidation.value };
           setWindows(prev =>
             prev.map(w =>
-              w.id === id ? { ...w, formRealtimeToolResponse: "Connecting..." } : w
+              w.id === id ? { ...w, formRealtimeToolResponse: "Connecting...", realtimeToolPassword: "" } : w
             )
           );
           apiFetch("/connect_to_tool", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
+            body: JSON.stringify(toolPayload),
           })
             .then((data) => {
               setWindows(prev =>
@@ -7554,21 +8217,25 @@ const fileInputRef = useRef(null);
             });
         }
         if (menuId === "batch_input_form" && action === "connect" && payload) {
-          console.log("connection_payload:",payload);
+          const sourceValidation = validateSchema(payload, sourceConnectionSchema);
+          if (!sourceValidation.ok) {
+            return { ...w, windowResponseI: sourceValidation.message || "Connection details are invalid.", sourceStatus: SOURCE_STATUSES.FAILED };
+          }
+          const connectPayload = { ...payload, ...sourceValidation.value };
           setWindows(prev =>
             prev.map(w =>
-              w.id === id ? { ...w, windowResponseI: "Connecting...", sourceStatus: SOURCE_STATUSES.CONNECTING, sourceKind: payload?.addressType || w.sourceAddressType || SOURCE_KINDS.BROKER } : w
+              w.id === id ? { ...w, windowResponseI: "Connecting...", sourceStatus: SOURCE_STATUSES.CONNECTING, sourceKind: connectPayload?.addressType || w.sourceAddressType || SOURCE_KINDS.BROKER } : w
             )
           );
           apiFetch("/connect_to_source", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
+            body: JSON.stringify(connectPayload),
           })
           .then((data) => {
             setWindows(prev =>
               prev.map(w =>
-                w.id === id ? { ...w, windowResponseI: data.message, sourceStatus: sourceStatusFromResponse(data.message), sourceKind: payload?.addressType || w.sourceKind || w.sourceAddressType || SOURCE_KINDS.BROKER } : w
+                w.id === id ? { ...w, windowResponseI: data.message, sourceStatus: sourceStatusFromResponse(data.message), sourceKind: connectPayload?.addressType || w.sourceKind || w.sourceAddressType || SOURCE_KINDS.BROKER } : w
               )
             );
           })
@@ -7609,15 +8276,20 @@ const fileInputRef = useRef(null);
             });        
         }
         if (menuId === "tool_integration_form" && action === "connect" && payload) {
+          const toolValidation = validateSchema(payload, toolConnectionSchema);
+          if (!toolValidation.ok) {
+            return { ...w, formToolResponse: toolValidation.message || "Tool connection details are invalid.", toolStatus: TOOL_STATUSES.FAILED };
+          }
+          const toolPayload = { ...payload, ...toolValidation.value };
           setWindows(prev =>
             prev.map(w =>
-              w.id === id ? { ...w, formToolResponse: "Connecting...", toolStatus: TOOL_STATUSES.CONNECTING } : w
+              w.id === id ? { ...w, formToolResponse: "Connecting...", toolStatus: TOOL_STATUSES.CONNECTING, toolPassword: "" } : w
             )
           );
           apiFetch("/connect_to_tool", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
+            body: JSON.stringify(toolPayload),
           })
             .then((data) => {              
               setWindows(prev =>
@@ -7698,10 +8370,16 @@ const fileInputRef = useRef(null);
                     broker_url: payloadAddress,
                     topic: payloadTopic,
                   };
-                requestDataframeCreation(apiFetch, payload1)
+                requestDataframeCreation(apiFetch, payload1, {
+                  label: "dataframe",
+                  onQueued: (queuedData) => {
+                    const jobId = getQueuedJobId(queuedData);
+                    if (jobId) activeDataframeJobsRef.current[String(id)] = jobId;
+                  }
+                })
                 .then((data) => { 
                     console.log("public source data:",data, "payload:", payload1, "api:", `${API_URL}/live_batch_files`)   
-                    var arrayData=Object.values(data.results)
+                    var arrayData=normalizeDataframeInfoList(data.results)
                     if (payload["addressType"] === "broker" && payload["mode"] === "realtime") {
                       arrayData[4] = "Live";
                     }
@@ -7719,7 +8397,8 @@ const fileInputRef = useRef(null);
                       );
                     }
                     else {
-                      alert("We could not create the dataframe right now. Please check the selected source and try again.")
+                      console.warn("Dataframe creation rejected", data);
+                      alert(formatDataframeFailureMessage(data, "We could not create the dataframe right now. Please check the selected source and try again."))
                       setWindows(prev =>
                         prev.map(w =>
                           w.id === id ? { ...w, batchFilesDataframeInfoI:[],loadscreenState: false,dataframeStatus: DATAFRAME_STATUSES.FAILED } : w
@@ -7728,8 +8407,8 @@ const fileInputRef = useRef(null);
                     }
                   })
                 .catch((err) => {
-                  console.error("create_DF error:", err, "payload:", payload1, "api:", `${API_URL}/live_batch_files`);
-                  alert("We could not create the dataframe from this source. Please verify the source is reachable and try again.");
+                  console.error("create_DF error:", err, "payload:", payload1, "api:", `${API_URL}/live_batch_files`, "jobResponse:", err?.jobResponse);
+                  alert(formatDataframeFailureMessage(err, "We could not create the dataframe from this source. Please verify the source is reachable and try again."));
                   setWindows(prev =>
                     prev.map(w =>
                       w.id === id ? { ...w, batchFilesDataframeInfoI: null, loadscreenState: false,dataframeStatus: DATAFRAME_STATUSES.FAILED} : w
@@ -7813,6 +8492,11 @@ const fileInputRef = useRef(null);
             const search_column = sanitizeText(payload?.[3] || "", { maxLength: 120 }).trim();
             const strict_mood = !!payload?.[4];
             const isStrictHybridSearch = hybrid && strict_mood;
+            const searchValidation = validateSchema({ keyword, date: selectedDate || "", search_column }, searchRequestSchema);
+            if (!searchValidation.ok) {
+              showValidationFailure(searchValidation.message || "Search input is invalid.");
+              return { ...w };
+            }
 
             const buildPayload = (offset) => {
               const value = {
@@ -7886,7 +8570,7 @@ const fileInputRef = useRef(null);
                 // UI reset
                 setWindows(prev =>
                   prev.map(w =>
-                    w.id === id
+                    String(w.id) === String(id)
                       ? {
                           ...w,
                           searchText: true,
@@ -7901,13 +8585,20 @@ const fileInputRef = useRef(null);
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify(buildPayload(0))
+                }, {
+                  label: "search",
+                  onQueued: (queuedData) => {
+                    const jobId = getQueuedJobId(queuedData);
+                    if (jobId) activeSearchJobsRef.current[String(id)] = jobId;
+                  }
                 })
                   .then(data => {
-                    const results = Array.isArray(data?.results) ? data.results : [];
-                    const hasMore = !!data?.has_more;
-                    console.log("search results:", results, hasMore, "payload:", buildPayload(0));
+                    const searchResponse = normalizeSearchResponse(data);
+                    const results = searchResponse.results;
+                    const hasMore = searchResponse.has_more;
+                    console.log("[search response normalized]", { response: searchResponse, results, hasMore, payload: buildPayload(0) });
 
-                    handleRawSearchDiagnostics(data, results);
+                    handleRawSearchDiagnostics(searchResponse, results);
 
                     setBatchFilesSearchResults(results);
                     setBatchFilesSearchMoreFiles(hasMore);
@@ -7928,15 +8619,15 @@ const fileInputRef = useRef(null);
                       )
                     );
 
-                    if (data?.message === "Result out of bound!") {
-                      alert(data.message);
+                    if (searchResponse?.message === "Result out of bound!") {
+                      alert(searchResponse.message);
                     }
                   })
                   .catch((err) => {
                   console.error(err);
                   setWindows(prev =>
                     prev.map(w =>
-                      w.id === id
+                      String(w.id) === String(id)
                         ? { ...w, searchText: false, searchPlaceholder: "Search failed" }
                         : w
                     )
@@ -7973,11 +8664,18 @@ const fileInputRef = useRef(null);
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(buildPayload(offset))
+              }, {
+                label: "search",
+                onQueued: (queuedData) => {
+                  const jobId = getQueuedJobId(queuedData);
+                  if (jobId) activeSearchJobsRef.current[String(id)] = jobId;
+                }
               })
                 .then(data => {
-                  const results = Array.isArray(data?.results) ? data.results : [];
-                  const hasMore = !!data?.has_more;
-                  console.log("search results:", data, "payload:", buildPayload(offset));
+                  const searchResponse = normalizeSearchResponse(data);
+                  const results = searchResponse.results;
+                  const hasMore = searchResponse.has_more;
+                  console.log("[search response normalized]", { response: searchResponse, results, hasMore, payload: buildPayload(offset) });
 
                   setBatchFilesSearchResults(prev => [...prev, ...results]);
                   setBatchFilesSearchMoreFiles(hasMore);
@@ -8067,10 +8765,16 @@ const fileInputRef = useRef(null);
                 session_id: id,//Source window id
                 value: newBatchFilesCollection, //Explodes at back end
               };
-            requestDataframeCreation(apiFetch, payload)
+            requestDataframeCreation(apiFetch, payload, {
+              label: "dataframe",
+              onQueued: (queuedData) => {
+                const jobId = getQueuedJobId(queuedData);
+                if (jobId) activeDataframeJobsRef.current[String(id)] = jobId;
+              }
+            })
             .then((data) => { 
                 console.log("searchdata:",data)   
-                var arrayData=Object.values(data.results)
+                var arrayData=normalizeDataframeInfoList(data.results)
                 if (isSuccessResponse(data)){
                   //Changing window content
                   alert("Dataframe created")
@@ -8085,7 +8789,8 @@ const fileInputRef = useRef(null);
                   );
                 }
                 else {
-                  alert("We could not create the dataframe from the selected files. Please review your selection and try again.")
+                  console.warn("Dataframe creation rejected", data);
+                  alert(formatDataframeFailureMessage(data, "We could not create the dataframe from the selected files. Please review your selection and try again."))
                   setWindows(prev =>
                     prev.map(w =>
                       w.id === id ? { ...w, batchFilesDataframeInfoI:[],loadscreenState: false,dataframeStatus: DATAFRAME_STATUSES.FAILED } : w
@@ -8094,8 +8799,8 @@ const fileInputRef = useRef(null);
                 }
               })
             .catch((err) => {
-              console.error(err);
-              alert("We could not create the dataframe from the selected files. Please try again in a moment.");
+              console.error("create_DF error:", err, "jobResponse:", err?.jobResponse);
+              alert(formatDataframeFailureMessage(err, "We could not create the dataframe from the selected files. Please try again in a moment."));
               setWindows(prev =>
                 prev.map(w =>
                   w.id === id ? { ...w, batchFilesDataframeInfoI: null, loadscreenState: false,dataframeStatus: DATAFRAME_STATUSES.FAILED} : w
@@ -8193,135 +8898,405 @@ const fileInputRef = useRef(null);
             //setBatchFilesDataframeRuleValue(payload);
           }, 300);
         }        
-        if (menuId === "batch_input_form_swap" && action === "page_IV") { //This is the component that initalizes the graph streaming
-          // Set new timeout for debounce
-          console.log("streaming:",batchFilesDataframeInfoI)
-          debounceRef.current = setTimeout(() => {
-            const newLoadscreenText="Initalizing "
-            // Initialize a variable to accumulate logs
-            let accumulatedLogs = '';
-            setSourceStreams(prev => ({ ...prev, [id]: false }));
-            setWindows(prev =>
-              prev.map(w =>
-               w.id === id ? { ...w, windowResponseI:null,sourceSessionLog:null,sourceStreamListener: true,loadscreenState: false, loadscreenText:newLoadscreenText,streamStatus: STREAM_STATUSES.STARTING,sourceStep: SOURCE_FLOW_STEPS.STREAM } : w
-              )
-            );
-            //Requesting session start
-            // Get the window object from the current state
-            const targetWindow = windows.find(w => w.id === id);
-            let action, source, target, relationship, tool, rule
-            if (!targetWindow) {
-              console.warn("Window not found:", id);
-            } else {
-              action = targetWindow.batchFilesDataframeActionValue;
-              source = targetWindow.batchFilesDataframeSourceValue;
-              target = targetWindow.batchFilesDataframeTargetValue;
-              relationship = targetWindow.batchFilesDataframeRelationshipValue && targetWindow.batchFilesDataframeRelationshipValue !== '' &&  targetWindow.batchFilesDataframeRelationshipValue !== true
-              ? targetWindow.batchFilesDataframeRelationshipValue : 'HAS_RELATIONSHIP';            
-              tool=targetWindow.batchFilesDataframeInfoI[7]; //Tools values sent from dataframe info
-              rule=targetWindow.batchFilesDataframeRuleValue;
-              console.log("Action, Source, Target from window:", action, source, target, relationship, tool, rule);
-            }            
-            //Template stance if failed to start the session (keeps the page from swaping)
-            newContent = sourceWorkflowContent;
-            newSubContent = "batch_input_form_pageIII";
-            const sourceMode = sourceWorkflowContent === "real_time_input" ? "realtime" : "batch";
-            const payload = {
-                id: "stream",
-                session_id: id,
-                mode: sourceMode,
-                source_mode: sourceMode,
-                value:{"window_id":id,"session_id":id,"mode":sourceMode,"source_mode":sourceMode,"tool":tool,"action":action,"source":source,"target":target,"relationship":relationship,"rule":rule}// Add filter request here
-              };
-            console.log("[stream request]", {
-              sourceMode,
-              action,
-              source,
-              target,
-              relationship,
-              rule,
-              payload,
-            });
-            apiFetch("/live_batch_files", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(payload),
-            })
-            .then((data) => { 
-              //var response=Object.values(data.results)
-              if (data != null){
-                if (isSuccessResponse(data)){
-                  const logFile = data.results;
-                  console.log("logFile:",logFile);
-                  const socket = socketRef.current;
-                  if (!socket || !logFile) return;
-                  setSourceStreamListener(true);
-                  setSourceSessionLogFile({logFile,session_id: id});
-                  setSourceStreams(prev => ({ ...prev, [id]: true }));
-                  newContent = sourceWorkflowContent;
-                  newSubContent = "batch_input_form_pageIV";
-                  setWindows(prev =>
-                    prev.map(w =>
-                      w.id === id
-                        ? {
-                            ...w,
-                            windowResponseI: "Session running...",
-                            streamStatus: STREAM_STATUSES.RUNNING,
-                            sourceStep: SOURCE_FLOW_STEPS.STREAM,
-                            batchFilesDataframeInfoI:w.batchFilesDataframeInfoI,
-                            loadscreenState: false,
-                            selectedContent: newContent,
-                            selectedSubContent: newSubContent,     
-                            sourceStreamListener: true,
-                            sourceSessionLogFile: logFile               
-                          }
-                        : w
-                    )
-                  );
-                }
-                else{
-                  pushNotification({
-                    title: "Streaming could not start",
-                    message: "The request was received, but the stream did not initialize. Please check the selected action and try again.",
-                    source: "Linkx",
-                    level: "error",
-                  });
-                  console.warn("Stream initialization rejected", { message: data?.message, status: data?.status, hasException: Boolean(data?.exception) });
-                  setSourceStreams(prev => ({ ...prev, [id]: false}));
-                  setSourceStreamListener(true);
-                  setWindows(prev =>
-                    prev.map(w =>
-                      w.id === id
-                        ? {
-                            ...w,
-                            batchFilesDataframeInfoI:w.batchFilesDataframeInfoI,
-                            windowResponseI: sourceWorkflowReadyResponse,
-                            loadscreenState: false,
-                            sourceStreamListener: false,
-                            streamStatus: STREAM_STATUSES.FAILED
-                          }
-                        : w
-                    )
-                  );
-                }
+if (menuId === "batch_input_form_swap" && action === "page_IV") {
+  console.log("streaming:", batchFilesDataframeInfoI);
+
+  debounceRef.current = setTimeout(() => {
+    const newLoadscreenText = "Initalizing ";
+
+    setSourceStreams(prev => ({ ...prev, [id]: false }));
+
+    setWindows(prev =>
+      prev.map(w =>
+        w.id === id
+          ? {
+              ...w,
+              windowResponseI: null,
+              sourceSessionLog: null,
+              sourceStreamListener: true,
+              loadscreenState: false,
+              loadscreenText: newLoadscreenText,
+              streamStatus: STREAM_STATUSES.STARTING,
+              sourceStep: SOURCE_FLOW_STEPS.STREAM,
+            }
+          : w
+      )
+    );
+
+    const targetWindow = windows.find(w => w.id === id);
+
+    if (!targetWindow) {
+      console.warn("Window not found:", id);
+      setWindows(prev =>
+        prev.map(current =>
+          String(current.id) === String(id)
+            ? {
+                ...current,
+                streamStatus: STREAM_STATUSES.FAILED,
+                loadscreenState: false,
+                sourceStreamListener: false,
+                windowResponseI: "Window not found.",
               }
-            })
-            .catch((err) => {
-              console.error("Stream initialization request failed", err);
-              pushNotification({
-                title: "Streaming could not start",
-                message: "Unable to reach the streaming service. Please try again.",
-                source: "Linkx",
-                level: "error",
+            : current
+        )
+      );
+      return;
+    }
+
+    let selectedAction = targetWindow.batchFilesDataframeActionValue;
+    const needsSourceTarget = selectedAction === "Source / Target Relationship";
+
+    let source = needsSourceTarget ? targetWindow.batchFilesDataframeSourceValue : "";
+    let target = needsSourceTarget ? targetWindow.batchFilesDataframeTargetValue : "";
+    let relationship =
+      needsSourceTarget &&
+      targetWindow.batchFilesDataframeRelationshipValue &&
+      targetWindow.batchFilesDataframeRelationshipValue !== "" &&
+      targetWindow.batchFilesDataframeRelationshipValue !== true
+        ? targetWindow.batchFilesDataframeRelationshipValue
+        : "HAS_RELATIONSHIP";
+
+    let tool = targetWindow.batchFilesDataframeInfoI?.[7];
+    let rule = targetWindow.batchFilesDataframeRuleValue;
+
+    const validationPayload = needsSourceTarget
+      ? {
+          action: selectedAction,
+          source,
+          target,
+          relationship,
+          tool,
+          rule,
+        }
+      : {
+          action: selectedAction,
+          source: "RULE_DEFINED",
+          target: "RULE_DEFINED",
+          relationship: "HAS_RELATIONSHIP",
+          tool,
+          rule,
+        };
+
+    const streamValidation = validateSchema(validationPayload, streamRequestSchema);
+
+    if (!streamValidation.ok) {
+      showValidationFailure(streamValidation.message || "Stream configuration is invalid.");
+      setWindows(prev =>
+        prev.map(current =>
+          String(current.id) === String(id)
+            ? {
+                ...current,
+                streamStatus: STREAM_STATUSES.FAILED,
+                loadscreenState: false,
+                sourceStreamListener: false,
+                windowResponseI: streamValidation.message,
+              }
+            : current
+        )
+      );
+      return;
+    }
+
+    selectedAction = streamValidation.value.action;
+    tool = streamValidation.value.tool;
+    rule = streamValidation.value.rule;
+
+    if (needsSourceTarget) {
+      source = streamValidation.value.source;
+      target = streamValidation.value.target;
+      relationship = streamValidation.value.relationship;
+    } else {
+      source = "";
+      target = "";
+      relationship = "";
+    }
+
+    newContent = sourceWorkflowContent;
+    newSubContent = "batch_input_form_pageIII";
+
+    const sourceMode = sourceWorkflowContent === "real_time_input" ? "realtime" : "batch";
+
+    const payload = {
+      id: "stream",
+      session_id: id,
+      mode: sourceMode,
+      source_mode: sourceMode,
+      value: {
+        window_id: id,
+        session_id: id,
+        mode: sourceMode,
+        source_mode: sourceMode,
+        tool,
+        action: selectedAction,
+        rule,
+        ...(needsSourceTarget ? { source, target, relationship } : {}),
+      },
+    };
+
+    console.log("[stream request]", {
+      sourceMode,
+      action: selectedAction,
+      source,
+      target,
+      relationship,
+      rule,
+      needsSourceTarget,
+      payload,
+    });
+
+    apiFetch("/live_batch_files", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    })
+      .then(async data => {
+        if (data == null) return;
+
+        const sessionKey = String(id);
+
+        const applyStreamState = (logFile, response, streamStatus = STREAM_STATUSES.RUNNING) => {
+          if (!logFile) return;
+
+          console.log("[stream log file]", {
+            session_id: sessionKey,
+            filename: logFile,
+            response,
+          });
+
+          setSourceStreamListener(true);
+          setSourceSessionLogFile({ logFile, session_id: sessionKey });
+          setSourceSessionLogFiles(prev => ({
+            ...prev,
+            [sessionKey]: { logFile, session_id: sessionKey },
+          }));
+          setSourceStreams(prev => ({ ...prev, [sessionKey]: true }));
+
+          newContent = sourceWorkflowContent;
+          newSubContent = "batch_input_form_pageIV";
+
+          setWindows(prev =>
+            prev.map(w =>
+              String(w.id) === sessionKey
+                ? {
+                    ...w,
+                    windowResponseI:
+                      streamStatus === STREAM_STATUSES.STARTING
+                        ? "Session queued..."
+                        : "Session running...",
+                    streamStatus,
+                    sourceStep: SOURCE_FLOW_STEPS.STREAM,
+                    batchFilesDataframeInfoI: w.batchFilesDataframeInfoI,
+                    loadscreenState: false,
+                    selectedContent: newContent,
+                    selectedSubContent: newSubContent,
+                    sourceStreamListener: true,
+                    sourceSessionLogFile: logFile,
+                  }
+                : w
+            )
+          );
+        };
+
+        const initialLogFile = resolveStreamResponseLogFilename(data);
+        const streamJobId = getQueuedJobId(data);
+
+        if (streamJobId) {
+          activeStreamJobsRef.current[sessionKey] = streamJobId;
+          streamTerminateRequestedRef.current[sessionKey] = false;
+          console.log("[stream job active]", {
+            session_id: sessionKey,
+            job_id: streamJobId,
+          });
+        }
+
+        const queued =
+          isQueuedJobResponse(data) ||
+          data?.queued === true ||
+          String(data?.status || "").toLowerCase() === "queued";
+
+        const accepted = isSuccessResponse(data) || queued;
+
+        if (!accepted) {
+          pushNotification({
+            title: "Streaming could not start",
+            message:
+              "The request was received, but the stream did not initialize. Please check the selected action and try again.",
+            source: "Linkx",
+            level: "error",
+          });
+
+          console.warn("Stream initialization rejected", {
+            message: data?.message,
+            status: data?.status,
+            hasException: Boolean(data?.exception),
+            response: data,
+          });
+
+          setSourceStreams(prev => ({ ...prev, [sessionKey]: false }));
+          setSourceStreamListener(true);
+
+          setSourceSessionLogFiles(prev => {
+            const nextStreams = { ...prev };
+            delete nextStreams[sessionKey];
+            return nextStreams;
+          });
+
+          setWindows(prev =>
+            prev.map(w =>
+              String(w.id) === sessionKey
+                ? {
+                    ...w,
+                    batchFilesDataframeInfoI: w.batchFilesDataframeInfoI,
+                    windowResponseI: sourceWorkflowReadyResponse,
+                    loadscreenState: false,
+                    sourceStreamListener: false,
+                    streamStatus: STREAM_STATUSES.FAILED,
+                  }
+                : w
+            )
+          );
+          return;
+        }
+
+        if (initialLogFile) {
+          applyStreamState(
+            initialLogFile,
+            data,
+            queued ? STREAM_STATUSES.STARTING : STREAM_STATUSES.RUNNING
+          );
+        }
+
+        if (queued && getQueuedPollPath(data)) {
+          try {
+            const jobResult = await pollJob(apiFetch, getQueuedPollPath(data), {
+              intervalMs: 1000,
+              label: "ingestion",
+            });
+
+            if (streamTerminateRequestedRef.current[sessionKey] === true) {
+              console.info("Stream job completed after terminate request; keeping stopped state", {
+                session_id: sessionKey,
+                job_id: activeStreamJobsRef.current[sessionKey],
+                jobResult,
               });
+              delete activeStreamJobsRef.current[sessionKey];
+              return;
+            }
+
+            const completedLogFile =
+              resolveStreamResponseLogFilename(jobResult) || initialLogFile;
+
+            delete activeStreamJobsRef.current[sessionKey];
+            streamTerminateRequestedRef.current[sessionKey] = false;
+
+            if (completedLogFile) {
+              applyStreamState(completedLogFile, jobResult, STREAM_STATUSES.RUNNING);
+            }
+          } catch (err) {
+            const wasTerminateRequested =
+              streamTerminateRequestedRef.current[sessionKey] === true;
+            const wasCancelled = JOB_CANCEL_STATUSES.has(
+              String(err?.jobStatus || "").toLowerCase()
+            );
+
+            if (wasTerminateRequested && wasCancelled) {
+              console.info("Stream stopped after terminate request", {
+                session_id: sessionKey,
+                job_id: activeStreamJobsRef.current[sessionKey],
+                status: err?.jobStatus,
+                jobResponse: err?.jobResponse,
+              });
+
+              delete activeStreamJobsRef.current[sessionKey];
+              streamTerminateRequestedRef.current[sessionKey] = false;
+              setSourceStreams(prev => ({ ...prev, [sessionKey]: false }));
+
               setWindows(prev =>
                 prev.map(w =>
-                  w.id === id ? { ...w, batchFilesDataframeInfoI:w.batchFilesDataframeInfoI, loadscreenState: false} : w
+                  String(w.id) === sessionKey
+                    ? {
+                        ...w,
+                        windowResponseI: "Stream stopped",
+                        sourceStreamListener: false,
+                        streamStatus: STREAM_STATUSES.TERMINATED,
+                        loadscreenState: false,
+                      }
+                    : w
                 )
               );
+              return;
+            }
+
+            console.error("Stream job failed", {
+              message: err?.message,
+              status: err?.jobStatus,
+              pollPath: err?.pollPath,
+              jobResult: err?.jobResult,
+              jobResponse: err?.jobResponse,
+              error: err,
             });
-          }, 300); // debounce delay   
+
+            const streamErrorMessage =
+              err?.message && String(err.message).toLowerCase() !== "success"
+                ? err.message
+                : "The stream job failed before it started. Check the console for the job response.";
+
+            pushNotification({
+              title: "Streaming could not start",
+              message: streamErrorMessage,
+              source: "Linkx",
+              level: "error",
+            });
+
+            delete activeStreamJobsRef.current[sessionKey];
+            streamTerminateRequestedRef.current[sessionKey] = false;
+            setSourceStreams(prev => ({ ...prev, [sessionKey]: false }));
+
+            setSourceSessionLogFiles(prev => {
+              const nextStreams = { ...prev };
+              delete nextStreams[sessionKey];
+              return nextStreams;
+            });
+
+            setWindows(prev =>
+              prev.map(w =>
+                String(w.id) === sessionKey
+                  ? {
+                      ...w,
+                      sourceStreamListener: false,
+                      streamStatus: STREAM_STATUSES.FAILED,
+                      loadscreenState: false,
+                    }
+                  : w
+              )
+            );
+          }
         }
+      })
+      .catch(err => {
+        console.error("Stream initialization request failed", err);
+
+        pushNotification({
+          title: "Streaming could not start",
+          message: "Unable to reach the streaming service. Please try again.",
+          source: "Linkx",
+          level: "error",
+        });
+
+        setWindows(prev =>
+          prev.map(w =>
+            w.id === id
+              ? {
+                  ...w,
+                  batchFilesDataframeInfoI: w.batchFilesDataframeInfoI,
+                  loadscreenState: false,
+                }
+              : w
+          )
+        );
+      });
+  }, 300);
+}
         if (menuId === "batch_input_stream_terminate" && action === "page_IV") {
           // Set new timeout for debounce
           debounceRef.current = setTimeout(() => {
@@ -8333,12 +9308,23 @@ const fileInputRef = useRef(null);
             );
             // Unpluging sockets
             const socket = socketRef.current;
+            const sessionKey = String(id);
+            streamTerminateRequestedRef.current[sessionKey] = true;
+            const activeFilename = activeLogStreamsRef.current[sessionKey] || resolveLogStreamFilename(sourceSessionLogFiles[sessionKey]);
             if (socket && socket.connected) {
-              socket.emit("log_stream_unplug", {filename: sourceSessionLogFile?.logFile,session_id: id});
-              socket.emit("graph_status_unsubscribe", {session_id: id})
-              // Optional: stop listening to the client side
-              // socket.off("stream_logs");
+              if (activeFilename) {
+                socket.emit("log_stream_unplug", { session_id: sessionKey, filename: activeFilename });
+              }
+              socket.emit("graph_status_unsubscribe", { session_id: id })
             }
+            clearLinkedGraphStatusForSession(sessionKey, "source_terminate_requested");
+            delete activeLogStreamsRef.current[sessionKey];
+            delete logBuffersRef.current[sessionKey];
+            setSourceSessionLogFiles(prev => {
+              const nextStreams = { ...prev };
+              delete nextStreams[sessionKey];
+              return nextStreams;
+            });
             //Refresh the options (the previous content options)
             let oldBatchFilesDataframeInfoI=batchFilesDataframeInfoI
             //setBatchFilesDataframeInfoI(null)
@@ -8346,7 +9332,7 @@ const fileInputRef = useRef(null);
             const payload = {
                 id: "end_session",
                   session_id: id,
-                value:{"window_id":id,"session_id":id,"log_file":sourceSessionLogFile}
+                value:{"window_id":id,"session_id":id,"log_file":activeFilename}
               };
             apiFetch("/live_batch_files", {
               method: "POST",
@@ -8356,14 +9342,16 @@ const fileInputRef = useRef(null);
             .then((data) => { 
               if (data!=null){
                 if (data.message==="success"){
-                  if (socket) socket.off("stream_logs"); 
+                  console.info("Stream termination accepted", { session_id: String(id), response: data });
                   setSourceStreamListener(false);
                   setSourceSessionLogFile(null);
                   setSourceSessionLog(null);
                   setSourceStreams(prev => ({ ...prev, [id]: false }));
+                  delete activeStreamJobsRef.current[String(id)];
                   //setBatchFilesDataframeInfoI(oldBatchFilesDataframeInfoI)
                   // unsubscribe sockets
-                  socketRef.current.emit("graph_status_unsubscribe", { session_id: id });
+                  socketRef.current?.emit("graph_status_unsubscribe", { session_id: id });
+                  clearLinkedGraphStatusForSession(String(id), "source_terminate_success");
                   setWindows(prev => prev.map(w =>
                     w.id === id
                     ? { ...w,windowResponseI:null,loadscreenState: false,sourceStreamListener: false,batchFilesDataframeInfoI:w.batchFilesDataframeInfoI, sourceSessionLog: null, setSourceSessionLogFile:null}
@@ -8410,10 +9398,31 @@ const fileInputRef = useRef(null);
             })
             .catch((err) => {
               console.error("err",err);
-              alert("We could not update the stream state. Please try again in a moment.");
+              alert("We could not update the stream state. Returning to the previous step.");
+              const fallbackContent = sourceWorkflowContent;
+              const fallbackSubContent = "batch_input_form_pageIII";
+              setSourceStreamListener(false);
+              setSourceSessionLogFile(null);
+              setSourceSessionLog(null);
+              setSourceStreams(prev => ({ ...prev, [id]: false }));
               setWindows(prev =>
                 prev.map(w =>
-                  w.id === id ? { ...w, batchFilesDataframeInfoI:w.batchFilesDataframeInfoI, loadscreenState: false} : w
+                  String(w.id) === String(id)
+                    ? {
+                        ...w,
+                        windowResponseI: sourceWorkflowReadyResponse,
+                        sourceStatus: sourceStatusFromResponse(sourceWorkflowReadyResponse),
+                        batchFilesDataframeInfoI:w.batchFilesDataframeInfoI,
+                        loadscreenState: false,
+                        loadscreenText: null,
+                        sourceStreamListener: false,
+                        streamStatus: STREAM_STATUSES.TERMINATED,
+                        sourceStep: SOURCE_FLOW_STEPS.DATAFRAME,
+                        selectedContent: fallbackContent,
+                        selectedSubContent: fallbackSubContent,
+                        sourceSessionLog: null
+                      }
+                    : w
                 )
               );
             });
@@ -8485,7 +9494,10 @@ const fileInputRef = useRef(null);
 
             const sourceId = payload["sourceId"];
             const iframe = payload["iframe"];
-            const newPayload = { id: "link", source_id: sanitizeGraphEndpointId(sourceId), graph_window_id: sanitizeGraphEndpointId(id) };
+            const sessionKey = sanitizeGraphEndpointId(sourceId);
+            const graphWindowId = sanitizeGraphEndpointId(id);
+            const newPayload = { id: "link", source_id: sessionKey, graph_window_id: graphWindowId };
+            console.log("[graph link request]", { sourceId, graphWindowId: id, payload: newPayload });
 
             // Send link request to backend
             apiFetch("/graph_link", {
@@ -8494,78 +9506,85 @@ const fileInputRef = useRef(null);
               body: JSON.stringify(newPayload),
             })
               .then(data => {
+                console.log("[graph link response]", { payload: newPayload, response: data });
                 if (isSuccessResponse(data)) {
                   // Link succeeded
                   setGraphLinkState(true);
                   setGraphLinkSource(sourceId);
                   sourceRef.current = sourceId;
                   setGraphStatusListener(true);
-                  alert("Linked to:",sourceId);
+                  alert(`Linked to ${sessionKey}`);
                   // -----------------------------
                   // 1️⃣ Determine relationships to send
                   // -----------------------------
                   const targetWindows = windowsRef.current.filter(
-                    w => w.graphLinkSource === String(sourceId)
+                    w => String(w.graphLinkSource || "") === sessionKey
                   );
 
                   let existingRelationships = null;
-                  // clone relationships from the existing siblings
-                  if (targetWindows.length > 0) { //Could be 0 even the link is formed with the first child
-
-                    // Use graphStatus from first linked window that has it
-                    existingRelationships = targetWindows.find(w => w.graphStatus)?.graphStatus;
+                  // clone relationships from existing linked graph siblings only when they have real items
+                  if (targetWindows.length > 0) {
+                    const siblingRelationships = targetWindows.find(w => Array.isArray(w.graphStatus) && w.graphStatus.length > 0)?.graphStatus;
+                    existingRelationships = siblingRelationships || null;
                   }
-                  console.log("targetWindows.length:",targetWindows.length, targetWindows.id)
-                  // Fallback: use global graphStatus
-                  // No siblings found
+                  console.log("[graph link sibling cache]", { sessionKey, linkedSiblingCount: targetWindows.length, existingRelationships });
+
                   if (!existingRelationships) {
-                    // relationship that corelates with the linked source (cause this linking could be the first)
-                    // graphStatus containes all the session status and relationships
-                    const relationships = graphStatus[sourceId]?.relationships || [];
-                    console.log("relationships_global:",graphStatus[sourceId],relationships)
-                    existingRelationships = relationships;
+                    const relationships = normalizeGraphRelationships(graphStatusRef.current?.[sessionKey]?.relationships);
+                    console.log("[graph link cached relationships]", { sessionKey, graphStatus: graphStatus[sessionKey], relationships });
+                    existingRelationships = relationships.length > 0 ? relationships : null;
                   }
 
                   // -----------------------------
                   // 2️⃣ Send relationships to the new window
                   // -----------------------------
                   if (existingRelationships) {
-                    console.log("existingRelationships.length",existingRelationships.length)
+                    console.log("[graph link applying cached relationships]", { sessionKey, count: existingRelationships.length });
                     setWindows(prev =>
                       prev.map(w =>
-                        w.id === id
+                        String(w.id) === String(id)
                           ? { ...w, graphStatus: existingRelationships}
                           : w
                       )
                     );
+                  } else {
+                    console.log("[graph link waiting for socket relationships]", { sessionKey, status_available: data?.results?.status_available });
                   }
                   
                   // -----------------------------
                   // 3️⃣ Subscribe socket for streaming (doesnt over lap or duplicates)
                   // -----------------------------
-                  const sessionKey = String(sourceId || "").trim();
                   if (sessionKey && socketRef.current) {
+                    console.log("[graph link ready for status subscription]", {
+                      session_id: sessionKey,
+                      graph_window_id: graphWindowId,
+                      status_available: data?.results?.status_available,
+                      socket_connected: socketRef.current.connected,
+                    });
+                    console.log("[graph status subscribe emit]", { session_id: sessionKey, source: "graph_link_success" });
                     socketRef.current.emit("graph_status_subscribe", { session_id: sessionKey });
                     graphStatusSubscribedSessionsRef.current.add(sessionKey);
                   }
                   // -----------------------------
                   // 4️⃣ Update new window state
                   // -----------------------------
-                  setWindows(prev =>
-                    prev.map(w =>
-                      w.id === id
+                  setWindows(prev => {
+                    const matchedWindow = prev.some(w => String(w.id) === String(id));
+                    console.log("[graph link committing window state]", { session_id: sessionKey, graph_window_id: graphWindowId, matchedWindow, action_id: id, window_ids: prev.map(w => w.id) });
+                    return prev.map(w =>
+                      String(w.id) === String(id)
                         ? {
                             ...w,
-                            sessionId: sourceId,
-                            graphLinkSource: sourceId,
+                            sessionId: sessionKey,
+                            graphLinkSource: sessionKey,
                             selectedContent: "graph_content",
                             activeGraph: "graph_info_placeholder",                            
                             graphLink: true,
                             loadscreenState: false
                           }
                         : w
-                    )
-                  );
+                    );
+                  });
                 } else {
                   // Linking failed
                   setGraphLinkState(false);

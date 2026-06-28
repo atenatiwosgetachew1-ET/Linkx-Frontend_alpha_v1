@@ -7105,3 +7105,155 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 .linkx_workspace_layer--locked svg{
   visibility: hidden !important;
 }
+
+
+/* Quick visibility restore for window sidebars and placeholder iframes */
+.window .side_bar,
+.window.focused .side_bar,
+.window.tab_mode .side_bar {
+  background: rgba(235, 246, 252, 0.78) !important;
+  border-right: 1px solid rgba(112, 154, 174, 0.45) !important;
+  box-shadow: 8px 0 18px rgba(45, 82, 100, 0.12) !important;
+  backdrop-filter: blur(8px) saturate(120%) !important;
+  z-index: 160 !important;
+  overflow: visible !important;
+}
+
+.window .side_bar .side_bar_menu,
+.window.focused .side_bar .side_bar_menu,
+.window.tab_mode .side_bar .side_bar_menu {
+  background: rgba(255, 255, 255, 0.74) !important;
+  border: 1px solid rgba(111, 156, 178, 0.48) !important;
+  box-shadow: 0 1px 8px rgba(45, 82, 100, 0.16) !important;
+  opacity: 1 !important;
+}
+
+.window .side_bar .side_bar_menu i,
+.window .side_bar .side_bar_menu svg,
+.window .side_bar .side_bar_menu .side_bar_icon,
+.window .side_bar .side_bar_menu .side_bar_icon_active {
+  opacity: 1 !important;
+  fill: #17384d !important;
+  color: #17384d !important;
+}
+
+.window .side_bar .side_bar_btn_options,
+.window .side_bar .side_bar_btn_options ul,
+.window .side_bar .side_bar_btn_options ul .window_side_bar_menu_list_I,
+.window .side_bar .side_bar_btn_options ul .window_side_bar_menu_list_I form {
+  background: rgba(239, 249, 253, 0.96) !important;
+  border-color: rgba(111, 156, 178, 0.5) !important;
+  box-shadow: 0 6px 18px rgba(45, 82, 100, 0.22) !important;
+}
+
+[data-theme="dark"] .window .side_bar,
+[data-theme="dark"] .window.focused .side_bar,
+[data-theme="dark"] .window.tab_mode .side_bar {
+  background: rgba(9, 20, 27, 0.76) !important;
+  border-right-color: rgba(113, 159, 177, 0.28) !important;
+  box-shadow: 8px 0 20px rgba(0, 0, 0, 0.24) !important;
+}
+
+[data-theme="dark"] .window .side_bar .side_bar_menu,
+[data-theme="dark"] .window.focused .side_bar .side_bar_menu,
+[data-theme="dark"] .window.tab_mode .side_bar .side_bar_menu {
+  background: rgba(18, 36, 47, 0.86) !important;
+  border-color: rgba(113, 159, 177, 0.32) !important;
+}
+
+[data-theme="dark"] .window .side_bar .side_bar_menu i,
+[data-theme="dark"] .window .side_bar .side_bar_menu svg,
+[data-theme="dark"] .window .side_bar .side_bar_menu .side_bar_icon,
+[data-theme="dark"] .window .side_bar .side_bar_menu .side_bar_icon_active {
+  fill: #d8eef4 !important;
+  color: #d8eef4 !important;
+}
+
+[data-theme="dark"] .window .side_bar .side_bar_btn_options,
+[data-theme="dark"] .window .side_bar .side_bar_btn_options ul,
+[data-theme="dark"] .window .side_bar .side_bar_btn_options ul .window_side_bar_menu_list_I,
+[data-theme="dark"] .window .side_bar .side_bar_btn_options ul .window_side_bar_menu_list_I form {
+  background: rgba(16, 34, 45, 0.96) !important;
+  border-color: rgba(113, 159, 177, 0.3) !important;
+}
+
+
+/* Quick visibility restore for tab header and Linkx tab menu label */
+.window_parent_tabs {
+  background: rgba(232, 244, 250, 0.76) !important;
+  border-bottom: 1px solid rgba(112, 154, 174, 0.38) !important;
+  box-shadow: 0 8px 24px rgba(45, 82, 100, 0.14) !important;
+  backdrop-filter: blur(8px) saturate(120%) !important;
+  z-index: 9999 !important;
+}
+.window_parent_tabs .window_parent_bar {
+  background: linear-gradient(90deg, rgba(20, 46, 71, 0.94), rgba(49, 73, 97, 0.92), rgba(20, 46, 71, 0.94)) !important;
+  color: #eef7fa !important;
+  border-bottom: 1px solid rgba(194, 225, 236, 0.25) !important;
+  box-shadow: 0 2px 12px rgba(24, 55, 78, 0.18) !important;
+}
+.window_parent_tabs .window_parent_bar .window_parent_bar_toggle_menu,
+.window_parent_tabs .window_parent_bar .window_parent_bar_toggle_menu .toggle_menu_btn {
+  background: transparent !important;
+  overflow: visible !important;
+}
+.window_parent_tabs .window_parent_bar .window_parent_bar_toggle_menu .toggle_menu_btn span {
+  background: #142e47 !important;
+  border: 1px solid rgba(221, 242, 250, 0.6) !important;
+  box-shadow: 0 2px 10px rgba(7, 19, 30, 0.25) !important;
+  opacity: 1 !important;
+}
+.window_parent_tabs .window_parent_bar .window_parent_bar_toggle_menu .toggle_menu_btn span i {
+  background: #eef7fa !important;
+}
+.window_parent_tabs .window_parent_bar .window_parent_bar_toggle_menu .toggle_menu_btn span i a {
+  background: #142e47 !important;
+}
+.window_parent_tabs .window_parent_bar .window_parent_bar_toggle_menu .toggle_menu_btn label {
+  display: inline-block !important;
+  color: #ffffff !important;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.35) !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  background: transparent !important;
+}
+.window_parent_tabs .window_parent_bar .window_parent_bar_toggle_menu .toggle_menu_btn label i {
+  color: #d8edf5 !important;
+}
+.window_parent_tabs .window_parent_tabs_container {
+  background: rgba(239, 249, 253, 0.94) !important;
+  border-bottom: 1px solid rgba(112, 154, 174, 0.34) !important;
+  box-shadow: 0 3px 12px rgba(45, 82, 100, 0.12) !important;
+}
+.window_parent_tabs .window_parent_tabs_container .tab_title {
+  background: rgba(255, 255, 255, 0.78) !important;
+  border: 1px solid rgba(112, 154, 174, 0.38) !important;
+  color: #17384d !important;
+  opacity: 1 !important;
+}
+.window_parent_tabs .window_parent_tabs_container .tab_title.active {
+  background: rgba(207, 232, 243, 0.98) !important;
+  color: #0f2a3c !important;
+}
+[data-theme="dark"] .window_parent_tabs {
+  background: rgba(9, 20, 27, 0.78) !important;
+  border-bottom-color: rgba(113, 159, 177, 0.3) !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28) !important;
+}
+[data-theme="dark"] .window_parent_tabs .window_parent_bar {
+  background: linear-gradient(90deg, rgba(8, 18, 24, 0.96), rgba(22, 43, 55, 0.94), rgba(8, 18, 24, 0.96)) !important;
+  color: #eef7fa !important;
+}
+[data-theme="dark"] .window_parent_tabs .window_parent_tabs_container {
+  background: rgba(13, 28, 38, 0.95) !important;
+  border-bottom-color: rgba(113, 159, 177, 0.25) !important;
+}
+[data-theme="dark"] .window_parent_tabs .window_parent_tabs_container .tab_title {
+  background: rgba(18, 38, 50, 0.92) !important;
+  border-color: rgba(113, 159, 177, 0.32) !important;
+  color: #d8eef4 !important;
+}
+[data-theme="dark"] .window_parent_tabs .window_parent_tabs_container .tab_title.active {
+  background: rgba(35, 63, 78, 0.98) !important;
+  color: #ffffff !important;
+}

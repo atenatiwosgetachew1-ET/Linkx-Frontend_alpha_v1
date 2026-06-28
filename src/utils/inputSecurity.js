@@ -1,3 +1,4 @@
+/* eslint-disable no-control-regex */
 const CONTROL_CHARS = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g;
 const HTML_MARKUP_CHARS = /[<>]/g;
 const IDENTIFIER_UNSAFE_CHARS = /[^a-zA-Z0-9_.@-]/g;
@@ -105,3 +106,52 @@ export const validateRelationshipName = (value) => {
 };
 
 export const compactValidationErrors = (...errors) => errors.flat().filter(Boolean).join(" ");
+
+
+export const validateSchema = (value = {}, schema = {}) => {
+  const source = value && typeof value === "object" ? value : {};
+  const sanitized = {};
+  const errors = [];
+
+  Object.entries(schema).forEach(([field, rules = {}]) => {
+    const raw = source[field];
+    const sanitizer = typeof rules.sanitize === "function" ? rules.sanitize : (item) => item;
+    const normalized = sanitizer(raw);
+
+    const label = rules.label || field;
+    const isEmpty = normalized === undefined || normalized === null || String(normalized).trim?.() === "";
+    if (rules.required && isEmpty) {
+      errors.push(label + " is required.");
+      return;
+    }
+    if (isEmpty) {
+      if (typeof rules.validate === "function") {
+        const customError = rules.validate(normalized, sanitized, source);
+        if (customError) errors.push(customError);
+      }
+      return;
+    }
+    sanitized[field] = normalized;
+
+    if (Number.isFinite(rules.minLength) && String(normalized).length < rules.minLength) {
+      errors.push(label + " must be at least " + rules.minLength + " characters.");
+    }
+    if (Number.isFinite(rules.maxLength) && String(normalized).length > rules.maxLength) {
+      errors.push(label + " must be " + rules.maxLength + " characters or less.");
+    }
+    if (rules.pattern && !rules.pattern.test(String(normalized))) {
+      errors.push(rules.message || (label + " has an invalid format."));
+    }
+    if (typeof rules.validate === "function") {
+      const customError = rules.validate(normalized, sanitized, source);
+      if (customError) errors.push(customError);
+    }
+  });
+
+  return {
+    ok: errors.length === 0,
+    value: sanitized,
+    errors,
+    message: errors.join(" "),
+  };
+};

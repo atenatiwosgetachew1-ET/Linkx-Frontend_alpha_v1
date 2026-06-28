@@ -1,7 +1,7 @@
-const CONTROL_CHARS = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g;
+const CONTROL_CHARS = new RegExp("[\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F\\u007F]", "g"); // eslint-disable-line no-control-regex
 const HTML_MARKUP_CHARS = /[<>]/g;
 const IDENTIFIER_UNSAFE_CHARS = /[^a-zA-Z0-9_.@-]/g;
-const SECRET_UNSAFE_CHARS = /[\s\u0000-\u001F\u007F]/g;
+const SECRET_UNSAFE_CHARS = new RegExp("[\\s\\u0000-\\u001F\\u007F]", "g"); // eslint-disable-line no-control-regex
 const PERMISSION_PATTERN = /^[a-z][a-z0-9:_-]*$/i;
 
 export const stripControlChars = (value = "") => String(value ?? "").replace(CONTROL_CHARS, "");
