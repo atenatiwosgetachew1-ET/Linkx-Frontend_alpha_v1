@@ -195,6 +195,12 @@ const sanitizeGraphEndpointId = (value = "", { maxLength = 128 } = {}) => (
   stripControlChars(value).replace(/[^a-zA-Z0-9_.:-]/g, "").slice(0, maxLength)
 );
 
+const sanitizeGraphRelationshipValue = (value = "", { maxLength = 128 } = {}) => {
+  const cleaned = stripControlChars(value).trim();
+  if (cleaned === "*") return "*";
+  return cleaned.replace(/[^a-zA-Z0-9_.:-]/g, "").slice(0, maxLength);
+};
+
 const getTrustedMessageOrigin = () => window.location.origin;
 const buildIframeMessage = (action, payload = {}) => ({ channel: LINKX_IFRAME_CHANNEL, version: LINKX_IFRAME_VERSION, action, payload });
 const getIframeMessageAction = (data) => data?.action || data?.type || "";
@@ -1583,6 +1589,188 @@ const fetchMaybeQueued = async (apiFetch, url, options = {}, pollOptions = {}) =
   return response;
 };
 
+const normalizeGraphChunkEventId = (value) => {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : 0;
+};
+
+const buildGraphChunkPollPath = (pollPath, afterEventId) => {
+  const separator = String(pollPath).includes("?") ? "&" : "?";
+  return String(pollPath) + separator + "include_chunks=1&after_event_id=" + encodeURIComponent(String(afterEventId || 0));
+};
+
+const mergeGraphChunksIntoState = (state, chunks = []) => {
+  const nextState = {
+    afterEventId: state?.afterEventId || 0,
+    nodesById: state?.nodesById instanceof Map ? state.nodesById : new Map(),
+    edges: Array.isArray(state?.edges) ? state.edges : [],
+    chunkCount: Number(state?.chunkCount || 0),
+    lastChunkCount: 0,
+  };
+
+  if (!Array.isArray(chunks)) return nextState;
+
+  chunks.forEach((chunk, index) => {
+    const eventId = normalizeGraphChunkEventId(chunk?.event_id ?? chunk?.eventId);
+    if (eventId > nextState.afterEventId) nextState.afterEventId = eventId;
+    const chunkNodes = Array.isArray(chunk?.nodes) ? chunk.nodes : [];
+    const chunkEdges = Array.isArray(chunk?.edges) ? chunk.edges : [];
+
+    chunkNodes.forEach((node) => {
+      if (!node || typeof node !== "object") return;
+      const nodeId = String(node.id ?? node.identity ?? node.elementId ?? "");
+      if (!nodeId) return;
+      nextState.nodesById.set(nodeId, node);
+    });
+
+    chunkEdges.forEach((edge) => {
+      if (!edge || typeof edge !== "object") return;
+      nextState.edges.push(edge);
+    });
+
+    nextState.chunkCount += 1;
+    nextState.lastChunkCount += 1;
+
+    console.log("[graph chunk merged]", {
+      chunk_index: index,
+      event_id: eventId || null,
+      chunk_nodes: chunkNodes.length,
+      chunk_edges: chunkEdges.length,
+      total_nodes: nextState.nodesById.size,
+      total_edges: nextState.edges.length,
+    });
+  });
+
+  return nextState;
+};
+
+const buildChunkedGraphResponse = (job, aggregateState, fallback = {}) => {
+  const jobResults = job?.results && typeof job.results === "object" ? job.results : {};
+  const jobResult = jobResults?.result && typeof jobResults.result === "object" ? jobResults.result : {};
+  const fallbackPayload = getGraphPayloadCandidate(fallback) || {};
+  const fallbackGraph = fallbackPayload?.graph && typeof fallbackPayload.graph === "object" ? fallbackPayload.graph : fallback?.graph;
+  const nodes = Array.from(aggregateState?.nodesById?.values?.() || []);
+  const edges = Array.isArray(aggregateState?.edges) ? aggregateState.edges : [];
+
+  return {
+    ...job,
+    message: jobResult.message || jobResults.message || job?.message || fallbackPayload.message || "success",
+    results: {
+      ...jobResults,
+      ...jobResult,
+      nodes,
+      edges,
+      source_id: jobResult.source_id ?? jobResults.source_id ?? fallbackPayload.source_id ?? fallback?.source_id,
+      graph_session_id: jobResult.graph_session_id ?? jobResults.graph_session_id ?? fallbackPayload.graph_session_id ?? fallback?.graph_session_id,
+      relationship: jobResult.relationship ?? jobResults.relationship ?? fallbackPayload.relationship ?? fallback?.relationship,
+      chunk_count: jobResult.chunk_count ?? jobResults.chunk_count ?? aggregateState?.chunkCount ?? 0,
+      chunked: jobResult.chunked ?? jobResults.chunked ?? true,
+      next_chunk_after_event_id: jobResults.next_chunk_after_event_id ?? aggregateState?.afterEventId ?? 0,
+      graph: {
+        ...(fallbackGraph && typeof fallbackGraph === "object" ? fallbackGraph : {}),
+        nodes,
+        edges,
+        source_id: jobResult.source_id ?? jobResults.source_id ?? fallbackPayload.source_id ?? fallback?.source_id,
+        graph_session_id: jobResult.graph_session_id ?? jobResults.graph_session_id ?? fallbackPayload.graph_session_id ?? fallback?.graph_session_id,
+        relationship: jobResult.relationship ?? jobResults.relationship ?? fallbackPayload.relationship ?? fallback?.relationship,
+        status: jobResult.status ?? jobResults.status ?? job?.status ?? fallbackPayload.status ?? fallback?.status ?? "succeeded",
+        message: jobResult.message ?? jobResults.message ?? job?.message ?? fallbackPayload.message ?? fallback?.message ?? "success",
+      },
+    },
+  };
+};
+
+const pollGraphJob = async (apiFetch, jobIdOrPath, { intervalMs = JOB_POLL_DEFAULT_INTERVAL_MS, timeoutMs = JOB_POLL_DEFAULT_TIMEOUT_MS, signal, timeoutMessage = "Graph request timed out. Retry graph load.", cancelledMessage = "Graph request cancelled.", label = "graph", onProgress, initialResponse } = {}) => {
+  const startedAt = Date.now();
+  const pollPath = String(jobIdOrPath || "").startsWith("/") ? String(jobIdOrPath) : "/jobs/" + encodeURIComponent(jobIdOrPath);
+  let attempt = 0;
+  let aggregateState = { afterEventId: 0, nodesById: new Map(), edges: [], chunkCount: 0, lastChunkCount: 0 };
+
+  while (Date.now() - startedAt < timeoutMs) {
+    if (signal?.aborted) throw new DOMException("Job request was cancelled", "AbortError");
+
+    const requestPath = buildGraphChunkPollPath(pollPath, aggregateState.afterEventId);
+    const job = await apiFetch(requestPath, { method: "GET", signal });
+    attempt += 1;
+    const status = getJobStatus(job);
+    const jobResults = job?.results && typeof job.results === "object" ? job.results : {};
+    const chunks = Array.isArray(jobResults.chunks) ? jobResults.chunks : [];
+    aggregateState = mergeGraphChunksIntoState(aggregateState, chunks);
+    const nextCursor = normalizeGraphChunkEventId(jobResults.next_chunk_after_event_id ?? jobResults.nextChunkAfterEventId);
+    if (nextCursor > aggregateState.afterEventId) aggregateState.afterEventId = nextCursor;
+    const partialResponse = buildChunkedGraphResponse(job, aggregateState, initialResponse);
+
+    console.log("[graph chunk poll]", {
+      label,
+      pollPath,
+      requestPath,
+      attempt,
+      status: status || "unknown",
+      elapsedMs: Date.now() - startedAt,
+      chunk_count: chunks.length,
+      next_after_event_id: aggregateState.afterEventId,
+      total_nodes: partialResponse.results.nodes.length,
+      total_edges: partialResponse.results.edges.length,
+      summary: {
+        total_nodes: jobResults?.result?.total_nodes ?? null,
+        total_edges: jobResults?.result?.total_edges ?? null,
+        chunk_count: jobResults?.result?.chunk_count ?? null,
+        chunked: jobResults?.result?.chunked ?? null,
+      },
+      response: job,
+    });
+
+    onProgress?.(partialResponse, {
+      attempt,
+      status,
+      pollPath,
+      requestPath,
+      chunkCount: chunks.length,
+      afterEventId: aggregateState.afterEventId,
+    });
+
+    if (JOB_SUCCESS_STATUSES.has(status)) {
+      console.log("[graph chunk poll succeeded]", {
+        label,
+        pollPath,
+        attempt,
+        total_nodes: partialResponse.results.nodes.length,
+        total_edges: partialResponse.results.edges.length,
+        response: job,
+      });
+      return partialResponse;
+    }
+
+    if (JOB_FAILURE_STATUSES.has(status)) {
+      const rawMessage = getJobErrorMessage(job, "Graph request failed");
+      const message = JOB_CANCEL_STATUSES.has(status) && (!rawMessage || String(rawMessage).toLowerCase() === "success") ? cancelledMessage : rawMessage;
+      const error = new Error(message);
+      error.jobResponse = job;
+      error.jobResult = partialResponse;
+      error.jobStatus = status;
+      error.pollPath = pollPath;
+      console.error("[graph chunk poll failed]", {
+        label,
+        pollPath,
+        attempt,
+        status,
+        after_event_id: aggregateState.afterEventId,
+        total_nodes: partialResponse.results.nodes.length,
+        total_edges: partialResponse.results.edges.length,
+        response: job,
+      });
+      throw error;
+    }
+
+    await delay(intervalMs);
+  }
+
+  const timeoutError = new Error(timeoutMessage);
+  timeoutError.pollPath = pollPath;
+  console.error("[graph chunk poll timed out]", { label, pollPath, elapsedMs: Date.now() - startedAt, after_event_id: aggregateState.afterEventId });
+  throw timeoutError;
+};
+
 const getDataframeJobMessage = (data) => getJobErrorMessage(data, "Dataframe job failed");
 
 const normalizeSearchResponse = (data) => {
@@ -1820,13 +2008,13 @@ const normalizeGraphRelationships = (value) => {
 const getGraphPayloadCandidate = (data) => {
   const parsedData = parseMaybeSerializedGraphPayload(data);
   const source = parsedData === data ? data : parsedData;
-  const parsedResult = parseMaybeSerializedGraphPayload(source?.results?.result);
-  if (parsedResult && typeof parsedResult === "object") return parsedResult;
-  if (source?.results?.result && typeof source.results.result === "object") return source.results.result;
   if (Array.isArray(source?.results?.nodes) || Array.isArray(source?.results?.edges)) return source.results;
   if (Array.isArray(source?.nodes) || Array.isArray(source?.edges)) return source;
   if (source?.graph && (Array.isArray(source.graph.nodes) || Array.isArray(source.graph.edges))) return source.graph;
   if (source?.results?.graph && (Array.isArray(source.results.graph.nodes) || Array.isArray(source.results.graph.edges))) return source.results.graph;
+  const parsedResult = parseMaybeSerializedGraphPayload(source?.results?.result);
+  if (parsedResult && typeof parsedResult === "object") return parsedResult;
+  if (source?.results?.result && typeof source.results.result === "object") return source.results.result;
   return source?.results ?? source;
 };
 
@@ -1867,30 +2055,44 @@ const normalizeGraphFetchResponse = (data) => {
 };
 
 const requestGraphFetch = async (apiFetch, payload, signal, options = {}) => {
-  const data = await fetchMaybeQueued(apiFetch, "/get_graph", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
+  const response = await apiFetch('/get_graph', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
     signal,
-  }, {
-    signal,
-    timeoutMs: 120 * 1000,
-    timeoutMessage: "Graph request timed out. Retry graph load.",
-    cancelledMessage: "Graph request cancelled.",
-    label: "graph",
-    onQueued: options.onQueued,
   });
+
+  console.log('[graph fetch initial response]', { payload, response });
+
+  let data = response;
+  if (isQueuedJobResponse(response)) {
+    const pollPath = getQueuedPollPath(response);
+    options.onQueued?.({ url: '/get_graph', pollPath, response });
+    console.log('[graph fetch queued]', { payload, pollPath, response });
+    data = await pollGraphJob(apiFetch, pollPath, {
+      signal,
+      timeoutMs: 120 * 1000,
+      timeoutMessage: 'Graph request timed out. Retry graph load.',
+      cancelledMessage: 'Graph request cancelled.',
+      label: 'graph',
+      onProgress: options.onProgress,
+      initialResponse: response,
+    });
+  }
+
+  console.log('[direct graph fetch response]', { payload, data });
 
   const status = getJobStatus(data);
   if (JOB_FAILURE_STATUSES.has(status) || data?.error || data?.results?.error || data?.result?.error) {
-    const message = JOB_CANCEL_STATUSES.has(status) ? "Graph request cancelled." : getGraphJobMessage(data);
-    console.error("[graph fetch failed]", { status, data });
-    console.log("[graph fetch failed raw]", data);
+    const message = JOB_CANCEL_STATUSES.has(status) ? 'Graph request cancelled.' : getGraphJobMessage(data);
+    console.error('[graph fetch failed]', { status, data });
+    console.log('[graph fetch failed raw]', data);
     throw new Error(message);
   }
 
   if (!hasGraphPayload(data)) {
-    console.error("[graph fetch missing payload]", { data, candidate: getGraphPayloadCandidate(data) });
+    console.error('[graph fetch missing payload]', { data, candidate: getGraphPayloadCandidate(data) });
+    console.log('[graph fetch missing payload raw]', data);
     throw new Error(getGraphJobMessage(data));
   }
 
@@ -5806,6 +6008,7 @@ const fileInputRef = useRef(null);
   const activeLogStreamsRef = useRef({});
   const activeStreamJobsRef = useRef({});
   const activeGraphJobsRef = useRef({});
+  const graphProgressRenderedRef = useRef({});
   const activeDataframeJobsRef = useRef({});
   const activeSearchJobsRef = useRef({});
   const graphAutoRequestedRef = useRef({});
@@ -7046,31 +7249,25 @@ const fileInputRef = useRef(null);
 
     socket.on("status", handleGraphStatus);
 
-    graphStatusSessionIds.forEach((currentSessionId) => {
-      const normalizedSession = String(currentSessionId || "").trim();
+    const subscribeGraphStatusSession = (sessionId, reason = "effect") => {
+      const normalizedSession = String(sessionId || "").trim();
       if (!normalizedSession) return;
-      if (!graphStatusSubscribedSessionsRef.current.has(normalizedSession)) {
-        logGraphWindowDebug("graph status subscribe", { session_id: normalizedSession });
-        console.log("[graph status subscribe emit]", { session_id: normalizedSession });
-        socket.emit("graph_status_subscribe", { session_id: normalizedSession });
-        graphStatusSubscribedSessionsRef.current.add(normalizedSession);
-      } else {
-        logGraphWindowDebug("graph status subscribe skipped", { session_id: normalizedSession });
-        console.log("[graph status subscribe skipped] already subscribed", { session_id: normalizedSession });
+      if (graphStatusSubscribedSessionsRef.current.has(normalizedSession)) {
+        logGraphWindowDebug("graph status subscribe skipped", { session_id: normalizedSession, reason });
+        console.log("[graph status subscribe skipped] already subscribed", { session_id: normalizedSession, reason });
+        return;
       }
+      logGraphWindowDebug("graph status subscribe", { session_id: normalizedSession, reason });
+      console.log("[graph status subscribe emit]", { session_id: normalizedSession, reason });
+      socket.emit("graph_status_subscribe", { session_id: normalizedSession });
+      graphStatusSubscribedSessionsRef.current.add(normalizedSession);
+    };
+
+    graphStatusSessionIds.forEach((currentSessionId) => {
+      subscribeGraphStatusSession(currentSessionId, "effect");
     });
 
-    const refreshTimer = window.setInterval(() => {
-      graphStatusSessionIds.forEach((currentSessionId) => {
-        const normalizedSession = String(currentSessionId || "").trim();
-        if (!normalizedSession) return;
-        console.log("[graph status refresh emit]", { session_id: normalizedSession });
-        socket.emit("graph_status_subscribe", { session_id: normalizedSession });
-      });
-    }, GRAPH_STATUS_REFRESH_INTERVAL_MS);
-
     return () => {
-      window.clearInterval(refreshTimer);
       graphStatusSessionIds.forEach((currentSessionId) => {
         const normalizedSession = String(currentSessionId || "").trim();
         if (!normalizedSession) return;
@@ -7834,7 +8031,7 @@ const fileInputRef = useRef(null);
   };
   const requestRelationshipGraph = (windowId, payload, options = {}) => {
     const iframe = payload?.iframe || null;
-    const relationship = sanitizeGraphEndpointId(payload?.relationship, { maxLength: 128 });
+    const relationship = sanitizeGraphRelationshipValue(payload?.relationship, { maxLength: 128 });
     const sourceId = String(payload?.sourceId || "").trim();
     const requestOrigin = options.requestOrigin || "manual";
     const graphWindowId = String(windowId || "").trim();
@@ -7862,6 +8059,7 @@ const fileInputRef = useRef(null);
     }
     const controller = new AbortController();
     graphFetchAbortControllersRef.current[graphWindowId] = controller;
+    delete graphProgressRenderedRef.current[graphWindowId];
     graphAutoRequestedRef.current[graphWindowId] = requestOrigin === "auto_relationships";
 
     setWindows((prev) =>
@@ -7893,6 +8091,49 @@ const fileInputRef = useRef(null);
           job_id: jobId || null,
           status: status || null,
         });
+      },
+      onProgress: (partialData, progressMeta) => {
+        if (!graphFetchAbortControllersRef.current[graphWindowId] || graphFetchAbortControllersRef.current[graphWindowId] !== controller) return;
+        const partialResults = partialData?.results || {};
+        const nodes = Array.isArray(partialResults.nodes) ? partialResults.nodes : [];
+        const edges = Array.isArray(partialResults.edges) ? partialResults.edges : [];
+        console.log('[graph fetch progress]', {
+          graph_window_id: graphWindowId,
+          session_id: sourceId,
+          relationship,
+          request_origin: requestOrigin,
+          status: progressMeta?.status || null,
+          after_event_id: progressMeta?.afterEventId ?? null,
+          chunk_count: progressMeta?.chunkCount ?? null,
+          node_count: nodes.length,
+          edge_count: edges.length,
+          data: partialData,
+        });
+        if (nodes.length === 0 && edges.length === 0) return;
+
+        setWindows((prev) =>
+          prev.map((windowState) =>
+            String(windowState.id) === graphWindowId
+              ? { ...windowState, loadscreenState: false, loadscreenText: null, activeGraph: 'graphs_basic' }
+              : windowState
+          )
+        );
+
+        const hasRenderedGraph = graphProgressRenderedRef.current[graphWindowId] === true;
+        const messageAction = hasRenderedGraph ? "graph_chunk_update" : "new_graph";
+        const sourceWindowState = windowsRef.current.find((windowState) => String(windowState.id) === graphWindowId);
+        const settingsToApply = normalizeGraphIframeSettings(iframeSettings[graphWindowId] || sourceWindowState?.iframeSettings);
+        if (!hasRenderedGraph) {
+          settingsToApply[2] = normalizeGraphLimitRange({ min: 0, max: 25 }, 25);
+          updateIframeSettings(graphWindowId, 2, { min: 0, max: 25 });
+        }
+        sendGraphMessageToIframe(iframe, messageAction, {
+          id: graphWindowId,
+          nodes,
+          edges,
+          settings: settingsToApply
+        });
+        graphProgressRenderedRef.current[graphWindowId] = true;
       }
     })
       .then((data) => {
@@ -7927,16 +8168,21 @@ const fileInputRef = useRef(null);
 
         if (isSuccessResponse(data)) {
           delete activeGraphJobsRef.current[graphWindowId];
+          const hasRenderedGraph = graphProgressRenderedRef.current[graphWindowId] === true;
+          const messageAction = hasRenderedGraph ? "graph_chunk_update" : "new_graph";
           const sourceWindowState = windowsRef.current.find((windowState) => String(windowState.id) === graphWindowId);
           const settingsToApply = normalizeGraphIframeSettings(iframeSettings[graphWindowId] || sourceWindowState?.iframeSettings);
-          settingsToApply[2] = normalizeGraphLimitRange({ min: 0, max: 25 }, 25);
-          updateIframeSettings(graphWindowId, 2, { min: 0, max: 25 });
-          sendGraphMessageToIframe(iframe, "new_graph", {
+          if (!hasRenderedGraph) {
+            settingsToApply[2] = normalizeGraphLimitRange({ min: 0, max: 25 }, 25);
+            updateIframeSettings(graphWindowId, 2, { min: 0, max: 25 });
+          }
+          sendGraphMessageToIframe(iframe, messageAction, {
             id: graphWindowId,
             nodes,
             edges,
             settings: settingsToApply
           });
+          graphProgressRenderedRef.current[graphWindowId] = true;
         } else {
           delete graphAutoRequestedRef.current[graphWindowId];
           alert(data.message);
@@ -7945,6 +8191,7 @@ const fileInputRef = useRef(null);
       .catch((err) => {
         if (err?.name === "AbortError") return;
         delete activeGraphJobsRef.current[graphWindowId];
+        delete graphProgressRenderedRef.current[graphWindowId];
         delete graphAutoRequestedRef.current[graphWindowId];
         console.error("[relationship graph request catch]", {
           graph_window_id: graphWindowId,
@@ -10174,9 +10421,16 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
                       status_available: data?.results?.status_available,
                       socket_connected: socketRef.current.connected,
                     });
-                    console.log("[graph status subscribe emit]", { session_id: sessionKey, source: "graph_link_success" });
-                    socketRef.current.emit("graph_status_subscribe", { session_id: sessionKey });
-                    graphStatusSubscribedSessionsRef.current.add(sessionKey);
+                    if (!graphStatusSubscribedSessionsRef.current.has(sessionKey)) {
+                      console.log("[graph status subscribe emit]", { session_id: sessionKey, source: "graph_link_success" });
+                      socketRef.current.emit("graph_status_subscribe", { session_id: sessionKey });
+                      graphStatusSubscribedSessionsRef.current.add(sessionKey);
+                    } else {
+                      console.log("[graph status subscribe skipped] already subscribed", {
+                        session_id: sessionKey,
+                        source: "graph_link_success",
+                      });
+                    }
                   }
                   // -----------------------------
                   // 4️⃣ Update new window state

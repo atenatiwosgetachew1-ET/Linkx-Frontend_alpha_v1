@@ -4436,7 +4436,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_settings_container .settings_form .settings_form_div_performance_mood{
 	position: relative;
 	display: block;
-	padding: 0.5vh 0;
+	padding: 2vh 0;
 	margin: auto;
 	border: none;
 	width: 93%;
@@ -7257,3 +7257,253 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   background: rgba(35, 63, 78, 0.98) !important;
   color: #ffffff !important;
 }
+
+/* Properties panel fit fixes: prevent nested controls from overflowing the narrow side panel. */
+.window .properties_container,
+.window .properties_container * {
+  box-sizing: border-box;
+}
+
+.window .properties_container {
+  min-width: 220px;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.window.tab_mode .properties_container {
+  min-width: 220px;
+}
+
+.window .properties_container .placeholder,
+.window .properties_container .reference_container,
+.window .properties_container .reference_container .top_panel,
+.window .properties_container .reference_container .top_panel .ppt_tabs_body_container,
+.window .properties_container .reference_container .bottom_panel {
+  width: 100%;
+  max-width: 100%;
+}
+
+.window .properties_container .reference_container {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.window .properties_container .reference_container .top_panel {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.window .properties_container .reference_container .top_panel .ppt_tabs_container {
+  flex: 0 0 4vh;
+  min-width: 0;
+  padding-top: 0;
+  overflow: hidden;
+}
+
+.window .properties_container .reference_container .top_panel .ppt_tabs_container .ppt_tabs {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: normal;
+}
+
+.window .properties_container .reference_container .top_panel .ppt_tabs_container .ppt_tabs i,
+.window .properties_container .reference_container .top_panel .ppt_tabs_container .ppt_tabs span {
+  float: none;
+  min-width: 0;
+  height: auto;
+}
+
+.window .properties_container .reference_container .top_panel .ppt_tabs_container .ppt_tabs span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.window .properties_container .reference_container .top_panel .ppt_tabs_body_container {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+}
+
+.window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_filters_container .filter_form,
+.window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_infos_container .infos_form,
+.window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_settings_container .settings_form {
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_filters_container .filter_form .filter_form_header_label,
+.window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_infos_container .infos_form .infos_form_header_label,
+.window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_settings_container .settings_form .setting_form_header_label {
+  width: 100%;
+  height: auto;
+  min-height: 0;
+  padding: 1vh 0.7vw;
+  overflow-wrap: anywhere;
+}
+
+.window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_filters_container .filter_form .filter_form_search_container {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 0;
+  width: 95%;
+  max-width: 95%;
+  padding: 0;
+  overflow: hidden;
+}
+
+.window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_filters_container .filter_form .filter_form_search_container input,
+.window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_filters_container .filter_form .filter_form_search_container button {
+  float: none;
+  margin: 0;
+  min-width: 0;
+}
+
+.window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_filters_container .filter_form .filter_form_search_container > input[type="text"] {
+  flex: 1 1 auto;
+  width: auto;
+}
+
+.window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_filters_container .filter_form .filter_form_search_container > button {
+  flex: 0 0 3.2rem;
+  width: 3.2rem;
+}
+
+.window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_filters_container .filter_form .filter_form_search_container .filter_form_search_options_container,
+.window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_filters_container .filter_form .filter_form_search_container .filter_form_search_condition,
+.window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_filters_container .filter_form .filter_form_search_container div {
+  flex: 1 0 100%;
+  width: 100%;
+  max-width: 100%;
+  margin-left: 0;
+}
+
+.window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_filters_container .filter_form .filter_form_search_container div span {
+  width: calc(50% - 0.4vw);
+  min-width: 0;
+}
+
+.window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_infos_container .graph_options_infos div {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_infos_container .graph_options_infos div span,
+.window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_infos_container .graph_options_infos div span:first-child,
+.window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_infos_container .graph_options_infos div:first-child span:first-child {
+  float: none;
+  min-width: 0;
+}
+
+.window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_infos_container .graph_options_infos div span:first-child,
+.window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_infos_container .graph_options_infos div:first-child span:first-child {
+  flex: 0 0 34%;
+  width: auto;
+}
+
+.window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_infos_container .graph_options_infos div span:last-child {
+  flex: 1 1 auto;
+  width: auto;
+}
+
+.window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_settings_container .settings_form .settings_form_div,
+.window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_settings_container .settings_form .settings_form_div_performance_mood,
+.window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_settings_container .settings_form .settings_form_div_firstChild {
+  width: 94%;
+  max-width: 94%;
+  padding-left: 0;
+  padding-right: 0;
+  overflow: hidden;
+}
+
+.window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_settings_container .settings_form .settings_form_div {
+  display: flex;
+  align-items: center;
+  gap: 0.25vw;
+}
+
+.window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_settings_container .settings_form .settings_form_div *:first-child {
+  width: auto;
+  flex: 1 1 auto;
+  min-width: 0;
+  padding-left: 0;
+}
+
+.window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_settings_container .settings_form .input_text,
+.window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_settings_container .settings_form .select_option {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.window .properties_container .reference_container .bottom_panel {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.window .properties_container .reference_container .bottom_panel .bottom_panel_title,
+.window .properties_container .reference_container .bottom_panel ul {
+  width: 100%;
+  max-width: 100%;
+}
+
+.window .properties_container .reference_container .bottom_panel ul {
+  position: relative;
+  overflow: auto;
+}
+
+/* Properties panel icon sizing: keep SVG glyphs crisp and centered in compact controls. */
+.window .properties_container .reference_container .top_panel .ppt_tabs_container .ppt_tabs i {
+  flex: 0 0 1.35rem;
+  width: 1.35rem;
+  height: 1.35rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 0.25rem;
+}
+
+.window .properties_container .reference_container .top_panel .ppt_tabs_container .ppt_tabs i > span,
+.window .properties_container .reference_container .top_panel .ppt_tabs_container .ppt_tabs i svg {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+  max-width: 100%;
+  max-height: 100%;
+}
+
+.window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_filters_container .filter_form .filter_form_search_container button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_filters_container .filter_form .filter_form_search_container button > span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.05rem;
+  height: 1.05rem;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  background: transparent;
+}
+
+.window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_filters_container .filter_form .filter_form_search_container button svg {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+  max-width: 100%;
+  max-height: 100%;
+}
+

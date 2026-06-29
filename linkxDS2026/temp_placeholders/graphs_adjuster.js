@@ -124,6 +124,10 @@ window.addEventListener("message", (event) => {
       createNewGraph(payload); // <-- payload should contain {nodes, edges}
       break;
 
+    case "graph_chunk_update":
+      mergeGraphChunkUpdate(payload);
+      break;
+
     case "load_graph_url":
       const id = payload?.id || null;  
       const file = payload?.file || null;  
@@ -2072,21 +2076,24 @@ function ensureGraphLoadingUi() {
       + '  inset: 0;\n'
       + '  z-index: 14000;\n'
       + '  display: none;\n'
-      + '  align-items: center;\n'
-      + '  justify-content: center;\n'
-      + '  background: rgba(10, 18, 24, 0.36);\n'
-      + '  backdrop-filter: blur(1px);\n'
+      + '  align-items: flex-end;\n'
+      + '  justify-content: flex-start;\n'
+      + '  padding: 0 0 16px 16px;\n'
+      + '  background: transparent;\n'
+      + '  backdrop-filter: none;\n'
+      + '  pointer-events: none;\n'
       + '}\n'
       + '#linkx_graph_loading_panel {\n'
-      + '  min-width: 280px;\n'
-      + '  max-width: min(92vw, 520px);\n'
-      + '  border-radius: 10px;\n'
+      + '  min-width: 220px;\n'
+      + '  max-width: min(72vw, 360px);\n'
+      + '  border-radius: 8px;\n'
       + '  border: 1px solid rgba(122, 147, 168, 0.30);\n'
       + '  background: rgba(247, 251, 255, 0.96);\n'
       + '  color: #304559;\n'
-      + '  padding: 14px 16px;\n'
+      + '  padding: 10px 12px;\n'
       + '  box-shadow: 0 10px 24px rgba(0,0,0,0.20);\n'
       + '  font-family: "Segoe UI", Arial, sans-serif;\n'
+      + '  pointer-events: none;\n'
       + '}\n'
       + '#linkx_graph_loading_title {\n'
       + '  font-size: 13px;\n'
@@ -2099,7 +2106,7 @@ function ensureGraphLoadingUi() {
       + '  color: #4f667c;\n'
       + '}\n'
       + 'html[data-theme="dark"] #linkx_graph_loading_overlay {\n'
-      + '  background: rgba(5, 10, 14, 0.56);\n'
+      + '  background: transparent;\n'
       + '}\n'
       + 'html[data-theme="dark"] #linkx_graph_loading_panel {\n'
       + '  background: rgba(15, 26, 36, 0.95);\n'
@@ -2117,7 +2124,7 @@ function ensureGraphLoadingUi() {
   overlay.id = "linkx_graph_loading_overlay";
   overlay.setAttribute("aria-live", "polite");
   overlay.innerHTML = '<div id="linkx_graph_loading_panel">'
-    + '<div id="linkx_graph_loading_title">Loading graph...</div>'
+    + '<div id="linkx_graph_loading_title">Preparing graph data...</div>'
     + '<div id="linkx_graph_loading_progress">Preparing...</div>'
     + '</div>';
   document.body.appendChild(overlay);
@@ -2130,13 +2137,13 @@ function ensureGraphLoadingUi() {
   return ui;
 }
 
-function showGraphLoading(title = "Loading graph...", current = null, total = null) {
+function showGraphLoading(title = "Preparing graph data...", current = null, total = null) {
   const ui = ensureGraphLoadingUi();
-  ui.titleEl.textContent = String(title || "Loading graph...");
+  ui.titleEl.textContent = String(title || "Preparing graph data...");
   if (Number.isFinite(current) && Number.isFinite(total) && total > 0) {
     const safeCurrent = Math.max(0, Math.min(total, current));
     const pct = Math.round((safeCurrent / total) * 100);
-    ui.progressEl.textContent = "Processed " + safeCurrent + " of " + total + " (" + pct + "%)";
+    ui.progressEl.textContent = "Collected " + safeCurrent + " of " + total + " (" + pct + "%)";
   } else {
     ui.progressEl.textContent = "Preparing...";
   }
@@ -2149,7 +2156,7 @@ function setGraphLoadingProgress(current, total, title = "") {
   if (Number.isFinite(current) && Number.isFinite(total) && total > 0) {
     const safeCurrent = Math.max(0, Math.min(total, current));
     const pct = Math.round((safeCurrent / total) * 100);
-    ui.progressEl.textContent = "Processed " + safeCurrent + " of " + total + " (" + pct + "%)";
+    ui.progressEl.textContent = "Collected " + safeCurrent + " of " + total + " (" + pct + "%)";
   } else {
     ui.progressEl.textContent = "Working...";
   }
@@ -7143,6 +7150,44 @@ function initializer(id){
   getAllNodeKeys(id);
   network.fit();
   network.redraw();
+}
+
+function mergeGraphChunkUpdate({ nodes = [], edges = [] } = {}) {
+  const incomingNodes = Array.isArray(nodes) ? nodes : [];
+  const incomingEdges = Array.isArray(edges) ? edges : [];
+  if (!window.FULL_GRAPH?.nodes || !window.FULL_GRAPH?.edges) {
+    createNewGraph({ nodes: incomingNodes, edges: incomingEdges });
+    return;
+  }
+
+  let changed = false;
+  incomingNodes.forEach((rawNode) => {
+    const node = typeof normalizeIncomingNodeForTheme === "function" ? normalizeIncomingNodeForTheme(rawNode) : rawNode;
+    if (!node || node.id == null) return;
+    const previous = FULL_GRAPH.nodes.get(node.id);
+    if (previous && JSON.stringify(previous) === JSON.stringify(node)) return;
+    upsertFullGraphNode(node);
+    changed = true;
+  });
+
+  incomingEdges.forEach((rawEdge) => {
+    const edge = typeof normalizeIncomingEdgeForTheme === "function" ? normalizeIncomingEdgeForTheme(rawEdge) : rawEdge;
+    if (!edge) return;
+    const normalized = {
+      ...edge,
+      id: edge.id ?? String(edge.from) + "_" + String(edge.to),
+      width: edge.weight ?? edge.width ?? 1,
+      title: edge.title || undefined,
+    };
+    const previous = FULL_GRAPH.edges.get(normalized.id);
+    if (previous && JSON.stringify(previous) === JSON.stringify(normalized)) return;
+    upsertFullGraphEdge(normalized);
+    changed = true;
+  });
+
+  if (!changed) return;
+  recomputeVisibleEdges();
+  renderVisibleGraphBatch();
 }
 
 function createNewGraph({ id, nodes = [], edges = [], settings = null }) {

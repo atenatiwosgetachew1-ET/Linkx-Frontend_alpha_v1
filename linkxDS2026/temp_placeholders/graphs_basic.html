@@ -1510,7 +1510,7 @@ smooth: {
 									const totalWork = Math.max(1, totalNodes + totalEdges);
 									let progressCounter = 0;
 									if (typeof window.showGraphLoading === "function") {
-										window.showGraphLoading("Loading graph elements...", 0, totalWork);
+										window.showGraphLoading("Preparing graph data...", 0, totalWork);
 									}
 									
 									FULL_GRAPH.nodes.clear();
@@ -1528,7 +1528,7 @@ smooth: {
 										nodeMap.set(node.id, node);
 										progressCounter += 1;
 										if (progressCounter % 200 === 0 && typeof window.setGraphLoadingProgress === "function") {
-											window.setGraphLoadingProgress(progressCounter, totalWork, "Loading nodes...");
+											window.setGraphLoadingProgress(progressCounter, totalWork, "Collecting nodes...");
 										}
 									}
 
@@ -1555,7 +1555,7 @@ smooth: {
 										if (toSet) toSet.add(edge.from);
 										progressCounter += 1;
 										if (progressCounter % 300 === 0 && typeof window.setGraphLoadingProgress === "function") {
-											window.setGraphLoadingProgress(progressCounter, totalWork, "Loading edges...");
+											window.setGraphLoadingProgress(progressCounter, totalWork, "Collecting edges...");
 										}
 									}
 
@@ -1584,7 +1584,7 @@ smooth: {
 									}
 									
 									if (typeof window.setGraphLoadingProgress === "function") {
-										window.setGraphLoadingProgress(totalWork, totalWork, "Rendering graph...");
+										window.setGraphLoadingProgress(totalWork, totalWork, "Preparing graph view...");
 									}
 									// Batch render visible graph
 									renderVisibleGraphBatch();

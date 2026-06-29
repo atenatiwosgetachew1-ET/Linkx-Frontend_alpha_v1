@@ -83,6 +83,8 @@ export const createApiClient = ({ baseUrl, getToken, onUnauthorized, onForbidden
         onRateLimited({ ...(data && typeof data === "object" ? data : {}), retry_after: retryAfter });
       }
 
+      console.error("[apiFetch non-ok response]", { path, status: response.status, data });
+
       const message = response.status === 429
         ? "Too many requests. Retry after " + (retryAfter || "a few") + " seconds."
         : data?.message ||
