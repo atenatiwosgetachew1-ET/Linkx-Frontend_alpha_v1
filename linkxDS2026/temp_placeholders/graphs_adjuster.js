@@ -166,8 +166,8 @@ window.addEventListener("message", (event) => {
       break;
 
     default:
-      console.warn("Unknown action:", action);
-      break;
+      if (!action) return;
+      console.warn("Unknown action:", action); 
   }
 });
 // Passing a message to the parent window
@@ -1688,7 +1688,7 @@ function restoreSettings(settings) {
     weightEdges(settings[5]);
     applyTitleToggle(asBool(settings[6]));
     showNodelabels(asBool(settings[7]));
-    console.log("Skipping edit infos at index 6.");
+    //console.log("Skipping edit infos at index 6.");
     networkphysics(asBool(settings[9]));
     networkLayoutType(layoutType);
 
@@ -4017,13 +4017,13 @@ function bringNodeToFront(nodeId) {
   network.fit({ nodes: Array.from(VISIBLE_STATE.nodes), animation: { duration: 300, easingFunction: "easeInOutQuad" } });
 }
 
-async function runLinkTraversal(selectedNodes, degree = 4) {
+async function runLinkTraversal(selectedNodes, degree = 5) {
   const ids = Array.isArray(selectedNodes) ? selectedNodes.map(normalizeGraphId).filter(id => FULL_GRAPH.nodes.has(id)) : [];
   if (!ids.length) {
     alert("Select at least one node to run link traversal.");
     return;
   }
-  const maxDepth = Math.max(1, Math.min(4, Number(degree) || 4));
+  const maxDepth = Math.max(1, Math.min(5, Number(degree) || 5));
 
   await runWithGraphLoading("Expanding traversal...", async ({ setProgress }) => {
     setProgress(1, 2, "Expanding neighborhood...");
@@ -4872,7 +4872,7 @@ function resetToLimit() {
 }
 
 function applyTitleToggle(state) {
-    console.log("applyTitleToggle_called:", state);
+    //console.log("applyTitleToggle_called:", state);
     window.currentSettings.showTitles = state;
     
     const nodeUpdates = [];
@@ -4980,11 +4980,11 @@ function applyTitleToggle(state) {
         nodesData.update(nodeUpdates);
     }
     if (edgeUpdates.length > 0) {
-        console.log("found edgeUpdates :",edgeUpdates)
+        //console.log("found edgeUpdates :",edgeUpdates)
         edgesData.update(edgeUpdates);
     }
     
-    console.log(`Titles ${state ? 'enabled' : 'disabled'} - Updated ${nodeUpdates.length} nodes, ${edgeUpdates.length} edges`);
+    //console.log(`Titles ${state ? 'enabled' : 'disabled'} - Updated ${nodeUpdates.length} nodes, ${edgeUpdates.length} edges`);
 }
 
 
@@ -6225,7 +6225,7 @@ async function loadGraphFromFile(id,file,settings = null) {
     });
     //Passing property keys
     getAllNodeKeys(id);
-    console.log("Graph loaded successfully1");
+    //console.log("Graph loaded successfully1");
 
   } catch (err) {
     console.error("Error loading graph file:", err);
@@ -7146,7 +7146,6 @@ function initializer(id){
 }
 
 function createNewGraph({ id, nodes = [], edges = [], settings = null }) {
-  console.log("yooo")
   resetGraphHistoryBuffer();
   suspendGraphHistoryStart();
   const totalNodes = Array.isArray(nodes) ? nodes.length : 0;
@@ -7182,7 +7181,7 @@ function createNewGraph({ id, nodes = [], edges = [], settings = null }) {
   MODIFIED_EDGES.clear();
 
   // Build FULL_GRAPH from the provided data
-  console.log("Initializing FullGraph...");
+  //console.log("Initializing FullGraph...");
   FULL_GRAPH.edgesByNode = null;
   initializeFullGraph({ nodes, edges });
   setCurrentGraphScope("");

@@ -1885,6 +1885,7 @@ const requestGraphFetch = async (apiFetch, payload, signal, options = {}) => {
   if (JOB_FAILURE_STATUSES.has(status) || data?.error || data?.results?.error || data?.result?.error) {
     const message = JOB_CANCEL_STATUSES.has(status) ? "Graph request cancelled." : getGraphJobMessage(data);
     console.error("[graph fetch failed]", { status, data });
+    console.log("[graph fetch failed raw]", data);
     throw new Error(message);
   }
 
@@ -2009,10 +2010,12 @@ const getSourceWindowAutofillDefaults = (configurations) => {
       toolUrl: "",
       toolUsername: "",
       toolPassword: "",
+      toolPasswordRef: "",
       toolDatabase: "",
       realtimeToolUrl: "",
       realtimeToolUsername: "",
       realtimeToolPassword: "",
+      realtimeToolPasswordRef: "",
       realtimeToolDatabase: "",
     };
   }
@@ -2035,10 +2038,12 @@ const getSourceWindowAutofillDefaults = (configurations) => {
     toolUrl,
     toolUsername,
     toolPassword: "",
+    toolPasswordRef: "",
     toolDatabase,
     realtimeToolUrl: toolUrl,
     realtimeToolUsername: toolUsername,
     realtimeToolPassword: "",
+    realtimeToolPasswordRef: "",
     realtimeToolDatabase: toolDatabase,
   };
 };
@@ -2054,6 +2059,57 @@ const CONFIG_SECRET_REF_KEYS = {
   api_key: ["api_key_ref", "key_ref"],
 };
 const CONFIG_SECRET_MASK_PATTERN = /^\*+$/;
+
+const normalizeSecretRefValue = (value) => String(value ?? "").trim();
+
+const getConfigurationToolPasswordRef = (configuration) => (
+  normalizeSecretRefValue(
+    configuration?.active_tool_password_ref ||
+    configuration?.tool_password_ref ||
+    configuration?.password_ref
+  )
+);
+
+const buildToolCredentialWindowPatch = (configuration) => {
+  const passwordRef = getConfigurationToolPasswordRef(configuration);
+  const maskedPassword = passwordRef ? "***" : "";
+  return {
+    toolUrl: getConfigValue(configuration, ["active_tool_url", "active_tool_protocol"]),
+    toolUsername: getConfigValue(configuration, "active_tool_username"),
+    toolDatabase: getConfigValue(configuration, ["active_tool_database", "custom_tool_database"]),
+    toolPassword: maskedPassword,
+    toolPasswordRef: passwordRef,
+    realtimeToolUrl: getConfigValue(configuration, ["active_tool_url", "active_tool_protocol"]),
+    realtimeToolUsername: getConfigValue(configuration, "active_tool_username"),
+    realtimeToolDatabase: getConfigValue(configuration, ["active_tool_database", "custom_tool_database"]),
+    realtimeToolPassword: maskedPassword,
+    realtimeToolPasswordRef: passwordRef,
+  };
+};
+
+const buildConnectToToolPayload = ({ payload, validatedValues, sessionKey, passwordRef }) => {
+  const nextPayload = {
+    ...payload,
+    ...validatedValues,
+    source_id: sessionKey,
+    session_id: sessionKey,
+  };
+  const normalizedPassword = sanitizeSecret(nextPayload.password, { maxLength: 256 });
+  const normalizedPasswordRef = normalizeSecretRefValue(passwordRef || payload?.password_ref);
+
+  if (CONFIG_SECRET_MASK_PATTERN.test(String(normalizedPassword || "").trim())) {
+    if (!normalizedPasswordRef) {
+      return { ok: false, message: "Enter the real Neo4j password before connecting." };
+    }
+    nextPayload.password = normalizedPassword;
+    nextPayload.password_ref = normalizedPasswordRef;
+    return { ok: true, payload: nextPayload };
+  }
+
+  delete nextPayload.password_ref;
+  nextPayload.password = normalizedPassword;
+  return { ok: true, payload: nextPayload };
+};
 
 const normalizeLoadedConfiguration = (payload) => {
   if (!payload) return {};
@@ -3421,11 +3477,12 @@ function IframeEmbed({wId,id,fileName,title,activeGraph,graphAction,iframeRef,BA
   );
 
   if (id === "source_placeholder"){
+    const trustedSandbox = "allow-scripts allow-same-origin allow-downloads allow-modals";
     return (
       <div className="iframe_graph">
         <iframe
           ref={iframeRef}
-          sandbox="allow-scripts allow-downloads allow-modals"
+          sandbox={trustedSandbox}
           src={`${iframeBasePath}/source_placeholder.html`}
           width="100%"
           height="98%"
@@ -3436,12 +3493,12 @@ function IframeEmbed({wId,id,fileName,title,activeGraph,graphAction,iframeRef,BA
     );
   }
   if (id == "graph_placeholder"){//graphs_basic
-    console.log("GRAPH PLACEHOLDER SRC:", `${iframeBasePath}/graph_placeholder.html`);
+    const trustedSandbox = "allow-scripts allow-same-origin allow-downloads allow-modals";
     return (
       <div className="iframe_graph">
         <iframe
           ref={iframeRef}
-          sandbox="allow-scripts allow-downloads allow-modals"
+          sandbox={trustedSandbox}
           src={`${iframeBasePath}/graph_placeholder.html`}
           width="100%"
           height="98%"
@@ -3452,11 +3509,12 @@ function IframeEmbed({wId,id,fileName,title,activeGraph,graphAction,iframeRef,BA
     );
   }
   if (id == "chart_placeholder"){//charts_basic
+    const trustedSandbox = "allow-scripts allow-same-origin allow-downloads allow-modals";
     return (
       <div className="iframe_graph">
         <iframe
           ref={iframeRef}
-          sandbox="allow-scripts allow-downloads allow-modals"
+          sandbox={trustedSandbox}
           src={`${iframeBasePath}/charts_basic.html`}
           width="100%"
           height="98%"
@@ -3468,20 +3526,12 @@ function IframeEmbed({wId,id,fileName,title,activeGraph,graphAction,iframeRef,BA
   }
   else {
     const iframeFile = fileName || activeGraph;
-
-    console.log("IframeEmbed", {
-      id,
-      fileName,
-      activeGraph,
-      iframeFile,
-      src: `${iframeBasePath}/${iframeFile}.html`,
-    });
-
+    const trustedSandbox = "allow-scripts allow-same-origin allow-downloads allow-modals";
     return (
       <div className="iframe_graph">
         <iframe
           ref={iframeRef}
-          sandbox="allow-scripts allow-downloads allow-modals"
+          sandbox={trustedSandbox}
           src={`${iframeBasePath}/${iframeFile}.html`}
           width="100%"
           height="98%"
@@ -5136,14 +5186,6 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
            {/* Graph iframe: show placeholder or actual graph */}
             {(selectedContent === "graph_content" || selectedContent === null) && (
               <div className="placeholder">
-                {console.log("GRAPH RENDER BLOCK:", {
-                  selectedContent,
-                  id,
-                  activeGraph,
-                  iframeId: selectedContent === null ? "graph_placeholder" : activeGraph,
-                  fileName: selectedContent === null ? "graph_placeholder" : activeGraph,
-                })}
-
                 <IframeEmbed
                   wId={id}
                   id={selectedContent === null ? "graph_placeholder" : activeGraph}
@@ -5884,11 +5926,7 @@ const fileInputRef = useRef(null);
 
     const realtimeWindowState = { ...targetWindow, ...overrides, id: sessionKey };
     const configurationPayload = buildRealtimeToolConfigurationPayload(configurations, realtimeWindowState);
-    const passwordRef =
-      configurationPayload.active_tool_password_ref ||
-      configurationPayload.tool_password_ref ||
-      configurationPayload.password_ref ||
-      "";
+    const passwordRef = getConfigurationToolPasswordRef(configurationPayload);
 
     updateSourceWindowState(sessionKey, {
       realtimeConfigPersistStatus: "saving",
@@ -5938,11 +5976,7 @@ const fileInputRef = useRef(null);
           }
 
           const loadedConfiguration = loadResult.configuration || {};
-          const confirmedPasswordRef =
-            loadedConfiguration.active_tool_password_ref ||
-            loadedConfiguration.tool_password_ref ||
-            loadedConfiguration.password_ref ||
-            "";
+          const confirmedPasswordRef = getConfigurationToolPasswordRef(loadedConfiguration);
           const hasPersistedToolCredentials = Boolean(
             sanitizeConnectionValue(loadedConfiguration.active_tool_url, { maxLength: 300 }) &&
             sanitizeIdentifier(loadedConfiguration.active_tool_username, { maxLength: 120 }) &&
@@ -5961,6 +5995,7 @@ const fileInputRef = useRef(null);
           }
 
           updateSourceWindowState(sessionKey, {
+            ...buildToolCredentialWindowPatch(loadedConfiguration),
             realtimeConfigPersistStatus: "saved",
             realtimeConfigPersistedSessionId: sessionKey,
             realtimeConfigPersistMessage: "Neo4j credentials saved for this session.",
@@ -6074,11 +6109,19 @@ const fileInputRef = useRef(null);
 
   useEffect(() => {
     const listeners = [];
-    const sendThemeMode = (frameEl) => {
-      frameEl?.contentWindow?.postMessage(
-        { action: "theme_mode", payload: themeMode },
-        getTrustedMessageOrigin()
-      );
+    const sendThemeMode = (windowId, frameEl) => {
+      const src = frameEl?.src;
+      const attrSrc = frameEl?.getAttribute?.("src");
+      const targetOrigin = getTrustedMessageOrigin();
+      try {
+        frameEl?.contentWindow?.postMessage(
+          { action: "theme_mode", payload: themeMode },
+          targetOrigin
+        );
+
+      } catch (e) {
+        console.error("Applying THEME FAILED:");
+      }
     };
 
     const replayGraphInfoToFrame = (windowId, frameEl) => {
@@ -6102,12 +6145,18 @@ const fileInputRef = useRef(null);
       const frameEl = frameRef?.current;
       if (!frameEl) return;
       const onLoad = () => {
-        sendThemeMode(frameEl);
+        console.log("IFRAME LOADED:", {
+          windowId,
+          src: frameEl.src,
+          attrSrc: frameEl.getAttribute("src"),
+        });
+
+        sendThemeMode(windowId, frameEl);
         replayGraphInfoToFrame(windowId, frameEl);
       };
       frameEl.addEventListener("load", onLoad);
       listeners.push(() => frameEl.removeEventListener("load", onLoad));
-      sendThemeMode(frameEl);
+      sendThemeMode(windowId, frameEl);
       replayGraphInfoToFrame(windowId, frameEl);
     });
 
@@ -6253,6 +6302,10 @@ const fileInputRef = useRef(null);
   const logGraphWindowDebug = (label, payload) => {
     if (!CLIENT_DEV_LOGS_ENABLED) return;
     console.info(`[graph debug] ${label}`, payload);
+  };
+
+  const logStreamFailureResponse = (label, payload) => {
+    console.error(`[stream failure] ${label}`, payload);
   };
 
   const canAccess = useCallback((permission) => (
@@ -7392,10 +7445,12 @@ const fileInputRef = useRef(null);
                       toolUrl: sourceAutofillDefaults.toolUrl,
                       toolUsername: sourceAutofillDefaults.toolUsername,
                       toolPassword: "",
+                      toolPasswordRef: "",
                       toolDatabase: sourceAutofillDefaults.toolDatabase,
                       realtimeToolUrl: sourceAutofillDefaults.realtimeToolUrl,
                       realtimeToolUsername: sourceAutofillDefaults.realtimeToolUsername,
                       realtimeToolPassword: "",
+                      realtimeToolPasswordRef: "",
                       realtimeToolDatabase: sourceAutofillDefaults.realtimeToolDatabase,
                       formToolResponse: null,
                       formRealtimeToolResponse: null,
@@ -7841,6 +7896,13 @@ const fileInputRef = useRef(null);
       }
     })
       .then((data) => {
+        console.log("[graph relationship fetch received raw]", {
+          graph_window_id: graphWindowId,
+          session_id: sourceId,
+          relationship,
+          request_origin: requestOrigin,
+          data,
+        });
         if (!graphFetchAbortControllersRef.current[graphWindowId] || graphFetchAbortControllersRef.current[graphWindowId] !== controller) return;
         const normalizedResults = data?.results || {};
         const nodes = Array.isArray(normalizedResults.nodes) ? normalizedResults.nodes : [];
@@ -7884,7 +7946,13 @@ const fileInputRef = useRef(null);
         if (err?.name === "AbortError") return;
         delete activeGraphJobsRef.current[graphWindowId];
         delete graphAutoRequestedRef.current[graphWindowId];
-        console.error(err);
+        console.error("[relationship graph request catch]", {
+          graph_window_id: graphWindowId,
+          session_id: sourceId,
+          relationship,
+          request_origin: requestOrigin,
+          error: err,
+        });
         setWindows((prev) =>
           prev.map((windowState) =>
             String(windowState.id) === graphWindowId
@@ -8089,7 +8157,7 @@ const fileInputRef = useRef(null);
 
                   performanceUpdates.forEach(({ index, setting, value }) => {
                     updateIframeSettings(id, index, value);
-                    sendToIframe(iframe, setting, value);
+                    sendGraphMessageToIframe(iframe, setting, value);
                   });
                 }
                 return { ...w, ...updates };
@@ -8145,11 +8213,11 @@ const fileInputRef = useRef(null);
                 }));
               }
               //Pass the setting change to the child iframe
-              sendToIframe(iframe, payload.settings, normalizedSettingState);
+              sendGraphMessageToIframe(iframe, payload.settings, normalizedSettingState);
 }
             if (action === "search") {
               const { option, keyword, keys, settings } = payload;
-              sendToIframe(iframe, "graph_search", { id, option, keyword, keys, settings });
+              sendGraphMessageToIframe(iframe, "graph_search", { id, option, keyword, keys, settings });
             }
             if (action === "search_change") {
               const { componentId, value } = payload;   
@@ -8182,7 +8250,7 @@ const fileInputRef = useRef(null);
               });
             }
             if (action === "filter_keys" && payload.filter === "all_property_keys") {
-              sendToIframe(iframe, "all_property_keys", { id });
+              sendGraphMessageToIframe(iframe, "all_property_keys", { id });
             }            
           }
 
@@ -8191,7 +8259,7 @@ const fileInputRef = useRef(null);
             const nextAction = payload?.settings || "fit_graph";
             const allowedActions = new Set(["fit_graph", "undo_graph", "redo_graph"]);
             if (allowedActions.has(nextAction)) {
-              sendToIframe(iframe, nextAction, nextAction);
+              sendGraphMessageToIframe(iframe, nextAction, nextAction);
             }
           }
 
@@ -8386,6 +8454,7 @@ const fileInputRef = useRef(null);
               toolUrl: sourceAutofillDefaults.toolUrl,
               toolUsername: sourceAutofillDefaults.toolUsername,
               toolPassword: "",
+              toolPasswordRef: "",
               toolDatabase: sourceAutofillDefaults.toolDatabase,
               batchFilesCollection: [],
               batchFilesSearchResults: null,
@@ -8493,12 +8562,19 @@ const fileInputRef = useRef(null);
               w.id === id ? {
                 ...w,
                 [fieldName]: normalizeValue(payload),
+                ...(fieldName === "toolPassword" ? {
+                  toolPasswordRef: CONFIG_SECRET_MASK_PATTERN.test(String(normalizeValue(payload) || "").trim()) ? w.toolPasswordRef : "",
+                } : {}),
                 ...(isRealtimeToolField ? {
                   realtimeNeo4jConnectedSessionId: null,
                   realtimeConfigPersistStatus: "idle",
                   realtimeConfigPersistedSessionId: null,
                   realtimeConfigPersistMessage: null,
                   realtimeStartGuardMessage: null,
+                  realtimeLastConnectSessionId: null,
+                  ...(fieldName === "realtimeToolPassword" ? {
+                    realtimeToolPasswordRef: CONFIG_SECRET_MASK_PATTERN.test(String(normalizeValue(payload) || "").trim()) ? w.realtimeToolPasswordRef : "",
+                  } : {}),
                 } : {}),
               } : w
             )
@@ -8509,7 +8585,7 @@ const fileInputRef = useRef(null);
           if (!sourceValidation.ok) {
             return { ...w, windowRealtimeResponseI: sourceValidation.message || "Connection details are invalid." };
           }
-          const connectPayload = { ...payload, ...sourceValidation.value };
+          const connectPayload = { ...payload, ...sourceValidation.value, session_id: normalizeSessionId(id) };
           setWindows(prev =>
             prev.map(w =>
               w.id === id ? {
@@ -8551,6 +8627,7 @@ const fileInputRef = useRef(null);
                 realtimeConfigPersistedSessionId: null,
                 realtimeConfigPersistMessage: null,
                 realtimeStartGuardMessage: null,
+                realtimeLastConnectSessionId: null,
               } : w
             )
           );
@@ -8558,7 +8635,7 @@ const fileInputRef = useRef(null);
             ...payload,
             broker: payload?.broker ?? payload?.address ?? "",
             hdfs: payload?.hdfs ?? payload?.storage ?? "",
-            session_id: payload?.session_id ?? id,
+            session_id: normalizeSessionId(id),
           };
           apiFetch("/disconnect_source", {
             method: "POST",
@@ -8587,16 +8664,23 @@ const fileInputRef = useRef(null);
             return { ...w, formRealtimeToolResponse: toolValidation.message || "Tool connection details are invalid." };
           }
           const sessionKey = normalizeSessionId(id);
-          const toolPayload = { ...payload, ...toolValidation.value, source_id: sessionKey, session_id: sessionKey };
-          if (CONFIG_SECRET_MASK_PATTERN.test(String(toolPayload.password || "").trim())) {
-            return { ...w, formRealtimeToolResponse: "Enter the real Neo4j password before connecting." };
+          const connectPayloadResult = buildConnectToToolPayload({
+            payload,
+            validatedValues: toolValidation.value,
+            sessionKey,
+            passwordRef: w.realtimeToolPasswordRef,
+          });
+          if (!connectPayloadResult.ok) {
+            return { ...w, formRealtimeToolResponse: connectPayloadResult.message, realtimeStartGuardMessage: connectPayloadResult.message };
           }
+          const toolPayload = connectPayloadResult.payload;
           setWindows(prev =>
             prev.map(w =>
               w.id === id ? {
                 ...w,
                 formRealtimeToolResponse: "Connecting...",
-                realtimeToolPassword: "",
+                realtimeToolPassword: CONFIG_SECRET_MASK_PATTERN.test(String(toolPayload.password || "").trim()) ? "***" : "",
+                realtimeToolPasswordRef: normalizeSecretRefValue(toolPayload.password_ref || w.realtimeToolPasswordRef),
                 realtimeNeo4jConnectedSessionId: null,
                 realtimeConfigPersistStatus: "idle",
                 realtimeConfigPersistedSessionId: null,
@@ -8626,6 +8710,8 @@ const fileInputRef = useRef(null);
                   w.id === id ? {
                     ...w,
                     formRealtimeToolResponse: data.message,
+                    realtimeToolPassword: connected && normalizeSecretRefValue(w.realtimeToolPasswordRef || toolPayload.password_ref) ? "***" : w.realtimeToolPassword,
+                    realtimeToolPasswordRef: connected ? normalizeSecretRefValue(w.realtimeToolPasswordRef || toolPayload.password_ref) : w.realtimeToolPasswordRef,
                     realtimeNeo4jConnectedSessionId: connected ? sessionKey : null,
                     realtimeStartGuardMessage: connected ? null : (data?.message || "Neo4j connection failed for this session."),
                   } : w
@@ -8691,7 +8777,7 @@ const fileInputRef = useRef(null);
           if (!sourceValidation.ok) {
             return { ...w, windowResponseI: sourceValidation.message || "Connection details are invalid.", sourceStatus: SOURCE_STATUSES.FAILED };
           }
-          const connectPayload = { ...payload, ...sourceValidation.value };
+          const connectPayload = { ...payload, ...sourceValidation.value, session_id: normalizeSessionId(id) };
           setWindows(prev =>
             prev.map(w =>
               w.id === id ? { ...w, windowResponseI: "Connecting...", sourceStatus: SOURCE_STATUSES.CONNECTING, sourceKind: connectPayload?.addressType || w.sourceAddressType || SOURCE_KINDS.BROKER } : w
@@ -8751,13 +8837,19 @@ const fileInputRef = useRef(null);
             return { ...w, formToolResponse: toolValidation.message || "Tool connection details are invalid.", toolStatus: TOOL_STATUSES.FAILED };
           }
           const sessionKey = normalizeSessionId(id);
-          const toolPayload = { ...payload, ...toolValidation.value, source_id: sessionKey, session_id: sessionKey };
-          if (CONFIG_SECRET_MASK_PATTERN.test(String(toolPayload.password || "").trim())) {
-            return { ...w, formToolResponse: "Enter the real Neo4j password before connecting.", toolStatus: TOOL_STATUSES.FAILED };
+          const connectPayloadResult = buildConnectToToolPayload({
+            payload,
+            validatedValues: toolValidation.value,
+            sessionKey,
+            passwordRef: w.toolPasswordRef,
+          });
+          if (!connectPayloadResult.ok) {
+            return { ...w, formToolResponse: connectPayloadResult.message, toolStatus: TOOL_STATUSES.FAILED };
           }
+          const toolPayload = connectPayloadResult.payload;
           setWindows(prev =>
             prev.map(w =>
-              w.id === id ? { ...w, formToolResponse: "Connecting...", toolStatus: TOOL_STATUSES.CONNECTING, toolPassword: "" } : w
+              w.id === id ? { ...w, formToolResponse: "Connecting...", toolStatus: TOOL_STATUSES.CONNECTING, toolPassword: CONFIG_SECRET_MASK_PATTERN.test(String(toolPayload.password || "").trim()) ? "***" : "", toolPasswordRef: normalizeSecretRefValue(toolPayload.password_ref || w.toolPasswordRef) } : w
             )
           );
           if (CLIENT_DEV_LOGS_ENABLED) {
@@ -8771,7 +8863,7 @@ const fileInputRef = useRef(null);
             .then((data) => {              
               setWindows(prev =>
                 prev.map(w =>
-                  w.id === id ? { ...w, formToolResponse: data.message, toolStatus: toolStatusFromResponse(data.message) } : w
+                  w.id === id ? { ...w, formToolResponse: data.message, toolStatus: toolStatusFromResponse(data.message), toolPassword: toolStatusFromResponse(data.message) === TOOL_STATUSES.CONNECTED && normalizeSecretRefValue(w.toolPasswordRef || toolPayload.password_ref) ? "***" : w.toolPassword, toolPasswordRef: toolStatusFromResponse(data.message) === TOOL_STATUSES.CONNECTED ? normalizeSecretRefValue(w.toolPasswordRef || toolPayload.password_ref) : w.toolPasswordRef } : w
                 )
               );
             })
@@ -8793,7 +8885,7 @@ const fileInputRef = useRef(null);
           apiFetch("/disconnect_tool", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
+            body: JSON.stringify({ ...payload, source_id: normalizeSessionId(id), session_id: normalizeSessionId(id) }),
           })
             .then((data) => {              
               setWindows(prev =>
@@ -9402,15 +9494,18 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
     }
 
     const isRealtimeMode = targetWindow.selectedContent === "real_time_input";
+    const hasRealtimeMatchingConnectSession = String(targetWindow.realtimeLastConnectSessionId || "") === sessionKey;
     const hasRealtimeNeo4jConnection = String(targetWindow.realtimeNeo4jConnectedSessionId || "") === sessionKey;
     const hasRealtimePersistedToolConfig = targetWindow.realtimeConfigPersistStatus === "saved" && String(targetWindow.realtimeConfigPersistedSessionId || "") === sessionKey;
     const realtimeBlockedMessage =
       targetWindow.realtimeStartGuardMessage ||
-      (!hasRealtimeNeo4jConnection
-        ? `Connect Neo4j successfully for session ${sessionKey} before starting realtime.`
-        : `Save Neo4j credentials for session ${sessionKey} before starting realtime.`);
+      (!hasRealtimeMatchingConnectSession
+        ? `Reconnect Neo4j for session ${sessionKey} before starting realtime.`
+        : !hasRealtimeNeo4jConnection
+          ? `Connect Neo4j successfully for session ${sessionKey} before starting realtime.`
+          : `Save Neo4j credentials for session ${sessionKey} before starting realtime.`);
 
-    if (isRealtimeMode && (!hasRealtimeNeo4jConnection || !hasRealtimePersistedToolConfig)) {
+    if (isRealtimeMode && (!hasRealtimeMatchingConnectSession || !hasRealtimeNeo4jConnection || !hasRealtimePersistedToolConfig)) {
       alert(realtimeBlockedMessage);
       updateSourceWindowState(sessionKey, {
         sourceStreamListener: false,
@@ -9625,6 +9720,7 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
         const accepted = isSuccessResponse(data) || queued;
 
         if (!accepted) {
+          logStreamFailureResponse("initialization rejected", data);
           pushNotification({
             title: "Streaming could not start",
             message:
@@ -9743,6 +9839,13 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
               jobResponse: err?.jobResponse,
               error: err,
             });
+            logStreamFailureResponse("queued job failed", {
+              message: err?.message,
+              status: err?.jobStatus,
+              pollPath: err?.pollPath,
+              jobResult: err?.jobResult,
+              jobResponse: err?.jobResponse,
+            });
 
             const streamErrorMessage =
               err?.message && String(err.message).toLowerCase() !== "success"
@@ -9783,6 +9886,7 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
       })
       .catch(err => {
         console.error("Stream initialization request failed", err);
+        logStreamFailureResponse("request failed", err);
 
         pushNotification({
           title: "Streaming could not start",
@@ -10853,6 +10957,9 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
             }
             console.log("defaultConfig:", result.configuration);
             setConfigurations(result.configuration);
+            if (windowsRef.current.some((windowState) => windowState.type === "source" && String(windowState.id) === String(session))) {
+              updateSourceWindowState(session, buildToolCredentialWindowPatch(result.configuration || {}));
+            }
             setloadscreenState(false);
           })
           .catch((err) => {

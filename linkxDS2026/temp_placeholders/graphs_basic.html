@@ -1504,7 +1504,7 @@ smooth: {
 								};
 								
 								function initializeFullGraph(graphData) {
-									console.log("Initializing FULL_GRAPH with provided graph data...");
+									//console.log("Initializing FULL_GRAPH with provided graph data...");
 									const totalNodes = Array.isArray(graphData?.nodes) ? graphData.nodes.length : 0;
 									const totalEdges = Array.isArray(graphData?.edges) ? graphData.edges.length : 0;
 									const totalWork = Math.max(1, totalNodes + totalEdges);
@@ -1593,7 +1593,7 @@ smooth: {
 										setCurrentGraphScope(graphData?.id || graphData?.graph_id || graphData?.name || "");
 									}
 
-									console.log("FULL_GRAPH initialization complete.");
+									//console.log("FULL_GRAPH initialization complete.");
 									if (typeof window.hideGraphLoading === "function") {
 										setTimeout(() => { window.hideGraphLoading(); }, 160);
 									}
@@ -1886,7 +1886,7 @@ smooth: {
 									        menuHTML += `<div class="menu_item" data-action="show_pinned_evidence">Show Pinned Evidence</div>`;
 									        menuHTML += `<div class="menu_item" data-action="clear_pinned_evidence">Clear Pinned Evidence</div>`;
 									        menuHTML += `<div class="menu_item" data-action="apply_community_detection">Detect Communities</div>`;
-									        menuHTML += `<div class="menu_item ${selectedNodes.length > 0 ? "" : "menu_item_disabled"}" data-action="link_traversal">Link Traversal (4 degrees)</div>`;
+									        menuHTML += `<div class="menu_item ${selectedNodes.length > 0 ? "" : "menu_item_disabled"}" data-action="link_traversal">Link Traversal (5 degrees)</div>`;
 									        menuHTML += `<div class="menu_item" data-action="cut_points">Cut Points</div>`;
 									    } else {
 								        if (nodeId && !selectedNodes.includes(nodeId)) {
@@ -1926,7 +1926,7 @@ smooth: {
 												menuHTML += `<div class="menu_item" data-action="pin_evidence">Pin Evidence</div>`;
 												menuHTML += `<div class="menu_item" data-action="unpin_evidence">Unpin Evidence</div>`;
 											}
-									menuHTML += `<div class="menu_item" data-action="link_traversal">Link Traversal (4 degrees)</div>`;
+									menuHTML += `<div class="menu_item" data-action="link_traversal">Link Traversal (5 degrees)</div>`;
 											menuHTML += `<div class="menu_item" data-action="cut_points">Cut Points</div>`;
 											if (
 											(window.PATH_HIGHLIGHT_STATE?.nodeIds?.size || 0) > 0 ||
@@ -2063,7 +2063,7 @@ smooth: {
 									      	bringNodeToFront(nodeId || selectedNodes[0]);
 									      	break;
 									      case 'link_traversal':
-									      	await runLinkTraversal(selectedNodes, 4);
+									      	await runLinkTraversal(selectedNodes, 5);
 									      	break;
 									      case 'cut_points':
 									      	await runCutPointDetection();
