@@ -1612,6 +1612,112 @@ const getStreamStartErrorMessage = (errorOrData, fallback = "The streaming reque
   return normalized;
 };
 
+const getApiProblemPayload = (input) => {
+  if (input?.data && typeof input.data === "object") return input.data;
+  if (input?.jobResponse && typeof input.jobResponse === "object") return input.jobResponse;
+  if (input && typeof input === "object") return input;
+  return {};
+};
+
+const getApiProblemStatus = (input) => {
+  const payload = getApiProblemPayload(input);
+  const status = Number(input?.status ?? payload?.__httpStatus ?? 0);
+  return Number.isFinite(status) ? status : 0;
+};
+
+const getApiProblemMessage = (input) => {
+  const payload = getApiProblemPayload(input);
+  return String(payload?.message ?? payload?.error ?? input?.message ?? "").trim();
+};
+
+const getSharedApiErrorMessage = (input, fallback = "Something went wrong. Please try again.") => {
+  const status = getApiProblemStatus(input);
+  const message = getApiProblemMessage(input).toLowerCase();
+  if (status === 401 || message === "unauthorized") return "Your session expired. Please sign in again.";
+  if (status === 403 || message === "forbidden") return "You do not have access to do that.";
+  if (status === 413 || message === "payload_too_large") return "The request was too large. Reduce file size or payload size and try again.";
+  if (status === 500 && message === "internal_server_error") return fallback;
+  return fallback;
+};
+
+const getConfigurationErrorMessage = (input, fallback = "Could not save configuration. Try again.") => {
+  const payload = getApiProblemPayload(input);
+  const status = getApiProblemStatus(input);
+  const message = String(payload?.message || "").trim().toLowerCase();
+  const detail = String(payload?.detail || "").trim();
+  const field = String(payload?.field || "").trim();
+  const resultsText = typeof payload?.results === "string" ? payload.results.trim() : "";
+  if (status === 400 && message === "validation_error" && detail === "json_object_required") return "Configuration payload must be an object.";
+  if (status === 400 && message === "validation_error" && field === "trusted_entities") return "Trusted entities are invalid.";
+  if (status === 400 && message === "validation_error" && field === "risk_entities") return "Risk entities are invalid.";
+  if (message === "failed!" && String(payload?.error || "") === "rule_upload_failed") return "Rule upload failed.";
+  if (status === 404 && resultsText) return resultsText;
+  if (status === 500 && message === "failed!" && String(payload?.error || "") === "configuration_load_failed") return "Could not load configuration. Try again.";
+  return getSharedApiErrorMessage(input, fallback);
+};
+
+const getConnectToolErrorMessage = (input, fallback = "Could not connect to Neo4j. Check the connection details and try again.") => {
+  const payload = getApiProblemPayload(input);
+  const status = getApiProblemStatus(input);
+  const message = String(payload?.message || "").trim();
+  const detail = String(payload?.detail || "").trim();
+  if (status === 400 && message === "validation_error") {
+    if (detail === "json_body_required") return "Request body missing.";
+    if (detail === "json_object_required") return "Connection payload must be an object.";
+    if (detail === "session_id_and_source_id_must_match_for_connect_to_tool") return "Session mismatch. Refresh and try again.";
+    if (detail === "Neo4j password is masked but no password_ref is available") return "Please enter the Neo4j password again.";
+    if (detail === "missing_required_connection_fields") return "Please complete the required connection fields.";
+  }
+  if (String(payload?.status || "").toLowerCase() === "error" && detail === "neo4j_credential_persistence_failed") return "Connected check passed, but the session could not save the connection. Try again.";
+  if (String(payload?.status || "").toLowerCase() === "error" && message === "Not connected!") return fallback;
+  return getSharedApiErrorMessage(input, fallback);
+};
+
+const getStreamingErrorMessage = (input, fallback = "The streaming request failed. Please check the backend response and try again.") => {
+  const payload = getApiProblemPayload(input);
+  const message = String(payload?.message || input?.message || "").trim();
+  const detail = String(payload?.detail || "").trim();
+  const resultsText = typeof payload?.results === "string" ? payload.results.trim() : "";
+  if (message === "Missing action_id or session_id") return "Streaming request is missing required session state.";
+  if (message === "Invalid stream value") return "Streaming settings were incomplete.";
+  if (message === "neo4j_not_connected_for_session") return detail ? "Neo4j is not connected for this session. " + detail : "Neo4j is not connected for this session.";
+  if (message === "failed!" && resultsText) return resultsText;
+  if (String(payload?.error || "").startsWith("Invalid action:")) return "Unsupported action.";
+  return getSharedApiErrorMessage(input, fallback);
+};
+
+const getGraphFetchErrorMessage = (input, fallback = "Graph fetch failed. Please retry.") => {
+  const payload = getApiProblemPayload(input);
+  const status = getApiProblemStatus(input);
+  const message = String(payload?.message || input?.message || "").trim();
+  const detail = String(payload?.detail || "").trim();
+  if (status === 400 && message === "validation_error" && detail === "source_id_or_session_window_required") return "Select a graph session first.";
+  if (status === 403 || message === "forbidden") return "You do not have access to this graph.";
+  if (status === 500 && message === "failed!" && String(payload?.error || "") === "graph_fetch_failed") return "Graph fetch failed. Please retry.";
+  if (message === "failed!") return fallback;
+  return getSharedApiErrorMessage(input, fallback);
+};
+
+const getJobFailureMessage = (input, fallback = "Operation failed.") => {
+  const payload = getApiProblemPayload(input);
+  const status = getApiProblemStatus(input);
+  const jobId = getQueuedJobId(payload) || getQueuedJobId(input);
+  if (status === 404 || String(payload?.message || "") === "not_found") return "Job not found or no longer available.";
+  if (status === 403 || String(payload?.message || "") === "forbidden") return "You do not have access to this job.";
+  const base = getJobErrorMessage(payload, fallback);
+  return jobId ? base + " Reference: " + jobId : base;
+};
+
+const getDisconnectSourceErrorMessage = (input, fallback = "Could not disconnect source. Try again.") => {
+  const payload = getApiProblemPayload(input);
+  const detail = String(payload?.detail || "").trim();
+  if (detail === "session_id_required") return "Missing session.";
+  return getSharedApiErrorMessage(input, fallback);
+};
+
+const getDisconnectToolErrorMessage = (input, fallback = "Could not disconnect tool. Try again.") => (
+  getSharedApiErrorMessage(input, fallback)
+);
 const isQueuedJobResponse = (data) => (
   data?.results?.accepted === true &&
   !!getQueuedPollPath(data)
@@ -6356,7 +6462,7 @@ const fileInputRef = useRef(null);
         return {
           ok: false,
           sessionId: sessionKey,
-          message: data?.message || "Configuration load failed.",
+          message: getConfigurationErrorMessage(data, "Could not load configuration. Try again."),
           data,
         };
       }
@@ -6411,7 +6517,7 @@ const fileInputRef = useRef(null);
     })
       .then((data) => {
         if (!isSuccessResponse(data)) {
-          const message = data?.message || "Neo4j credentials could not be saved for this session.";
+          const message = getConfigurationErrorMessage(data, "Neo4j credentials could not be saved for this session.");
           updateSourceWindowState(sessionKey, {
             realtimeConfigPersistStatus: "failed",
             realtimeConfigPersistedSessionId: null,
@@ -6695,16 +6801,16 @@ const fileInputRef = useRef(null);
     onUnauthorized: () => {
       pushNotification({
         title: "Session expired",
-        message: "Please sign in again.",
+        message: "Your session expired. Please sign in again.",
         source: "Auth",
         level: "warning",
       });
       logout();
     },
-    onForbidden: (data) => {
+    onForbidden: () => {
       pushNotification({
         title: "Permission denied",
-        message: data?.permission ? "Missing permission: " + data.permission : (data?.message || data?.error || "You do not have permission for this action."),
+        message: "You do not have access to do that.",
         source: "RBAC",
         level: "warning",
       });
@@ -6725,6 +6831,15 @@ const fileInputRef = useRef(null);
         title: "Rate limited",
         message: "Too many requests." + (retryAfter ? " Retry after " + retryAfter + " seconds." : " Please try again shortly."),
         source: "Security",
+        level: "warning",
+        durationMs: 8000,
+      });
+    },
+    onPayloadTooLarge: () => {
+      pushNotification({
+        title: "Request too large",
+        message: "The request was too large. Reduce file size or payload size and try again.",
+        source: "Linkx",
         level: "warning",
         durationMs: 8000,
       });
@@ -8440,7 +8555,7 @@ const fileInputRef = useRef(null);
           graphProgressRenderedRef.current[graphWindowId] = true;
         } else {
           delete graphAutoRequestedRef.current[graphWindowId];
-          alert(data.message);
+          alert(getConfigurationErrorMessage(data, "Could not upload configuration. Try again."));
         }
       })
       .catch((err) => {
@@ -8462,7 +8577,7 @@ const fileInputRef = useRef(null);
               : windowState
           )
         );
-        alert(err?.message || "Graph request failed");
+        alert(getGraphFetchErrorMessage(err, getJobFailureMessage(err, "Graph fetch failed. Please retry.")));
       })
       .finally(() => {
         if (graphFetchAbortControllersRef.current[graphWindowId] === controller) {
@@ -8897,7 +9012,7 @@ const fileInputRef = useRef(null);
                   );
                 } 
                 else {
-                  alert(data.message)
+                  alert(getConfigurationErrorMessage(data))
                   setWindows(prev =>
                     prev.map(w =>
                       w.id === id ? { ...w,loadscreenState: false ,loadscreenText:null} : w
@@ -9145,9 +9260,10 @@ const fileInputRef = useRef(null);
             body: JSON.stringify(disconnectPayload),
           })
             .then((data) => {
+              const failed = String(data?.status || "").toLowerCase() === "error";
               setWindows(prev =>
                 prev.map(w =>
-                  w.id === id ? { ...w, windowRealtimeResponseI: data.message } : w
+                  w.id === id ? { ...w, windowRealtimeResponseI: failed ? getDisconnectSourceErrorMessage(data) : data.message } : w
                 )
               );
             })
@@ -9155,7 +9271,7 @@ const fileInputRef = useRef(null);
               console.error(err);
               setWindows(prev =>
                 prev.map(w =>
-                  w.id === id ? { ...w, windowRealtimeResponseI: "Disconnecting failed!" } : w
+                  w.id === id ? { ...w, windowRealtimeResponseI: getDisconnectSourceErrorMessage(err) } : w
                 )
               );
             });
@@ -9207,15 +9323,16 @@ const fileInputRef = useRef(null);
           })
             .then((data) => {
               const connected = toolStatusFromResponse(data?.message) === TOOL_STATUSES.CONNECTED;
+              const failureMessage = getConnectToolErrorMessage(data);
               setWindows(prev =>
                 prev.map(w =>
                   w.id === id ? {
                     ...w,
-                    formRealtimeToolResponse: data.message,
+                    formRealtimeToolResponse: connected ? data.message : failureMessage,
                     realtimeToolPassword: connected && normalizeSecretRefValue(w.realtimeToolPasswordRef || toolPayload.password_ref) ? "***" : w.realtimeToolPassword,
                     realtimeToolPasswordRef: connected ? normalizeSecretRefValue(w.realtimeToolPasswordRef || toolPayload.password_ref) : w.realtimeToolPasswordRef,
                     realtimeNeo4jConnectedSessionId: connected ? sessionKey : null,
-                    realtimeStartGuardMessage: connected ? null : (data?.message || "Neo4j connection failed for this session."),
+                    realtimeStartGuardMessage: connected ? null : failureMessage,
                   } : w
                 )
               );
@@ -9237,7 +9354,7 @@ const fileInputRef = useRef(null);
                 data: err?.data,
                 error: err,
               });
-              const backendMessage = getStreamStartErrorMessage(
+              const backendMessage = getConnectToolErrorMessage(
                 err,
                 "Neo4j connection failed for this session."
               );
@@ -9268,9 +9385,10 @@ const fileInputRef = useRef(null);
             body: JSON.stringify({ ...payload, source_id: normalizeSessionId(id), session_id: normalizeSessionId(id) }),
           })
             .then((data) => {
+              const failed = String(data?.status || "").toLowerCase() === "error";
               setWindows(prev =>
                 prev.map(w =>
-                  w.id === id ? { ...w, formRealtimeToolResponse: data.message } : w
+                  w.id === id ? { ...w, formRealtimeToolResponse: failed ? getDisconnectToolErrorMessage(data) : data.message } : w
                 )
               );
             })
@@ -9278,7 +9396,7 @@ const fileInputRef = useRef(null);
               console.error(err);
               setWindows(prev =>
                 prev.map(w =>
-                  w.id === id ? { ...w, formRealtimeToolResponse: "Disonnecting failed!" } : w
+                  w.id === id ? { ...w, formRealtimeToolResponse: getDisconnectToolErrorMessage(err) } : w
                 )
               );
             });
@@ -9327,9 +9445,10 @@ const fileInputRef = useRef(null);
             body: JSON.stringify(payload),
           })
             .then((data) => {
+              const failed = String(data?.status || "").toLowerCase() === "error";
               setWindows(prev =>
                 prev.map(w =>
-                  w.id === id ? { ...w, windowResponseI: data.message, sourceStatus: sourceStatusFromResponse(data.message) } : w
+                  w.id === id ? { ...w, windowResponseI: failed ? getDisconnectSourceErrorMessage(data) : data.message, sourceStatus: failed ? SOURCE_STATUSES.FAILED : sourceStatusFromResponse(data.message) } : w
                 )
               );
             })
@@ -9337,7 +9456,7 @@ const fileInputRef = useRef(null);
               console.error(err);
               setWindows(prev =>
                 prev.map(w =>
-                  w.id === id ? { ...w, windowResponseI: "Disconnecting failed!", sourceStatus: SOURCE_STATUSES.FAILED } : w
+                  w.id === id ? { ...w, windowResponseI: getDisconnectSourceErrorMessage(err), sourceStatus: SOURCE_STATUSES.FAILED } : w
                 )
               );
             });        
@@ -9372,9 +9491,11 @@ const fileInputRef = useRef(null);
             body: JSON.stringify(toolPayload),
           })
             .then((data) => {              
+              const connected = toolStatusFromResponse(data?.message) === TOOL_STATUSES.CONNECTED;
+              const failureMessage = getConnectToolErrorMessage(data);
               setWindows(prev =>
                 prev.map(w =>
-                  w.id === id ? { ...w, formToolResponse: data.message, toolStatus: toolStatusFromResponse(data.message), toolPassword: toolStatusFromResponse(data.message) === TOOL_STATUSES.CONNECTED && normalizeSecretRefValue(w.toolPasswordRef || toolPayload.password_ref) ? "***" : w.toolPassword, toolPasswordRef: toolStatusFromResponse(data.message) === TOOL_STATUSES.CONNECTED ? normalizeSecretRefValue(w.toolPasswordRef || toolPayload.password_ref) : w.toolPasswordRef } : w
+                  w.id === id ? { ...w, formToolResponse: connected ? data.message : failureMessage, toolStatus: toolStatusFromResponse(data.message), toolPassword: connected && normalizeSecretRefValue(w.toolPasswordRef || toolPayload.password_ref) ? "***" : w.toolPassword, toolPasswordRef: connected ? normalizeSecretRefValue(w.toolPasswordRef || toolPayload.password_ref) : w.toolPasswordRef } : w
                 )
               );
             })
@@ -9385,9 +9506,9 @@ const fileInputRef = useRef(null);
                 data: err?.data,
                 error: err,
               });
-              const backendMessage = getStreamStartErrorMessage(
+              const backendMessage = getConnectToolErrorMessage(
                 err,
-                "Connecting failed!"
+                "Could not connect to Neo4j. Check the connection details and try again."
               );
               setWindows(prev =>
                 prev.map(w =>
@@ -9408,9 +9529,10 @@ const fileInputRef = useRef(null);
             body: JSON.stringify({ ...payload, source_id: normalizeSessionId(id), session_id: normalizeSessionId(id) }),
           })
             .then((data) => {              
+              const failed = String(data?.status || "").toLowerCase() === "error";
               setWindows(prev =>
                 prev.map(w =>
-                  w.id === id ? { ...w, formToolResponse: data.message, toolStatus: toolStatusFromResponse(data.message) } : w
+                  w.id === id ? { ...w, formToolResponse: failed ? getDisconnectToolErrorMessage(data) : data.message, toolStatus: failed ? TOOL_STATUSES.FAILED : toolStatusFromResponse(data.message) } : w
                 )
               );
             })
@@ -9418,7 +9540,7 @@ const fileInputRef = useRef(null);
               console.error(err);
               setWindows(prev =>
                 prev.map(w =>
-                  w.id === id ? { ...w, formToolResponse: "Disonnecting failed!", toolStatus: TOOL_STATUSES.FAILED } : w
+                  w.id === id ? { ...w, formToolResponse: getDisconnectToolErrorMessage(err), toolStatus: TOOL_STATUSES.FAILED } : w
                 )
               );
             });        
@@ -10243,7 +10365,7 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
           logStreamFailureResponse("initialization rejected", data);
           pushNotification({
             title: "Streaming could not start",
-            message: getStreamStartErrorMessage(
+            message: getStreamingErrorMessage(
               data,
               "The request was received, but the stream did not initialize. Please check the selected action and try again."
             ),
@@ -10369,10 +10491,10 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
               jobResponse: err?.jobResponse,
             });
 
-            const streamErrorMessage =
-              err?.message && String(err.message).toLowerCase() !== "success"
-                ? err.message
-                : "The stream job failed before it started. Check the console for the job response.";
+            const streamErrorMessage = getStreamingErrorMessage(
+              { ...err, message: getJobFailureMessage(err, err?.message || "The stream job failed before it started.") },
+              "The stream job failed before it started. Check the console for the job response."
+            );
 
             pushNotification({
               title: "Streaming could not start",
@@ -10412,7 +10534,7 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
 
         pushNotification({
           title: "Streaming could not start",
-          message: getStreamStartErrorMessage(
+          message: getStreamingErrorMessage(
             err,
             "The streaming request failed. Please check the backend response and try again."
           ),
@@ -11400,6 +11522,7 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
         })
         .catch((err) => {
           console.error("err",err);
+          alert(getConfigurationErrorMessage(err));
           setloadscreenState(false);
         });    
       }, 300);
@@ -11428,12 +11551,13 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
           alert("Rule removed!");
           handleConfigurationActions("load_default");
         } else {
-          alert(`Remove failed: ${data.message}${data?.results ? ` (${String(data.results)})` : ""}`);
+          alert(getConfigurationErrorMessage(data, "Could not remove the selected rule. Try again."));
         }
         setloadscreenState(false);
       })
       .catch((err) => {
         console.error("ConfigRemoveErr", err);
+        alert(getConfigurationErrorMessage(err, "Could not remove the selected rule. Try again."));
         setloadscreenState(false);
       });
     }
@@ -11462,13 +11586,14 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
           alert("Configuration uploaded!");
           handleConfigurationActions("load_default");
         } else {
-          alert(data.message);
+          alert(getGraphFetchErrorMessage(data));
         }
         if (importInput) importInput.value = "";
         setloadscreenState(false);
       })
       .catch((err) => {
         console.error("ConfigUploadErr", err);
+        alert(getConfigurationErrorMessage(err, "Could not upload configuration. Try again."));
         setloadscreenState(false);
       });
     }
@@ -11483,7 +11608,7 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
         fetchConfigurationForSession(session)
           .then((result) => {
             if (!result.ok) {
-              alert(result.message);
+              alert(getConfigurationErrorMessage(result, result.message));
               setloadscreenState(false);
               return;
             }

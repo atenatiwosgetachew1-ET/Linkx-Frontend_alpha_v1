@@ -33,7 +33,7 @@ const parseResponse = async (response) => {
   }
 };
 
-export const createApiClient = ({ baseUrl, getToken, onUnauthorized, onForbidden, onLocked, onRateLimited, onSecurityPolicyBlocked } = {}) => {
+export const createApiClient = ({ baseUrl, getToken, onUnauthorized, onForbidden, onLocked, onRateLimited, onSecurityPolicyBlocked, onPayloadTooLarge } = {}) => {
   return async function apiFetch(path, options = {}) {
     const headers = new Headers(options.headers || {});
     const token = typeof getToken === "function" ? getToken() : null;
@@ -81,6 +81,9 @@ export const createApiClient = ({ baseUrl, getToken, onUnauthorized, onForbidden
       }
       if (response.status === 429 && typeof onRateLimited === "function" && !options.suppressRateLimitedHandler) {
         onRateLimited({ ...(data && typeof data === "object" ? data : {}), retry_after: retryAfter });
+      }
+      if (response.status === 413 && typeof onPayloadTooLarge === "function" && !options.suppressPayloadTooLargeHandler) {
+        onPayloadTooLarge(data);
       }
 
       console.error("[apiFetch non-ok response]", { path, status: response.status, data });
