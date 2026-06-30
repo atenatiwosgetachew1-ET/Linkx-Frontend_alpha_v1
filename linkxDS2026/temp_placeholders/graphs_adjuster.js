@@ -7433,11 +7433,15 @@ function initializer(id){
   network.redraw();
 }
 
-function mergeGraphChunkUpdate({ nodes = [], edges = [] } = {}) {
+function mergeGraphChunkUpdate({ nodes = [], edges = [], progress = null } = {}) {
   const incomingNodes = Array.isArray(nodes) ? nodes : [];
   const incomingEdges = Array.isArray(edges) ? edges : [];
+  if (progress && typeof window.showGraphLoading === "function") {
+    window.showGraphLoading(progress.title || "Fetching graph data...", progress.current ?? null, progress.total ?? null);
+  }
+
   if (!window.FULL_GRAPH?.nodes || !window.FULL_GRAPH?.edges) {
-    createNewGraph({ nodes: incomingNodes, edges: incomingEdges });
+    createNewGraph({ nodes: incomingNodes, edges: incomingEdges, progress });
     return;
   }
 
@@ -7466,19 +7470,31 @@ function mergeGraphChunkUpdate({ nodes = [], edges = [] } = {}) {
     changed = true;
   });
 
-  if (!changed) return;
+  if (!changed) {
+    if (progress?.complete && typeof window.hideGraphLoading === "function") {
+      setTimeout(() => { window.hideGraphLoading(); }, 180);
+    }
+    return;
+  }
   recomputeVisibleEdges();
   renderVisibleGraphBatch();
+  if (progress?.complete && typeof window.hideGraphLoading === "function") {
+    setTimeout(() => { window.hideGraphLoading(); }, 180);
+  }
 }
 
-function createNewGraph({ id, nodes = [], edges = [], settings = null }) {
+function createNewGraph({ id, nodes = [], edges = [], settings = null, progress = null }) {
   resetGraphHistoryBuffer();
   suspendGraphHistoryStart();
   const totalNodes = Array.isArray(nodes) ? nodes.length : 0;
   const totalEdges = Array.isArray(edges) ? edges.length : 0;
   const totalElements = totalNodes + totalEdges;
   if (typeof window.showGraphLoading === "function") {
-    window.showGraphLoading("Preparing graph data...", 0, Math.max(1, totalElements));
+    if (progress) {
+      window.showGraphLoading(progress.title || "Fetching graph data...", progress.current ?? 0, progress.total ?? Math.max(1, totalElements));
+    } else {
+      window.showGraphLoading("Preparing graph data...", 0, Math.max(1, totalElements));
+    }
   }
   try {
   // Reset visible graph
@@ -7520,7 +7536,7 @@ function createNewGraph({ id, nodes = [], edges = [], settings = null }) {
   }
   } finally {
     suspendGraphHistoryEnd();
-    if (typeof window.hideGraphLoading === "function") {
+    if (progress?.complete && typeof window.hideGraphLoading === "function") {
       setTimeout(() => { window.hideGraphLoading(); }, 180);
     }
   }

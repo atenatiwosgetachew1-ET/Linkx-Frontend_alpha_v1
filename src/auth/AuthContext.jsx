@@ -105,18 +105,13 @@ const clearSsoParams = () => {
 };
 
 export function AuthProvider({ apiUrl, allowedSsoOrigins = [], children }) {
-  const [token, setToken] = useState("");
+  const [token, setToken] = useState(() => localStorage.getItem(AUTH_TOKEN_KEY) || "");
   const [user, setUser] = useState(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [isSsoAuthenticating, setIsSsoAuthenticating] = useState(false);
   const [ssoError, setSsoError] = useState("");
 
   const trustedSsoOrigins = useMemo(() => normalizeAllowedOrigins(allowedSsoOrigins), [allowedSsoOrigins]);
-
-  useEffect(() => {
-    // Clear any access token persisted by older frontend builds.
-    localStorage.removeItem(AUTH_TOKEN_KEY);
-  }, []);
 
   const applyAuth = useCallback((nextToken, nextUser) => {
     const normalizedUser = normalizeUser(nextUser);
@@ -125,7 +120,8 @@ export function AuthProvider({ apiUrl, allowedSsoOrigins = [], children }) {
       setToken("");
       setUser(null);
       return;
-    }
+    }
+    localStorage.setItem(AUTH_TOKEN_KEY, nextToken);
     setToken(nextToken);
     setUser(normalizedUser);
     setSsoError("");
@@ -255,12 +251,7 @@ export function AuthProvider({ apiUrl, allowedSsoOrigins = [], children }) {
       }
 
       try {
-        const data = await authRequest(apiUrl, "/auth/me", {
-          method: "GET",
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const auth = parseAuthResponse(data, token);
-        if (!cancelled) applyAuth(auth.token, auth.user);
+        await verifyToken(token);
       } catch {
         if (!cancelled) logout();
       } finally {
@@ -272,7 +263,7 @@ export function AuthProvider({ apiUrl, allowedSsoOrigins = [], children }) {
     return () => {
       cancelled = true;
     };
-  }, [apiUrl, applyAuth, exchangeParentToken, exchangeSsoCode, logout, token]);
+  }, [exchangeParentToken, exchangeSsoCode, logout, token, verifyToken]);
 
   useEffect(() => {
     const handleSsoMessage = async (event) => {

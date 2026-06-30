@@ -1536,6 +1536,11 @@ const UPLOAD_ALLOWED_EXTENSIONS = [".csv", ".json", ".parquet", ".xlsx"];
 const MAX_UPLOAD_FILE_COUNT = Number(import.meta.env.VITE_MAX_UPLOAD_FILE_COUNT || 25);
 const MAX_UPLOAD_BYTES = Number(import.meta.env.VITE_MAX_UPLOAD_BYTES || 10 * 1024 * 1024);
 const MAX_UPLOAD_TOTAL_BYTES = Number(import.meta.env.VITE_MAX_UPLOAD_TOTAL_BYTES || MAX_UPLOAD_BYTES * MAX_UPLOAD_FILE_COUNT);
+const WINDOW_CAPS = {
+  source: { soft: 3, hard: 5, label: "source windows" },
+  graph: { soft: 6, hard: 10, label: "graph windows" },
+  chart: { soft: 6, hard: 10, label: "chart windows" },
+};
 const JOB_SUCCESS_STATUSES = new Set(["succeeded", "success", "finished", "completed", "done"]);
 const JOB_PENDING_STATUSES = new Set(["queued", "pending", "running", "started", "processing", "in_progress"]);
 const JOB_CANCEL_STATUSES = new Set(["cancel_requested", "cancellation_requested", "cancelled", "canceled"]);
@@ -1640,6 +1645,26 @@ const getSharedApiErrorMessage = (input, fallback = "Something went wrong. Pleas
   return fallback;
 };
 
+const sanitizeBackendUserMessage = (message, fallback = "Operation failed.") => {
+  const normalized = String(message || "").trim();
+  if (!normalized) return fallback;
+
+  if (/tool_credentials/i.test(normalized)) {
+    return "Neo4j connection details are missing for this session.";
+  }
+  if (/password_ref/i.test(normalized)) {
+    return "Please enter the Neo4j password again.";
+  }
+  if (/(session_id|source_id|invalid_fields|validation_error|internal_server_error|payload_too_large|not_found)/i.test(normalized)) {
+    return fallback;
+  }
+  if (/^failed!$/i.test(normalized)) {
+    return fallback;
+  }
+
+  return normalized;
+};
+
 const getConfigurationErrorMessage = (input, fallback = "Could not save configuration. Try again.") => {
   const payload = getApiProblemPayload(input);
   const status = getApiProblemStatus(input);
@@ -1704,7 +1729,7 @@ const getJobFailureMessage = (input, fallback = "Operation failed.") => {
   const jobId = getQueuedJobId(payload) || getQueuedJobId(input);
   if (status === 404 || String(payload?.message || "") === "not_found") return "Job not found or no longer available.";
   if (status === 403 || String(payload?.message || "") === "forbidden") return "You do not have access to this job.";
-  const base = getJobErrorMessage(payload, fallback);
+  const base = sanitizeBackendUserMessage(getJobErrorMessage(payload, fallback), fallback);
   return jobId ? base + " Reference: " + jobId : base;
 };
 
@@ -6398,6 +6423,7 @@ const fileInputRef = useRef(null);
   const noticeTimersRef = useRef({});
   const confirmationsRef = useRef([]);
   const graphFetchAbortControllersRef = useRef({});
+  const pendingWindowCreatesRef = useRef({ source: 0, graph: 0, chart: 0 });
   const toggleMenuRef = useRef(null);
   const tabsToggleButtonRef = useRef(null);
   const darkFloatMenuToggleRef = useRef(null);
@@ -7592,28 +7618,6 @@ const fileInputRef = useRef(null);
           });
         }
 
-        targetWindows.forEach((windowState) => {
-          const graphWindowId = String(windowState.id || "").trim();
-          if (!graphWindowId) return;
-          if (String(windowState.activeGraph || "") !== "graph_info_placeholder") return;
-          if (!Array.isArray(relationships) || relationships.length === 0) return;
-          if (graphAutoRequestedRef.current[graphWindowId]) return;
-
-          graphAutoRequestedRef.current[graphWindowId] = true;
-          logGraphWindowDebug("graph auto-fetch scheduled", {
-            graph_window_id: graphWindowId,
-            session_id: sessionKey,
-            relationship: "*",
-          });
-          requestRelationshipGraph(graphWindowId, {
-            graphId: graphWindowId,
-            sourceId: sessionKey,
-            relationship: "*",
-            iframe: iframeRefs.current[graphWindowId],
-          }, {
-            requestOrigin: "auto_relationships",
-          });
-        });
       }
     };
 
@@ -7932,6 +7936,48 @@ const fileInputRef = useRef(null);
   }, [pushNotification, verifyToken, exchangeParentToken]);
 
   // ---------------------------------------------------------------------------- Windows management ---
+  const countOpenWindowsByType = useCallback((windowType) => (
+    windowsRef.current.filter((windowState) => windowState.type === windowType).length
+  ), []);
+
+  const releasePendingWindowCreate = useCallback((windowType) => {
+    if (!Object.prototype.hasOwnProperty.call(pendingWindowCreatesRef.current, windowType)) return;
+    pendingWindowCreatesRef.current[windowType] = Math.max(0, Number(pendingWindowCreatesRef.current[windowType] || 0) - 1);
+  }, []);
+
+  const guardWindowCreation = useCallback((windowType) => {
+    const cap = WINDOW_CAPS[windowType];
+    if (!cap) return { ok: true };
+
+    const currentCount = countOpenWindowsByType(windowType);
+    const pendingCount = Number(pendingWindowCreatesRef.current[windowType] || 0);
+    const totalCount = currentCount + pendingCount;
+
+    if (totalCount >= cap.hard) {
+      pushNotification({
+        title: "Window limit reached",
+        message: "Maximum of " + cap.hard + " " + cap.label + " reached. Close one before opening another.",
+        source: "Linkx",
+        level: "warning",
+        durationMs: 7000,
+      });
+      return { ok: false };
+    }
+
+    if (totalCount >= cap.soft) {
+      pushNotification({
+        title: "Window count warning",
+        message: "You already have " + totalCount + " " + cap.label + " open. Performance may degrade if you open more.",
+        source: "Linkx",
+        level: "warning",
+        durationMs: 5000,
+      });
+    }
+
+    pendingWindowCreatesRef.current[windowType] = pendingCount + 1;
+    return { ok: true };
+  }, [countOpenWindowsByType, pushNotification]);
+
   const handleFocusWindow = (id) => {
     console.log("focused_on:", id, "type:", typeof id);
     setWindows((prev) => {
@@ -7962,6 +8008,11 @@ const fileInputRef = useRef(null);
   const handleCreateWindows = (sessionId, type, iframeRef, initialContent = null) => {
     if (type === "source" && !requirePermission(PERMISSIONS.SOURCE_CREATE, "source windows")) return null;
     if (type === "graph" && !requirePermission(PERMISSIONS.GRAPH_CREATE, "graph windows")) return null;
+    const guardedTypes = new Set(["source", "graph", "chart"]);
+    if (guardedTypes.has(type)) {
+      const guardResult = guardWindowCreation(type);
+      if (!guardResult.ok) return null;
+    }
     const id = generateWindowId();
     // if (windowIdRef[id]){
     //   const id = generateWindowId();
@@ -8031,14 +8082,19 @@ const fileInputRef = useRef(null);
                     },
                   ];
                 });
+                releasePendingWindowCreate("source");
                 console.log("windowsId:",windowsId)
                 handleFocusWindow(windowsId)
                 setZIndexCounter(prev => prev + 1);
               } else {
+                releasePendingWindowCreate("source");
                 alert("Could not initialize source window!");
               }
             })
-            .catch(console.error);
+            .catch((error) => {
+              releasePendingWindowCreate("source");
+              console.error(error);
+            });
         }, 300);
     } else if (type === "graph") {
       iframeRefs.current[id] = React.createRef();
@@ -8079,6 +8135,7 @@ const fileInputRef = useRef(null);
           },
         ];
       });
+      releasePendingWindowCreate("graph");
       handleFocusWindow(id)
       setZIndexCounter(prev => prev + 1);
       return id;
@@ -8102,6 +8159,7 @@ const fileInputRef = useRef(null);
           },
         ];
       });
+      releasePendingWindowCreate("chart");
       handleFocusWindow(id)
       setZIndexCounter(prev => prev + 1);
     } else if (type === "parent") {
@@ -8447,6 +8505,24 @@ const fileInputRef = useRef(null);
       payload: newPayload,
     });
 
+    const buildGraphProgressPayload = (response, complete = false) => {
+      const responseResults = response?.results && typeof response.results === "object" ? response.results : {};
+      const summary = responseResults?.result && typeof responseResults.result === "object" ? responseResults.result : {};
+      const currentNodes = Array.isArray(responseResults.nodes) ? responseResults.nodes.length : 0;
+      const currentEdges = Array.isArray(responseResults.edges) ? responseResults.edges.length : 0;
+      const totalNodes = Number(summary.total_nodes);
+      const totalEdges = Number(summary.total_edges);
+      const total = Number.isFinite(totalNodes) && Number.isFinite(totalEdges)
+        ? Math.max(1, totalNodes + totalEdges)
+        : null;
+      return {
+        title: "Fetching graph data...",
+        current: currentNodes + currentEdges,
+        total,
+        complete,
+      };
+    };
+
     requestGraphFetch(apiFetch, newPayload, controller.signal, {
       onQueued: (queuedData) => {
         const jobId = getQueuedJobId(queuedData);
@@ -8489,6 +8565,8 @@ const fileInputRef = useRef(null);
           )
         );
 
+        const progress = buildGraphProgressPayload(partialData, false);
+
         const hasRenderedGraph = graphProgressRenderedRef.current[graphWindowId] === true;
         const messageAction = hasRenderedGraph ? "graph_chunk_update" : "new_graph";
         const sourceWindowState = windowsRef.current.find((windowState) => String(windowState.id) === graphWindowId);
@@ -8501,7 +8579,8 @@ const fileInputRef = useRef(null);
           id: graphWindowId,
           nodes,
           edges,
-          settings: settingsToApply
+          settings: settingsToApply,
+          progress,
         });
         graphProgressRenderedRef.current[graphWindowId] = true;
       }
@@ -8550,12 +8629,13 @@ const fileInputRef = useRef(null);
             id: graphWindowId,
             nodes,
             edges,
-            settings: settingsToApply
+            settings: settingsToApply,
+            progress: buildGraphProgressPayload(data, true),
           });
           graphProgressRenderedRef.current[graphWindowId] = true;
         } else {
           delete graphAutoRequestedRef.current[graphWindowId];
-          alert(getConfigurationErrorMessage(data, "Could not upload configuration. Try again."));
+          alert(getGraphFetchErrorMessage(data));
         }
       })
       .catch((err) => {
@@ -11516,7 +11596,7 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
             setloadscreenState(false);
           } 
           else {
-            alert(data.message)
+            alert(getConfigurationErrorMessage(data))
             setloadscreenState(false);
           }
         })
