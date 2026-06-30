@@ -59,34 +59,31 @@ window.addEventListener("message", (event) => {
       break;
     
     case "limit_nodes_key":      
-      applyLimit(payload);
+      void applyLimitWithBusyUi(payload);
       break;
     
     case "limit_nodes_sort":      
-      applyLimit(payload);
+      void applyLimitWithBusyUi(payload);
       break;
 
     case "limit_nodes_amount":      
-      applyLimit(payload);
+      void applyLimitWithBusyUi(payload);
       break;
      
     case "label_nodes_group":
       window.currentSettings.lableGroup = payload;
       break;
     case "weight_edges":
-      weightEdges(payload);
+      void applyWeightEdgesWithBusyUi(payload);
       break;
 
     case "show_title":
-      let showTitleEnabled = payload;
-      applyTitleToggle(showTitleEnabled);
+      void applyTitleToggleWithBusyUi(payload);
       break;
 
     case "show_label":
-      window.currentSettings.showLabels = payload;
-      showNodelabels(window.currentSettings.showLabels);
+      void applyLabelToggleWithBusyUi(payload);
       break;
-
     case "edit_infos":
       window.currentSettings.editInformations = payload;
       toggleNodeInfosEdit(window.currentSettings.editInformations);
@@ -2071,52 +2068,61 @@ function ensureGraphLoadingUi() {
   if (!document.getElementById("linkx_graph_loading_styles")) {
     const style = document.createElement("style");
     style.id = "linkx_graph_loading_styles";
-    style.textContent = '#linkx_graph_loading_overlay {\n'
-      + '  position: fixed;\n'
-      + '  inset: 0;\n'
-      + '  z-index: 14000;\n'
-      + '  display: none;\n'
-      + '  align-items: flex-end;\n'
-      + '  justify-content: flex-start;\n'
-      + '  padding: 0 0 16px 16px;\n'
-      + '  background: transparent;\n'
-      + '  backdrop-filter: none;\n'
-      + '  pointer-events: none;\n'
-      + '}\n'
-      + '#linkx_graph_loading_panel {\n'
-      + '  min-width: 220px;\n'
-      + '  max-width: min(72vw, 360px);\n'
-      + '  border-radius: 8px;\n'
-      + '  border: 1px solid rgba(122, 147, 168, 0.30);\n'
-      + '  background: rgba(247, 251, 255, 0.96);\n'
-      + '  color: #304559;\n'
-      + '  padding: 10px 12px;\n'
-      + '  box-shadow: 0 10px 24px rgba(0,0,0,0.20);\n'
-      + '  font-family: "Segoe UI", Arial, sans-serif;\n'
-      + '  pointer-events: none;\n'
-      + '}\n'
-      + '#linkx_graph_loading_title {\n'
-      + '  font-size: 13px;\n'
-      + '  font-weight: 600;\n'
-      + '  letter-spacing: 0.02em;\n'
-      + '  margin-bottom: 8px;\n'
-      + '}\n'
-      + '#linkx_graph_loading_progress {\n'
-      + '  font-size: 12px;\n'
-      + '  color: #4f667c;\n'
-      + '}\n'
-      + 'html[data-theme="dark"] #linkx_graph_loading_overlay {\n'
-      + '  background: transparent;\n'
-      + '}\n'
-      + 'html[data-theme="dark"] #linkx_graph_loading_panel {\n'
-      + '  background: rgba(15, 26, 36, 0.95);\n'
-      + '  border-color: rgba(103, 132, 156, 0.36);\n'
-      + '  color: #c8d4df;\n'
-      + '  box-shadow: 0 12px 26px rgba(0,0,0,0.50);\n'
-      + '}\n'
-      + 'html[data-theme="dark"] #linkx_graph_loading_progress {\n'
-      + '  color: #94a7b9;\n'
-      + '}';
+    style.textContent = `#linkx_graph_loading_overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 14000;
+  display: none;
+  align-items: flex-end;
+  justify-content: flex-start;
+  padding: 0 0 16px 16px;
+  background: transparent;
+  backdrop-filter: none;
+  pointer-events: none;
+  cursor: progress;
+}
+#linkx_graph_loading_overlay[data-blocking="true"] {
+  background: rgba(243, 248, 252, 0.18);
+  backdrop-filter: blur(1.5px);
+  pointer-events: auto;
+}
+#linkx_graph_loading_panel {
+  min-width: 220px;
+  max-width: min(72vw, 360px);
+  border-radius: 8px;
+  border: 1px solid rgba(122, 147, 168, 0.30);
+  background: rgba(247, 251, 255, 0.96);
+  color: #304559;
+  padding: 10px 12px;
+  box-shadow: 0 10px 24px rgba(0,0,0,0.20);
+  font-family: "Segoe UI", Arial, sans-serif;
+  pointer-events: none;
+}
+#linkx_graph_loading_title {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  margin-bottom: 8px;
+}
+#linkx_graph_loading_progress {
+  font-size: 12px;
+  color: #4f667c;
+}
+html[data-theme="dark"] #linkx_graph_loading_overlay {
+  background: transparent;
+}
+html[data-theme="dark"] #linkx_graph_loading_overlay[data-blocking="true"] {
+  background: rgba(7, 14, 20, 0.22);
+}
+html[data-theme="dark"] #linkx_graph_loading_panel {
+  background: rgba(15, 26, 36, 0.95);
+  border-color: rgba(103, 132, 156, 0.36);
+  color: #c8d4df;
+  box-shadow: 0 12px 26px rgba(0,0,0,0.50);
+}
+html[data-theme="dark"] #linkx_graph_loading_progress {
+  color: #94a7b9;
+}`;
     document.head.appendChild(style);
   }
 
@@ -2131,42 +2137,80 @@ function ensureGraphLoadingUi() {
   ui = {
     overlay,
     titleEl: overlay.querySelector("#linkx_graph_loading_title"),
-    progressEl: overlay.querySelector("#linkx_graph_loading_progress")
+    progressEl: overlay.querySelector("#linkx_graph_loading_progress"),
+    blockingCount: 0,
+    progressMode: "collected"
   };
   window.__linkxGraphLoadingUi = ui;
   return ui;
 }
 
-function showGraphLoading(title = "Preparing graph data...", current = null, total = null) {
-  const ui = ensureGraphLoadingUi();
-  ui.titleEl.textContent = String(title || "Preparing graph data...");
-  if (Number.isFinite(current) && Number.isFinite(total) && total > 0) {
-    const safeCurrent = Math.max(0, Math.min(total, current));
-    const pct = Math.round((safeCurrent / total) * 100);
-    ui.progressEl.textContent = "Collected " + safeCurrent + " of " + total + " (" + pct + "%)";
+function applyGraphLoadingUiState(ui) {
+  const blocking = Number(ui?.blockingCount || 0) > 0;
+  if (!ui?.overlay) return;
+  ui.overlay.dataset.blocking = blocking ? "true" : "false";
+  ui.overlay.style.pointerEvents = blocking ? "auto" : "none";
+  document.body.style.cursor = blocking ? "progress" : "";
+  if (blocking) {
+    document.body.setAttribute("aria-busy", "true");
   } else {
-    ui.progressEl.textContent = "Preparing...";
+    document.body.removeAttribute("aria-busy");
   }
-  ui.overlay.style.display = "flex";
 }
 
-function setGraphLoadingProgress(current, total, title = "") {
-  const ui = ensureGraphLoadingUi();
-  if (title) ui.titleEl.textContent = String(title);
-  if (Number.isFinite(current) && Number.isFinite(total) && total > 0) {
-    const safeCurrent = Math.max(0, Math.min(total, current));
-    const pct = Math.round((safeCurrent / total) * 100);
-    ui.progressEl.textContent = "Collected " + safeCurrent + " of " + total + " (" + pct + "%)";
-  } else {
-    ui.progressEl.textContent = "Working...";
+function formatGraphLoadingProgress(current, total, mode = "collected") {
+  if (!(Number.isFinite(current) && Number.isFinite(total) && total > 0)) {
+    return mode === "steps" ? "Working..." : "Preparing...";
   }
+  const safeCurrent = Math.max(0, Math.min(total, current));
+  const pct = Math.round((safeCurrent / total) * 100);
+  if (mode === "steps") {
+    return "Step " + safeCurrent + " of " + total + " (" + pct + "%)";
+  }
+  return "Collected " + safeCurrent + " of " + total + " (" + pct + "%)";
+}
+
+function lockGraphInteraction() {
+  const ui = ensureGraphLoadingUi();
+  ui.blockingCount = Number(ui.blockingCount || 0) + 1;
+  applyGraphLoadingUiState(ui);
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    ui.blockingCount = Math.max(0, Number(ui.blockingCount || 0) - 1);
+    applyGraphLoadingUiState(ui);
+  };
+}
+
+function showGraphLoading(title = "Preparing graph data...", current = null, total = null, options = {}) {
+  const ui = ensureGraphLoadingUi();
+  ui.progressMode = options?.progressMode === "steps" ? "steps" : "collected";
+  ui.titleEl.textContent = String(title || "Preparing graph data...");
+  ui.progressEl.textContent = formatGraphLoadingProgress(current, total, ui.progressMode);
   ui.overlay.style.display = "flex";
+  applyGraphLoadingUiState(ui);
+}
+
+function setGraphLoadingProgress(current, total, title = "", options = {}) {
+  const ui = ensureGraphLoadingUi();
+  if (options?.progressMode === "steps" || options?.progressMode === "collected") {
+    ui.progressMode = options.progressMode;
+  }
+  if (title) ui.titleEl.textContent = String(title);
+  ui.progressEl.textContent = formatGraphLoadingProgress(current, total, ui.progressMode);
+  ui.overlay.style.display = "flex";
+  applyGraphLoadingUiState(ui);
 }
 
 function hideGraphLoading() {
   const ui = window.__linkxGraphLoadingUi;
   if (!ui || !ui.overlay) return;
   ui.overlay.style.display = "none";
+  if (!Number(ui.blockingCount || 0)) {
+    document.body.style.cursor = "";
+    document.body.removeAttribute("aria-busy");
+  }
 }
 
 async function runWithGraphLoading(title, worker, options = {}) {
@@ -2175,14 +2219,18 @@ async function runWithGraphLoading(title, worker, options = {}) {
   const minVisibleMs = Math.max(0, Number(options?.minVisibleMs) || 220);
   const totalRaw = Number(options?.total);
   const defaultTotal = Number.isFinite(totalRaw) && totalRaw > 0 ? totalRaw : null;
+  const progressMode = options?.progressMode === "steps" ? "steps" : "collected";
+  const blockInteraction = options?.blockInteraction === true;
   const hasUi = typeof window.showGraphLoading === "function" && typeof window.hideGraphLoading === "function";
 
   let wasVisible = false;
+  let releaseInteractionLock = null;
   const startTs = Date.now();
   if (hasUi) {
     const ui = ensureGraphLoadingUi();
     wasVisible = ui?.overlay?.style?.display === "flex";
-    window.showGraphLoading(title || "Working...", defaultTotal == null ? null : 0, defaultTotal);
+    if (blockInteraction) releaseInteractionLock = lockGraphInteraction();
+    window.showGraphLoading(title || "Working...", defaultTotal == null ? null : 0, defaultTotal, { progressMode });
   }
 
   await new Promise(resolve => {
@@ -2197,10 +2245,11 @@ async function runWithGraphLoading(title, worker, options = {}) {
         const useTotal = Number.isFinite(totalValue) && totalValue > 0
           ? totalValue
           : defaultTotal;
-        window.setGraphLoadingProgress(current, useTotal, nextTitle || "");
+        window.setGraphLoadingProgress(current, useTotal, nextTitle || "", { progressMode });
       }
     });
   } finally {
+    if (releaseInteractionLock) releaseInteractionLock();
     if (!hasUi || wasVisible) return;
     const elapsed = Date.now() - startTs;
     const waitMs = Math.max(0, minVisibleMs - elapsed);
@@ -2208,11 +2257,41 @@ async function runWithGraphLoading(title, worker, options = {}) {
   }
 }
 
+async function runExclusiveGraphTask(title, worker, options = {}) {
+  if (typeof worker !== "function") return null;
+
+  const activeTask = window.__linkxGraphExclusiveTask;
+  if (activeTask) {
+    if (typeof window.linkxNotify === "function") {
+      window.linkxNotify("Graph is still processing the previous action.", {
+        title: "Notice",
+        level: "info",
+        durationMs: 1800
+      });
+    }
+    return activeTask;
+  }
+
+  const task = runWithGraphLoading(title, worker, {
+    ...options,
+    blockInteraction: true,
+    progressMode: options?.progressMode || "steps"
+  });
+  window.__linkxGraphExclusiveTask = task;
+  try {
+    return await task;
+  } finally {
+    if (window.__linkxGraphExclusiveTask === task) {
+      window.__linkxGraphExclusiveTask = null;
+    }
+  }
+}
+
 window.showGraphLoading = showGraphLoading;
 window.setGraphLoadingProgress = setGraphLoadingProgress;
 window.hideGraphLoading = hideGraphLoading;
 window.runWithGraphLoading = runWithGraphLoading;
-
+window.runExclusiveGraphTask = runExclusiveGraphTask;
 
 const ICON_THEME_CACHE = new Map();
 const ICON_THEME_PENDING = new Set();
@@ -3373,7 +3452,30 @@ async function mergeSelectedNodes(selectedNodes) {
 function generatePaletteColor(index, total) {
   const safeTotal = Math.max(1, total);
   const hue = Math.round((index % safeTotal) * (360 / safeTotal));
-  return `hsl(${hue}, 62%, 55%)`;
+  return hslToHex(hue, 62, 55);
+}
+
+function hslToHex(h, s, l) {
+  h = (((Number(h) || 0) % 360) + 360) % 360;
+  s = Math.max(0, Math.min(100, Number(s) || 0)) / 100;
+  l = Math.max(0, Math.min(100, Number(l) || 0)) / 100;
+
+  const c = (1 - Math.abs(2 * l - 1)) * s;
+  const x = c * (1 - Math.abs((h / 60) % 2 - 1));
+  const m = l - c / 2;
+  let r = 0;
+  let g = 0;
+  let b = 0;
+
+  if (h < 60) [r, g, b] = [c, x, 0];
+  else if (h < 120) [r, g, b] = [x, c, 0];
+  else if (h < 180) [r, g, b] = [0, c, x];
+  else if (h < 240) [r, g, b] = [0, x, c];
+  else if (h < 300) [r, g, b] = [x, 0, c];
+  else [r, g, b] = [c, 0, x];
+
+  const toHex = value => ("0" + Math.round((value + m) * 255).toString(16)).slice(-2);
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
 }
 
 function getVisibleNodeSnapshots() {
@@ -3873,7 +3975,7 @@ async function runPathFinderForSelection(selectedNodes) {
 
     setProgress(3, 3, "Finalizing...");
     return result;
-  }, { minVisibleMs: 260, total: 3 });
+  }, { minVisibleMs: 260, total: 3, blockInteraction: true, progressMode: "steps" });
 
   if (!pathResult.path.length) {
     alert("No path found between the selected nodes.");
@@ -3986,7 +4088,7 @@ async function runFindAllPathsForSelection(selectedNodes) {
 
     setProgress(3, 3, "Finalizing...");
     return found;
-  }, { minVisibleMs: 320, total: 3 });
+  }, { minVisibleMs: 320, total: 3, blockInteraction: true, progressMode: "steps" });
 
   if (!allPaths.length) {
     alert("No paths found between the selected nodes.");
@@ -4036,7 +4138,7 @@ async function runLinkTraversal(selectedNodes, degree = 5) {
     setProgress(1, 2, "Expanding neighborhood...");
     expandNeighborhoodFromSelection(ids, maxDepth);
     setProgress(2, 2, "Refreshing graph...");
-  }, { minVisibleMs: 180, total: 2 });
+  }, { minVisibleMs: 180, total: 2, blockInteraction: true, progressMode: "steps" });
 
   alert(`Expanded traversal up to ${maxDepth} degree(s).`);
 }
@@ -4104,7 +4206,7 @@ async function runCutPointDetection() {
 
     setProgress(3, 3, "Finalizing...");
     return points;
-  }, { minVisibleMs: 220, total: 3 });
+  }, { minVisibleMs: 220, total: 3, blockInteraction: true, progressMode: "steps" });
 
   if (!cutPoints.length) {
     alert("No cut points found in the current visible graph.");
@@ -4206,7 +4308,7 @@ async function toggleEdgeBundlingLiteWithLoading(forceState = null) {
     const next = toggleEdgeBundlingLite(forceState);
     setProgress(2, 2, "Refreshing graph...");
     return next;
-  }, { minVisibleMs: 180, total: 2 });
+  }, { minVisibleMs: 180, total: 2, blockInteraction: true, progressMode: "steps" });
 }
 
 async function configureEdgeBundlingLite() {
@@ -4228,7 +4330,7 @@ async function configureEdgeBundlingLite() {
       applyEdgeBundlingLite();
       network.redraw();
       setProgress(2, 2, "Finalizing...");
-    }, { minVisibleMs: 180, total: 2 });
+    }, { minVisibleMs: 180, total: 2, blockInteraction: true, progressMode: "steps" });
   }
 }
 
@@ -4572,51 +4674,193 @@ function isCommunityDetectableNode(nodeId) {
   return true;
 }
 
-function detectVisibleCommunities(options = {}) {
+function getCommunityEdgeRelationship(edge) {
+  const value = edge?.rel_type ?? edge?.relationship ?? edge?.type ?? edge?.label ?? "Unspecified";
+  const normalized = String(value == null ? "" : value).trim();
+  return normalized || "Unspecified";
+}
+
+function incrementMapCounter(map, key, amount = 1) {
+  map.set(key, (map.get(key) || 0) + amount);
+}
+
+function getTopCounterKey(counter) {
+  let winner = "";
+  let winnerCount = -1;
+  counter.forEach((count, key) => {
+    if (count > winnerCount || (count === winnerCount && String(key) < String(winner))) {
+      winner = key;
+      winnerCount = count;
+    }
+  });
+  return winner;
+}
+
+function addCommunityNeighbor(adjacency, from, to, relationship, weight) {
+  if (!adjacency.has(from)) adjacency.set(from, new Map());
+  const neighbors = adjacency.get(from);
+  const current = neighbors.get(to) || { weight: 0, labels: new Map() };
+  current.weight += weight;
+  incrementMapCounter(current.labels, relationship, weight);
+  neighbors.set(to, current);
+}
+
+function buildVisibleCommunityGraph(options = {}) {
   const includeThemeLines = options.includeThemeLines === true;
   const filtered = getFilteredVisibleGraphIds();
-  const visibleSet = new Set(Array.from(filtered.nodeIds).filter(isCommunityDetectableNode));
-  const visited = new Set();
-  const communities = [];
+  const nodeIds = Array.from(filtered.nodeIds).filter(isCommunityDetectableNode).sort();
+  const visibleSet = new Set(nodeIds);
+  const labelFrequency = new Map();
+  const usableEdges = [];
 
-  visibleSet.forEach(startNode => {
-    if (visited.has(startNode)) return;
-    const queue = [startNode];
-    const members = [];
-    visited.add(startNode);
+  filtered.edgeIds.forEach(edgeId => {
+    const edge = FULL_GRAPH.edges.get(edgeId) || edgesData.get(edgeId);
+    if (!edge) return;
+    if (!includeThemeLines && isThemeLineEdge(edge)) return;
 
-    while (queue.length > 0) {
-      const nodeId = queue.shift();
-      members.push(nodeId);
+    const from = normalizeGraphId(edge.from);
+    const to = normalizeGraphId(edge.to);
+    if (!visibleSet.has(from) || !visibleSet.has(to) || from === to) return;
 
-      const traversable = getTraversableEdges(nodeId, {
-        directed: false,
-        weighted: false,
-        includeThemeLines
-      });
-
-      traversable.forEach(next => {
-        if (!visibleSet.has(next.to) || visited.has(next.to)) return;
-        visited.add(next.to);
-        queue.push(next.to);
-      });
-    }
-    communities.push(members);
+    const relationship = getCommunityEdgeRelationship(edge);
+    incrementMapCounter(labelFrequency, relationship);
+    usableEdges.push({ from, to, relationship });
   });
 
-  return communities.sort((a, b) => b.length - a.length);
+  const adjacency = new Map(nodeIds.map(nodeId => [nodeId, new Map()]));
+  const nodeRelationshipCounts = new Map(nodeIds.map(nodeId => [nodeId, new Map()]));
+
+  usableEdges.forEach(edge => {
+    const frequency = Math.max(1, labelFrequency.get(edge.relationship) || 1);
+    const rarityBoost = Math.min(2.5, Math.sqrt(usableEdges.length / frequency) / 3);
+    const weight = 1 + rarityBoost;
+
+    addCommunityNeighbor(adjacency, edge.from, edge.to, edge.relationship, weight);
+    addCommunityNeighbor(adjacency, edge.to, edge.from, edge.relationship, weight);
+    incrementMapCounter(nodeRelationshipCounts.get(edge.from), edge.relationship);
+    incrementMapCounter(nodeRelationshipCounts.get(edge.to), edge.relationship);
+  });
+
+  return { adjacency, nodeIds, nodeRelationshipCounts };
+}
+
+function detectVisibleCommunities(options = {}) {
+  const { adjacency, nodeIds, nodeRelationshipCounts } = buildVisibleCommunityGraph(options);
+  if (nodeIds.length === 0) return [];
+
+  const labels = new Map(nodeIds.map(nodeId => [nodeId, nodeId]));
+  const dominantRelationship = new Map(
+    nodeIds.map(nodeId => [nodeId, getTopCounterKey(nodeRelationshipCounts.get(nodeId) || new Map())])
+  );
+
+  for (let iteration = 0; iteration < 14; iteration += 1) {
+    let changed = false;
+    const orderedNodes = [...nodeIds].sort((a, b) => {
+      const degreeDiff = (adjacency.get(b)?.size || 0) - (adjacency.get(a)?.size || 0);
+      return degreeDiff || String(a).localeCompare(String(b));
+    });
+
+    orderedNodes.forEach(nodeId => {
+      const neighbors = adjacency.get(nodeId);
+      if (!neighbors || neighbors.size === 0) return;
+
+      const scores = new Map();
+      const nodeDominant = dominantRelationship.get(nodeId);
+      neighbors.forEach((edgeInfo, neighborId) => {
+        const neighborLabel = labels.get(neighborId);
+        if (!neighborLabel) return;
+
+        const edgeDominant = getTopCounterKey(edgeInfo.labels);
+        const relationshipBonus = nodeDominant && edgeDominant === nodeDominant ? 1.35 : 1;
+        incrementMapCounter(scores, neighborLabel, edgeInfo.weight * relationshipBonus);
+      });
+
+      let bestLabel = labels.get(nodeId);
+      let bestScore = scores.get(bestLabel) || 0;
+      scores.forEach((score, label) => {
+        if (score > bestScore || (score === bestScore && String(label) < String(bestLabel))) {
+          bestLabel = label;
+          bestScore = score;
+        }
+      });
+
+      if (bestLabel !== labels.get(nodeId)) {
+        labels.set(nodeId, bestLabel);
+        changed = true;
+      }
+    });
+
+    if (!changed) break;
+  }
+
+  const grouped = new Map();
+  nodeIds.forEach(nodeId => {
+    const label = labels.get(nodeId) || nodeId;
+    if (!grouped.has(label)) grouped.set(label, []);
+    grouped.get(label).push(nodeId);
+  });
+
+  return Array.from(grouped.values())
+    .map(members => members.sort())
+    .sort((a, b) => b.length - a.length || String(a[0]).localeCompare(String(b[0])));
+}
+
+function separateCommunityLayout(communities) {
+  if (!network || !Array.isArray(communities) || communities.length <= 1) return;
+  const movableCommunities = communities.filter(group => Array.isArray(group) && group.length > 0);
+  if (movableCommunities.length <= 1) return;
+
+  const allNodeIds = movableCommunities.flat();
+  const positions = network.getPositions(allNodeIds);
+  const radius = Math.max(220, Math.min(1600, Math.sqrt(allNodeIds.length) * 80));
+  const centerStep = (Math.PI * 2) / movableCommunities.length;
+
+  movableCommunities.forEach((communityNodes, index) => {
+    const currentPositions = communityNodes
+      .map(nodeId => positions[nodeId])
+      .filter(pos => pos && Number.isFinite(pos.x) && Number.isFinite(pos.y));
+    if (currentPositions.length === 0) return;
+
+    const currentCenter = currentPositions.reduce((acc, pos) => ({
+      x: acc.x + pos.x,
+      y: acc.y + pos.y
+    }), { x: 0, y: 0 });
+    currentCenter.x /= currentPositions.length;
+    currentCenter.y /= currentPositions.length;
+
+    const targetAngle = index * centerStep - Math.PI / 2;
+    const targetCenter = {
+      x: Math.cos(targetAngle) * radius,
+      y: Math.sin(targetAngle) * radius
+    };
+    const dx = targetCenter.x - currentCenter.x;
+    const dy = targetCenter.y - currentCenter.y;
+
+    communityNodes.forEach(nodeId => {
+      const pos = positions[nodeId];
+      if (!pos || !Number.isFinite(pos.x) || !Number.isFinite(pos.y)) return;
+      network.moveNode(nodeId, pos.x + dx, pos.y + dy);
+    });
+  });
+
+  if (typeof network.fit === "function") {
+    network.fit({
+      nodes: allNodeIds,
+      animation: { duration: 320, easingFunction: "easeInOutQuad" }
+    });
+  }
 }
 
 async function applyCommunityDetection() {
   const result = await runWithGraphLoading("Detecting communities...", async ({ setProgress }) => {
-    setProgress(1, 3, "Scanning connected groups...");
+    setProgress(1, 4, "Scoring relationship neighborhoods...");
     const communities = detectVisibleCommunities({ includeThemeLines: false });
     if (communities.length === 0) {
-      setProgress(3, 3, "No communities found");
+      setProgress(4, 4, "No communities found");
       return { communities };
     }
 
-    setProgress(2, 3, "Applying community colors...");
+    setProgress(2, 4, "Applying community colors...");
     const nodeUpdates = [];
     communities.forEach((communityNodes, index) => {
       const color = generatePaletteColor(index, communities.length);
@@ -4632,17 +4876,21 @@ async function applyCommunityDetection() {
     });
     nodesData.update(nodeUpdates);
 
+    setProgress(3, 4, "Separating detected groups...");
+    separateCommunityLayout(communities);
+
     window.parent.postMessage({
       type: "community_detection_result",
       payload: {
         communities: communities.length,
-        largest: communities[0]?.length || 0
+        largest: communities[0]?.length || 0,
+        method: "relationship_weighted_label_propagation"
       }
     }, window.location.origin);
 
-    setProgress(3, 3, "Finalizing...");
+    setProgress(4, 4, "Finalizing...");
     return { communities };
-  }, { minVisibleMs: 280, total: 3 });
+  }, { minVisibleMs: 280, total: 4 });
 
   if (!result || !Array.isArray(result.communities) || result.communities.length === 0) {
     alert("No communities detected in the current visible graph.");
@@ -4876,6 +5124,39 @@ function resetToLimit() {
         });
         window.limitOverridden = false;
     }
+}
+
+async function applyLimitWithBusyUi(payload) {
+  return runExclusiveGraphTask("Updating graph view...", async ({ setProgress }) => {
+    setProgress(1, 2, "Recomputing visible graph...");
+    applyLimit(payload);
+    setProgress(2, 2, "Finalizing...");
+  }, { minVisibleMs: 180, total: 2, blockInteraction: true, progressMode: "steps" });
+}
+
+async function applyWeightEdgesWithBusyUi(payload) {
+  return runExclusiveGraphTask("Updating edge weights...", async ({ setProgress }) => {
+    setProgress(1, 2, "Applying edge weight mode...");
+    weightEdges(payload);
+    setProgress(2, 2, "Finalizing...");
+  }, { minVisibleMs: 180, total: 2 });
+}
+
+async function applyTitleToggleWithBusyUi(state) {
+  return runExclusiveGraphTask("Updating graph titles...", async ({ setProgress }) => {
+    setProgress(1, 2, state ? "Building titles..." : "Clearing titles...");
+    applyTitleToggle(state);
+    setProgress(2, 2, "Finalizing...");
+  }, { minVisibleMs: 200, total: 2 });
+}
+
+async function applyLabelToggleWithBusyUi(state) {
+  return runExclusiveGraphTask("Updating graph labels...", async ({ setProgress }) => {
+    window.currentSettings.showLabels = state;
+    setProgress(1, 2, state ? "Showing labels..." : "Hiding labels...");
+    showNodelabels(window.currentSettings.showLabels);
+    setProgress(2, 2, "Finalizing...");
+  }, { minVisibleMs: 180, total: 2 });
 }
 
 function applyTitleToggle(state) {

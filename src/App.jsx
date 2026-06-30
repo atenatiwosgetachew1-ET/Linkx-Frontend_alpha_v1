@@ -190,6 +190,13 @@ const extractMainSessionId = (data) => normalizeSessionId(
   data?.results
 );
 
+const extractParentSessionId = (value) => {
+  const normalized = normalizeSessionId(value);
+  if (!normalized) return "";
+  const parts = normalized.split("_");
+  return parts.length > 1 ? normalizeSessionId(parts.slice(1).join("_")) : normalized;
+};
+
 
 const sanitizeGraphEndpointId = (value = "", { maxLength = 128 } = {}) => (
   stripControlChars(value).replace(/[^a-zA-Z0-9_.:-]/g, "").slice(0, maxLength)
@@ -834,6 +841,14 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
   const activeRuleValue = normalizeActiveRuleValue(parsedConfig?.active_rule);
   const ruleNames = Array.isArray(parsedConfig?.rule_names) ? parsedConfig.rule_names : [];
   const canRemoveRule = ruleNames.length > 0 && selectedRuleForRemoval !== "";
+  const classifiedEntityEntries = normalizeClassifiedEntityEntries(
+    parsedConfig?.trusted_entities ?? parsedConfig?.trusted_catalog ?? parsedConfig?.trusted_list ?? parsedConfig?.trustedList ?? parsedConfig?.active_tool_trusted_list,
+    parsedConfig?.risk_entities ?? parsedConfig?.riskEntities ?? parsedConfig?.active_risk_entities,
+    {
+      value: parsedConfig?.classified_entities ?? parsedConfig?.classifiedEntities,
+      preserveEmpty: true,
+    }
+  );
   const largeSearchBackend = normalizeLargeSearchBackend(parsedConfig?.large_search_backend);
   const elasticScrollLimit = normalizeElasticScrollLimit(parsedConfig?.elastic_scroll_limit);
   const idleTimeoutMinutes = Math.max(1, Math.round((idleSettings?.timeoutMs || DEFAULT_IDLE_TIMEOUT_MS) / 60000));
@@ -890,7 +905,37 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
     actions("remove", { rule: selectedRuleForRemoval });
   };
 
+  const updateClassifiedEntities = (nextEntries) => {
+    actions("change", {
+      name: "classified_entities",
+      value: normalizeClassifiedEntityEntries(null, null, { value: nextEntries, preserveEmpty: true }),
+    });
+  };
 
+  const handleClassifiedEntityAdd = () => {
+    updateClassifiedEntities([
+      ...classifiedEntityEntries,
+      { key: "", value: "", category: "Trusted" },
+    ]);
+  };
+
+  const handleClassifiedEntityChange = (index, field, value) => {
+    const nextEntries = classifiedEntityEntries.map((entry, entryIndex) => (
+      entryIndex === index
+        ? {
+            ...entry,
+            [field]: field === "category"
+              ? (String(value) === "Risk" ? "Risk" : "Trusted")
+              : sanitizeText(value, { maxLength: field === "key" ? 160 : 500 }),
+          }
+        : entry
+    ));
+    updateClassifiedEntities(nextEntries);
+  };
+
+  const handleClassifiedEntityRemove = (index) => {
+    updateClassifiedEntities(classifiedEntityEntries.filter((_, entryIndex) => entryIndex !== index));
+  };
 
   return (
     <div
@@ -1244,6 +1289,7 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
                   value={Array.isArray(parsedConfig?.active_tool_tables) ? parsedConfig.active_tool_tables.join(", ") : ""}
                   onChange={(e) => actions("change", { name: e.target.name, value: e.target.value })}
                 />
+
               </fieldset>
 
               {/* Analysis Rules */}
@@ -1294,6 +1340,71 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
                 <label>
                   Get latest sample <a href="/linkxDS2026/temp_rules/Linkx_Rules_Template.zip" download> Template</a>
                 </label>
+              </fieldset>
+
+              <fieldset style={{ display: activeConfigTab === "rules" ? "block" : "none" }}>
+                <legend>Classified Entities</legend>
+                <table className="config_classified_entities_table">
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th>Key</th>
+                      <th>Value</th>
+                      <th>Category</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {classifiedEntityEntries.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="config_trusted_list_empty">No classified-entity entries yet.</td>
+                      </tr>
+                    ) : classifiedEntityEntries.map((entry, index) => (
+                      <tr key={"classified-entity-" + index}>
+                        <td className="config_trusted_list_index">{index + 1}</td>
+                        <td>
+                          <input
+                            type="text"
+                            className="subinput config_trusted_list_input"
+                            value={entry.key || ""}
+                            onChange={(e) => handleClassifiedEntityChange(index, "key", e.target.value)}
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="text"
+                            className="subinput config_trusted_list_input"
+                            value={entry.value || ""}
+                            onChange={(e) => handleClassifiedEntityChange(index, "value", e.target.value)}
+                          />
+                        </td>
+                        <td>
+                          <select
+                            className="config_classified_entities_select"
+                            value={entry.category || "Trusted"}
+                            onChange={(e) => handleClassifiedEntityChange(index, "category", e.target.value)}
+                          >
+                            <option value="Trusted">Trusted</option>
+                            <option value="Risk">Risk</option>
+                          </select>
+                        </td>
+                        <td className="config_trusted_list_actions">
+                          <button
+                            type="button"
+                            className="critical_btns config_trusted_list_remove"
+                            onClick={() => handleClassifiedEntityRemove(index)}
+                          >
+                            Remove
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+
+                <button type="button" className="action_btns config_trusted_list_add" onClick={handleClassifiedEntityAdd}>
+                  Add row
+                </button>
               </fieldset>
 
 
@@ -1478,6 +1589,27 @@ const getJobErrorMessage = (job, fallback = "Job failed") => {
     job?.message ??
     job?.error ??
     fallback;
+};
+
+
+const getStreamStartErrorMessage = (errorOrData, fallback = "The streaming request could not be completed.") => {
+  if (!errorOrData) return fallback;
+
+  const directMessage =
+    errorOrData?.data?.message ??
+    errorOrData?.data?.error ??
+    errorOrData?.jobResponse?.message ??
+    errorOrData?.jobResponse?.error ??
+    errorOrData?.jobResult?.message ??
+    errorOrData?.jobResult?.error ??
+    errorOrData?.message ??
+    errorOrData?.error;
+
+  const normalized = String(directMessage || "").trim();
+  if (!normalized || normalized.toLowerCase() === "failed to fetch") {
+    return fallback;
+  }
+  return normalized;
 };
 
 const isQueuedJobResponse = (data) => (
@@ -2127,6 +2259,99 @@ const normalizeElasticScrollLimit = (value) => {
   return parsed;
 };
 
+const normalizeTrustedListEntries = (value, options = {}) => {
+  const preserveEmpty = options?.preserveEmpty === true;
+  const source = Array.isArray(value)
+    ? value
+    : typeof value === "string" && value.trim()
+      ? (() => {
+          try {
+            const parsed = JSON.parse(value);
+            return Array.isArray(parsed) ? parsed : [];
+          } catch (_error) {
+            return [];
+          }
+        })()
+      : [];
+
+  return source.map((item) => {
+    if (Array.isArray(item)) {
+      return {
+        key: sanitizeText(item[0] ?? "", { maxLength: 160 }),
+        value: sanitizeText(item[1] ?? "", { maxLength: 500 }),
+      };
+    }
+    if (!item || typeof item !== "object") {
+      return { key: "", value: "" };
+    }
+
+    if (Object.prototype.hasOwnProperty.call(item, "key") || Object.prototype.hasOwnProperty.call(item, "value") || Object.prototype.hasOwnProperty.call(item, "name") || Object.prototype.hasOwnProperty.call(item, "data")) {
+      return {
+        key: sanitizeText(item.key ?? item.name ?? "", { maxLength: 160 }),
+        value: sanitizeText(item.value ?? item.data ?? "", { maxLength: 500 }),
+      };
+    }
+
+    const firstScalarEntry = Object.entries(item).find(([, entryValue]) => ["string", "number", "boolean"].includes(typeof entryValue));
+    if (!firstScalarEntry) {
+      return { key: "", value: "" };
+    }
+
+    return {
+      key: sanitizeText(firstScalarEntry[0] ?? "", { maxLength: 160 }),
+      value: sanitizeText(firstScalarEntry[1] ?? "", { maxLength: 500 }),
+    };
+  }).filter((item) => preserveEmpty || item.key !== "" || item.value !== "");
+};
+
+const normalizeClassifiedEntityEntries = (trustedValue, riskValue, options = {}) => {
+  const preserveEmpty = options?.preserveEmpty === true;
+  const explicitSource = options?.value;
+
+  if (explicitSource !== undefined) {
+    const sourceEntries = Array.isArray(explicitSource)
+      ? explicitSource
+      : typeof explicitSource === "string" && explicitSource.trim()
+        ? (() => {
+            try {
+              const parsed = JSON.parse(explicitSource);
+              return Array.isArray(parsed) ? parsed : [];
+            } catch (_error) {
+              return [];
+            }
+          })()
+        : [];
+
+    return sourceEntries.map((item) => ({
+      key: sanitizeText(item?.key ?? item?.name ?? "", { maxLength: 160 }),
+      value: sanitizeText(item?.value ?? item?.data ?? "", { maxLength: 500 }),
+      category: String(item?.category || "Trusted") === "Risk" ? "Risk" : "Trusted",
+    })).filter((item) => preserveEmpty || item.key !== "" || item.value !== "");
+  }
+
+  const trustedEntries = normalizeTrustedListEntries(trustedValue, { preserveEmpty: true }).map((item) => ({
+    ...item,
+    category: "Trusted",
+  }));
+  const riskEntries = normalizeTrustedListEntries(riskValue, { preserveEmpty: true }).map((item) => ({
+    ...item,
+    category: "Risk",
+  }));
+
+  return [...trustedEntries, ...riskEntries].filter((item) => preserveEmpty || item.key !== "" || item.value !== "");
+};
+
+const splitClassifiedEntityEntries = (entries) => {
+  const normalized = normalizeClassifiedEntityEntries(null, null, { value: entries, preserveEmpty: false });
+  return normalized.reduce((acc, item) => {
+    const targetKey = item.category === "Risk" ? "risk_entities" : "trusted_entities";
+    if (item.key) {
+      acc[targetKey].push({ [item.key]: item.value });
+    }
+    return acc;
+  }, { trusted_entities: [], risk_entities: [] });
+};
+
 const normalizeLargeSearchBackend = (value) => (
   LARGE_SEARCH_BACKENDS.has(String(value || "")) ? String(value) : DEFAULT_LARGE_SEARCH_BACKEND
 );
@@ -2134,6 +2359,15 @@ const normalizeLargeSearchBackend = (value) => (
 const normalizeConfigurationFieldValue = (name, value) => {
   if (name === "storage_tables" || name === "active_tool_tables") {
     return Array.isArray(value) ? value : String(value || "").split(",").map((item) => item.trim()).filter(Boolean);
+  }
+  if (name === "trusted_list") {
+    return normalizeTrustedListEntries(value, { preserveEmpty: true });
+  }
+  if (name === "risk_entities") {
+    return normalizeTrustedListEntries(value, { preserveEmpty: true });
+  }
+  if (name === "classified_entities") {
+    return normalizeClassifiedEntityEntries(null, null, { value, preserveEmpty: true });
   }
   if (name === "large_search_backend") {
     return normalizeLargeSearchBackend(value);
@@ -2342,7 +2576,28 @@ const buildConfigurationSavePayload = (configuration) => {
       delete rest[key];
     }
   });
+  Object.values(CONFIG_SECRET_REF_KEYS).flat().forEach((key) => {
+    delete rest[key];
+  });
+  delete rest.tool_credentials;
   const largeSearchBackend = normalizeLargeSearchBackend(rest.large_search_backend);
+  const classifiedEntities = normalizeClassifiedEntityEntries(
+    rest.trusted_entities ?? rest.trusted_catalog ?? rest.trusted_list ?? rest.trustedList ?? rest.active_tool_trusted_list,
+    rest.risk_entities ?? rest.riskEntities ?? rest.active_risk_entities,
+    {
+      value: rest.classified_entities ?? rest.classifiedEntities,
+      preserveEmpty: false,
+    }
+  );
+  const splitEntities = splitClassifiedEntityEntries(classifiedEntities);
+  rest.trusted_entities = splitEntities.trusted_entities;
+  rest.risk_entities = splitEntities.risk_entities;
+  delete rest.trusted_catalog;
+  delete rest.trusted_list;
+  delete rest.trustedList;
+  delete rest.active_tool_trusted_list;
+  delete rest.classified_entities;
+  delete rest.classifiedEntities;
 
   return {
     ...rest,
@@ -6075,14 +6330,14 @@ const fileInputRef = useRef(null);
   };
 
   const resolveConfigurationSessionId = (preferredWindowId = null) => {
-    const preferredSessionId = normalizeSessionId(preferredWindowId);
+    const preferredSessionId = extractParentSessionId(preferredWindowId);
     if (preferredSessionId) return preferredSessionId;
 
     const activeSourceWindow = windowsRef.current.find(
       (windowState) => windowState.type === "source" && String(windowState.id) === String(activeWindowId)
     );
 
-    return normalizeSessionId(
+    return extractParentSessionId(
       activeSourceWindow?.id || sessionId || sessionIdRef.current || readStoredSessionId()
     );
   };
@@ -8976,10 +9231,19 @@ const fileInputRef = useRef(null);
               }
             })
             .catch((err) => {
-              console.error(err);
+              console.error("[realtime connect_to_tool failed]", {
+                message: err?.message,
+                status: err?.status,
+                data: err?.data,
+                error: err,
+              });
+              const backendMessage = getStreamStartErrorMessage(
+                err,
+                "Neo4j connection failed for this session."
+              );
               setWindows(prev =>
                 prev.map(w =>
-                  w.id === id ? { ...w, formRealtimeToolResponse: "Connecting failed!", realtimeStartGuardMessage: "Neo4j connection failed for this session." } : w
+                  w.id === id ? { ...w, formRealtimeToolResponse: backendMessage, realtimeStartGuardMessage: backendMessage } : w
                 )
               );
             });
@@ -9115,10 +9379,19 @@ const fileInputRef = useRef(null);
               );
             })
             .catch((err) => {
-              console.error(err);
+              console.error("[connect_to_tool failed]", {
+                message: err?.message,
+                status: err?.status,
+                data: err?.data,
+                error: err,
+              });
+              const backendMessage = getStreamStartErrorMessage(
+                err,
+                "Connecting failed!"
+              );
               setWindows(prev =>
                 prev.map(w =>
-                  w.id === id ? { ...w, formToolResponse: "Connecting failed!", toolStatus: TOOL_STATUSES.FAILED } : w
+                  w.id === id ? { ...w, formToolResponse: backendMessage, toolStatus: TOOL_STATUSES.FAILED } : w
                 )
               );
             });        
@@ -9970,8 +10243,10 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
           logStreamFailureResponse("initialization rejected", data);
           pushNotification({
             title: "Streaming could not start",
-            message:
-              "The request was received, but the stream did not initialize. Please check the selected action and try again.",
+            message: getStreamStartErrorMessage(
+              data,
+              "The request was received, but the stream did not initialize. Please check the selected action and try again."
+            ),
             source: "Linkx",
             level: "error",
           });
@@ -10137,7 +10412,10 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
 
         pushNotification({
           title: "Streaming could not start",
-          message: "Unable to reach the streaming service. Please try again.",
+          message: getStreamStartErrorMessage(
+            err,
+            "The streaming request failed. Please check the backend response and try again."
+          ),
           source: "Linkx",
           level: "error",
         });

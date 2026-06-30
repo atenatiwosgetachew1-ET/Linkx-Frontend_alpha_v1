@@ -937,6 +937,89 @@ body{
   border-color: #8fc8ef;
   background-color: #FFF;
 }
+#configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .config_trusted_list_table{
+  margin-top: 0.3vh;
+  table-layout: fixed;
+}
+#configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .config_trusted_list_table th{
+  text-align: left;
+  color: #20405c;
+  font-size: calc(0.38vh + 0.44vw);
+  font-weight: 600;
+  padding: 0.2vh 0.35vw 0.45vh 0;
+}
+#configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .config_trusted_list_table th:nth-child(1),
+#configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .config_trusted_list_table td:nth-child(1){
+  width: 7%;
+}
+#configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .config_trusted_list_table th:nth-child(2),
+#configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .config_trusted_list_table td:nth-child(2){
+  width: 28%;
+}
+#configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .config_trusted_list_table th:nth-child(3),
+#configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .config_trusted_list_table td:nth-child(3){
+  width: 43%;
+}
+#configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .config_trusted_list_table th:nth-child(4),
+#configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .config_trusted_list_table td:nth-child(4){
+  width: 22%;
+  padding-right: 0;
+}
+#configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .config_trusted_list_input{
+  width: 100%;
+  margin-right: 0;
+}
+#configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .config_trusted_list_index{
+  font-weight: 600;
+  white-space: nowrap;
+}
+#configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .config_trusted_list_empty{
+  color: #5b7184;
+  font-style: italic;
+  padding: 0.6vh 0;
+}
+#configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .config_trusted_list_actions{
+  text-align: right;
+}
+#configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .config_trusted_list_remove{
+  width: 100%;
+  min-width: 84px;
+  margin-right: 0;
+}
+#configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .config_trusted_list_add{
+  width: auto;
+  min-width: 110px;
+  margin-top: 0.25vh;
+}
+#configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .config_classified_entities_table{
+  margin-top: 0.3vh;
+  table-layout: fixed;
+}
+#configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .config_classified_entities_table th:nth-child(1),
+#configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .config_classified_entities_table td:nth-child(1){
+  width: 7%;
+}
+#configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .config_classified_entities_table th:nth-child(2),
+#configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .config_classified_entities_table td:nth-child(2){
+  width: 24%;
+}
+#configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .config_classified_entities_table th:nth-child(3),
+#configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .config_classified_entities_table td:nth-child(3){
+  width: 31%;
+}
+#configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .config_classified_entities_table th:nth-child(4),
+#configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .config_classified_entities_table td:nth-child(4){
+  width: 18%;
+}
+#configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .config_classified_entities_table th:nth-child(5),
+#configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .config_classified_entities_table td:nth-child(5){
+  width: 20%;
+  padding-right: 0;
+}
+#configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .config_classified_entities_select{
+  width: 100%;
+  margin-right: 0;
+}
 #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .input_checkbox{
   float: left;
   width: auto;
@@ -6227,6 +6310,13 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 }
 [data-theme="dark"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .input_checkbox {
   accent-color: #607b94 !important;
+}
+[data-theme="dark"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .config_trusted_list_table th,
+[data-theme="dark"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .config_trusted_list_index {
+  color: #c8d5df !important;
+}
+[data-theme="dark"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .config_trusted_list_empty {
+  color: #90a5b8 !important;
 }
 
 .linkx_login_shell {
