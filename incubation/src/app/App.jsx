@@ -6,7 +6,7 @@ import { useAuth } from '../auth/useAuth.js';
 import LoginPage from '../auth/LoginPage.jsx';
 import WorkspaceFrame from '../workspace/components/WorkspaceFrame.jsx';
 import { WorkspaceProvider } from '../workspace/state/WorkspaceContext.jsx';
-import { initializeMainSession } from '../services/sessionApi.js';
+import { extractMainSessionConfiguration, initializeMainSession } from '../services/sessionApi.js';
 import { NotificationProvider } from '../shared/notifications/NotificationContext.jsx';
 import { appConfig } from './config.js';
 
@@ -14,7 +14,8 @@ const loginLogo = import.meta.env.BASE_URL + 'site_images/Linkx square Icon (256
 
 function IncubationShell() {
   const { user, token, logout } = useAuth();
-  const [mainSessionId, setMainSessionId] = useState(() => sessionStorage.getItem('session') || '');
+  const [mainSessionId, setMainSessionId] = useState(() => localStorage.getItem('session') || sessionStorage.getItem('session') || '');
+  const [sessionConfiguration, setSessionConfiguration] = useState({});
   const [sessionError, setSessionError] = useState('');
 
   useEffect(() => {
@@ -22,9 +23,10 @@ function IncubationShell() {
     if (!token) return undefined;
 
     initializeMainSession(appConfig.apiUrl, token)
-      .then(({ sessionId }) => {
+      .then(({ data, sessionId }) => {
         if (!cancelled) {
           setMainSessionId(sessionId);
+          setSessionConfiguration(extractMainSessionConfiguration(data));
           setSessionError('');
         }
       })
@@ -44,6 +46,7 @@ function IncubationShell() {
         token={token}
         apiUrl={appConfig.apiUrl}
         mainSessionId={mainSessionId}
+        sessionConfiguration={sessionConfiguration}
         sessionError={sessionError}
         onSignOut={logout}
         logoSrc={loginLogo}

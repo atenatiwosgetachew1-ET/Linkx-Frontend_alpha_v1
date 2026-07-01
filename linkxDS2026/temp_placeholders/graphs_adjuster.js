@@ -91,30 +91,30 @@ window.addEventListener("message", (event) => {
 
     case "graph_physics":
       let state = payload;
-      networkphysics(state);
+      void applyPhysicsWithBusyUi(state);
       break;
 
     case "layout_type":
       let type = payload;
-      networkLayoutType(type);
+      void applyLayoutTypeWithBusyUi(type);
       break;
 
     case "layout_direction":
       let direction = payload;
-      networkLayoutDirection(direction);
+      void applyLayoutDirectionWithBusyUi(direction);
       break;
 
     case "sort_method":
       let sort = payload;
-      networkLayoutSort(sort);
+      void applyLayoutSortWithBusyUi(sort);
       break;
 
     case "layer_mode":
-      networkLayerMode(payload);
+      void applyLayerModeWithBusyUi(payload);
       break;
 
     case "layer_key":
-      networkLayerKey(payload);
+      void applyLayerKeyWithBusyUi(payload);
       break;
 
     case "new_graph":      
@@ -188,6 +188,27 @@ function messageParent(payload){
     },
     window.location.origin
   );
+}
+
+function postGraphRenderStats(reason = "render") {
+  const id = window.currentGraphWindowId || null;
+  const visibleNodes = VISIBLE_STATE?.nodes?.size ?? (nodesData?.getIds ? nodesData.getIds().length : 0);
+  const visibleEdges = VISIBLE_STATE?.edges?.size ?? (edgesData?.getIds ? edgesData.getIds().length : 0);
+  window.parent.postMessage({
+    type: "graph_render_stats",
+    payload: {
+      id,
+      reason,
+      nodes: visibleNodes,
+      edges: visibleEdges,
+      total_nodes: visibleNodes,
+      total_edges: visibleEdges,
+      visible_nodes: visibleNodes,
+      visible_edges: visibleEdges,
+      physics: !!window.currentSettings?.physics,
+      layout_type: window.currentSettings?.layoutType || "default"
+    }
+  }, window.location.origin);
 }
 
 function ensureInteractionPopupUi() {
@@ -1002,10 +1023,22 @@ function normalizeLayerMode(mode) {
   return "hop_distance";
 }
 
+function notifyGraphPerformance(message, options = {}) {
+  if (typeof window.linkxNotify !== "function") return;
+  window.linkxNotify(message, {
+    title: options.title || "Notice",
+    level: options.level || "info",
+    durationMs: options.durationMs || 2600
+  });
+}
+
 const AUTO_PHYSICS_NODE_THRESHOLD = 300;
+const HIERARCHICAL_LAYOUT_NODE_THRESHOLD = 300;
 const GRAPH_LIMIT_HARD_MAX = 100000;
 let AUTO_PHYSICS_FORCED_OFF = false;
 let LAST_APPLIED_EFFECTIVE_PHYSICS = null;
+let DEFERRED_MANUAL_LAYOUT_TIMER = null;
+let LAST_MANUAL_LAYOUT_SIGNATURE = "";
 const SAVED_VIEWS_STORAGE_KEY = "linkx_saved_views_v1";
 const PINNED_EVIDENCE_STORAGE_KEY = "linkx_pinned_evidence_v1";
 const ALERT_RULES_STORAGE_KEY = "linkx_alert_rules_v1";
@@ -4998,15 +5031,6 @@ function applyLimit({ key = "", sort = "asc", amount = 25, min = null, max = nul
     renderVisibleGraphBatch();
     const renderDone = performance.now();
 
-    if (VISIBLE_STATE.nodes.size >= 500 || VISIBLE_STATE.edges.size >= 1000) {
-      console.log(
-        `[applyLimit] nodes=${VISIBLE_STATE.nodes.size} edges=${VISIBLE_STATE.edges.size} ` +
-        `select=${(selectionDone - perfStart).toFixed(1)}ms ` +
-        `edgeRecompute=${(edgesDone - selectionDone).toFixed(1)}ms ` +
-        `render=${(renderDone - edgesDone).toFixed(1)}ms ` +
-        `total=${(renderDone - perfStart).toFixed(1)}ms`
-      );
-    }
 }
 
 
@@ -5159,6 +5183,54 @@ async function applyLabelToggleWithBusyUi(state) {
   }, { minVisibleMs: 180, total: 2 });
 }
 
+async function applyPhysicsWithBusyUi(state) {
+  return runExclusiveGraphTask("Updating graph physics...", async ({ setProgress }) => {
+    setProgress(1, 2, state ? "Applying physics..." : "Stopping physics...");
+    networkphysics(state);
+    setProgress(2, 2, "Finalizing...");
+  }, { minVisibleMs: 180, total: 2 });
+}
+
+async function applyLayoutTypeWithBusyUi(type) {
+  return runExclusiveGraphTask("Updating graph layout...", async ({ setProgress }) => {
+    setProgress(1, 2, "Applying layout...");
+    networkLayoutType(type);
+    setProgress(2, 2, "Finalizing...");
+  }, { minVisibleMs: 200, total: 2 });
+}
+
+async function applyLayoutDirectionWithBusyUi(direction) {
+  return runExclusiveGraphTask("Updating graph layout...", async ({ setProgress }) => {
+    setProgress(1, 2, "Applying direction...");
+    networkLayoutDirection(direction);
+    setProgress(2, 2, "Finalizing...");
+  }, { minVisibleMs: 180, total: 2 });
+}
+
+async function applyLayoutSortWithBusyUi(sort) {
+  return runExclusiveGraphTask("Updating graph layout...", async ({ setProgress }) => {
+    setProgress(1, 2, "Applying sort order...");
+    networkLayoutSort(sort);
+    setProgress(2, 2, "Finalizing...");
+  }, { minVisibleMs: 180, total: 2 });
+}
+
+async function applyLayerModeWithBusyUi(mode) {
+  return runExclusiveGraphTask("Updating graph layout...", async ({ setProgress }) => {
+    setProgress(1, 2, "Applying layer mode...");
+    networkLayerMode(mode);
+    setProgress(2, 2, "Finalizing...");
+  }, { minVisibleMs: 180, total: 2 });
+}
+
+async function applyLayerKeyWithBusyUi(key) {
+  return runExclusiveGraphTask("Updating graph layout...", async ({ setProgress }) => {
+    setProgress(1, 2, "Applying layer key...");
+    networkLayerKey(key);
+    setProgress(2, 2, "Finalizing...");
+  }, { minVisibleMs: 180, total: 2 });
+}
+
 function applyTitleToggle(state) {
     //console.log("applyTitleToggle_called:", state);
     window.currentSettings.showTitles = state;
@@ -5287,6 +5359,7 @@ function applyLabelToggle(state) {
   });
   window.currentSettings.showLabels = state;
   network.redraw();
+  postGraphRenderStats("label_toggle");
 }
 
 
@@ -5415,13 +5488,19 @@ function weightEdges(state) {
   const nodeValues = !isOff && !isDefault ? getNodeNumericValueMap(mode) : null;
   const computedEdgeWeights = new Map();
   let adaptiveScale = { min: 1, max: 1, useLog: false };
+  const visibleEdges = [];
+
+  edgesData.forEach(edge => {
+    if (edge && edge.id != null) visibleEdges.push(edge);
+  });
 
   if (!isOff && !isDefault) {
     const sampledWeights = [];
 
-    FULL_GRAPH.edges.forEach((baseEdge, edgeId) => {
+    visibleEdges.forEach((edge) => {
+      const edgeId = edge.id;
       const mod = MODIFIED_EDGES.get(edgeId) || {};
-      const merged = { ...baseEdge, ...mod };
+      const merged = { ...(FULL_GRAPH.edges.get(edgeId) || edge), ...mod };
       const weightValue = getEdgeWeightFromNodeValues(merged, nodeValues);
       computedEdgeWeights.set(edgeId, weightValue);
       sampledWeights.push(weightValue);
@@ -5430,7 +5509,8 @@ function weightEdges(state) {
     adaptiveScale = getAdaptiveWeightScale(sampledWeights);
   }
 
-  edgesData.forEach(edge => {
+  const updates = [];
+  visibleEdges.forEach(edge => {
     const mod = MODIFIED_EDGES.get(edge.id) || {};
     let width = 1;
 
@@ -5445,7 +5525,7 @@ function weightEdges(state) {
       width = EdgeWeightToWidth(weightValue, adaptiveScale);
     }
 
-    edgesData.update({
+    updates.push({
       id: edge.id,
       width
     });
@@ -5455,6 +5535,10 @@ function weightEdges(state) {
       width
     });
   });
+
+  if (updates.length > 0) {
+    edgesData.update(updates);
+  }
 
   window.currentSettings.weightEdges = mode;
 }
@@ -5499,14 +5583,19 @@ function filterNodes(predicate, limit = 300) {
 function showNodelabels(state) {
   window.currentSettings.showLabels = state;
 
+  const updates = [];
   nodesData.forEach(node => {
     const base = FULL_GRAPH.nodes.get(node.id);
     const mod  = MODIFIED_NODES.get(node.id) || {};
-    nodesData.update({
+    updates.push({
       id: node.id,
       label: getNodeRenderLabel(base, mod, state)
     });
   });
+
+  if (updates.length > 0) {
+    nodesData.update(updates);
+  }
 
   network.redraw();
 }
@@ -5540,6 +5629,12 @@ function networkphysics(state) {
   window.currentSettings.physics = requested;
   updateGraphOption("graph_physics", requested);
   syncPhysicsWithCurrentState({ forceRestart: true });
+  if (requested && AUTO_PHYSICS_FORCED_OFF) {
+    notifyGraphPerformance("Physics stays off on large graph views. Reduce the visible graph scope to enable it.", {
+      title: "Physics limited",
+      durationMs: 3400
+    });
+  }
 }
 
 function isPhysicsEnabledState(state) {
@@ -5588,15 +5683,18 @@ function syncPhysicsWithCurrentState({ forceRestart = false, forceApply = false 
 }
 
 function updatePerformancePhysicsGuard(visibleNodeCount) {
-  const shouldForceOff = Number(visibleNodeCount) >= AUTO_PHYSICS_NODE_THRESHOLD;
+  const effectiveNodeCount = Number(visibleNodeCount) || 0;
+  const shouldForceOff = effectiveNodeCount >= AUTO_PHYSICS_NODE_THRESHOLD;
   if (AUTO_PHYSICS_FORCED_OFF === shouldForceOff) return;
 
   AUTO_PHYSICS_FORCED_OFF = shouldForceOff;
   const effective = syncPhysicsWithCurrentState({ forceRestart: true });
-  console.log(
-    `[performancePhysics] visibleNodes=${visibleNodeCount} threshold=${AUTO_PHYSICS_NODE_THRESHOLD} ` +
-    `forcedOff=${AUTO_PHYSICS_FORCED_OFF} effectivePhysics=${effective}`
-  );
+  if (AUTO_PHYSICS_FORCED_OFF) {
+    notifyGraphPerformance("Physics was turned off automatically for this large graph view.", {
+      title: "Performance mode",
+      durationMs: 3200
+    });
+  }
 }
 
 function enforceCurrentPhysicsState({ forceApply = false } = {}) {
@@ -5884,6 +5982,34 @@ function applyLayeredLayout(nodeIds, visibleSet, updates) {
   });
 }
 
+function getManualLayoutSignature(type) {
+  const nodeIds = Array.from(VISIBLE_STATE?.nodes || []).map(String).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  const sample = nodeIds.length <= 12
+    ? nodeIds.join("|")
+    : nodeIds.slice(0, 6).join("|") + "::" + nodeIds.slice(-6).join("|");
+  return [
+    type || "default",
+    window.currentSettings.layoutDirection || "UD",
+    window.currentSettings.layerMode || "hop_distance",
+    window.currentSettings.layerKey || "",
+    nodeIds.length,
+    sample
+  ].join("::");
+}
+
+function scheduleManualLayout(type, options = {}) {
+  const signature = getManualLayoutSignature(type);
+  if (LAST_MANUAL_LAYOUT_SIGNATURE === signature) return;
+  if (DEFERRED_MANUAL_LAYOUT_TIMER) {
+    clearTimeout(DEFERRED_MANUAL_LAYOUT_TIMER);
+  }
+  DEFERRED_MANUAL_LAYOUT_TIMER = setTimeout(() => {
+    DEFERRED_MANUAL_LAYOUT_TIMER = null;
+    LAST_MANUAL_LAYOUT_SIGNATURE = signature;
+    applyManualLayout(type, options);
+  }, 0);
+}
+
 function applyManualLayout(type, { fitToView = true, redraw = true } = {}) {
   if (!network || !isManualLayoutType(type)) return;
 
@@ -6094,7 +6220,16 @@ function applyManualLayout(type, { fitToView = true, redraw = true } = {}) {
 function networkLayoutType(type) {
   if (!network) return;
 
-  const layoutType = type || "default";
+  let layoutType = type || "default";
+  const visibleNodeCount = VISIBLE_STATE?.nodes?.size || nodesData?.length || 0;
+  if (layoutType === "hierarchical" && visibleNodeCount >= HIERARCHICAL_LAYOUT_NODE_THRESHOLD) {
+    layoutType = "layered";
+    window.currentSettings.layoutDirection = window.currentSettings.layoutDirection || "UD";
+    notifyGraphPerformance("Hierarchical layout is too expensive for this graph size. Switched to layered layout.", {
+      title: "Layout adjusted",
+      durationMs: 3600
+    });
+  }
   if (layoutType === "hierarchical") {
     network.setOptions({
       layout: {
@@ -7433,7 +7568,8 @@ function initializer(id){
   network.redraw();
 }
 
-function mergeGraphChunkUpdate({ nodes = [], edges = [], progress = null } = {}) {
+function mergeGraphChunkUpdate({ id = null, nodes = [], edges = [], progress = null } = {}) {
+  if (id != null) window.currentGraphWindowId = id;
   const incomingNodes = Array.isArray(nodes) ? nodes : [];
   const incomingEdges = Array.isArray(edges) ? edges : [];
   if (progress && typeof window.showGraphLoading === "function") {
@@ -7441,7 +7577,7 @@ function mergeGraphChunkUpdate({ nodes = [], edges = [], progress = null } = {})
   }
 
   if (!window.FULL_GRAPH?.nodes || !window.FULL_GRAPH?.edges) {
-    createNewGraph({ nodes: incomingNodes, edges: incomingEdges, progress });
+    createNewGraph({ id, nodes: incomingNodes, edges: incomingEdges, progress });
     return;
   }
 
@@ -7471,6 +7607,7 @@ function mergeGraphChunkUpdate({ nodes = [], edges = [], progress = null } = {})
   });
 
   if (!changed) {
+    postGraphRenderStats("chunk_no_change");
     if (progress?.complete && typeof window.hideGraphLoading === "function") {
       setTimeout(() => { window.hideGraphLoading(); }, 180);
     }
@@ -7478,12 +7615,14 @@ function mergeGraphChunkUpdate({ nodes = [], edges = [], progress = null } = {})
   }
   recomputeVisibleEdges();
   renderVisibleGraphBatch();
+  postGraphRenderStats("chunk_update");
   if (progress?.complete && typeof window.hideGraphLoading === "function") {
     setTimeout(() => { window.hideGraphLoading(); }, 180);
   }
 }
 
 function createNewGraph({ id, nodes = [], edges = [], settings = null, progress = null }) {
+  window.currentGraphWindowId = id || window.currentGraphWindowId || null;
   resetGraphHistoryBuffer();
   suspendGraphHistoryStart();
   const totalNodes = Array.isArray(nodes) ? nodes.length : 0;
@@ -7527,7 +7666,6 @@ function createNewGraph({ id, nodes = [], edges = [], settings = null, progress 
   FULL_GRAPH.edgesByNode = null;
   initializeFullGraph({ nodes, edges });
   setCurrentGraphScope("");
-
   // Optional: any iframe / parent init logic
   initializer?.(id);
 
@@ -7557,6 +7695,18 @@ function renderVisibleGraphBatch() {
     const filteredIds = getFilteredVisibleGraphIds();
     const desiredNodeIds = filteredIds.nodeIds;
     const desiredEdgeIds = filteredIds.edgeIds;
+    let largeLayoutJustForced = false;
+    const wasPerformanceMode = AUTO_PHYSICS_FORCED_OFF;
+    const isPerformanceMode = desiredNodeIds.size >= AUTO_PHYSICS_NODE_THRESHOLD;
+    const enteredPerformanceMode = !wasPerformanceMode && isPerformanceMode;
+    if (enteredPerformanceMode) {
+      window.currentSettings.physics = false;
+      if (window.currentSettings.layoutType === "hierarchical") {
+        window.currentSettings.layoutType = "layered";
+        updateGraphOption("layout_type", "layered");
+        largeLayoutJustForced = true;
+      }
+    }
     updatePerformancePhysicsGuard(desiredNodeIds.size);
     const markerSets = getMarkerSets();
 
@@ -7654,7 +7804,11 @@ function renderVisibleGraphBatch() {
       nodeBatch.push(merged);
     }
     if (nodeBatch.length > 0) {
-      nodesData.update(nodeBatch);
+      if (currentNodeIds.size === 0) {
+        nodesData.add(nodeBatch);
+      } else {
+        nodesData.update(nodeBatch);
+      }
     }
 
     // Add/update visible edges progressively.
@@ -7674,12 +7828,20 @@ function renderVisibleGraphBatch() {
       edgeBatch.push(merged);
     }
     if (edgeBatch.length > 0) {
-      edgesData.update(edgeBatch);
+      if (currentEdgeIds.size === 0) {
+        edgesData.add(edgeBatch);
+      } else {
+        edgesData.update(edgeBatch);
+      }
     }
 
     const activeLayoutType = window.currentSettings.layoutType;
     if (isManualLayoutType(activeLayoutType)) {
+      if (desiredNodeIds.size >= AUTO_PHYSICS_NODE_THRESHOLD && activeLayoutType === "layered") {
+        scheduleManualLayout(activeLayoutType, { fitToView: false, redraw: true });
+      } else {
         applyManualLayout(activeLayoutType, { fitToView: false, redraw: false });
+      }
     }
 
     const weightMode = normalizeEdgeWeightMode(window.currentSettings.weightEdges);
@@ -7693,7 +7855,7 @@ function renderVisibleGraphBatch() {
 
     applyMarkerOverlays(desiredNodeIds, desiredEdgeIds);
     
-    if (network) {
+    if (network && !largeLayoutJustForced) {
         network.redraw();
     }
 
@@ -7701,15 +7863,7 @@ function renderVisibleGraphBatch() {
       scheduleAlertScan();
     }
 
-    const renderDone = performance.now();
-    if (desiredNodeIds.size >= 500 || desiredEdgeIds.size >= 1000) {
-      console.log(
-        `[renderVisibleGraphBatch] nodes=${desiredNodeIds.size} edges=${desiredEdgeIds.size} ` +
-        `nodeBatch=${nodeBatch.length} edgeBatch=${edgeBatch.length} ` +
-        `removedNodes=${nodesToRemove.length} removedEdges=${edgesToRemove.length} ` +
-        `weightMode=${weightMode || "off"} total=${(renderDone - renderStart).toFixed(1)}ms`
-      );
-    }
+    postGraphRenderStats("render_batch");
 }
 
 function generateNodeTitleSafely(node) {
@@ -7815,4 +7969,5 @@ function renderVisibleGraph() {
   applyMarkerOverlays(filteredIds.nodeIds, filteredIds.edgeIds);
 
   network.redraw();
+  postGraphRenderStats("render_full");
 }

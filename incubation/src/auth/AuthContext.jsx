@@ -11,11 +11,9 @@ import {
 const AUTH_TOKEN_KEY = "linkx_auth_token";
 const SESSION_STORAGE_KEY = "session";
 
-const readStoredToken = () => {
-  const nextToken = sessionStorage.getItem(AUTH_TOKEN_KEY) || "";
-  if (localStorage.getItem(AUTH_TOKEN_KEY)) clearClientSessionState();
-  return nextToken;
-};
+const readStoredToken = () => (
+  localStorage.getItem(AUTH_TOKEN_KEY) || sessionStorage.getItem(AUTH_TOKEN_KEY) || ""
+);
 
 const clearClientSessionState = () => {
   sessionStorage.removeItem(AUTH_TOKEN_KEY);
@@ -70,7 +68,8 @@ export function AuthProvider({ apiUrl, allowedSsoOrigins = [], children }) {
       return;
     }
 
-    sessionStorage.setItem(AUTH_TOKEN_KEY, nextToken);
+    localStorage.setItem(AUTH_TOKEN_KEY, nextToken);
+    sessionStorage.removeItem(AUTH_TOKEN_KEY);
     setToken(nextToken);
     setUser(normalizedUser);
     setSsoError("");

@@ -12,8 +12,16 @@ export const extractMainSessionId = (data = {}) => (
   null
 );
 
+export const extractMainSessionConfiguration = (data = {}) => (
+  data?.results?.configuration ??
+  data?.results?.configurations ??
+  data?.configuration ??
+  data?.configurations ??
+  {}
+);
+
 export const initializeMainSession = async (apiUrl, token, { socketId = null } = {}) => {
-  const existingSession = sessionStorage.getItem(SESSION_STORAGE_KEY) || null;
+  const existingSession = localStorage.getItem(SESSION_STORAGE_KEY) || sessionStorage.getItem(SESSION_STORAGE_KEY) || null;
   const payload = {
     id: 'init',
     existing_session: existingSession,
@@ -29,7 +37,10 @@ export const initializeMainSession = async (apiUrl, token, { socketId = null } =
     body: JSON.stringify(payload),
   });
   const sessionId = extractMainSessionId(data);
-  if (sessionId) sessionStorage.setItem(SESSION_STORAGE_KEY, String(sessionId));
+  if (sessionId) {
+    localStorage.setItem(SESSION_STORAGE_KEY, String(sessionId));
+    sessionStorage.removeItem(SESSION_STORAGE_KEY);
+  }
 
   return { data, sessionId: sessionId ? String(sessionId) : '' };
 };

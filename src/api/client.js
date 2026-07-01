@@ -66,24 +66,29 @@ export const createApiClient = ({ baseUrl, getToken, onUnauthorized, onForbidden
     if (!response.ok) {
       const retryAfterHeader = response.headers.get("Retry-After");
       const retryAfter = Number(data?.retry_after ?? retryAfterHeader ?? 0) || 0;
+      const requestMeta = {
+        path: String(path || ""),
+        method: String(options.method || "GET").toUpperCase(),
+        status: response.status,
+      };
 
       if (response.status === 401 && typeof onUnauthorized === "function" && !options.suppressUnauthorizedHandler) {
-        onUnauthorized(data);
+        onUnauthorized(data, requestMeta);
       }
       if (response.status === 403 && typeof onForbidden === "function" && !options.suppressForbiddenHandler) {
-        onForbidden(data);
+        onForbidden(data, requestMeta);
       }
       if (response.status === 400 && data?.message === "Connection rejected by security policy." && typeof onSecurityPolicyBlocked === "function" && !options.suppressSecurityPolicyHandler) {
-        onSecurityPolicyBlocked(data);
+        onSecurityPolicyBlocked(data, requestMeta);
       }
       if (response.status === 423 && typeof onLocked === "function" && !options.suppressLockedHandler) {
-        onLocked(data);
+        onLocked(data, requestMeta);
       }
       if (response.status === 429 && typeof onRateLimited === "function" && !options.suppressRateLimitedHandler) {
-        onRateLimited({ ...(data && typeof data === "object" ? data : {}), retry_after: retryAfter });
+        onRateLimited({ ...(data && typeof data === "object" ? data : {}), retry_after: retryAfter }, requestMeta);
       }
       if (response.status === 413 && typeof onPayloadTooLarge === "function" && !options.suppressPayloadTooLargeHandler) {
-        onPayloadTooLarge(data);
+        onPayloadTooLarge(data, requestMeta);
       }
 
       console.error("[apiFetch non-ok response]", { path, status: response.status, data });

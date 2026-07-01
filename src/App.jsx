@@ -39,7 +39,7 @@ const GRAPH_LIMIT_HARD_MAX = 100000;
 const DEFAULT_GRAPH_IFRAME_SETTINGS = ["", "", { min: 0, max: 25 }, "", "", "", false, false, false, false, "concentric", "UD", "directed", "hop_distance", ""];
 const LINKX_IFRAME_CHANNEL = "linkx:iframe";
 const LINKX_IFRAME_VERSION = 1;
-const TRUSTED_IFRAME_MESSAGE_TYPES = new Set(["app_notification", "notification", "nodeProperties", "all_property_keys_response", "graph_search_results", "network_components", "entity_selection", "graph_alerts", "pinned_evidence_update", "clipboard_get", "clipboard_set"]);
+const TRUSTED_IFRAME_MESSAGE_TYPES = new Set(["app_notification", "notification", "nodeProperties", "all_property_keys_response", "graph_search_results", "graph_render_stats", "network_components", "entity_selection", "graph_alerts", "pinned_evidence_update", "clipboard_get", "clipboard_set"]);
 const IDLE_TIMEOUT_STORAGE_KEY = "linkx_idle_timeout_settings";
 const DEFAULT_IDLE_WARNING_MS = 14 * 60 * 1000;
 const DEFAULT_IDLE_TIMEOUT_MS = 15 * 60 * 1000;
@@ -189,6 +189,24 @@ const extractMainSessionId = (data) => normalizeSessionId(
   data?.configurations?.session_id ??
   data?.results
 );
+
+const extractInitConfiguration = (data) => (
+  data?.results?.configuration ??
+  data?.results?.configurations ??
+  data?.configuration ??
+  data?.configurations ??
+  {}
+);
+
+const extractSourceWindowSessionId = (data, fallbackWindowId, fallbackParentSessionId) => normalizeSessionId(
+  data?.results?.source_id ??
+  data?.results?.session_id ??
+  data?.source_id ??
+  data?.session_id ??
+  `${fallbackWindowId}_${fallbackParentSessionId}`
+);
+
+const shouldLogoutOnUnauthorized = (path) => ["/auth/me", "/auth/verify", "/init"].includes(String(path || "").trim());
 
 const extractParentSessionId = (value) => {
   const normalized = normalizeSessionId(value);
@@ -3402,7 +3420,7 @@ function Settings({ isSettingsOpen, toggleAction, actor, roles = [], permissions
     </div>
   );
 }
-function WindowVerticalSplitPanels({id, type, sourceId, initialTopHeight, minTopHeight, maxTopHeight, graphStatus, activeGraph, graphAction, iframeRef, iframeSearch, iframeSettings, performanceMood, selectedPropertyTab, nodeProperties, filterPropertyKeys, filterResults}) {
+function WindowVerticalSplitPanels({id, type, sourceId, initialTopHeight, minTopHeight, maxTopHeight, graphStatus, graphStatusBySession, graphRenderStats, activeGraph, graphAction, iframeRef, iframeSearch, iframeSettings, performanceMood, selectedPropertyTab, nodeProperties, filterPropertyKeys, filterResults}) {
   const containerRef = useRef(null);
   const [containerHeight, setContainerHeight] = useState(0);
   const [topHeightPx, setTopHeightPx] = useState(0);
@@ -3413,8 +3431,16 @@ function WindowVerticalSplitPanels({id, type, sourceId, initialTopHeight, minTop
   const settings = normalizeGraphIframeSettings(iframeSettings[id]);
   const search = Array.isArray(iframeSearch[id]) ? iframeSearch[id] : ["", false, {}, { nodes: 0, edges: 0 }];
   const relationships = normalizeGraphRelationships(graphStatus);
+  const renderedGraphStats = graphRenderStats && typeof graphRenderStats === "object" ? graphRenderStats : {};
+  const graphNodeCount = Number(
+    renderedGraphStats.visible_nodes ??
+    renderedGraphStats.total_nodes ??
+    renderedGraphStats.nodes ??
+    0
+  );
+  const physicsSettingDisabled = !activeGraph || graphNodeCount >= 300;
+  const hierarchicalLayoutDisabled = !activeGraph || graphNodeCount >= 300;
   const selectedSearchKeysCount = Object.values(search[2] || {}).filter(Boolean).length;
-  console.log("search:",search,"activeGraph:",activeGraph)
 
   const limitRange = normalizeGraphLimitRange(settings?.[2], 25);
   const [limitMinDraft, setLimitMinDraft] = useState(String(limitRange.min));
@@ -3899,7 +3925,7 @@ function WindowVerticalSplitPanels({id, type, sourceId, initialTopHeight, minTop
                     settings: "graph_physics",
                     state: e.target.value,
                   })}}
-                  disabled={!activeGraph}>
+                  disabled={physicsSettingDisabled}>
                   <option value="">Off</option>
                   <option value="true">On</option>
                 </select>                
@@ -3914,7 +3940,7 @@ function WindowVerticalSplitPanels({id, type, sourceId, initialTopHeight, minTop
                   })}}
                   disabled={!activeGraph}>
                   <option value="default">Default (Concentric)</option>
-                  <option value="hierarchical">hierarchical</option>
+                  <option value="hierarchical" disabled={hierarchicalLayoutDisabled}>hierarchical</option>
                   <option value="layered">layered</option>
                   <option value="circle">circle</option>
                   <option value="star">star</option>
@@ -4040,6 +4066,7 @@ function WindowVerticalSplitPanels({id, type, sourceId, initialTopHeight, minTop
 function IframeEmbed({wId,id,fileName,title,activeGraph,graphAction,iframeRef,BASE_URL}) {
   const normalizedBaseUrl = String(BASE_URL || import.meta.env.BASE_URL || "").replace(/\/+$/, "");
   const iframeBasePath = `${normalizedBaseUrl}/linkxDS2026/temp_placeholders`;
+  const iframeVersion = "20260701-graphperf9";
   const frameIdentity = String(activeGraph || id || "").toLowerCase();
   const isPlaceholderFrame = frameIdentity.includes("placeholder");
   const shouldShowFitGraphControl = frameIdentity.includes("graph") && !isPlaceholderFrame;
@@ -4071,7 +4098,7 @@ function IframeEmbed({wId,id,fileName,title,activeGraph,graphAction,iframeRef,BA
         <iframe
           ref={iframeRef}
           sandbox={trustedSandbox}
-          src={`${iframeBasePath}/source_placeholder.html`}
+          src={`${iframeBasePath}/source_placeholder.html?v=${iframeVersion}`}
           width="100%"
           height="98%"
           style={{ border: 'none' }}
@@ -4087,7 +4114,7 @@ function IframeEmbed({wId,id,fileName,title,activeGraph,graphAction,iframeRef,BA
         <iframe
           ref={iframeRef}
           sandbox={trustedSandbox}
-          src={`${iframeBasePath}/graph_placeholder.html`}
+          src={`${iframeBasePath}/graph_placeholder.html?v=${iframeVersion}`}
           width="100%"
           height="98%"
           style={{ border: 'none' }}
@@ -4103,7 +4130,7 @@ function IframeEmbed({wId,id,fileName,title,activeGraph,graphAction,iframeRef,BA
         <iframe
           ref={iframeRef}
           sandbox={trustedSandbox}
-          src={`${iframeBasePath}/charts_basic.html`}
+          src={`${iframeBasePath}/charts_basic.html?v=${iframeVersion}`}
           width="100%"
           height="98%"
           style={{ border: 'none' }}
@@ -4120,7 +4147,7 @@ function IframeEmbed({wId,id,fileName,title,activeGraph,graphAction,iframeRef,BA
         <iframe
           ref={iframeRef}
           sandbox={trustedSandbox}
-          src={`${iframeBasePath}/${iframeFile}.html`}
+          src={`${iframeBasePath}/${iframeFile}.html?v=${iframeVersion}`}
           width="100%"
           height="98%"
           style={{ border: "none" }}
@@ -4204,7 +4231,7 @@ function DraggableWindow({ children, initialPos = { top: 0, left: 0 }, orientati
     </div>
   );
 }
-function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText, loadscreenState, isSideBarMenuOpen, orientation, configurations, windowAction, graphAction, chartAction, selectedContent, selectedSubContent, selectedNodes, selectedEdges,windowResponseI,windowResponseII,windowRealtimeResponseI,formToolResponse,formRealtimeToolResponse,sourceAddressType,sourceAddressText,sourceStorageText,sourceTopicText,sourceKind,sourceStatus,toolStatus,dataframeStatus,streamStatus,sourceStep,sourceRealtimeAddressType,sourceRealtimeAddressText,sourceRealtimeTopicText,toolUrl,toolUsername,toolPassword,toolDatabase,realtimeToolUrl,realtimeToolUsername,realtimeToolPassword,realtimeToolDatabase,realtimeNeo4jConnectedSessionId,realtimeConfigPersistStatus,realtimeConfigPersistedSessionId,realtimeConfigPersistMessage,realtimeStartGuardMessage,batchFilesSearchHybrid,batchFilesSearchHybridQuery,batchFilesSearchStrict,searchText,batchFilesSearchLimit,batchFilesSearchResults,batchFilesSearchMoreFiles,searchResultsVisible,searchPlaceholder,batchFilesCollection, batchFilesDataframeInfoI, batchFilesDataframeInfoII, batchFilesDataframeActionValue, batchFilesDataframeSourceValue, batchFilesDataframeTargetValue, batchFilesDataframeRelationshipValue, batchFilesDataframeRuleValue, sourceSessionLog, sourceStreams , sourceStreamListener, fileInputRef, textareaRefs, onClose, onMove, zIndex, onFocus, covered, graphLink, graphLinkId, graphLinkSource, graphStatus, activeGraph, chartLink, chartLinkId, activechart, iframeRef, iframeFilters, iframeSettings, iframeSearch, iframePerformanceMood, selectedPropertyTab, filterPropertyKeys, filterResults, nodeProperties, BASE_URL, searchButtonRef, resultContainerRef, requestConfirmation }) {
+function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText, loadscreenState, isSideBarMenuOpen, orientation, configurations, windowAction, graphAction, chartAction, selectedContent, selectedSubContent, selectedNodes, selectedEdges,windowResponseI,windowResponseII,windowRealtimeResponseI,formToolResponse,formRealtimeToolResponse,sourceAddressType,sourceAddressText,sourceStorageText,sourceTopicText,sourceKind,sourceStatus,toolStatus,dataframeStatus,streamStatus,sourceStep,sourceRealtimeAddressType,sourceRealtimeAddressText,sourceRealtimeTopicText,toolUrl,toolUsername,toolPassword,toolDatabase,realtimeToolUrl,realtimeToolUsername,realtimeToolPassword,realtimeToolDatabase,realtimeNeo4jConnectedSessionId,realtimeConfigPersistStatus,realtimeConfigPersistedSessionId,realtimeConfigPersistMessage,realtimeStartGuardMessage,batchFilesSearchHybrid,batchFilesSearchHybridQuery,batchFilesSearchStrict,searchText,batchFilesSearchLimit,batchFilesSearchResults,batchFilesSearchMoreFiles,searchResultsVisible,searchPlaceholder,batchFilesCollection, batchFilesDataframeInfoI, batchFilesDataframeInfoII, batchFilesDataframeActionValue, batchFilesDataframeSourceValue, batchFilesDataframeTargetValue, batchFilesDataframeRelationshipValue, batchFilesDataframeRuleValue, sourceSessionLog, sourceStreams , sourceStreamListener, fileInputRef, textareaRefs, onClose, onMove, zIndex, onFocus, covered, graphLink, graphLinkId, graphLinkSource, graphStatus, graphStatusBySession, graphRenderStats, activeGraph, chartLink, chartLinkId, activechart, iframeRef, iframeFilters, iframeSettings, iframeSearch, iframePerformanceMood, selectedPropertyTab, filterPropertyKeys, filterResults, nodeProperties, BASE_URL, searchButtonRef, resultContainerRef, requestConfirmation }) {
   const canCancelGraphStaging = type === "graph" && typeof loadscreenText === "string" && (
     loadscreenText.toLowerCase().startsWith("staging graph") ||
     loadscreenText.toLowerCase().startsWith("fetching graph")
@@ -5798,6 +5825,8 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
                 minTopHeight="20%"
                 maxTopHeight="100%"
                 graphStatus={graphStatus}
+                graphStatusBySession={graphStatusBySession}
+                graphRenderStats={graphRenderStats}
                 activeGraph={activeGraph}
                 graphAction={graphAction}
                 iframeRef={iframeRef}  // same ref as iframe
@@ -6824,14 +6853,25 @@ const fileInputRef = useRef(null);
   const apiFetch = useMemo(() => createApiClient({
     baseUrl: API_URL,
     getToken: () => token,
-    onUnauthorized: () => {
+    onUnauthorized: (data, requestMeta) => {
+      if (shouldLogoutOnUnauthorized(requestMeta?.path)) {
+        pushNotification({
+          title: "Session expired",
+          message: "Your session expired. Please sign in again.",
+          source: "Auth",
+          level: "warning",
+        });
+        logout();
+        return;
+      }
+
       pushNotification({
-        title: "Session expired",
-        message: "Your session expired. Please sign in again.",
+        title: "Request unauthorized",
+        message: data?.message || data?.error || "That request was rejected, but your saved login was kept.",
         source: "Auth",
         level: "warning",
+        durationMs: 6000,
       });
-      logout();
     },
     onForbidden: () => {
       pushNotification({
@@ -6970,10 +7010,12 @@ const fileInputRef = useRef(null);
         });
         if (isSuccessResponse(initData)) {
           const nextSession = extractMainSessionId(initData) || previousSessionId;
-          setConfigurations(initData.configurations || {});
+          setConfigurations(extractInitConfiguration(initData));
           setSessionId(nextSession);
           sessionIdRef.current = nextSession;
-          localStorage.setItem("session", nextSession);
+          if (nextSession) {
+            localStorage.setItem("session", nextSession);
+          }
         }
       } catch (initErr) {
         console.warn("Post-unlock init failed", initErr);
@@ -7094,21 +7136,14 @@ const fileInputRef = useRef(null);
         })
           .then(data => {
             if (isSuccessResponse(data)) {
-              const session = extractMainSessionId(data);
-              try{
-                const configs= data.configurations;
-                // const jsonString = configs.replace(/'/g, '"');
-                // const parsedConfig = JSON.parse(jsonString);
-                console.log("init_config:",configs)
-                setConfigurations(configs)
-                setSessionId(session);
-              } 
-              catch (error) {
-                console.error('Error parsing configurations:', error);
-              }
+              const session = extractMainSessionId(data) || oldSession || "";
+              const configs = extractInitConfiguration(data);
+              console.log("init_config:", configs)
+              setConfigurations(configs)
+              setSessionId(session || null);
+              sessionIdRef.current = session || null;
               if (session) {
                 localStorage.setItem('session', session);
-                setSessionId(session);
               }
               const registerAfterInit = () => registerStrReportSocketReceiver(session);
               const socket = socketRef.current;
@@ -7881,6 +7916,39 @@ const fileInputRef = useRef(null);
         );
         console.log("IframeSettings:",iframeSettings)
       }    
+      if (event.data?.type === "graph_render_stats") {
+        const payload = event.data?.payload || {};
+        const targetGraphWindowId = payload.id ?? resolvedSourceWindowId;
+        const visibleNodes = Number(payload.visible_nodes ?? payload.nodes ?? payload.total_nodes ?? 0) || 0;
+        const visibleEdges = Number(payload.visible_edges ?? payload.edges ?? payload.total_edges ?? 0) || 0;
+        const graphIsLarge = visibleNodes >= 300;
+        const currentGraphWindow = windowsRef.current.find((w) => w.type === "graph" && String(w.id) === String(targetGraphWindowId));
+        const previousVisibleNodes = Number(currentGraphWindow?.graphRenderStats?.visible_nodes ?? currentGraphWindow?.graphRenderStats?.total_nodes ?? 0) || 0;
+        const enteredPerformanceMode = previousVisibleNodes < 300 && graphIsLarge;
+        setWindows(prev =>
+          prev.map(w => {
+            if (w.type !== "graph" || String(w.id) !== String(targetGraphWindowId)) return w;
+            const nextSettings = normalizeGraphIframeSettings(w.iframeSettings);
+            if (enteredPerformanceMode) {
+              nextSettings[9] = false;
+              if (nextSettings[10] === "hierarchical") {
+                nextSettings[10] = "layered";
+              }
+            }
+            return { ...w, graphRenderStats: { visible_nodes: visibleNodes, visible_edges: visibleEdges, total_nodes: visibleNodes, total_edges: visibleEdges, reason: payload.reason || "iframe" }, iframeSettings: nextSettings };
+          })
+        );
+        if (enteredPerformanceMode) {
+          setIframeSettings(prev => {
+            const nextSettings = normalizeGraphIframeSettings(prev[targetGraphWindowId]);
+            nextSettings[9] = false;
+            if (nextSettings[10] === "hierarchical") {
+              nextSettings[10] = "layered";
+            }
+            return { ...prev, [targetGraphWindowId]: nextSettings };
+          });
+        }
+      }
       if (event.data?.type === "graph_search_results") {        
         const { id, nodes, edges } = event.data.payload; // unpack the payload
         const targetGraphWindowId = id ?? resolvedSourceWindowId;
@@ -8018,7 +8086,6 @@ const fileInputRef = useRef(null);
     //   const id = generateWindowId();
     // }
     if (type === "source") {
-      const windowsId = id+"_"+sessionId;
       const sourceAutofillDefaults = getSourceWindowAutofillDefaults(configurations);
       debounceRef.current = setTimeout(() => {
           const payload = { id: "source_window", session_id: sessionId, window_id:id};
@@ -8029,6 +8096,8 @@ const fileInputRef = useRef(null);
           })
             .then(data => {
               if (isSuccessResponse(data)) {
+                const windowsId = extractSourceWindowSessionId(data, id, sessionId);
+                const parentSessionId = extractParentSessionId(windowsId) || normalizeSessionId(sessionId);
                 iframeRefs.current[windowsId] = React.createRef();
                 setActiveWindowId(windowsId);
                 setWindows(prev => {
@@ -8041,7 +8110,7 @@ const fileInputRef = useRef(null);
                       id: windowsId,
                       type,
                       zIndex: maxZ + 1,
-                      sessionId: sessionId,
+                      sessionId: parentSessionId,
                       selectedContent: initialContent,
                       selectedSubContent: null,
                       formData: {},
@@ -8128,6 +8197,7 @@ const fileInputRef = useRef(null);
             selectedSubContent: null,
             graphLink: null,
             graphStatus: null,
+            graphRenderStats: null,
             activeGraph: null,
             iframeSearch: initialSearch,
             iframeSettings: initialSettings,
@@ -10926,6 +10996,7 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
                             graphLinkSource: sessionKey,
                             selectedContent: "graph_content",
                             activeGraph: "graph_info_placeholder",                            
+                            graphRenderStats: null,
                             graphLink: true,
                             loadscreenState: false
                           }
@@ -10953,6 +11024,7 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
                             ...w,
                             selectedContent: selectedContent,
                             graphStatus: null,
+                            graphRenderStats: null,
                             graphLink: false,
                             loadscreenState: false
                           }
@@ -10981,6 +11053,7 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
                           ...w,
                           selectedContent: selectedContent,
                           graphStatus: null,
+                          graphRenderStats: null,
                           graphLink: false,
                           loadscreenState: false
                         }
@@ -11020,7 +11093,7 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
                 setGraphStatusListener(false);
                 setWindows(prev =>
                   prev.map(w =>
-                    w.id === id ? { ...w, activeGraph:"graph_placeholder",graphStatus:null,graphLinkSource:null,filterPropertyKeys:null,selectedContent:null,graphLink:false,loadscreenState: false} : w
+                    w.id === id ? { ...w, activeGraph:"graph_placeholder",graphStatus:null,graphRenderStats:null,graphLinkSource:null,filterPropertyKeys:null,selectedContent:null,graphLink:false,loadscreenState: false} : w
                   )
                 );
               });
@@ -11904,6 +11977,8 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
               covered={window.covered}
               graphLink={window.graphLink}
               graphStatus={window.graphStatus}
+              graphStatusBySession={graphStatus}
+              graphRenderStats={window.graphRenderStats}
               activeGraph={window.activeGraph}
               iframeRef={iframeRefs.current[window.id]}
               iframeSettings={iframeSettings}
