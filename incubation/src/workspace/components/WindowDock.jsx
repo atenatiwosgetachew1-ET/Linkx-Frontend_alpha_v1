@@ -8,7 +8,7 @@ const tabIconPaths = {
   [WORKSPACE_WINDOW_TYPES.GRAPH]: 'M7 8.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Zm10 12a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5ZM7 20.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Zm2.2-4.2 5.6-7.6M9.5 7.3l5 8.2',
   [WORKSPACE_WINDOW_TYPES.CHART]: 'M5 20V10m7 10V4m7 16v-7M3 20h18',
   [WORKSPACE_WINDOW_TYPES.CONFIGURATION]: 'M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Zm0-5v2M12 18.5v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2',
-  [WORKSPACE_WINDOW_TYPES.SETTINGS]: 'M5 7h14M5 12h14M5 17h14M8 7v0M16 12v0M11 17v0',
+  [WORKSPACE_WINDOW_TYPES.SETTINGS]: 'M14.7 6.3a4 4 0 0 0-5 5L4.5 16.5a2.1 2.1 0 0 0 3 3l5.2-5.2a4 4 0 0 0 5-5l-2.6 2.6-3-3z',
 };
 
 function WindowTabIcon({ type }) {
@@ -21,6 +21,8 @@ function WindowTabIcon({ type }) {
 
 export default function WindowDock({ workspace }) {
   const [isOverviewOpen, setIsOverviewOpen] = useState(false);
+  const [draggedWindowId, setDraggedWindowId] = useState(null);
+  const [dropTargetWindowId, setDropTargetWindowId] = useState(null);
   const tabsRef = useRef(null);
   const previousWindowCountRef = useRef(workspace.windows.length);
   const activeWindow = workspace.activeWindow || workspace.windows.at(-1);
@@ -42,6 +44,28 @@ export default function WindowDock({ workspace }) {
 
   if (!activeWindow) return null;
 
+  const handleTabDragStart = (windowId) => {
+    setDraggedWindowId(windowId);
+    setDropTargetWindowId(windowId);
+  };
+
+  const handleTabDrop = (targetWindowId) => {
+    if (!draggedWindowId || !targetWindowId || draggedWindowId === targetWindowId) {
+      setDraggedWindowId(null);
+      setDropTargetWindowId(null);
+      return;
+    }
+
+    workspace.reorderWindows(draggedWindowId, targetWindowId);
+    setDraggedWindowId(null);
+    setDropTargetWindowId(null);
+  };
+
+  const resetDragState = () => {
+    setDraggedWindowId(null);
+    setDropTargetWindowId(null);
+  };
+
   return (
     <section className="workspace_window_dock" aria-label="Docked workspace windows">
       <div className="workspace_window_dock_header">
@@ -55,8 +79,23 @@ export default function WindowDock({ workspace }) {
           return (
             <div
               key={windowItem.id}
-              className={'workspace_window_dock_tab' + (isActive ? ' is-active' : '')}
+              className={
+                'workspace_window_dock_tab' +
+                (isActive ? ' is-active' : '') +
+                (draggedWindowId === windowItem.id ? ' is-dragging' : '') +
+                (dropTargetWindowId === windowItem.id && draggedWindowId !== windowItem.id ? ' is-drop-target' : '')
+              }
               role="presentation"
+              draggable
+              onDragStart={() => handleTabDragStart(windowItem.id)}
+              onDragOver={(event) => {
+                event.preventDefault();
+                if (draggedWindowId && draggedWindowId !== windowItem.id && dropTargetWindowId !== windowItem.id) {
+                  setDropTargetWindowId(windowItem.id);
+                }
+              }}
+              onDrop={() => handleTabDrop(windowItem.id)}
+              onDragEnd={resetDragState}
             >
               <button
                 className="workspace_window_dock_tab_focus"
@@ -79,6 +118,7 @@ export default function WindowDock({ workspace }) {
                 onFocus={() => workspace.focusWindow(windowItem.id)}
                 onChange={(event) => workspace.updateWindowCustomTitle(windowItem.id, event.target.value)}
                 onClick={(event) => event.stopPropagation()}
+                onDragStart={(event) => event.stopPropagation()}
               />
               <button
                 className="workspace_window_dock_tab_close linkx_tooltip_anchor"
@@ -86,6 +126,7 @@ export default function WindowDock({ workspace }) {
                 data-tooltip={'Close ' + windowItem.title}
                 aria-label={'Close ' + windowItem.title}
                 onClick={() => workspace.closeWindow(windowItem.id)}
+                onDragStart={(event) => event.stopPropagation()}
               >
                 ×
               </button>

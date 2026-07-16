@@ -16,7 +16,7 @@
             durationMs: options.durationMs
           }
         },
-        window.location.origin
+        window.__LINKX_PARENT_ORIGIN__ || "*"
       );
       return true;
     } catch (_err) {
@@ -36,8 +36,22 @@
   }
 })();
 
+const LINKX_PARENT_ORIGIN = (() => {
+  try {
+    const direct = new URLSearchParams(window.location.search).get("parent_origin");
+    if (direct) return direct;
+    if (document.referrer) return new URL(document.referrer).origin;
+  } catch (_err) {}
+  return "";
+})();
+window.__LINKX_PARENT_ORIGIN__ = LINKX_PARENT_ORIGIN;
+window.isTrustedIframeParentEvent = (event) => {
+  if (!LINKX_PARENT_ORIGIN) return true;
+  return String(event?.origin || "") === LINKX_PARENT_ORIGIN;
+};
+
 window.addEventListener("message", (event) => {
-  if (event.origin !== window.location.origin) return;
+  if (typeof window.isTrustedIframeParentEvent === "function" && !window.isTrustedIframeParentEvent(event)) return;
   const { action, payload } = event.data;
   if (action === "theme_mode") {
     const nextMode = payload === "dark" ? "dark" : "light";
@@ -186,7 +200,7 @@ function messageParent(payload){
         edges: edgesData.get(edgeIds)  // pass array of edge IDs
       }
     },
-    window.location.origin
+    window.__LINKX_PARENT_ORIGIN__ || "*"
   );
 }
 
@@ -208,7 +222,7 @@ function postGraphRenderStats(reason = "render") {
       physics: !!window.currentSettings?.physics,
       layout_type: window.currentSettings?.layoutType || "default"
     }
-  }, window.location.origin);
+  }, window.__LINKX_PARENT_ORIGIN__ || "*");
 }
 
 function ensureInteractionPopupUi() {
@@ -1272,6 +1286,10 @@ window.PATH_HIGHLIGHT_STATE = window.PATH_HIGHLIGHT_STATE || {
   nodeIds: new Set(),
   edgeIds: new Set()
 };
+window.TRAVERSAL_HIGHLIGHT_STATE = window.TRAVERSAL_HIGHLIGHT_STATE || {
+  nodeIds: new Set(),
+  edgeIds: new Set()
+};
 window.ALERT_HIGHLIGHT_STATE = window.ALERT_HIGHLIGHT_STATE || {
   nodeIds: new Set(),
   edgeIds: new Set()
@@ -1352,6 +1370,8 @@ function captureGraphHistorySnapshot() {
     limitOverridden: !!window.limitOverridden,
     pathNodeIds: Array.from(window.PATH_HIGHLIGHT_STATE?.nodeIds || []),
     pathEdgeIds: Array.from(window.PATH_HIGHLIGHT_STATE?.edgeIds || []),
+    traversalNodeIds: Array.from(window.TRAVERSAL_HIGHLIGHT_STATE?.nodeIds || []),
+    traversalEdgeIds: Array.from(window.TRAVERSAL_HIGHLIGHT_STATE?.edgeIds || []),
     alertNodeIds: Array.from(window.ALERT_HIGHLIGHT_STATE?.nodeIds || []),
     alertEdgeIds: Array.from(window.ALERT_HIGHLIGHT_STATE?.edgeIds || []),
     selectedNodes: typeof network?.getSelectedNodes === "function" ? network.getSelectedNodes() : [],
@@ -1401,6 +1421,12 @@ function applyGraphHistorySnapshot(snapshot) {
       window.PATH_HIGHLIGHT_STATE.edgeIds.clear();
       (snapshot.pathNodeIds || []).forEach((id) => window.PATH_HIGHLIGHT_STATE.nodeIds.add(id));
       (snapshot.pathEdgeIds || []).forEach((id) => window.PATH_HIGHLIGHT_STATE.edgeIds.add(id));
+    }
+    if (window.TRAVERSAL_HIGHLIGHT_STATE) {
+      window.TRAVERSAL_HIGHLIGHT_STATE.nodeIds.clear();
+      window.TRAVERSAL_HIGHLIGHT_STATE.edgeIds.clear();
+      (snapshot.traversalNodeIds || []).forEach((id) => window.TRAVERSAL_HIGHLIGHT_STATE.nodeIds.add(id));
+      (snapshot.traversalEdgeIds || []).forEach((id) => window.TRAVERSAL_HIGHLIGHT_STATE.edgeIds.add(id));
     }
     if (window.ALERT_HIGHLIGHT_STATE) {
       window.ALERT_HIGHLIGHT_STATE.nodeIds.clear();
@@ -1658,7 +1684,7 @@ function getAllNodeKeys(id) {
   window.parent.postMessage({
     type: "all_property_keys_response",
     payload: { id, keys: [...keySet] }
-  }, window.location.origin);
+  }, window.__LINKX_PARENT_ORIGIN__ || "*");
 }
 
 function normalizeLimitRange(value, fallbackMax = 25) {
@@ -2577,15 +2603,22 @@ function getNodeBackgroundColor(node) {
 
 function applyNodeStateDecorations(mergedNode, nodeId, markerSets) {
   const isPath = markerSets.pathNodeIds.has(nodeId);
+  const isTraversal = markerSets.traversalNodeIds.has(nodeId);
   const isAlert = markerSets.alertNodeIds.has(nodeId);
   const isPinned = markerSets.pinnedNodeIds.has(nodeId);
-  if (!isPath && !isAlert && !isPinned) return;
+  if (!isPath && !isTraversal && !isAlert && !isPinned) return;
 
   const baseBg = getNodeBackgroundColor(mergedNode);
   if (isPath) {
     mergedNode.borderWidth = Math.max(3.5, Number(mergedNode.borderWidth) || 1);
     mergedNode.color = buildNodeColorWithBorder(baseBg, "#f97316");
     mergedNode.shadow = { enabled: true, color: "rgba(249,115,22,0.45)", size: 18, x: 0, y: 0 };
+    return;
+  }
+  if (isTraversal) {
+    mergedNode.borderWidth = Math.max(3.6, Number(mergedNode.borderWidth) || 1);
+    mergedNode.color = buildNodeColorWithBorder("#dc2626", "#7e22ce");
+    mergedNode.shadow = { enabled: true, color: "rgba(126,34,206,0.40)", size: 18, x: 0, y: 0 };
     return;
   }
   if (isAlert) {
@@ -2610,14 +2643,20 @@ function getEdgeBaseColor(edge) {
 
 function applyEdgeStateDecorations(mergedEdge, edgeId, markerSets) {
   const isPath = markerSets.pathEdgeIds.has(edgeId);
+  const isTraversal = markerSets.traversalEdgeIds.has(edgeId);
   const isAlert = markerSets.alertEdgeIds.has(edgeId);
   const isPinned = markerSets.pinnedEdgeIds.has(edgeId);
-  if (!isPath && !isAlert && !isPinned) return;
+  if (!isPath && !isTraversal && !isAlert && !isPinned) return;
 
   const baseWidth = Number(mergedEdge.width) || 1;
   if (isPath) {
     mergedEdge.width = Math.max(baseWidth, 3.4);
     mergedEdge.color = { color: "#f97316", inherit: false };
+    return;
+  }
+  if (isTraversal) {
+    mergedEdge.width = Math.max(baseWidth, 3.6);
+    mergedEdge.color = { color: "#dc2626", highlight: "#7e22ce", hover: "#7e22ce", inherit: false };
     return;
   }
   if (isAlert) {
@@ -2638,6 +2677,8 @@ function getMarkerSets() {
     pinnedEdgeIds: pinnedSets.edgeIds,
     pathNodeIds: window.PATH_HIGHLIGHT_STATE?.nodeIds || new Set(),
     pathEdgeIds: window.PATH_HIGHLIGHT_STATE?.edgeIds || new Set(),
+    traversalNodeIds: window.TRAVERSAL_HIGHLIGHT_STATE?.nodeIds || new Set(),
+    traversalEdgeIds: window.TRAVERSAL_HIGHLIGHT_STATE?.edgeIds || new Set(),
     alertNodeIds: window.ALERT_HIGHLIGHT_STATE?.nodeIds || new Set(),
     alertEdgeIds: window.ALERT_HIGHLIGHT_STATE?.edgeIds || new Set()
   };
@@ -2651,6 +2692,7 @@ function applyMarkerOverlays(nodeIds, edgeIds) {
   (nodeIds || []).forEach(nodeId => {
     if (
       !markerSets.pathNodeIds.has(nodeId) &&
+      !markerSets.traversalNodeIds.has(nodeId) &&
       !markerSets.alertNodeIds.has(nodeId) &&
       !markerSets.pinnedNodeIds.has(nodeId)
     ) {
@@ -2666,6 +2708,7 @@ function applyMarkerOverlays(nodeIds, edgeIds) {
   (edgeIds || []).forEach(edgeId => {
     if (
       !markerSets.pathEdgeIds.has(edgeId) &&
+      !markerSets.traversalEdgeIds.has(edgeId) &&
       !markerSets.alertEdgeIds.has(edgeId) &&
       !markerSets.pinnedEdgeIds.has(edgeId)
     ) {
@@ -3245,20 +3288,25 @@ function expandNeighborhoodFromSelection(selectedNodes, maxDepth = 1) {
 
   const queue = [];
   const visited = new Set();
+  const traversedNodeIds = new Set();
+  const traversedEdgeIds = new Set();
   seeds.forEach(nodeId => {
     queue.push({ nodeId, depth: 0 });
     visited.add(nodeId);
+    traversedNodeIds.add(nodeId);
     VISIBLE_STATE.nodes.add(nodeId);
   });
 
   while (queue.length > 0) {
     const { nodeId, depth } = queue.shift();
     if (depth >= maxDepth) continue;
-    const neighbors = FULL_GRAPH.adjacency.get(nodeId);
-    if (!neighbors) continue;
-    neighbors.forEach(neighborId => {
+    const traversableEdges = getTraversableEdges(nodeId, { directed: false, weighted: false, includeThemeLines: false });
+    traversableEdges.forEach(({ edgeId, to }) => {
+      const neighborId = normalizeGraphId(to);
       if (!FULL_GRAPH.nodes.has(neighborId)) return;
       VISIBLE_STATE.nodes.add(neighborId);
+      traversedNodeIds.add(neighborId);
+      traversedEdgeIds.add(edgeId);
       if (visited.has(neighborId)) return;
       visited.add(neighborId);
       queue.push({ nodeId: neighborId, depth: depth + 1 });
@@ -3266,6 +3314,16 @@ function expandNeighborhoodFromSelection(selectedNodes, maxDepth = 1) {
   }
 
   recomputeVisibleEdges();
+  if (window.TRAVERSAL_HIGHLIGHT_STATE) {
+    window.TRAVERSAL_HIGHLIGHT_STATE.nodeIds.clear();
+    window.TRAVERSAL_HIGHLIGHT_STATE.edgeIds.clear();
+    traversedNodeIds.forEach(nodeId => {
+      if (VISIBLE_STATE.nodes.has(nodeId)) window.TRAVERSAL_HIGHLIGHT_STATE.nodeIds.add(nodeId);
+    });
+    traversedEdgeIds.forEach(edgeId => {
+      if (VISIBLE_STATE.edges.has(edgeId)) window.TRAVERSAL_HIGHLIGHT_STATE.edgeIds.add(edgeId);
+    });
+  }
   renderVisibleGraphBatch();
 }
 
@@ -4449,7 +4507,7 @@ function publishGraphAlerts(alerts) {
       count: alerts.length,
       alerts
     }
-  }, window.location.origin);
+  }, window.__LINKX_PARENT_ORIGIN__ || "*");
 }
 
 function runAlertScan(notify = true) {
@@ -4534,7 +4592,7 @@ function pushPinnedEvidenceItem(item) {
   window.parent.postMessage({
     type: "pinned_evidence_update",
     payload: window.PINNED_EVIDENCE
-  }, window.location.origin);
+  }, window.__LINKX_PARENT_ORIGIN__ || "*");
 }
 
 function pinSelectedEvidence() {
@@ -4570,7 +4628,7 @@ function clearPinnedEvidence() {
   window.parent.postMessage({
     type: "pinned_evidence_update",
     payload: window.PINNED_EVIDENCE
-  }, window.location.origin);
+  }, window.__LINKX_PARENT_ORIGIN__ || "*");
   renderVisibleGraphBatch();
 }
 
@@ -4627,7 +4685,7 @@ function unpinSelectedEvidence() {
   window.parent.postMessage({
     type: "pinned_evidence_update",
     payload: window.PINNED_EVIDENCE
-  }, window.location.origin);
+  }, window.__LINKX_PARENT_ORIGIN__ || "*");
   renderVisibleGraphBatch();
 }
 
@@ -4653,7 +4711,7 @@ function unpinEvidenceByContext(nodeId = null, edgeId = null) {
   window.parent.postMessage({
     type: "pinned_evidence_update",
     payload: window.PINNED_EVIDENCE
-  }, window.location.origin);
+  }, window.__LINKX_PARENT_ORIGIN__ || "*");
   renderVisibleGraphBatch();
 }
 
@@ -4919,7 +4977,7 @@ async function applyCommunityDetection() {
         largest: communities[0]?.length || 0,
         method: "relationship_weighted_label_propagation"
       }
-    }, window.location.origin);
+    }, window.__LINKX_PARENT_ORIGIN__ || "*");
 
     setProgress(4, 4, "Finalizing...");
     return { communities };
@@ -5405,7 +5463,7 @@ function copyNodes(selectedIds) {
       type: "clipboard_set",
       payload: clipboardPayload
     },
-    window.location.origin
+    window.__LINKX_PARENT_ORIGIN__ || "*"
   );
 }
 
@@ -5619,7 +5677,7 @@ function showNodeInfos(node, state) {
   // Send message to parent window
   window.parent.postMessage(
     { type: "nodeProperties", payload: result },
-    window.location.origin
+    window.__LINKX_PARENT_ORIGIN__ || "*"
   );
   return result;
 }
@@ -6406,7 +6464,7 @@ function graphSearch({ id, keyword, option, keys, settings }) {
     window.parent.postMessage({
       type: "graph_search_results",
       payload: { id, nodes: VISIBLE_STATE.nodes.size, edges: VISIBLE_STATE.edges.size }
-    }, window.location.origin);
+    }, window.__LINKX_PARENT_ORIGIN__ || "*");
   };
 
   const limitRange = normalizeLimitRange(
@@ -6757,7 +6815,7 @@ function getNetworkComponents(payload){
         edges: edgesData.get()
       }
     },
-    window.location.origin
+    window.__LINKX_PARENT_ORIGIN__ || "*"
   );
 }
 
@@ -7086,7 +7144,7 @@ function waitForFrames(frameCount = 2) {
 async function renderReportCanvasFromTemplate(report) {
   const html2canvasRef = await ensureHtml2Canvas();
   const iframe = document.createElement("iframe");
-  iframe.src = "../temp_placeholders/graph_reports.html";
+  iframe.src = "../temp_placeholders/graph_reports.html?parent_origin=" + encodeURIComponent(window.location.origin || "null");
   iframe.style.position = "fixed";
   iframe.style.left = "-12000px";
   iframe.style.top = "0";
@@ -7110,7 +7168,7 @@ async function renderReportCanvasFromTemplate(report) {
       throw new Error("Report template iframe is unavailable");
     }
 
-    iframe.contentWindow.postMessage({ action: "graph_report", payload: report }, window.location.origin);
+    iframe.contentWindow.postMessage({ action: "graph_report", payload: report }, "*");
     await waitForFrames(3);
 
     const root = iframe.contentDocument.querySelector(".report_container") || iframe.contentDocument.body;

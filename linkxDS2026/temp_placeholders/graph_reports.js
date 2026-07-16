@@ -212,8 +212,17 @@
     );
   }
 
+  const LINKX_REPORT_PARENT_ORIGIN = (() => {
+    try {
+      const direct = new URLSearchParams(window.location.search).get("parent_origin");
+      if (direct) return direct;
+      if (document.referrer) return new URL(document.referrer).origin;
+    } catch (_err) {}
+    return "";
+  })();
+
   window.addEventListener("message", function (event) {
-  if (event.origin !== window.location.origin) return;
+  if (LINKX_REPORT_PARENT_ORIGIN && String(event.origin || "") !== LINKX_REPORT_PARENT_ORIGIN) return;
     const data = event?.data || {};
     if (data.action !== "graph_report") return;
     updateReport(data.payload);

@@ -2,11 +2,20 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
+<script>
+(function(){
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const theme = params.get("theme") === "dark" ? "dark" : "light";
+    document.documentElement.setAttribute("data-theme", theme);
+  } catch (_) {}
+})();
+</script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Network Metrics Slideshow (Fixed Icons)</title>
 <style>
 :root {
-  --accent-gradient: linear-gradient(45deg, #00bcd4, #8e44ad, #e91e63);
+  --accent-gradient: linear-gradient(90deg, #ae794f, #bf8b61, #8b5d37);
   --text-muted: #9fb3c8;
   --page-bg: radial-gradient(circle at center, #101820, #070c12);
   --dot: #8aa0b5;
@@ -14,10 +23,11 @@
 }
 
 html[data-theme="light"] {
-  --text-muted: #555;
-  --page-bg: radial-gradient(circle at center, #edf6fa, #d9eaf1);
-  --dot: #666;
-  --dot-active: #333;
+  --accent-gradient: linear-gradient(90deg, #ae794f, #bf8b61, #8b5d37);
+  --text-muted: #81614b;
+  --page-bg: linear-gradient(180deg, rgba(255, 254, 251, 1), rgba(248, 242, 235, 1));
+  --dot: rgba(174, 121, 79, 0.28);
+  --dot-active: #ae794f;
 }
 
 html[data-theme="dark"] {
@@ -46,6 +56,12 @@ body {
   user-select: none;
 }
 
+html[data-theme="light"] body {
+  background:
+    linear-gradient(180deg, rgba(255, 254, 251, 1), rgba(248, 242, 235, 1)),
+    radial-gradient(circle at top, rgba(174, 121, 79, 0.08), transparent 42%);
+}
+
 .slideshow {
   position: relative;
   width: 100vw;
@@ -53,6 +69,10 @@ body {
   height: 100vh;
   border-radius: 1vw;
   overflow: hidden;
+}
+
+html[data-theme="light"] .slideshow {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(250, 246, 240, 0.88));
 }
 
 /* Each slide */
@@ -83,6 +103,11 @@ body {
   display: inline-block;
   animation: hueshift 3s linear infinite;
 }
+
+html[data-theme="light"] .slide .icon {
+  animation: none;
+  filter: drop-shadow(0 16px 28px rgba(174, 121, 79, 0.16));
+}
 .slide .icon svg {
   width: 100%;
   height: 100%;
@@ -99,12 +124,21 @@ body {
   animation: hueshift 3s linear infinite;
 }
 
+html[data-theme="light"] .slide .title {
+  animation: none;
+  font-weight: 500;
+}
+
 /* Description */
 .slide .text {
   font-size: 13px;
   max-width: 70%;
   color: var(--text-muted);
   line-height: 1.7;
+}
+
+html[data-theme="light"] .slide .text {
+  color: #81614b;
 }
 
 /* Dots */
@@ -116,6 +150,10 @@ body {
   width: 100%;
   gap: 1vw;
   opacity: 0.4;
+}
+
+html[data-theme="light"] .dots {
+  opacity: 1;
 }
 .dot {
   width: 1vw;
@@ -247,8 +285,17 @@ function showSlide(i) {
 
 setInterval(() => showSlide(index + 1), 2500);
 
+const LINKX_PARENT_ORIGIN = (() => {
+  try {
+    const direct = new URLSearchParams(window.location.search).get("parent_origin");
+    if (direct) return direct;
+    if (document.referrer) return new URL(document.referrer).origin;
+  } catch (_) {}
+  return window.location.origin;
+})();
+
 window.addEventListener("message", (event) => {
-  if (event.origin !== window.location.origin) return;
+  if (LINKX_PARENT_ORIGIN && String(event.origin || "") !== LINKX_PARENT_ORIGIN) return;
   if (event?.data?.action === "theme_mode") {
     const nextMode = event.data.payload === "dark" ? "dark" : "light";
     document.documentElement.setAttribute("data-theme", nextMode);

@@ -168,7 +168,8 @@
 
         .status_badge.status-unknown,
         .status_badge.status-pending,
-        .status_badge.status-waiting {
+        .status_badge.status-waiting,
+        .status_badge.status-info {
           background-color: #dbeafe;
           border-color: #60a5fa;
           color: #1e3a8a;
@@ -210,7 +211,8 @@
 
         html[data-theme="dark"] .status_badge.status-unknown,
         html[data-theme="dark"] .status_badge.status-pending,
-        html[data-theme="dark"] .status_badge.status-waiting {
+        html[data-theme="dark"] .status_badge.status-waiting,
+        html[data-theme="dark"] .status_badge.status-info {
           background-color: rgba(30, 58, 138, 0.32);
           border-color: #93c5fd;
           color: #dbeafe;
@@ -453,7 +455,8 @@
                     <li><strong>User</strong><span id="dbUser"></span></li>
                     <li><strong>Available Nodes</strong><span id="nodes"></span></li>
                     <li><strong>Available Relationships</strong><span id="relationships"></span></li>
-                    <li><strong>All Relationships</strong><span id="allRelationships"></span></li>
+                    <li><strong>Total Relationships</strong><span id="allRelationships"></span></li>
+                    <li><strong>Relationship Labels</strong><span id="relationshipLabels"></span></li>
                     <li><strong>Property Keys</strong><span id="propertyKeys"></span></li>
                     <li><strong>Application Version</strong><span id="appVersion"></span></li>
                 </ul>
@@ -548,17 +551,69 @@
     return present;
   };
 
+  const STATUS_BADGE_TONES = {
+    analyzing: "info",
+    analysing: "info",
+    starting: "info",
+    running: "info",
+    streaming: "info",
+    ingesting: "info",
+    processing: "info",
+    queued: "info",
+    pending: "info",
+    waiting: "info",
+    initializing: "info",
+    subscribed: "info",
+    connected: "info",
+    active: "info",
+    completed: "success",
+    complete: "success",
+    success: "success",
+    succeeded: "success",
+    ready: "success",
+    healthy: "success",
+    warning: "warning",
+    flagged: "warning",
+    suspicious: "warning",
+    risk: "warning",
+    degraded: "warning",
+    partial: "warning",
+    failed: "failed",
+    failure: "failed",
+    error: "failed",
+    terminated: "failed",
+    stopped: "failed",
+    disconnected: "failed",
+    rejected: "failed",
+    unknown: "unknown",
+  };
+
+  const normalizeStatusValue = (value) => String(value || "").trim();
+
+  const mapStatusTone = (value) => {
+    const normalized = normalizeStatusValue(value)
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "_");
+
+    return STATUS_BADGE_TONES[normalized] || "unknown";
+  };
+
   const setStatusBadge = (value) => {
     const el = document.getElementById("statusBadge");
     if (!el) return;
 
-    const text = safeText(value, "unknown");
-    const normalized = String(text).toLowerCase().replace(/[^a-z0-9]+/g, "-");
+    const normalizedText = normalizeStatusValue(value);
+    const text = normalizedText || "unknown";
+    const statusKey = text.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+    const tone = mapStatusTone(text);
 
     el.className = "status_badge";
-    const tokens = normalized.split("-").filter(Boolean);
-    tokens.forEach((t) => el.classList.add(`status-${t}`));
-    el.classList.add(`status-${normalized || "unknown"}`);
+    el.classList.add(`status-${tone}`);
+    if (statusKey) {
+      el.classList.add(`status-value-${statusKey}`);
+    }
+    el.dataset.statusTone = tone;
+    el.dataset.statusValue = text;
     el.textContent = text;
   };
 
@@ -624,7 +679,11 @@
 
     const totalNodes = firstDefined(
       payload.total_nodes,
+      payload.available_nodes,
+      payload.availableNodes,
       summary.total_nodes,
+      summary.available_nodes,
+      summary.availableNodes,
       (summary.clean_nodes != null && summary.flagged_nodes != null)
         ? Number(summary.clean_nodes) + Number(summary.flagged_nodes)
         : null
@@ -632,9 +691,17 @@
 
     const totalRelationships = firstDefined(
       payload.total_relationships,
+      payload.all_relationships,
+      payload.allRelationships,
       summary.total_relationships,
-      summary.flagged_relationships
+      summary.all_relationships,
+      summary.allRelationships,
+      summary.flagged_relationships,
+      Array.isArray(payload.relationships) ? payload.relationships.length : null,
+      Array.isArray(payload.edges) ? payload.edges.length : null
     );
+
+    const availableRelationships = relationshipLabels.length;
 
     const relationshipsText = relationshipLabels.length > 0
       ? relationshipLabels
@@ -652,15 +719,22 @@
       summary.neo4j_version
     );
 
-    const statusText = firstDefined(payload.status, summary.status, "unknown");
+    const statusText = firstDefined(
+      payload.status,
+      payload.session_status,
+      summary.status,
+      summary.session_status,
+      "unknown"
+    );
     setField("sourceId", sourceId, { hideIfEmpty: false });
     setStatusBadge(statusText);
 
     setField("dbName", dbName);
     setField("dbUser", dbUser);
     setField("nodes", totalNodes, { formatter: formatNumber });
-    setField("relationships", relationshipsText);
+    setField("relationships", availableRelationships, { formatter: formatNumber });
     setField("allRelationships", totalRelationships, { formatter: formatNumber });
+    setField("relationshipLabels", relationshipsText);
     setField("propertyKeys", propertyKeysText);
     setField("appVersion", appVersion);
 
@@ -684,8 +758,17 @@
     if (detailsSection) detailsSection.style.display = (summaryHasValues || metricsHasValues) ? "" : "none";
   }
 
-  window.addEventListener("message", (event) => {
-  if (event.origin !== window.location.origin) return;
+  const LINKX_PARENT_ORIGIN = (() => {
+  try {
+    const direct = new URLSearchParams(window.location.search).get("parent_origin");
+    if (direct) return direct;
+    if (document.referrer) return new URL(document.referrer).origin;
+  } catch (_) {}
+  return window.location.origin;
+})();
+
+window.addEventListener("message", (event) => {
+  if (LINKX_PARENT_ORIGIN && String(event.origin || "") !== LINKX_PARENT_ORIGIN) return;
     console.log("message event received:", event.data);
 
     const { action, payload } = event.data || {};

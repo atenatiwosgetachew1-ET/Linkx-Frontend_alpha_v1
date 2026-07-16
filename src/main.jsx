@@ -3,8 +3,27 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.jsx'
 
+const shouldKeepClientLogs = () => {
+  if (!import.meta.env.PROD) return true;
+  if (import.meta.env.VITE_ENABLE_CLIENT_LOGS === 'true') return true;
+  if (typeof window === 'undefined') return false;
+
+  try {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('debug_logs') === '1') return true;
+  } catch (_error) {
+    // Ignore malformed location state.
+  }
+
+  try {
+    return window.localStorage?.getItem('linkx_enable_client_logs') === 'true';
+  } catch (_error) {
+    return false;
+  }
+};
+
 const installProductionConsoleGuard = () => {
-  if (!import.meta.env.PROD || import.meta.env.VITE_ENABLE_CLIENT_LOGS === 'true') return;
+  if (shouldKeepClientLogs()) return;
   ['debug', 'log', 'info', 'warn', 'error'].forEach((method) => {
     if (typeof console[method] === 'function') {
       console[method] = () => {};
@@ -15,8 +34,7 @@ const installProductionConsoleGuard = () => {
 installProductionConsoleGuard();
 
 if (typeof window !== 'undefined') {
-  const savedThemeMode = localStorage.getItem('linkx_theme_mode');
-  document.documentElement.setAttribute('data-theme', savedThemeMode === 'dark' ? 'dark' : 'light');
+  document.documentElement.setAttribute('data-theme', 'light');
 }
 
 /**

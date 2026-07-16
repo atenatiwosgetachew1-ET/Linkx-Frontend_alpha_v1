@@ -15,7 +15,7 @@ const fallbackLoginBackgroundImage = "/site_images/Linkx_background_basic.webp";
 const loginLogo = import.meta.env.BASE_URL + "site_images/Linkx square Icon (256x256).png";
 const genericLoginError = "Unable to sign in at this time. Please try again later.";
 
-export default function LoginPage({ onLogin, ssoError = "", isSsoAuthenticating = false }) {
+export default function LoginPage({ onLogin, onParentProjectLogin, ssoError = "", isSsoAuthenticating = false }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -55,6 +55,22 @@ export default function LoginPage({ onLogin, ssoError = "", isSsoAuthenticating 
     playBackgroundVideo();
   }, [areBackgroundAnimationsEnabled]);
 
+
+  const handleParentProjectLogin = async () => {
+    setError("");
+    if (typeof onParentProjectLogin !== "function") {
+      setError("Parent project login is not configured.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      await onParentProjectLogin();
+    } catch (err) {
+      setError(err?.message || genericLoginError);
+      setIsSubmitting(false);
+    }
+  };
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -153,6 +169,15 @@ export default function LoginPage({ onLogin, ssoError = "", isSsoAuthenticating 
           {(error || ssoError) && <div className="linkx_login_error">{error || ssoError}</div>}
           <button type="submit" disabled={isSubmitting || isSsoAuthenticating}>
             {isSsoAuthenticating ? "Completing SSO..." : isSubmitting ? "Signing in..." : "Sign in"}
+          </button>
+          <div className="linkx_login_divider"><span>or</span></div>
+          <button
+            type="button"
+            className="linkx_login_parent_project_btn"
+            disabled={isSubmitting || isSsoAuthenticating}
+            onClick={handleParentProjectLogin}
+          >
+            Continue with Parent project
           </button>
         </form>
       </section>

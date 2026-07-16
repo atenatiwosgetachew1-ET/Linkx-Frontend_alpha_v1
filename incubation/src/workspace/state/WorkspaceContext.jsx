@@ -25,6 +25,10 @@ export function WorkspaceProvider({ children }) {
         type: WORKSPACE_ACTIONS.FOCUS_WINDOW,
         payload: { id },
       }),
+      reorderWindows: (draggedId, targetId) => dispatch({
+        type: WORKSPACE_ACTIONS.REORDER_WINDOWS,
+        payload: { draggedId, targetId },
+      }),
       updateWindowCustomTitle: (id, customTitle) => dispatch({
         type: WORKSPACE_ACTIONS.UPDATE_WINDOW_CUSTOM_TITLE,
         payload: { id, customTitle },

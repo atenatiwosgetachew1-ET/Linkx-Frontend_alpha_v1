@@ -122,6 +122,12 @@ const defaultSourceState = {
     storageDateFrom: '',
     storageDateTo: '',
     selectedStorageFiles: [],
+    searchDateFrom: '',
+    searchDateTo: '',
+    searchScope: 'transactions',
+    searchUseDefault: true,
+    searchPath: '',
+    selectedSearchFiles: [],
     sourceStatus: SOURCE_STATUSES.IDLE,
     sourceMessage: 'Not connected.',
     toolStatus: TOOL_STATUSES.IDLE,
@@ -230,7 +236,7 @@ const getWorkflowSteps = (mode, state) => {
 const getAccessibleSteps = (mode, state) => {
   if (mode === SOURCE_MODES.BATCH) {
     const steps = new Set(['upload']);
-    if ((state.selectedFiles || []).length > 0 || isSourceReady(state)) steps.add('dataframe');
+    if ((state.selectedFiles || []).length > 0 || (state.selectedSearchFiles || []).length > 0 || isSourceReady(state)) steps.add('dataframe');
     if (steps.has('dataframe') && canStream(state)) steps.add('stream');
     if (state.streamStatus === STREAM_STATUSES.RUNNING) steps.add('stream');
     return steps;
@@ -1043,58 +1049,206 @@ function StorageStep({ state, onPatchModeState, onSourceAction }) {
     </div>
   );
 }
-function SearchStep({ state, windowId, onPatchModeState }) {
-  const selectedFiles = state.selectedFiles || [];
-  const searchModeName = 'source-search-mode-' + windowId;
+function SearchStep({ state, onPatchModeState }) {
+  const searchModeName = 'source-search-mode';
+  const [lastSearchRequest, setLastSearchRequest] = useState(null);
+  const searchOptions = ['transactions', 'accounts', 'alerts'];
+  const sampleRows = [
+    { keyword: 'AMOUNT:1200', searchedAt: '2026-07-15 09:12', count: 18 },
+    { keyword: 'BENACCOUNTNO:334900', searchedAt: '2026-07-15 09:10', count: 24 },
+    { keyword: 'TRANSACTIONDATE:2026-07-14', searchedAt: '2026-07-15 09:09', count: 30 },
+    { keyword: 'BRANCHNAME:ADDIS', searchedAt: '2026-07-15 09:07', count: 16 },
+    { keyword: 'ACCOUNTNO:102392', searchedAt: '2026-07-15 09:06', count: 20 },
+    { keyword: 'ALERT:RISK_FLAG', searchedAt: '2026-07-15 09:04', count: 12 },
+    { keyword: 'CUSTOMER:ACTIVE', searchedAt: '2026-07-15 09:03', count: 14 },
+    { keyword: 'MERCHANT:ONLINE', searchedAt: '2026-07-15 09:01', count: 21 },
+    { keyword: 'COUNTRY:ET', searchedAt: '2026-07-15 08:59', count: 11 },
+    { keyword: 'TX:HIGH_VALUE', searchedAt: '2026-07-15 08:57', count: 28 },
+  ];
+  const selectedResults = state.selectedSearchFiles || [];
+  const normalizedQuery = String(lastSearchRequest?.query || '').trim().toLowerCase();
+  const strictResults = normalizedQuery
+    ? sampleRows.filter((row) => row.keyword.toLowerCase().includes(normalizedQuery))
+    : sampleRows;
+  const fuzzyResults = normalizedQuery
+    ? sampleRows.filter((row) => normalizedQuery.split('').every((char) => row.keyword.toLowerCase().includes(char)))
+    : sampleRows;
+  const matchedRows = lastSearchRequest?.mode === 'hybrid' ? fuzzyResults : strictResults;
+  const visibleRows = matchedRows.slice(0, lastSearchRequest?.revealCount || 0);
+  const hasSearched = Boolean(lastSearchRequest);
+  const showRows = hasSearched && visibleRows.length > 0;
+  const emptyMessage = hasSearched ? 'No matching keywords found.' : 'Search results will appear here.';
+
+  const handleSearchSubmit = () => {
+    const nextQuery = state.searchQuery || '';
+    const nextMode = state.searchMode;
+
+    setLastSearchRequest((previous) => {
+      const sameSearch = previous && previous.query === nextQuery && previous.mode === nextMode;
+      return {
+        query: nextQuery,
+        mode: nextMode,
+        revealCount: sameSearch ? previous.revealCount + 1 : 1,
+      };
+    });
+  };
+
+  const toggleSearchResult = (keyword) => {
+    const nextSelected = selectedResults.includes(keyword)
+      ? selectedResults.filter((item) => item !== keyword)
+      : [...selectedResults, keyword];
+    onPatchModeState({ selectedSearchFiles: nextSelected });
+  };
 
   return (
-    <div className="source_window_step_body">
-      <section className="source_window_section">
-        <header>
-          <h3>Search from storage</h3>
-          <span className="source_window_hint">Backend search will attach here.</span>
+    <div className="source_window_step_body source_window_step_body_storage">
+      <section className="source_window_storage_browser">
+        <header className="source_window_storage_browser_header">
+          <div className="source_window_storage_title">
+            <SourceModeIcon type="search" />
+            <h3>Elastic Search source</h3>
+            <StatusPill label="Search" status={state.sourceStatus} />
+          </div>
+          <div className="source_window_storage_type_buttons" role="group" aria-label="Elastic Search source type">
+            <button type="button" className="is-selected">
+              <SourceModeIcon type="search" />
+              <span>Index search</span>
+            </button>
+            <button type="button" disabled>
+              <SourceModeIcon type="cloud" />
+              <span>Remote index</span>
+            </button>
+          </div>
         </header>
-        <div className="source_window_search_bar">
-          <input
-            type="text"
-            value={state.searchQuery}
-            placeholder="Type here to search"
-            onChange={(event) => onPatchModeState({ searchQuery: event.target.value })}
-          />
-          <input
-            type="date"
-            value={state.searchDate}
-            onChange={(event) => onPatchModeState({ searchDate: event.target.value })}
-          />
-          <button type="button" disabled>Search</button>
-        </div>
-        <div className="source_window_radio_group is-compact" role="radiogroup" aria-label="Search type">
-          <label>
+
+        <div className="source_window_storage_fields source_window_search_fields">
+          <label className="source_window_storage_default_toggle">
             <input
-              type="radio"
-              name={searchModeName}
-              checked={state.searchMode === 'raw'}
-              onChange={() => onPatchModeState({ searchMode: 'raw' })}
+              type="checkbox"
+              checked={state.searchUseDefault !== false}
+              onChange={(event) => onPatchModeState({ searchUseDefault: event.target.checked })}
             />
-            <span>Raw files</span>
+            <span>Use Default</span>
           </label>
-          <label>
+          <Field label="Path">
             <input
-              type="radio"
-              name={searchModeName}
-              checked={state.searchMode === 'hybrid'}
-              onChange={() => onPatchModeState({ searchMode: 'hybrid' })}
+              type="text"
+              value={state.searchPath}
+              placeholder="Keyword index path"
+              disabled={state.searchUseDefault !== false}
+              onChange={(event) => onPatchModeState({ searchPath: event.target.value })}
             />
-            <span>Hybrid search</span>
-          </label>
+          </Field>
+          <div className="source_window_search_mode_group" role="radiogroup" aria-label="Search mode">
+            <label className={state.searchMode === 'raw' ? 'is-selected' : ''}>
+              <input
+                type="radio"
+                name={searchModeName}
+                checked={state.searchMode === 'raw'}
+                onChange={() => onPatchModeState({ searchMode: 'raw' })}
+              />
+              <span>Strict search</span>
+            </label>
+            <label className={state.searchMode === 'hybrid' ? 'is-selected' : ''}>
+              <input
+                type="radio"
+                name={searchModeName}
+                checked={state.searchMode === 'hybrid'}
+                onChange={() => onPatchModeState({ searchMode: 'hybrid' })}
+              />
+              <span>Fuzzy search</span>
+            </label>
+          </div>
+          <Field label="Index">
+            <select value={state.searchScope || 'transactions'} onChange={(event) => onPatchModeState({ searchScope: event.target.value })}>
+              {searchOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+            </select>
+          </Field>
         </div>
-      </section>
-      <section className="source_window_section source_window_file_board">
-        <header>
-          <h3>Selected files</h3>
-          <span>{selectedFiles.length} selected</span>
-        </header>
-        <p>No files selected yet. Search results and upload results will populate this area.</p>
+
+        <div className="source_window_storage_file_panel">
+          <div className="source_window_storage_file_browser" aria-label="Elastic Search result browser">
+            <div className="source_window_storage_parent_row">
+              <button
+                type="button"
+                className="source_window_storage_parent_button"
+                aria-label="Return to parent directory"
+                disabled
+              >
+                ..
+              </button>
+              <div className="source_window_storage_search_input">
+                <input
+                  type="text"
+                  value={state.searchQuery}
+                  placeholder="Search results by keyword"
+                  onChange={(event) => onPatchModeState({ searchQuery: event.target.value })}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault();
+                      handleSearchSubmit();
+                    }
+                  }}
+                />
+                <button type="button" aria-label="Search results" onClick={handleSearchSubmit}>
+                  <SourceModeIcon type="search" />
+                </button>
+              </div>
+              <div className="source_window_storage_date_range">
+                <input
+                  type="date"
+                  value={state.searchDateFrom}
+                  onChange={(event) => onPatchModeState({ searchDateFrom: event.target.value })}
+                />
+                <b aria-hidden="true">-</b>
+                <input
+                  type="date"
+                  value={state.searchDateTo}
+                  onChange={(event) => onPatchModeState({ searchDateTo: event.target.value })}
+                />
+              </div>
+              <span className="source_window_storage_selection_tools">
+                <span className="source_window_storage_selected_count">{selectedResults.length} Selected results</span>
+                <button
+                  type="button"
+                  className="source_window_storage_discard_button linkx_tooltip_anchor"
+                  data-tooltip="Discard selection"
+                  aria-label="Discard selection"
+                  disabled={selectedResults.length === 0}
+                  onClick={() => onPatchModeState({ selectedSearchFiles: [] })}
+                >
+                  <SourceModeIcon type="clear" />
+                </button>
+              </span>
+            </div>
+            <div className="source_window_storage_file_header" aria-hidden="true">
+              <span />
+              <span>Keyword</span>
+              <span>Searched at</span>
+              <span>Size</span>
+            </div>
+            {showRows ? visibleRows.map((row, index) => (
+              <button
+                key={row.keyword + index}
+                type="button"
+                className={'source_window_storage_file_row' + (selectedResults.includes(row.keyword) ? ' is-selected' : '')}
+                onClick={() => toggleSearchResult(row.keyword)}
+              >
+                <span className="source_window_storage_file_selector" aria-hidden="true" />
+                <span>{row.keyword}</span>
+                <small>{row.searchedAt}</small>
+                <small>{row.count} results</small>
+              </button>
+            )) : (
+              <div className="source_window_storage_placeholder_row" role="status" aria-live="polite">
+                <span />
+                <span>{emptyMessage}</span>
+                <small />
+                <small />
+              </div>
+            )}
+          </div>
+        </div>
       </section>
     </div>
   );
@@ -1267,8 +1421,14 @@ function WorkflowBody({ mode, modeState, windowId, validationMessage, handlers, 
   if (mode === SOURCE_MODES.BATCH && modeState.step === 'upload' && modeState.selectedConnectionType === 'broker') {
     return <BrokerStep mode={mode} state={modeState} windowId={windowId} validationMessage={validationMessage} onPatchModeState={onPatchModeState} onSourceAction={handlers.onSourceAction} />;
   }
+  if (mode === SOURCE_MODES.BATCH && modeState.step === 'upload' && modeState.selectedConnectionType === 'search') {
+    return <SearchStep state={modeState} onPatchModeState={onPatchModeState} />;
+  }
+  if (mode === SOURCE_MODES.REALTIME && modeState.step === 'connect') {
+    return <BrokerStep mode={mode} state={modeState} windowId={windowId} validationMessage={validationMessage} onPatchModeState={onPatchModeState} onSourceAction={handlers.onSourceAction} />;
+  }
   if (mode === SOURCE_MODES.BATCH && modeState.step === 'upload') return <UploadStep state={modeState} onPatchModeState={onPatchModeState} />;
-  if (modeState.step === 'search') return <SearchStep state={modeState} windowId={windowId} onPatchModeState={onPatchModeState} />;
+  if (modeState.step === 'search') return <SearchStep state={modeState} onPatchModeState={onPatchModeState} />;
   if (modeState.step === 'dataframe') return <DataframeStep mode={mode} state={modeState} onPatchModeState={onPatchModeState} onOpenConfiguration={onOpenConfiguration} />;
   if (modeState.step === 'stream') return <StreamStep state={modeState} />;
   return (
@@ -1382,7 +1542,7 @@ export default function SourceWindowBody({ windowItem }) {
       : 'This source workflow is ready for the next integration.';
   const streamActionLabels = {
     'Store data': 'Store data',
-    'Source / Target Mapping': 'Map Data',
+    'Source / Target Mapping': 'Map network',
     'Link Analysis': 'Analyze',
   };
   const continueButtonLabel = modeState.step === 'stream' ? streamActionLabels[modeState.dataframeAction] || 'Analyze' : 'Continue';

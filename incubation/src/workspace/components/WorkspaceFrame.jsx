@@ -47,7 +47,7 @@ const launcherItems = [
     label: 'Settings',
     windowType: WORKSPACE_WINDOW_TYPES.SETTINGS,
     contextTab: WORKSPACE_CONTEXT_TABS.SETTINGS,
-    path: 'M5 7h14M5 12h14M5 17h14M8 7v0M16 12v0M11 17v0',
+    path: 'M14.7 6.3a4 4 0 0 0-5 5L4.5 16.5a2.1 2.1 0 0 0 3 3l5.2-5.2a4 4 0 0 0 5-5l-2.6 2.6-3-3z',
   },
 ];
 

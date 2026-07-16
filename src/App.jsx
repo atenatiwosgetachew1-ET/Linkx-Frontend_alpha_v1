@@ -3,7 +3,6 @@ import { io } from 'socket.io-client';
 import { createPortal } from 'react-dom';
 
 import './main.css'
-import NetworkBackground from './networkAnimation.jsx'
 import { createApiClient } from './api/client.js';
 import { AuthProvider, useAuth } from './auth/AuthContext.jsx';
 import LoginPage from './auth/LoginPage.jsx';
@@ -40,9 +39,10 @@ const DEFAULT_GRAPH_IFRAME_SETTINGS = ["", "", { min: 0, max: 25 }, "", "", "", 
 const LINKX_IFRAME_CHANNEL = "linkx:iframe";
 const LINKX_IFRAME_VERSION = 1;
 const TRUSTED_IFRAME_MESSAGE_TYPES = new Set(["app_notification", "notification", "nodeProperties", "all_property_keys_response", "graph_search_results", "graph_render_stats", "network_components", "entity_selection", "graph_alerts", "pinned_evidence_update", "clipboard_get", "clipboard_set"]);
-const IDLE_TIMEOUT_STORAGE_KEY = "linkx_idle_timeout_settings";
+const SESSION_POLICY_CACHE_KEY = "linkx_session_policy_cache";
 const DEFAULT_IDLE_WARNING_MS = 14 * 60 * 1000;
-const DEFAULT_IDLE_TIMEOUT_MS = 15 * 60 * 1000;
+const DEFAULT_IDLE_LOCK_MS = 15 * 60 * 1000;
+const DEFAULT_IDLE_TIMEOUT_MS = 60 * 60 * 1000;
 const MIN_IDLE_TIMEOUT_MS = 60 * 1000;
 const MAX_IDLE_TIMEOUT_MS = 24 * 60 * 60 * 1000;
 
@@ -57,50 +57,114 @@ const clampMs = (value, min, max) => Math.max(min, Math.min(max, Math.round(Numb
 const normalizeIdleSettings = (value = {}, fallback = {}) => {
   const fallbackTimeout = clampMs(fallback.timeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS, MIN_IDLE_TIMEOUT_MS, MAX_IDLE_TIMEOUT_MS);
   const timeoutMs = clampMs(value.timeoutMs ?? fallbackTimeout, MIN_IDLE_TIMEOUT_MS, MAX_IDLE_TIMEOUT_MS);
-  const fallbackWarning = clampMs(fallback.warningMs ?? DEFAULT_IDLE_WARNING_MS, 0, Math.max(0, timeoutMs - 1000));
-  const warningMs = clampMs(value.warningMs ?? fallbackWarning, 0, Math.max(0, timeoutMs - 1000));
+  const fallbackLock = clampMs(fallback.lockMs ?? DEFAULT_IDLE_LOCK_MS, MIN_IDLE_TIMEOUT_MS, timeoutMs);
+  const lockMs = clampMs(value.lockMs ?? fallbackLock, MIN_IDLE_TIMEOUT_MS, timeoutMs);
+  const fallbackWarning = clampMs(fallback.warningMs ?? DEFAULT_IDLE_WARNING_MS, 0, Math.max(0, lockMs - 1000));
+  const warningMs = clampMs(value.warningMs ?? fallbackWarning, 0, Math.max(0, lockMs - 1000));
 
   return {
-    enabled: value.enabled !== false,
+    enabled: value.enabled !== false && timeoutMs > 0,
     warningMs,
+    lockMs,
     timeoutMs,
+    lockRequiresReauth: value.lockRequiresReauth !== false,
   };
 };
 
 const getDefaultIdleSettings = () => normalizeIdleSettings({
   enabled: String(import.meta.env.VITE_IDLE_TIMEOUT_ENABLED || "true").toLowerCase() !== "false",
   warningMs: parsePositiveMs(import.meta.env.VITE_IDLE_WARNING_MS, DEFAULT_IDLE_WARNING_MS),
+  lockMs: parsePositiveMs(import.meta.env.VITE_IDLE_LOCK_MS, DEFAULT_IDLE_LOCK_MS),
   timeoutMs: parsePositiveMs(import.meta.env.VITE_IDLE_TIMEOUT_MS, DEFAULT_IDLE_TIMEOUT_MS),
+  lockRequiresReauth: String(import.meta.env.VITE_IDLE_LOCK_REQUIRES_REAUTH || "true").toLowerCase() !== "false",
 });
 
-const readStoredIdleSettings = (fallback) => {
+const readCachedSessionPolicy = (sessionId, fallback = null) => {
+  const sessionKey = normalizeSessionId(sessionId);
+  if (!sessionKey) return fallback;
   try {
-    const raw = localStorage.getItem(IDLE_TIMEOUT_STORAGE_KEY);
+    const raw = localStorage.getItem(SESSION_POLICY_CACHE_KEY);
     if (!raw) return fallback;
-    return normalizeIdleSettings(JSON.parse(raw), fallback);
+    const parsed = JSON.parse(raw);
+    const entry = parsed?.[sessionKey];
+    if (!entry || typeof entry !== "object") return fallback;
+    return {
+      ...entry,
+      sessionId: sessionKey,
+      policy: normalizeIdleSettings(entry.policy, fallback?.policy || getDefaultIdleSettings()),
+      editableFields: Array.isArray(entry.editableFields) ? entry.editableFields : [],
+      authTokenSeconds: Number.isFinite(Number(entry.authTokenSeconds)) ? Number(entry.authTokenSeconds) : null,
+      source: String(entry.source || "").trim(),
+    };
   } catch {
     return fallback;
   }
 };
 
-const persistIdleSettings = (settings) => {
+const persistSessionPolicyCache = (sessionId, value) => {
+  const sessionKey = normalizeSessionId(sessionId);
+  if (!sessionKey || !value || typeof value !== "object") return;
   try {
-    localStorage.setItem(IDLE_TIMEOUT_STORAGE_KEY, JSON.stringify(settings));
+    const raw = localStorage.getItem(SESSION_POLICY_CACHE_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    parsed[sessionKey] = {
+      ...value,
+      sessionId: sessionKey,
+      cachedAt: Date.now(),
+    };
+    localStorage.setItem(SESSION_POLICY_CACHE_KEY, JSON.stringify(parsed));
   } catch {
-    // Ignore storage failures; the active session still uses the selected value.
+    // Cache failures are non-fatal. Backend policy remains authoritative.
   }
 };
 
-function useIdleTimeout({ enabled, warningMs, timeoutMs, isLocked = false, resetKey = 0, onWarn, onTimeout }) {
+const normalizeSessionPolicyResponse = (data, fallbackSessionId = "") => {
+  const results = data?.results && typeof data.results === "object" ? data.results : (data && typeof data === "object" ? data : {});
+  const policy = results.policy && typeof results.policy === "object" ? results.policy : {};
+  const normalizedPolicy = normalizeIdleSettings({
+    enabled: true,
+    warningMs: policy.idle_warning_ms ?? policy.idleWarningMs,
+    lockMs: policy.idle_lock_ms ?? policy.idleLockMs,
+    timeoutMs: policy.max_idle_timeout_ms ?? policy.maxIdleTimeoutMs,
+    lockRequiresReauth: policy.lock_requires_reauth ?? policy.lockRequiresReauth,
+  }, getDefaultIdleSettings());
+
+  return {
+    sessionId: normalizeSessionId(results.session_id ?? fallbackSessionId),
+    policy: normalizedPolicy,
+    source: String(results.source || "").trim(),
+    editableFields: Array.isArray(results.editable_fields) ? results.editable_fields.map((field) => String(field || "").trim()).filter(Boolean) : [],
+    authTokenSeconds: Number.isFinite(Number(policy.auth_token_seconds ?? results.auth_token_seconds)) ? Number(policy.auth_token_seconds ?? results.auth_token_seconds) : null,
+  };
+};
+
+const buildSessionPolicyPatchBody = (sessionId, idleSettings) => ({
+  id: "session_policy_update",
+  session_id: normalizeSessionId(sessionId),
+  policy: {
+    idle_warning_ms: Number(idleSettings?.warningMs) || DEFAULT_IDLE_WARNING_MS,
+    idle_lock_ms: Number(idleSettings?.lockMs) || DEFAULT_IDLE_LOCK_MS,
+    max_idle_timeout_ms: Number(idleSettings?.timeoutMs) || DEFAULT_IDLE_TIMEOUT_MS,
+    lock_requires_reauth: idleSettings?.lockRequiresReauth !== false,
+  },
+});
+
+function useIdleTimeout({ enabled, warningMs, lockMs, timeoutMs, isLocked = false, resetKey = 0, onWarn, onLock, onTimeout }) {
   const warningTimerRef = useRef(null);
+  const lockTimerRef = useRef(null);
   const timeoutTimerRef = useRef(null);
   const onWarnRef = useRef(onWarn);
+  const onLockRef = useRef(onLock);
   const onTimeoutRef = useRef(onTimeout);
   const isLockedRef = useRef(isLocked);
 
   useEffect(() => {
     onWarnRef.current = onWarn;
   }, [onWarn]);
+
+  useEffect(() => {
+    onLockRef.current = onLock;
+  }, [onLock]);
 
   useEffect(() => {
     onTimeoutRef.current = onTimeout;
@@ -115,6 +179,10 @@ function useIdleTimeout({ enabled, warningMs, timeoutMs, isLocked = false, reset
       clearTimeout(warningTimerRef.current);
       warningTimerRef.current = null;
     }
+    if (lockTimerRef.current) {
+      clearTimeout(lockTimerRef.current);
+      lockTimerRef.current = null;
+    }
     if (timeoutTimerRef.current) {
       clearTimeout(timeoutTimerRef.current);
       timeoutTimerRef.current = null;
@@ -125,16 +193,22 @@ function useIdleTimeout({ enabled, warningMs, timeoutMs, isLocked = false, reset
     clearIdleTimers();
     if (!enabled || !Number.isFinite(timeoutMs) || timeoutMs <= 0) return;
 
-    if (Number.isFinite(warningMs) && warningMs > 0 && warningMs < timeoutMs) {
+    if (Number.isFinite(warningMs) && warningMs > 0 && warningMs < lockMs) {
       warningTimerRef.current = setTimeout(() => {
         onWarnRef.current?.();
       }, warningMs);
     }
 
+    if (Number.isFinite(lockMs) && lockMs > 0 && lockMs <= timeoutMs) {
+      lockTimerRef.current = setTimeout(() => {
+        onLockRef.current?.();
+      }, lockMs);
+    }
+
     timeoutTimerRef.current = setTimeout(() => {
       onTimeoutRef.current?.();
     }, timeoutMs);
-  }, [clearIdleTimers, enabled, timeoutMs, warningMs]);
+  }, [clearIdleTimers, enabled, lockMs, timeoutMs, warningMs]);
 
   useEffect(() => {
     if (!enabled) {
@@ -227,6 +301,26 @@ const sanitizeGraphRelationshipValue = (value = "", { maxLength = 128 } = {}) =>
 };
 
 const getTrustedMessageOrigin = () => window.location.origin;
+const getIframeElement = (frameOrRef = null) => frameOrRef?.current || frameOrRef || null;
+const getIframePostMessageOrigin = (frameOrRef = null) => {
+  const frameEl = getIframeElement(frameOrRef);
+  const sandbox = String(frameEl?.getAttribute?.("sandbox") || "");
+  return sandbox.includes("allow-same-origin") ? getTrustedMessageOrigin() : "*";
+};
+const getIframePathname = (frameOrRef = null) => {
+  const frameEl = getIframeElement(frameOrRef);
+  const rawSrc = String(frameEl?.getAttribute?.("src") || frameEl?.src || "").trim();
+  if (!rawSrc) return "";
+  try {
+    return new URL(rawSrc, window.location.href).pathname;
+  } catch (_err) {
+    return "";
+  }
+};
+const postMessageToIframe = (frameOrRef, payload) => {
+  const frameEl = getIframeElement(frameOrRef);
+  frameEl?.contentWindow?.postMessage(payload, getIframePostMessageOrigin(frameEl));
+};
 const buildIframeMessage = (action, payload = {}) => ({ channel: LINKX_IFRAME_CHANNEL, version: LINKX_IFRAME_VERSION, action, payload });
 const getIframeMessageAction = (data) => data?.action || data?.type || "";
 const isTrustedMessageOrigin = (event) => String(event?.origin || "") === getTrustedMessageOrigin();
@@ -468,6 +562,10 @@ const getSourceFlowState = (win = {}) => {
 const isSourceConnectedState = (flow) => flow.sourceStatus === SOURCE_STATUSES.CONNECTED;
 const isSourceUploadedState = (flow) => flow.sourceStatus === SOURCE_STATUSES.UPLOADED || flow.sourceKind === SOURCE_KINDS.UPLOAD;
 const isToolConnectedState = (flow) => flow.toolStatus === TOOL_STATUSES.CONNECTED;
+const isSourceActiveForGraphLink = (win = {}) => {
+  const flow = getSourceFlowState(win);
+  return [STREAM_STATUSES.STARTING, STREAM_STATUSES.RUNNING].includes(flow.streamStatus) || win.sourceStreamListener === true;
+};
 
 const getPreviousBatchSourceStep = (flow) => {
   if (flow.sourceStep === SOURCE_FLOW_STEPS.SEARCH) return SOURCE_FLOW_STEPS.CONNECT;
@@ -544,7 +642,7 @@ const broadcastClipboard = () => {
     try {
       window.frames[i].postMessage(
         { type: "clipboard_data", payload },
-        getTrustedMessageOrigin()
+        "*"
       );
     } catch {
       // Ignore inaccessible frames.
@@ -568,8 +666,8 @@ window.addEventListener("message", e => {
     broadcastClipboard();
   }
 });
-/** Dark + zero windows: upload dropzone and quick actions over the workspace background. */
-function DarkHomeMenuOverlay({ toggleAction, canAccess = () => true, areBackgroundAnimationsEnabled = false }) {
+/** Home + zero windows: upload dropzone and quick actions over the workspace background. */
+function HomeMenuOverlay({ toggleAction, canAccess = () => true, areBackgroundAnimationsEnabled = false }) {
   const [isUploadDragActive, setIsUploadDragActive] = useState(false);
   const uploadDragDepthRef = useRef(0);
   const openUploadSource = () => {
@@ -842,7 +940,7 @@ function Taskbar({ windows, isTaskBarOpen, activeWindowId, focusWindow, toggleAc
     </div>
   );
 }
-function Configurations({sessionId,actions,loadscreenState,setloadscreenState,toggleAction,configurations,isConfigurationsOpen,apiFetch,canAccess,idleSettings,onIdleSettingsChange}) {
+function Configurations({sessionId,actions,loadscreenState,setloadscreenState,toggleAction,configurations,isConfigurationsOpen,apiFetch,canAccess,idleSettings,idlePolicyMeta,onIdleSettingsChange}) {
   const [remote, setRemote] = useState(false);
   const [automation, setAutomation] = useState(false);
   const [parsedConfig, setParsedConfig] = useState(null);
@@ -870,10 +968,14 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
   const largeSearchBackend = normalizeLargeSearchBackend(parsedConfig?.large_search_backend);
   const elasticScrollLimit = normalizeElasticScrollLimit(parsedConfig?.elastic_scroll_limit);
   const idleTimeoutMinutes = Math.max(1, Math.round((idleSettings?.timeoutMs || DEFAULT_IDLE_TIMEOUT_MS) / 60000));
+  const idleLockMinutes = Math.max(1, Math.round((idleSettings?.lockMs || DEFAULT_IDLE_LOCK_MS) / 60000));
   const idleWarningMinutes = Math.max(0, Math.round((idleSettings?.warningMs || DEFAULT_IDLE_WARNING_MS) / 60000));
+  const editableIdleFields = Array.isArray(idlePolicyMeta?.editableFields) ? idlePolicyMeta.editableFields : [];
+  const isIdlePolicyFieldEditable = (field) => editableIdleFields.length === 0 || editableIdleFields.includes(field);
 
   const updateIdleMinutes = (key, value) => {
-    const minutes = Math.max(key === "warningMs" ? 0 : 1, Math.min(1440, Number.parseInt(value, 10) || 0));
+    const minMinutes = key === "warningMs" ? 0 : 1;
+    const minutes = Math.max(minMinutes, Math.min(1440, Number.parseInt(value, 10) || 0));
     onIdleSettingsChange?.((previous) => normalizeIdleSettings({
       ...previous,
       [key]: minutes * 60 * 1000,
@@ -1115,15 +1217,91 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
                   </tbody>
                 </table>
 
-                <label>API search Endpoint</label>
-                <input
-                  type="text"
-                  name="search_api_endpoint"
+                <div className="config_endpoint_grid">
+                  <div className="config_endpoint_field config_endpoint_field--wide">
+                    <label>API search Endpoint</label>
+                    <input
+                      type="text"
+                      name="search_api_endpoint"
+                      className="input_text"
+                      placeholder="API search Endpoint"
+                      value={parsedConfig?.search_api_endpoint || ""}
+                      onChange={(e) => actions("change", { name: e.target.name, value: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="config_endpoint_field">
+                    <label>Elasticsearch fuzzy search endpoint</label>
+                    <input
+                      type="text"
+                      name="search_api_endpoint_es_fuzzy"
+                      className="input_text"
+                      placeholder="Elasticsearch fuzzy endpoint"
+                      value={parsedConfig?.search_api_endpoint_es_fuzzy || ""}
+                      onChange={(e) => actions("change", { name: e.target.name, value: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="config_endpoint_field">
+                    <label>Elasticsearch strict search endpoint</label>
+                    <input
+                      type="text"
+                      name="search_api_endpoint_es_strict"
+                      className="input_text"
+                      placeholder="Elasticsearch strict endpoint"
+                      value={parsedConfig?.search_api_endpoint_es_strict || ""}
+                      onChange={(e) => actions("change", { name: e.target.name, value: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="config_endpoint_field">
+                    <label>Hive fuzzy search endpoint</label>
+                    <input
+                      type="text"
+                      name="search_api_endpoint_hive_fuzzy"
+                      className="input_text"
+                      placeholder="Hive fuzzy endpoint"
+                      value={parsedConfig?.search_api_endpoint_hive_fuzzy || ""}
+                      onChange={(e) => actions("change", { name: e.target.name, value: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="config_endpoint_field">
+                    <label>Hive strict search endpoint</label>
+                    <input
+                      type="text"
+                      name="search_api_endpoint_hive_strict"
+                      className="input_text"
+                      placeholder="Hive strict endpoint"
+                      value={parsedConfig?.search_api_endpoint_hive_strict || ""}
+                      onChange={(e) => actions("change", { name: e.target.name, value: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <label>Large search retrieval</label>
+                <select
+                  name="large_search_backend"
                   className="input_text"
-                  placeholder="API search Endpoint"
-                  value={parsedConfig?.search_api_endpoint || ""}
+                  value={largeSearchBackend}
+                  onChange={(e) => actions("change", { name: e.target.name, value: e.target.value })}
+                >
+                  <option value="hive">Hive/Spark query</option>
+                  <option value="elastic_scroll">Elasticsearch scroll</option>
+                </select>
+
+                <label>Elasticsearch scroll limit</label>
+                <input
+                  type="number"
+                  min="1"
+                  step="1000"
+                  name="elastic_scroll_limit"
+                  className="input_text"
+                  value={elasticScrollLimit}
+                  disabled={largeSearchBackend !== "elastic_scroll"}
                   onChange={(e) => actions("change", { name: e.target.name, value: e.target.value })}
                 />
+                <label className="idle_timeout_hint">Used by the backend when large fuzzy search results are converted into a dataframe.</label>
 
                 <label>Database</label>
                 <select
@@ -1164,29 +1342,6 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
                   onChange={(e) => actions("change", { name: e.target.name, value: e.target.value })}
                 />
 
-                <label>Large search retrieval</label>
-                <select
-                  name="large_search_backend"
-                  className="input_text"
-                  value={largeSearchBackend}
-                  onChange={(e) => actions("change", { name: e.target.name, value: e.target.value })}
-                >
-                  <option value="hive">Hive/Spark query</option>
-                  <option value="elastic_scroll">Elasticsearch scroll</option>
-                </select>
-
-                <label>Elasticsearch scroll limit</label>
-                <input
-                  type="number"
-                  min="1"
-                  step="1000"
-                  name="elastic_scroll_limit"
-                  className="input_text"
-                  value={elasticScrollLimit}
-                  disabled={largeSearchBackend !== "elastic_scroll"}
-                  onChange={(e) => actions("change", { name: e.target.name, value: e.target.value })}
-                />
-                <label className="idle_timeout_hint">Used by the backend when large fuzzy search results are converted into a dataframe.</label>
               </fieldset>
 
               {/* Notes */}
@@ -1427,25 +1582,27 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
 
 
               <fieldset style={{ display: activeConfigTab === "system" ? "block" : "none" }}>
-                <legend>Interaction timeout</legend>
-                <input
-                  type="checkbox"
-                  id="idle_timeout_enabled"
-                  className="input_checkbox"
-                  checked={idleSettings?.enabled !== false}
-                  onChange={(event) => onIdleSettingsChange?.((previous) => ({ ...previous, enabled: event.target.checked }))}
-                />
-                <label htmlFor="idle_timeout_enabled" className="sublabel">Lock inactive users</label>
-
+                <legend>Session timeout policy</legend>
+                <label className="sublabel">Backend source: {idlePolicyMeta?.source || "session"}</label>
                 <div className="idle_timeout_grid">
-                  <label>Lock after
+                  <label>Warn after
                     <input
                       type="number"
                       min="0"
                       max="1439"
                       value={idleWarningMinutes}
                       onChange={(event) => updateIdleMinutes("warningMs", event.target.value)}
-                      disabled={idleSettings?.enabled === false}
+                      disabled={!isIdlePolicyFieldEditable("idle_warning_ms") || idlePolicyMeta?.isLoading || idlePolicyMeta?.isSaving}
+                    />
+                  </label>
+                  <label>Lock after
+                    <input
+                      type="number"
+                      min="1"
+                      max="1440"
+                      value={idleLockMinutes}
+                      onChange={(event) => updateIdleMinutes("lockMs", event.target.value)}
+                      disabled={!isIdlePolicyFieldEditable("idle_lock_ms") || idlePolicyMeta?.isLoading || idlePolicyMeta?.isSaving}
                     />
                   </label>
                   <label>Logout after
@@ -1455,11 +1612,29 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
                       max="1440"
                       value={idleTimeoutMinutes}
                       onChange={(event) => updateIdleMinutes("timeoutMs", event.target.value)}
-                      disabled={idleSettings?.enabled === false}
+                      disabled={!isIdlePolicyFieldEditable("max_idle_timeout_ms") || idlePolicyMeta?.isLoading || idlePolicyMeta?.isSaving}
                     />
                   </label>
                 </div>
-                <label className="idle_timeout_hint">Lock preserves the workspace. Logout clears it only if the user stays away.</label>
+                <label className="settings_inline_check">
+                  <input
+                    type="checkbox"
+                    checked={idleSettings?.lockRequiresReauth !== false}
+                    onChange={(event) => onIdleSettingsChange?.((previous) => normalizeIdleSettings({
+                      ...previous,
+                      lockRequiresReauth: event.target.checked,
+                    }, getDefaultIdleSettings()))}
+                    disabled={!isIdlePolicyFieldEditable("lock_requires_reauth") || idlePolicyMeta?.isLoading || idlePolicyMeta?.isSaving}
+                  />
+                  Require re-auth after lock
+                </label>
+                <label className="idle_timeout_hint">Policy is loaded from the backend session and saved back through the session policy endpoint.</label>
+                {Number.isFinite(idlePolicyMeta?.authTokenSeconds) && (
+                  <label className="idle_timeout_hint">Auth token lifetime: {Math.max(1, Math.round(idlePolicyMeta.authTokenSeconds / 60))} minute(s).</label>
+                )}
+                {idlePolicyMeta?.isLoading && <label className="idle_timeout_hint">Refreshing session policy...</label>}
+                {idlePolicyMeta?.isSaving && <label className="idle_timeout_hint">Saving session policy...</label>}
+                {idlePolicyMeta?.error && <label className="idle_timeout_hint">{idlePolicyMeta.error}</label>}
               </fieldset>
 
               {/* Miscellaneous */}
@@ -1714,6 +1889,25 @@ const getConnectToolErrorMessage = (input, fallback = "Could not connect to Neo4
   if (String(payload?.status || "").toLowerCase() === "error" && detail === "neo4j_credential_persistence_failed") return "Connected check passed, but the session could not save the connection. Try again.";
   if (String(payload?.status || "").toLowerCase() === "error" && message === "Not connected!") return fallback;
   return getSharedApiErrorMessage(input, fallback);
+};
+
+const getConnectSourceErrorMessage = (input, fallback = "Connection failed!") => {
+  const payload = getApiProblemPayload(input);
+  const candidates = [
+    payload?.message,
+    payload?.detail,
+    payload?.error,
+    payload?.results?.message,
+    payload?.results?.detail,
+    payload?.results?.error,
+    typeof payload?.results === "string" ? payload.results : "",
+    input?.message,
+    input?.error,
+    typeof input === "string" ? input : "",
+  ];
+  const directMessage = candidates.map((value) => String(value || "").trim()).find(Boolean);
+  if (!directMessage || /^failed!$/i.test(directMessage)) return fallback;
+  return directMessage;
 };
 
 const getStreamingErrorMessage = (input, fallback = "The streaming request failed. Please check the backend response and try again.") => {
@@ -2408,6 +2602,43 @@ const normalizeElasticScrollLimit = (value) => {
   return parsed;
 };
 
+const normalizeConfigAddressList = (value) => {
+  const source = Array.isArray(value)
+    ? value
+    : typeof value === "string" && value.trim()
+      ? value.split(",")
+      : [];
+
+  const seen = new Set();
+  const items = [];
+  source.forEach((item) => {
+    const normalized = sanitizeConnectionValue(item, { maxLength: 300 });
+    const key = normalized.toLowerCase();
+    if (!normalized || seen.has(key)) return;
+    seen.add(key);
+    items.push(normalized);
+  });
+  return items;
+};
+
+const mergeConfigAddressOptions = ({ list, activeValue, pendingValue }) => {
+  const existing = normalizeConfigAddressList(list);
+  const active = sanitizeConnectionValue(activeValue, { maxLength: 300 });
+  const pending = sanitizeConnectionValue(pendingValue, { maxLength: 300 });
+  const preferred = pending || active;
+  const merged = normalizeConfigAddressList([
+    ...(preferred ? [preferred] : []),
+    ...(active ? [active] : []),
+    ...existing,
+  ]);
+
+  return {
+    list: merged,
+    active: preferred || active,
+    pending,
+  };
+};
+
 const normalizeTrustedListEntries = (value, options = {}) => {
   const preserveEmpty = options?.preserveEmpty === true;
   const source = Array.isArray(value)
@@ -2563,6 +2794,9 @@ const normalizeConfigurationStatePatch = (previous, name, value) => {
 
 const isConfigAutoFillEnabled = (configurations) => {
   const config = parseConfigurationValue(configurations);
+  if (config?.auto_fill_fields === undefined || config?.auto_fill_fields === null || config?.auto_fill_fields === "") {
+    return true;
+  }
   return config?.auto_fill_fields === true || config?.auto_fill_fields === "true";
 };
 
@@ -2611,6 +2845,8 @@ const getSourceWindowAutofillDefaults = (configurations) => {
   const toolUrl = getConfigValue(configurations, ["active_tool_url", "active_tool_protocol"]);
   const toolUsername = getConfigValue(configurations, "active_tool_username");
   const toolDatabase = getConfigValue(configurations, ["active_tool_database", "custom_tool_database"]);
+  const toolPasswordRef = getConfigurationToolPasswordRef(configurations);
+  const maskedToolPassword = toolPasswordRef ? "***" : "";
 
   return {
     sourceAddressType: "broker",
@@ -2622,14 +2858,38 @@ const getSourceWindowAutofillDefaults = (configurations) => {
     sourceRealtimeTopicText: "",
     toolUrl,
     toolUsername,
-    toolPassword: "",
-    toolPasswordRef: "",
+    toolPassword: maskedToolPassword,
+    toolPasswordRef,
     toolDatabase,
     realtimeToolUrl: toolUrl,
     realtimeToolUsername: toolUsername,
-    realtimeToolPassword: "",
-    realtimeToolPasswordRef: "",
+    realtimeToolPassword: maskedToolPassword,
+    realtimeToolPasswordRef: toolPasswordRef,
     realtimeToolDatabase: toolDatabase,
+  };
+};
+
+const buildSourceWindowAutofillPatch = (configurations) => {
+  const defaults = getSourceWindowAutofillDefaults(configurations);
+  return {
+    sourceKind: defaults.sourceAddressType || SOURCE_KINDS.BROKER,
+    sourceAddressType: defaults.sourceAddressType,
+    sourceAddressText: defaults.sourceAddressText,
+    sourceStorageText: defaults.sourceStorageText,
+    sourceTopicText: defaults.sourceTopicText,
+    sourceRealtimeAddressType: defaults.sourceRealtimeAddressType,
+    sourceRealtimeAddressText: defaults.sourceRealtimeAddressText,
+    sourceRealtimeTopicText: defaults.sourceRealtimeTopicText,
+    toolUrl: defaults.toolUrl,
+    toolUsername: defaults.toolUsername,
+    toolPassword: defaults.toolPassword,
+    toolPasswordRef: defaults.toolPasswordRef,
+    toolDatabase: defaults.toolDatabase,
+    realtimeToolUrl: defaults.realtimeToolUrl,
+    realtimeToolUsername: defaults.realtimeToolUsername,
+    realtimeToolPassword: defaults.realtimeToolPassword,
+    realtimeToolPasswordRef: defaults.realtimeToolPasswordRef,
+    realtimeToolDatabase: defaults.realtimeToolDatabase,
   };
 };
 
@@ -2711,6 +2971,28 @@ const normalizeLoadedConfiguration = (payload) => {
         parsed[key] = String(value);
       }
     });
+
+    const kafkaAddressState = mergeConfigAddressOptions({
+      list: parsed.kafka_addresses,
+      activeValue: parsed.active_kafka_adress,
+      pendingValue: parsed.kafka_custom_address,
+    });
+    parsed.kafka_addresses = kafkaAddressState.list;
+    if (kafkaAddressState.active) parsed.active_kafka_adress = kafkaAddressState.active;
+    if (kafkaAddressState.pending) parsed.kafka_custom_address = kafkaAddressState.pending;
+
+    const storageAddressState = mergeConfigAddressOptions({
+      list: parsed.storage_addresses,
+      activeValue: parsed.active_storage_address,
+      pendingValue: parsed.storage_custom_address,
+    });
+    parsed.storage_addresses = storageAddressState.list;
+    if (storageAddressState.active) parsed.active_storage_address = storageAddressState.active;
+    if (storageAddressState.pending) parsed.storage_custom_address = storageAddressState.pending;
+
+    if (parsed.auto_fill_fields === undefined || parsed.auto_fill_fields === null || parsed.auto_fill_fields === "") {
+      parsed.auto_fill_fields = true;
+    }
   }
   return parsed;
 };
@@ -2747,6 +3029,24 @@ const buildConfigurationSavePayload = (configuration) => {
   delete rest.active_tool_trusted_list;
   delete rest.classified_entities;
   delete rest.classifiedEntities;
+
+  const kafkaAddressState = mergeConfigAddressOptions({
+    list: rest.kafka_addresses,
+    activeValue: rest.active_kafka_adress,
+    pendingValue: rest.kafka_custom_address,
+  });
+  rest.kafka_addresses = kafkaAddressState.list;
+  rest.active_kafka_adress = kafkaAddressState.active;
+  rest.kafka_custom_address = "";
+
+  const storageAddressState = mergeConfigAddressOptions({
+    list: rest.storage_addresses,
+    activeValue: rest.active_storage_address,
+    pendingValue: rest.storage_custom_address,
+  });
+  rest.storage_addresses = storageAddressState.list;
+  rest.active_storage_address = storageAddressState.active;
+  rest.storage_custom_address = "";
 
   return {
     ...rest,
@@ -4063,10 +4363,13 @@ function WindowVerticalSplitPanels({id, type, sourceId, initialTopHeight, minTop
     </div>
   );
 }
-function IframeEmbed({wId,id,fileName,title,activeGraph,graphAction,iframeRef,BASE_URL}) {
+function IframeEmbed({wId,id,fileName,title,activeGraph,graphAction,iframeRef,BASE_URL,themeMode = "light"}) {
   const normalizedBaseUrl = String(BASE_URL || import.meta.env.BASE_URL || "").replace(/\/+$/, "");
   const iframeBasePath = `${normalizedBaseUrl}/linkxDS2026/temp_placeholders`;
-  const iframeVersion = "20260701-graphperf9";
+  const iframeVersion = "20260704-sourceplaceholder1";
+  const parentOriginParam = encodeURIComponent(getTrustedMessageOrigin());
+  const strictSandbox = "allow-scripts allow-downloads allow-modals";
+  const relaxedSandbox = "allow-scripts allow-same-origin allow-downloads allow-modals";
   const frameIdentity = String(activeGraph || id || "").toLowerCase();
   const isPlaceholderFrame = frameIdentity.includes("placeholder");
   const shouldShowFitGraphControl = frameIdentity.includes("graph") && !isPlaceholderFrame;
@@ -4092,13 +4395,12 @@ function IframeEmbed({wId,id,fileName,title,activeGraph,graphAction,iframeRef,BA
   );
 
   if (id === "source_placeholder"){
-    const trustedSandbox = "allow-scripts allow-same-origin allow-downloads allow-modals";
     return (
       <div className="iframe_graph">
         <iframe
           ref={iframeRef}
-          sandbox={trustedSandbox}
-          src={`${iframeBasePath}/source_placeholder.html?v=${iframeVersion}`}
+          sandbox={strictSandbox}
+          src={`${iframeBasePath}/source_placeholder.html?v=${iframeVersion}&theme=${encodeURIComponent(themeMode)}&parent_origin=${parentOriginParam}`}
           width="100%"
           height="98%"
           style={{ border: 'none' }}
@@ -4108,13 +4410,12 @@ function IframeEmbed({wId,id,fileName,title,activeGraph,graphAction,iframeRef,BA
     );
   }
   if (id == "graph_placeholder"){//graphs_basic
-    const trustedSandbox = "allow-scripts allow-same-origin allow-downloads allow-modals";
     return (
       <div className="iframe_graph">
         <iframe
           ref={iframeRef}
-          sandbox={trustedSandbox}
-          src={`${iframeBasePath}/graph_placeholder.html?v=${iframeVersion}`}
+          sandbox={strictSandbox}
+          src={`${iframeBasePath}/graph_placeholder.html?v=${iframeVersion}&parent_origin=${parentOriginParam}`}
           width="100%"
           height="98%"
           style={{ border: 'none' }}
@@ -4124,13 +4425,12 @@ function IframeEmbed({wId,id,fileName,title,activeGraph,graphAction,iframeRef,BA
     );
   }
   if (id == "chart_placeholder"){//charts_basic
-    const trustedSandbox = "allow-scripts allow-same-origin allow-downloads allow-modals";
     return (
       <div className="iframe_graph">
         <iframe
           ref={iframeRef}
-          sandbox={trustedSandbox}
-          src={`${iframeBasePath}/charts_basic.html?v=${iframeVersion}`}
+          sandbox={relaxedSandbox}
+          src={`${iframeBasePath}/charts_basic.html?v=${iframeVersion}&parent_origin=${parentOriginParam}`}
           width="100%"
           height="98%"
           style={{ border: 'none' }}
@@ -4141,13 +4441,12 @@ function IframeEmbed({wId,id,fileName,title,activeGraph,graphAction,iframeRef,BA
   }
   else {
     const iframeFile = fileName || activeGraph;
-    const trustedSandbox = "allow-scripts allow-same-origin allow-downloads allow-modals";
     return (
       <div className="iframe_graph">
         <iframe
           ref={iframeRef}
-          sandbox={trustedSandbox}
-          src={`${iframeBasePath}/${iframeFile}.html?v=${iframeVersion}`}
+          sandbox={strictSandbox}
+          src={`${iframeBasePath}/${iframeFile}.html?v=${iframeVersion}&parent_origin=${parentOriginParam}`}
           width="100%"
           height="98%"
           style={{ border: "none" }}
@@ -4212,7 +4511,6 @@ function DraggableWindow({ children, initialPos = { top: 0, left: 0 }, orientati
       document.body.style.userSelect = "auto";
     };
   }, []);
-{console.log("isDragging:", isDragging)}
   return (    
     <div
       ref={windowRef}
@@ -4231,7 +4529,7 @@ function DraggableWindow({ children, initialPos = { top: 0, left: 0 }, orientati
     </div>
   );
 }
-function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText, loadscreenState, isSideBarMenuOpen, orientation, configurations, windowAction, graphAction, chartAction, selectedContent, selectedSubContent, selectedNodes, selectedEdges,windowResponseI,windowResponseII,windowRealtimeResponseI,formToolResponse,formRealtimeToolResponse,sourceAddressType,sourceAddressText,sourceStorageText,sourceTopicText,sourceKind,sourceStatus,toolStatus,dataframeStatus,streamStatus,sourceStep,sourceRealtimeAddressType,sourceRealtimeAddressText,sourceRealtimeTopicText,toolUrl,toolUsername,toolPassword,toolDatabase,realtimeToolUrl,realtimeToolUsername,realtimeToolPassword,realtimeToolDatabase,realtimeNeo4jConnectedSessionId,realtimeConfigPersistStatus,realtimeConfigPersistedSessionId,realtimeConfigPersistMessage,realtimeStartGuardMessage,batchFilesSearchHybrid,batchFilesSearchHybridQuery,batchFilesSearchStrict,searchText,batchFilesSearchLimit,batchFilesSearchResults,batchFilesSearchMoreFiles,searchResultsVisible,searchPlaceholder,batchFilesCollection, batchFilesDataframeInfoI, batchFilesDataframeInfoII, batchFilesDataframeActionValue, batchFilesDataframeSourceValue, batchFilesDataframeTargetValue, batchFilesDataframeRelationshipValue, batchFilesDataframeRuleValue, sourceSessionLog, sourceStreams , sourceStreamListener, fileInputRef, textareaRefs, onClose, onMove, zIndex, onFocus, covered, graphLink, graphLinkId, graphLinkSource, graphStatus, graphStatusBySession, graphRenderStats, activeGraph, chartLink, chartLinkId, activechart, iframeRef, iframeFilters, iframeSettings, iframeSearch, iframePerformanceMood, selectedPropertyTab, filterPropertyKeys, filterResults, nodeProperties, BASE_URL, searchButtonRef, resultContainerRef, requestConfirmation }) {
+function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText, loadscreenState, isSideBarMenuOpen, orientation, configurations, windowAction, graphAction, chartAction, selectedContent, selectedSubContent, selectedNodes, selectedEdges,windowResponseI,windowResponseII,windowRealtimeResponseI,formToolResponse,formRealtimeToolResponse,sourceAddressType,sourceAddressText,sourceStorageText,sourceTopicText,sourceKind,sourceStatus,toolStatus,dataframeStatus,streamStatus,sourceStep,sourceRealtimeAddressType,sourceRealtimeAddressText,sourceRealtimeTopicText,toolUrl,toolUsername,toolPassword,toolDatabase,realtimeToolUrl,realtimeToolUsername,realtimeToolPassword,realtimeToolDatabase,realtimeNeo4jConnectedSessionId,realtimeConfigPersistStatus,realtimeConfigPersistedSessionId,realtimeConfigPersistMessage,realtimeStartGuardMessage,batchFilesSearchHybrid,batchFilesSearchHybridQuery,batchFilesSearchStrict,searchText,batchFilesSearchLimit,batchFilesSearchResults,batchFilesSearchMoreFiles,searchResultsVisible,searchPlaceholder,batchFilesCollection, batchFilesDataframeInfoI, batchFilesDataframeInfoII, batchFilesDataframeActionValue, batchFilesDataframeSourceValue, batchFilesDataframeTargetValue, batchFilesDataframeRelationshipValue, batchFilesDataframeRuleValue, sourceSessionLog, sourceStreams , sourceStreamListener, fileInputRef, textareaRefs, onClose, onMove, zIndex, onFocus, covered, graphLink, graphLinkId, graphLinkSource, graphStatus, graphStatusBySession, graphRenderStats, activeGraph, chartLink, chartLinkId, activechart, iframeRef, iframeFilters, iframeSettings, iframeSearch, iframePerformanceMood, selectedPropertyTab, filterPropertyKeys, filterResults, nodeProperties, BASE_URL, searchButtonRef, resultContainerRef, requestConfirmation, themeMode, isWorkspaceLocked }) {
   const canCancelGraphStaging = type === "graph" && typeof loadscreenText === "string" && (
     loadscreenText.toLowerCase().startsWith("staging graph") ||
     loadscreenText.toLowerCase().startsWith("fetching graph")
@@ -4266,6 +4564,7 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
         : ""
   );
   const canStartRealtimeStream = !isRealtimeSourceWorkflow || (hasRealtimeNeo4jConnection && hasRealtimePersistedToolConfig);
+  const showLockedSourceHint = isWorkspaceLocked && type === "source";
   if (type === "source") {
     return (
       <DraggableWindow initialPos={{ top: 0, left: 0}} zIndex={zIndex} orientation={orientation}>
@@ -4283,7 +4582,7 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
             {(covered || dragProps.isDragging) && <div className="window_cover" />}  
             <div id={`window_bar_${type}_${id}`} className="window_bar"
               onMouseDown={isMaximized ? undefined : dragProps.onBarMouseDown} onDoubleClick={() => windowAction(id,"window_change_view", "",iframeRef)}>
-              <div className="window_bar_title_container">Source Window<input placeholder="Add custom title" type="text"/></div>
+              <div className="window_bar_title_container">Source Window{showLockedSourceHint && <span className="window_lock_state_badge">Source actions available. Graphs and settings stay locked.</span>}<input placeholder="Add custom title" type="text"/></div>
               <div className="window_bar_btns_container">
                 <span onClick={() => onClose(id)}>x</span>
                 <span onClick={() => windowAction(id,"window_change_view", "",iframeRef)}>                 
@@ -4332,12 +4631,12 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
             <div id={`window_content_${type}_${id}`}  className='content_container'>
                 {selectedContent === null && (
                   <div className="placeholder">
-                    <IframeEmbed wId={id} id="source_placeholder" fileName="source_placeholder" activeGraph={activeGraph} graphAction={graphAction} iframeRef={iframeRef} BASE_URL={BASE_URL}/>
+                    <IframeEmbed wId={id} id="source_placeholder" fileName="source_placeholder" activeGraph={activeGraph} graphAction={graphAction} iframeRef={iframeRef} BASE_URL={BASE_URL} themeMode={themeMode}/>
                   </div>
                 )}
                 {selectedContent === "live_source_options" && (
                   <div className="live_source_options_container">
-                    <div className="" style={{fontSize:'2.5vh',borderBottom:'1px solid var(--input-border)', color:'var(--app-text)', padding:'2vh',textAlign:'left',paddingLeft:'0vw',margin:'1.5vw'}}>Pick a source input</div>
+                    <div className="source_window_section_heading">Pick a source input</div>
                     <div className="live_source_option" onClick={() => windowAction(id,"real_time_input","update")}>
                       <span className="live_source_option_icon">
                         <Icons id="window_live_source_option" type="realTime_input" condition="True"/> 
@@ -4360,7 +4659,7 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
                 )}
                 {selectedContent === "real_time_input" && selectedSubContent === "real_time_input_form_pageI" && (
                   <div className="live_source_options_container">
-                    <div className="" style={{fontSize:'2.5vh',borderBottom:'1px solid var(--input-border)', color:'var(--app-text)', padding:'2vh',textAlign:'left',paddingLeft:'0vw',margin:'1.5vw',marginBottom:0}}>Pick a source input</div>
+                    <div className="source_window_section_heading source_window_section_heading--compact">Pick a source input</div>
                     <div className="live_source_option_passive" style={{position:'absolute',top:'calc( 3vh - 3vw)',left:'0vw'}}>
                       <span className="live_source_option_icon">
                         <Icons id="window_live_source_option" type="realTime_input" condition="True"/> 
@@ -4616,7 +4915,7 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
                 )}
                 {isSharedSourceWorkflowPage && (
                   <div className="live_source_options_container">
-                    <div className="" style={{fontSize:'2.5vh',borderBottom:'1px solid var(--input-border)', color:'var(--app-text)', padding:'2vh',textAlign:'left',paddingLeft:'0vw',margin:'1.5vw',marginBottom:0}}>Pick a source input</div>
+                    <div className="source_window_section_heading source_window_section_heading--compact">Pick a source input</div>
                     <div className="live_source_option_passive" style={{position:'absolute',top:'calc( 3vh - 3vw)',left:'0vw'}}>
                       <span className="live_source_option_icon">
                         <Icons id="window_live_source_option" type={isRealtimeSourceWorkflow ? "realTime_input" : "batch_input"} condition="True"/> 
@@ -4661,7 +4960,6 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
                               windowAction(id, "batch_input_form", "disconnect", sourcePayload);
                             }
                             else {
-                              console.log("render sourceAddress:", brokerAddress);
                               windowAction(id, "batch_input_form", "connect", sourcePayload);
                             }
                             }}
@@ -5450,7 +5748,7 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
               )}
               {selectedContent === "null2" && (
                 <div className="placeholder">
-                  <IframeEmbed wId={id} id="source_placeholder" fileName="source_placeholder" activeGraph={activeGraph} graphAction={graphAction} iframeRef={iframeRef} BASE_URL={BASE_URL}/>
+                  <IframeEmbed wId={id} id="source_placeholder" fileName="source_placeholder" activeGraph={activeGraph} graphAction={graphAction} iframeRef={iframeRef} BASE_URL={BASE_URL} themeMode={themeMode}/>
                 </div>
               )}
             </div>
@@ -6204,7 +6502,10 @@ function Main({userName,setSessionId, API_URL,debounceRef,setConfigurations, con
   const shouldUseBackgroundVideo = areBackgroundAnimationsEnabled && !isBackgroundVideoUnavailable;
 
   return (
-    <main id="main" className={themeMode === "dark" ? "linkx_workspace_scene" : undefined}>
+    <main
+      id="main"
+      className={`linkx_workspace_scene linkx_workspace_scene--${themeMode}`}
+    >
       {themeMode === "dark" ? (
         <>
           {shouldUseBackgroundVideo ? (
@@ -6240,7 +6541,7 @@ function Main({userName,setSessionId, API_URL,debounceRef,setConfigurations, con
           <div className="linkx_workspace_scene_overlay" aria-hidden="true" />
         </>
       ) : (
-        <NetworkBackground name={userName} themeMode={themeMode} />
+        <div className="linkx_workspace_scene_light_plane" aria-hidden="true" />
       )}
     </main>
   );
@@ -6351,9 +6652,13 @@ function ConfirmationDialog({ items, onResolve }) {
 }
 function LinkxWorkspace() {
   const auth = useAuth();
-  const { token, user, actor, roles, permissions, logout, verifyToken, exchangeParentToken, hasPermission, hasRole } = auth;
+  const { token, user, actor, roles, permissions, logout, verifyToken, hasPermission, hasRole } = auth;
   const [windows, setWindows] = useState([]);
-  const [orientation, setOrientation] = useState("tabs"); // "windows" | "tabs"
+  const [orientation, setOrientation] = useState(() => {
+    if (typeof window === "undefined") return "tabs";
+    const storedOrientation = window.localStorage.getItem("linkx_orientation_mode");
+    return storedOrientation === "windows" ? "windows" : "tabs";
+  }); // "windows" | "tabs"
   const [activeWindowId, setActiveWindowId] = useState(null);
   const [activeTabId, setActiveTabId] = useState(null);
   const windowIdRef = useRef(null);    // stores currently selected/active window
@@ -6364,10 +6669,7 @@ function LinkxWorkspace() {
   const [sessionId, setSessionId] = useState(null);
   const [isToggleMenuOpen, setIsToggleMenuOpen] = useState(false);
   const [isTaskBarOpen, setIsTaskBarOpen] = useState(false);
-  const [themeMode, setThemeMode] = useState(() => {
-    const savedMode = localStorage.getItem("linkx_theme_mode");
-    return savedMode === "dark" ? "dark" : "light";
-  });
+  const [themeMode, setThemeMode] = useState("light");
   const { areBackgroundAnimationsEnabled, setBackgroundAnimationsEnabled } = useBackgroundAnimations();
   const [configurations, setConfigurations] = useState({});
   const [isConfigurationsOpen, setIsConfigurationsOpen] = useState(false);
@@ -6426,6 +6728,8 @@ const fileInputRef = useRef(null);
   const graphProgressRenderedRef = useRef({});
   const activeDataframeJobsRef = useRef({});
   const activeSearchJobsRef = useRef({});
+  const idlePolicyPatchTimerRef = useRef(null);
+  const idlePolicyRequestSeqRef = useRef(0);
   const graphAutoRequestedRef = useRef({});
   const streamTerminateRequestedRef = useRef({});
   const textareaRefs = useRef({});
@@ -6459,13 +6763,33 @@ const fileInputRef = useRef(null);
   const API_URL = import.meta.env.VITE_API_URL
   const BASE_URL = import.meta.env.VITE_BASE_URL
   const defaultIdleSettings = useMemo(() => getDefaultIdleSettings(), []);
-  const [idleSettings, setIdleSettings] = useState(() => readStoredIdleSettings(defaultIdleSettings));
-  const workspaceIdleLockMinutes = Math.max(1, Math.round((idleSettings?.warningMs || DEFAULT_IDLE_WARNING_MS) / 60000));
+  const [idleSettings, setIdleSettings] = useState(defaultIdleSettings);
+  const [idlePolicyMeta, setIdlePolicyMeta] = useState({
+    sessionId: "",
+    source: "",
+    editableFields: ["idle_warning_ms", "idle_lock_ms", "max_idle_timeout_ms", "lock_requires_reauth"],
+    authTokenSeconds: null,
+    isLoading: false,
+    isSaving: false,
+    error: "",
+    loaded: false,
+  });
+  const workspaceIdleLockMinutes = Math.max(1, Math.round((idleSettings?.lockMs || DEFAULT_IDLE_LOCK_MS) / 60000));
   const workspaceIdleLogoutMinutes = Math.max(1, Math.round((idleSettings?.timeoutMs || DEFAULT_IDLE_TIMEOUT_MS) / 60000));
   const HEADER_TRIGGER_ALLOWED_ORIGINS = String(import.meta.env.VITE_HEADER_ALLOWED_ORIGINS || "")
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean);
+  const activeParentSessionId = useMemo(() => {
+    const activeWindow = windows.find((windowState) => String(windowState.id) === String(activeWindowId)) || null;
+    const candidates = [
+      activeWindow?.type === "source" ? activeWindow.id : "",
+      activeWindow?.graphLinkSource || "",
+      activeWindow?.sessionId || "",
+      sessionId || sessionIdRef.current || readStoredSessionId(),
+    ];
+    return candidates.map((value) => extractParentSessionId(value)).find(Boolean) || "";
+  }, [windows, activeWindowId, sessionId]);
 
   const runScopedDebounce = (bucketRef, scopedId, fn, delay = 300) => {
     const key = String(scopedId);
@@ -6694,14 +7018,19 @@ const fileInputRef = useRef(null);
 
   const hasOpenWindows = windows.length > 0;
   const hasVisibleWorkspacePanel = hasOpenWindows || isConfigurationsOpen || isSettingsOpen;
-  const showDarkHomeOverlay = themeMode === "dark" && !hasVisibleWorkspacePanel;
+  const showHomeOverlay = !hasVisibleWorkspacePanel;
   const showDarkFloatingMenu = themeMode === "dark" && !isToggleMenuOpen && hasOpenWindows && orientation === "windows";
 
   useEffect(() => {
-    if (showDarkHomeOverlay) {
+    if (showHomeOverlay) {
       setIsToggleMenuOpen(false);
     }
-  }, [showDarkHomeOverlay]);
+  }, [showHomeOverlay]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem("linkx_orientation_mode", orientation);
+  }, [orientation]);
 
   useEffect(() => {
     if (!isToggleMenuOpen) return;
@@ -6715,9 +7044,11 @@ const fileInputRef = useRef(null);
       setIsToggleMenuOpen(false);
     };
 
-    document.addEventListener("pointerdown", handleOutsideToggleClick);
+    document.addEventListener("pointerdown", handleOutsideToggleClick, true);
+    document.addEventListener("touchstart", handleOutsideToggleClick, true);
     return () => {
-      document.removeEventListener("pointerdown", handleOutsideToggleClick);
+      document.removeEventListener("pointerdown", handleOutsideToggleClick, true);
+      document.removeEventListener("touchstart", handleOutsideToggleClick, true);
     };
   }, [isToggleMenuOpen]);
 
@@ -6731,12 +7062,8 @@ const fileInputRef = useRef(null);
     const sendThemeMode = (windowId, frameEl) => {
       const src = frameEl?.src;
       const attrSrc = frameEl?.getAttribute?.("src");
-      const targetOrigin = getTrustedMessageOrigin();
       try {
-        frameEl?.contentWindow?.postMessage(
-          { action: "theme_mode", payload: themeMode },
-          targetOrigin
-        );
+        postMessageToIframe(frameEl, { action: "theme_mode", payload: themeMode });
 
       } catch (e) {
         console.error("Applying THEME FAILED:");
@@ -6754,10 +7081,7 @@ const fileInputRef = useRef(null);
       const cachedPayload = graphInfoPayloadBySessionRef.current[sessionKey];
       if (!cachedPayload || typeof cachedPayload !== "object") return;
 
-      frameEl?.contentWindow?.postMessage(
-        { action: "informations", payload: cachedPayload },
-        getTrustedMessageOrigin()
-      );
+      postMessageToIframe(frameEl, { action: "informations", payload: cachedPayload });
     };
 
     Object.entries(iframeRefs.current || {}).forEach(([windowId, frameRef]) => {
@@ -6911,6 +7235,7 @@ const fileInputRef = useRef(null);
       });
     },
     onLocked: (data) => {
+      lockedSessionIdRef.current = activeParentSessionId || sessionIdRef.current || readStoredSessionId();
       setIsWorkspaceLocked(true);
       pushNotification({
         title: "Workspace locked",
@@ -6920,7 +7245,7 @@ const fileInputRef = useRef(null);
         durationMs: 8000,
       });
     },
-  }), [API_URL, token, logout, pushNotification]);
+  }), [API_URL, activeParentSessionId, token, logout, pushNotification]);
 
   const logConnectToToolRequest = (body, { method = "POST", path = "/connect_to_tool" } = {}) => {
     const url = `${String(API_URL || "").replace(/\/$/, "")}${path.startsWith("/") ? path : `/${path}`}`;
@@ -6951,16 +7276,151 @@ const fileInputRef = useRef(null);
     hasRole("admin") || hasPermission(permission)
   ), [hasRole, hasPermission]);
 
+  const applySessionPolicy = useCallback((policyPayload, { fromCache = false } = {}) => {
+    const normalized = normalizeSessionPolicyResponse(policyPayload, activeParentSessionId || sessionIdRef.current || readStoredSessionId());
+    if (!normalized.sessionId) return null;
+    setIdleSettings(normalized.policy);
+    setIdlePolicyMeta((previous) => ({
+      ...previous,
+      sessionId: normalized.sessionId,
+      source: normalized.source || previous.source,
+      editableFields: normalized.editableFields,
+      authTokenSeconds: normalized.authTokenSeconds,
+      isLoading: false,
+      isSaving: false,
+      error: "",
+      loaded: true,
+      fromCache,
+    }));
+    persistSessionPolicyCache(normalized.sessionId, normalized);
+    return normalized;
+  }, [activeParentSessionId]);
+
+  const fetchSessionPolicy = useCallback(async (targetSessionId, { preferCache = true } = {}) => {
+    const sessionKey = normalizeSessionId(targetSessionId);
+    if (!sessionKey || !token) return null;
+
+    const requestId = ++idlePolicyRequestSeqRef.current;
+    const cachedPolicy = preferCache ? readCachedSessionPolicy(sessionKey) : null;
+    if (cachedPolicy) {
+      setIdleSettings(cachedPolicy.policy);
+      setIdlePolicyMeta((previous) => ({
+        ...previous,
+        sessionId: sessionKey,
+        source: cachedPolicy.source || previous.source,
+        editableFields: cachedPolicy.editableFields,
+        authTokenSeconds: cachedPolicy.authTokenSeconds,
+        isLoading: true,
+        isSaving: false,
+        error: "",
+        loaded: true,
+        fromCache: true,
+      }));
+    } else {
+      setIdlePolicyMeta((previous) => ({
+        ...previous,
+        sessionId: sessionKey,
+        isLoading: true,
+        error: "",
+      }));
+    }
+
+    try {
+      const data = await apiFetch("/auth/session-policy?session_id=" + encodeURIComponent(sessionKey), {
+        method: "GET",
+      });
+      if (requestId !== idlePolicyRequestSeqRef.current) return null;
+      return applySessionPolicy(data, { fromCache: false });
+    } catch (error) {
+      if (requestId !== idlePolicyRequestSeqRef.current) return null;
+      const message = error?.message || "Could not refresh the backend session policy.";
+      setIdlePolicyMeta((previous) => ({
+        ...previous,
+        sessionId: sessionKey,
+        isLoading: false,
+        error: message,
+        loaded: previous.loaded || Boolean(cachedPolicy),
+      }));
+      if (!cachedPolicy && Number(error?.status) !== 423) {
+        pushNotification({
+          title: "Session policy unavailable",
+          message,
+          source: "Auth",
+          level: "warning",
+          durationMs: 7000,
+        });
+      }
+      return null;
+    }
+  }, [apiFetch, applySessionPolicy, pushNotification, token]);
+
   const updateIdleSettings = useCallback((nextSettings) => {
-    setIdleSettings((previous) => normalizeIdleSettings(
-      typeof nextSettings === "function" ? nextSettings(previous) : nextSettings,
-      defaultIdleSettings
-    ));
-  }, [defaultIdleSettings]);
+    const sessionKey = normalizeSessionId(idlePolicyMeta.sessionId || activeParentSessionId || sessionIdRef.current || readStoredSessionId());
+    setIdleSettings((previous) => {
+      const normalized = normalizeIdleSettings(
+        typeof nextSettings === "function" ? nextSettings(previous) : nextSettings,
+        defaultIdleSettings
+      );
+
+      if (idlePolicyPatchTimerRef.current) {
+        clearTimeout(idlePolicyPatchTimerRef.current);
+      }
+
+      if (sessionKey && token) {
+        setIdlePolicyMeta((current) => ({ ...current, isSaving: true, error: "" }));
+        idlePolicyPatchTimerRef.current = setTimeout(async () => {
+          try {
+            const data = await apiFetch("/auth/session-policy", {
+              method: "PATCH",
+              body: buildSessionPolicyPatchBody(sessionKey, normalized),
+            });
+            applySessionPolicy(
+              data?.results
+                ? data
+                : {
+                    results: {
+                      session_id: sessionKey,
+                      policy: buildSessionPolicyPatchBody(sessionKey, normalized).policy,
+                      editable_fields: idlePolicyMeta.editableFields,
+                      source: idlePolicyMeta.source,
+                      auth_token_seconds: idlePolicyMeta.authTokenSeconds,
+                    },
+                  },
+              { fromCache: false }
+            );
+          } catch (error) {
+            const message = error?.message || "Could not save the backend session policy.";
+            setIdlePolicyMeta((current) => ({ ...current, isSaving: false, error: message }));
+            pushNotification({
+              title: "Session policy save failed",
+              message,
+              source: "Auth",
+              level: "warning",
+              durationMs: 7000,
+            });
+            fetchSessionPolicy(sessionKey, { preferCache: true });
+          }
+        }, 450);
+      }
+
+      return normalized;
+    });
+  }, [activeParentSessionId, apiFetch, applySessionPolicy, defaultIdleSettings, fetchSessionPolicy, idlePolicyMeta.authTokenSeconds, idlePolicyMeta.editableFields, idlePolicyMeta.sessionId, idlePolicyMeta.source, pushNotification, token]);
 
   useEffect(() => {
-    persistIdleSettings(idleSettings);
-  }, [idleSettings]);
+    if (idlePolicyPatchTimerRef.current) {
+      return () => clearTimeout(idlePolicyPatchTimerRef.current);
+    }
+    return undefined;
+  }, []);
+
+  useEffect(() => {
+    if (!token || !activeParentSessionId) {
+      setIdlePolicyMeta((previous) => ({ ...previous, sessionId: "", isLoading: false, isSaving: false, loaded: false }));
+      return;
+    }
+    fetchSessionPolicy(activeParentSessionId, { preferCache: true });
+  }, [activeParentSessionId, fetchSessionPolicy, token]);
 
   const requirePermission = useCallback((permission, actionName = "this action") => {
     if (canAccess(permission)) return true;
@@ -7016,6 +7476,7 @@ const fileInputRef = useRef(null);
           if (nextSession) {
             localStorage.setItem("session", nextSession);
           }
+          fetchSessionPolicy(extractParentSessionId(nextSession || previousSessionId), { preferCache: true });
         }
       } catch (initErr) {
         console.warn("Post-unlock init failed", initErr);
@@ -7029,7 +7490,7 @@ const fileInputRef = useRef(null);
       }
       throw unlockErr;
     }
-  }, [apiFetch, verifyToken]);
+  }, [apiFetch, fetchSessionPolicy, verifyToken]);
 
   pushNotificationRef.current = pushNotification;
   sessionIdRef.current = sessionId;
@@ -7142,6 +7603,12 @@ const fileInputRef = useRef(null);
               setConfigurations(configs)
               setSessionId(session || null);
               sessionIdRef.current = session || null;
+              const sourceAutofillPatch = buildSourceWindowAutofillPatch(configs || {});
+              setWindows((prev) => prev.map((windowState) => (
+                windowState.type === "source"
+                  ? { ...windowState, ...sourceAutofillPatch }
+                  : windowState
+              )));
               if (session) {
                 localStorage.setItem('session', session);
               }
@@ -7456,7 +7923,6 @@ const fileInputRef = useRef(null);
     let lastHashBySession = {};
     const handleGraphStatus = (payload) => {
       logGraphWindowDebug("graph status event", payload);
-      console.log("[graph status payload]", payload);
       const { type, data, error, session_id } = payload;
       const sessionKey = String(session_id || "").trim();
       if (!sessionKey) {
@@ -7469,9 +7935,9 @@ const fileInputRef = useRef(null);
         return normalizedPath.endsWith("/temp_placeholders/graph_info_placeholder.html");
       };
 
-      const buildGraphInfoPayload = (metadata, currentSessionKey, relationships = []) => {
+      const buildGraphInfoPayload = (metadata, currentSessionKey, relationships = [], summaryOverride = null) => {
         const base = metadata && typeof metadata === "object" ? metadata : {};
-        const summary = base.summary && typeof base.summary === "object" ? base.summary : {};
+        const summary = summaryOverride && typeof summaryOverride === "object" ? summaryOverride : (base.summary && typeof base.summary === "object" ? base.summary : {});
         const graph = base.graph && typeof base.graph === "object" ? base.graph : {};
         const pickFirst = (...values) => values.find((value) => value !== undefined && value !== null && value !== "");
         const relationshipList = Array.isArray(relationships) ? relationships : [];
@@ -7481,6 +7947,8 @@ const fileInputRef = useRef(null);
         const totalNodes = pickFirst(
           base.total_nodes,
           base.totalNodes,
+          base.available_nodes,
+          base.availableNodes,
           base.node_count,
           base.nodeCount,
           base.nodes_count,
@@ -7489,6 +7957,8 @@ const fileInputRef = useRef(null);
           base.nodes_total,
           summary.total_nodes,
           summary.totalNodes,
+          summary.available_nodes,
+          summary.availableNodes,
           summary.node_count,
           summary.nodeCount,
           summary.nodes_count,
@@ -7502,6 +7972,8 @@ const fileInputRef = useRef(null);
         const totalRelationships = pickFirst(
           base.total_relationships,
           base.totalRelationships,
+          base.all_relationships,
+          base.allRelationships,
           base.relationship_count,
           base.relationshipCount,
           base.relationships_count,
@@ -7510,6 +7982,8 @@ const fileInputRef = useRef(null);
           base.edge_count,
           summary.total_relationships,
           summary.totalRelationships,
+          summary.all_relationships,
+          summary.allRelationships,
           summary.relationship_count,
           summary.relationshipCount,
           summary.relationships_count,
@@ -7517,17 +7991,34 @@ const fileInputRef = useRef(null);
           Array.isArray(base.relationships) ? base.relationships.length : undefined,
           Array.isArray(base.edges) ? base.edges.length : undefined,
           Array.isArray(graph.edges) ? graph.edges.length : undefined,
+          Array.isArray(graph.relationships) ? graph.relationships.length : undefined,
           relationshipList.length
+        );
+        const normalizedStatus = pickFirst(
+          base.status,
+          base.session_status,
+          summary.status,
+          summary.session_status
+        );
+        const normalizedRunId = pickFirst(
+          base.run_id,
+          summary.run_id
         );
         return {
           ...base,
           session_id: String(currentSessionKey || ""),
           analysisSessionId: String(currentSessionKey || ""),
+          status: normalizedStatus,
+          session_status: pickFirst(base.session_status, normalizedStatus),
+          run_id: normalizedRunId,
           relationship_labels: relationshipLabels,
           total_nodes: totalNodes,
           total_relationships: totalRelationships,
           summary: {
             ...summary,
+            status: pickFirst(summary.status, normalizedStatus),
+            session_status: pickFirst(summary.session_status, normalizedStatus),
+            run_id: pickFirst(summary.run_id, normalizedRunId),
             total_nodes: pickFirst(summary.total_nodes, totalNodes),
             total_relationships: pickFirst(summary.total_relationships, totalRelationships),
           },
@@ -7566,16 +8057,26 @@ const fileInputRef = useRef(null);
         console.warn("[graph status cached] no linked graph window yet", { sessionKey, payload });
       }
 
-      if (type === "metadata") {
-        const metadata = data?.metadata ?? data?.results?.metadata ?? data?.result?.metadata ?? data?.status ?? data;
-        const previousRelationships = normalizeGraphRelationships(graphStatusRef.current?.[sessionKey]?.relationships);
-        const infoPayload = buildGraphInfoPayload(metadata, sessionKey, previousRelationships);
+      if (type === "session_status") {
+        const sessionStatus = data && typeof data === "object" ? data : {};
+        const previousEntry = graphStatusRef.current?.[sessionKey] || {};
+        const previousMetadata = previousEntry.status && typeof previousEntry.status === "object" ? previousEntry.status : {};
+        const previousRelationships = normalizeGraphRelationships(previousEntry.relationships);
+        const nextMetadata = {
+          ...previousMetadata,
+          session_id: sessionKey,
+          analysisSessionId: sessionKey,
+          status: sessionStatus.status ?? previousMetadata.status ?? previousMetadata.session_status,
+          session_status: sessionStatus.status ?? previousMetadata.session_status ?? previousMetadata.status,
+          run_id: sessionStatus.run_id ?? previousMetadata.run_id,
+        };
+        const infoPayload = buildGraphInfoPayload(nextMetadata, sessionKey, previousRelationships, previousEntry.summary ?? null);
         graphInfoPayloadBySessionRef.current[sessionKey] = infoPayload;
         graphStatusRef.current = {
           ...graphStatusRef.current,
           [sessionKey]: {
-            ...graphStatusRef.current[sessionKey],
-            status: metadata
+            ...previousEntry,
+            status: nextMetadata,
           }
         };
 
@@ -7583,18 +8084,48 @@ const fileInputRef = useRef(null);
           ...prev,
           [sessionKey]: {
             ...prev[sessionKey],
-            status: metadata
+            status: nextMetadata,
+          }
+        }));
+
+        targetWindows.forEach((w) => {
+          const iframe = iframeRefs.current[w.id];
+          if (iframe?.current?.contentWindow && isGraphInfoPlaceholderPath(getIframePathname(iframe))) {
+            postMessageToIframe(iframe, { action: "informations", payload: infoPayload });
+          }
+        });
+
+        return;
+      }
+
+      if (type === "metadata") {
+        const metadata = data?.metadata ?? data?.results?.metadata ?? data?.result?.metadata ?? data?.status ?? data;
+        const previousRelationships = normalizeGraphRelationships(graphStatusRef.current?.[sessionKey]?.relationships);
+        const infoPayload = buildGraphInfoPayload(metadata, sessionKey, previousRelationships, data?.summary ?? data?.results?.summary ?? data?.result?.summary ?? null);
+        graphInfoPayloadBySessionRef.current[sessionKey] = infoPayload;
+        graphStatusRef.current = {
+          ...graphStatusRef.current,
+          [sessionKey]: {
+            ...graphStatusRef.current[sessionKey],
+            status: metadata,
+            summary: data?.summary ?? data?.results?.summary ?? data?.result?.summary ?? graphStatusRef.current?.[sessionKey]?.summary ?? null,
+          }
+        };
+
+        setGraphStatus(prev => ({
+          ...prev,
+          [sessionKey]: {
+            ...prev[sessionKey],
+            status: metadata,
+            summary: data?.summary ?? data?.results?.summary ?? data?.result?.summary ?? prev[sessionKey]?.summary ?? null,
           }
         }));
 
         targetWindows.forEach(w => {
           const iframe = iframeRefs.current[w.id];
           if (iframe?.current?.contentWindow) {
-            if (isGraphInfoPlaceholderPath(iframe?.current?.contentWindow.location?.pathname)) {
-              iframe.current.contentWindow.postMessage(
-                { action: "informations", payload: infoPayload },
-                getTrustedMessageOrigin()
-              );
+            if (isGraphInfoPlaceholderPath(getIframePathname(iframe))) {
+              postMessageToIframe(iframe, { action: "informations", payload: infoPayload });
             }
           }
         });
@@ -7615,7 +8146,6 @@ const fileInputRef = useRef(null);
             relationships
           }
         };
-        console.log("[graph relationships updated]", { session_id: sessionKey, count: relationships.length, relationships });
         logGraphWindowDebug("graph relationships updated", {
           session_id: sessionKey,
           relationship_count: relationships.length,
@@ -7639,16 +8169,14 @@ const fileInputRef = useRef(null);
         );
 
         const metadataPayload = graphStatusRef.current?.[sessionKey]?.status;
+        const summaryPayload = graphStatusRef.current?.[sessionKey]?.summary;
         if (metadataPayload && typeof metadataPayload === "object") {
-          const infoPayload = buildGraphInfoPayload(metadataPayload, sessionKey, relationships);
+          const infoPayload = buildGraphInfoPayload(metadataPayload, sessionKey, relationships, summaryPayload);
           graphInfoPayloadBySessionRef.current[sessionKey] = infoPayload;
           targetWindows.forEach((w) => {
             const iframe = iframeRefs.current[w.id];
-            if (iframe?.current?.contentWindow && isGraphInfoPlaceholderPath(iframe?.current?.contentWindow.location?.pathname)) {
-              iframe.current.contentWindow.postMessage(
-                { action: "informations", payload: infoPayload },
-                getTrustedMessageOrigin()
-              );
+            if (iframe?.current?.contentWindow && isGraphInfoPlaceholderPath(getIframePathname(iframe))) {
+              postMessageToIframe(iframe, { action: "informations", payload: infoPayload });
             }
           });
         }
@@ -7663,11 +8191,9 @@ const fileInputRef = useRef(null);
       if (!normalizedSession) return;
       if (graphStatusSubscribedSessionsRef.current.has(normalizedSession)) {
         logGraphWindowDebug("graph status subscribe skipped", { session_id: normalizedSession, reason });
-        console.log("[graph status subscribe skipped] already subscribed", { session_id: normalizedSession, reason });
         return;
       }
       logGraphWindowDebug("graph status subscribe", { session_id: normalizedSession, reason });
-      console.log("[graph status subscribe emit]", { session_id: normalizedSession, reason });
       socket.emit("graph_status_subscribe", { session_id: normalizedSession });
       graphStatusSubscribedSessionsRef.current.add(normalizedSession);
     };
@@ -7680,7 +8206,6 @@ const fileInputRef = useRef(null);
       graphStatusSessionIds.forEach((currentSessionId) => {
         const normalizedSession = String(currentSessionId || "").trim();
         if (!normalizedSession) return;
-        console.log("[graph status unsubscribe]", { session_id: normalizedSession });
         socket.emit("graph_status_unsubscribe", { session_id: normalizedSession });
         graphStatusSubscribedSessionsRef.current.delete(normalizedSession);
       });
@@ -7733,11 +8258,8 @@ const fileInputRef = useRef(null);
           !searchButtonRef.current.contains(event.target) &&
           !resultContainerRef.current.contains(event.target)
         ) {
-          console.log('Click outside container', event.target);
           resultContainerRef.current.style.display = 'none';
           setSearchResultsVisible(false);
-        } else {
-          console.log('Click inside container', event.target);
         }
       };
 
@@ -7767,7 +8289,6 @@ const fileInputRef = useRef(null);
   //-------------------------------------------------------------------------------- messages listner
   useEffect(() => {
     const handleIframeMessage = (event) => {
-      console.log("event detected:",event)
       const sourceWindow = event?.source || null;
       const resolvedSourceWindowId = Object.keys(iframeRefs.current || {}).find((windowId) => {
         const frameRef = iframeRefs.current[windowId];
@@ -7859,63 +8380,61 @@ const fileInputRef = useRef(null);
         });
         return;
       }
-      if (event.data?.action === "authenticate") {
-        const authOrigin = String(event.origin || "");
-        const sameOrigin = authOrigin === window.location.origin;
-        const allowedOrigin = HEADER_TRIGGER_ALLOWED_ORIGINS.includes(authOrigin);
-        if (!sameOrigin && !allowedOrigin) return;
-
-        const payload = event.data?.payload && typeof event.data.payload === "object" ? event.data.payload : event.data;
-        const parentAccessToken = payload?.parent_access_token || payload?.access_token || "";
-        const iframeToken = payload?.token || "";
-        const tokenType = String(payload?.token_type || payload?.tokenType || "").toLowerCase();
-        if (!parentAccessToken && !iframeToken) {
-          console.warn("No token found in message");
-          return;
-        }
-
-        const authenticateFromMessage = parentAccessToken || tokenType === "parent_access" || tokenType === "access"
-          ? exchangeParentToken(parentAccessToken || iframeToken)
-          : verifyToken(iframeToken);
-
-        authenticateFromMessage
-          .then((verifiedUser) => {
-            setUserName(verifiedUser?.display_name || verifiedUser?.username || null);
-            pushNotification({
-              title: "Authenticated",
-              message: `Signed in as ${verifiedUser?.display_name || verifiedUser?.username || "user"}.`,
-              source: "Auth",
-              level: "success",
-            });
-          })
-          .catch((err) => {
-            console.error("Failed to verify iframe token:", err);
-            pushNotification({
-              title: "Authentication failed",
-              message: err?.message || "Invalid token received from iframe.",
-              source: "Auth",
-              level: "error",
-            });
-          });
-      }
       if (event.data?.type === "nodeProperties") {
-        const properties = event.data.payload; // unpack the payload
-        const targetGraphWindow = event.data?.payload?.id ?? resolvedSourceWindowId ?? windowIdRef.current;
+        const rawProperties = event.data?.payload;
+        const normalizedProperties = rawProperties && typeof rawProperties === "object" && !Array.isArray(rawProperties)
+          ? (Object.keys(rawProperties).length > 0 ? rawProperties : null)
+          : null;
+        const targetGraphWindowId = event.data?.payload?.windowId ?? resolvedSourceWindowId;
+        if (!targetGraphWindowId) return;
+
         setWindows(prev =>
-            prev.map(w => w.type === "graph" && w.id === targetGraphWindow ? { ...w, nodeProperties: properties } : w)
+          prev.map(w =>
+            w.type === "graph" && String(w.id) === String(targetGraphWindowId)
+              ? { ...w, nodeProperties: normalizedProperties }
+              : w
+          )
         );
+        return;
       }
       if (event.data?.type === "all_property_keys_response") {
-        const { id, keys } = event.data.payload; // unpack the payload
-        const targetGraphWindowId = id ?? resolvedSourceWindowId;
-        //console.log(`Got keys from iframe ${id}:`, keys); // ["label", "group", ...]
-        // Update your state with just the keys
-        // Update the specific window that matches this iframe id
+        const payload = event.data?.payload || {};
+        const targetGraphWindowId = payload.id ?? resolvedSourceWindowId;
+        if (!targetGraphWindowId) return;
+
+        const normalizedKeys = Array.isArray(payload.keys)
+          ? Array.from(new Set(payload.keys.map((key) => String(key || "").trim()).filter(Boolean)))
+          : [];
+        const applyPropertyKeyDefaults = (rawSettings) => {
+          const nextSettings = normalizeGraphIframeSettings(rawSettings);
+          const defaultKey = normalizedKeys[0] || "";
+          if (!defaultKey) return nextSettings;
+          if (!nextSettings[0]) nextSettings[0] = defaultKey;
+          if (!nextSettings[4]) nextSettings[4] = defaultKey;
+          if (nextSettings[13] === "property_value" && !nextSettings[14]) nextSettings[14] = defaultKey;
+          return nextSettings;
+        };
+
         setWindows(prev =>
-          prev.map(w => w.type === "graph" && w.id === targetGraphWindowId ? { ...w, filterPropertyKeys: keys } : w)
+          prev.map(w => {
+            if (w.type !== "graph" || String(w.id) !== String(targetGraphWindowId)) return w;
+            return {
+              ...w,
+              filterPropertyKeys: normalizedKeys,
+              iframeSettings: applyPropertyKeyDefaults(w.iframeSettings),
+            };
+          })
         );
-        console.log("IframeSettings:",iframeSettings)
-      }    
+        setIframeSettings(prev => {
+          const currentWindow = windowsRef.current.find((w) => w.type === "graph" && String(w.id) === String(targetGraphWindowId));
+          const baseSettings = prev[targetGraphWindowId] ?? currentWindow?.iframeSettings;
+          return {
+            ...prev,
+            [targetGraphWindowId]: applyPropertyKeyDefaults(baseSettings),
+          };
+        });
+        return;
+      }
       if (event.data?.type === "graph_render_stats") {
         const payload = event.data?.payload || {};
         const targetGraphWindowId = payload.id ?? resolvedSourceWindowId;
@@ -7988,10 +8507,12 @@ const fileInputRef = useRef(null);
       if (event.data?.type === "entity_selection") {
         console.log(22)
         //Note: this id is not a chart window id but the sourse graph window id 
-        const { id, selectedNodes, selectedEdges } = event.data.payload; // unpack the payload
-        const sourceGraphId = id ?? resolvedSourceWindowId;
+        const selectionPayload = event.data?.payload || {};
+        const sourceGraphId = selectionPayload.id ?? resolvedSourceWindowId;
+        const selectedNodes = selectionPayload.selectedNodes ?? selectionPayload.nodes ?? [];
+        const selectedEdges = selectionPayload.selectedEdges ?? selectionPayload.edges ?? [];
         //set selected entities for alllinked chart window to the top graph window
-        handleChartActions(sourceGraphId,"updateNetwork","selection", { ...event.data.payload, id: sourceGraphId, selectedNodes, selectedEdges });
+        handleChartActions(sourceGraphId,"updateNetwork","selection", { ...selectionPayload, id: sourceGraphId, selectedNodes, selectedEdges });
         console.log(23)
       }
       //1 Listen what is selected from the graph window
@@ -8001,7 +8522,7 @@ const fileInputRef = useRef(null);
 
       window.addEventListener("message", handleIframeMessage);
       return () => window.removeEventListener("message", handleIframeMessage);
-  }, [pushNotification, verifyToken, exchangeParentToken]);
+  }, [pushNotification, verifyToken]);
 
   // ---------------------------------------------------------------------------- Windows management ---
   const countOpenWindowsByType = useCallback((windowType) => (
@@ -8076,6 +8597,10 @@ const fileInputRef = useRef(null);
   const handleCreateWindows = (sessionId, type, iframeRef, initialContent = null) => {
     if (type === "source" && !requirePermission(PERMISSIONS.SOURCE_CREATE, "source windows")) return null;
     if (type === "graph" && !requirePermission(PERMISSIONS.GRAPH_CREATE, "graph windows")) return null;
+    if (isWorkspaceLocked && ["graph", "chart"].includes(type)) {
+      notifyLockedSensitiveAction(type + " windows");
+      return null;
+    }
     const guardedTypes = new Set(["source", "graph", "chart"]);
     if (guardedTypes.has(type)) {
       const guardResult = guardWindowCreation(type);
@@ -8131,16 +8656,17 @@ const fileInputRef = useRef(null);
                       sourceRealtimeTopicText: sourceAutofillDefaults.sourceRealtimeTopicText,
                       toolUrl: sourceAutofillDefaults.toolUrl,
                       toolUsername: sourceAutofillDefaults.toolUsername,
-                      toolPassword: "",
-                      toolPasswordRef: "",
+                      toolPassword: sourceAutofillDefaults.toolPassword,
+                      toolPasswordRef: sourceAutofillDefaults.toolPasswordRef,
                       toolDatabase: sourceAutofillDefaults.toolDatabase,
                       realtimeToolUrl: sourceAutofillDefaults.realtimeToolUrl,
                       realtimeToolUsername: sourceAutofillDefaults.realtimeToolUsername,
-                      realtimeToolPassword: "",
-                      realtimeToolPasswordRef: "",
+                      realtimeToolPassword: sourceAutofillDefaults.realtimeToolPassword,
+                      realtimeToolPasswordRef: sourceAutofillDefaults.realtimeToolPasswordRef,
                       realtimeToolDatabase: sourceAutofillDefaults.realtimeToolDatabase,
                       formToolResponse: null,
                       formRealtimeToolResponse: null,
+                      fileInputRef: fileInputRef,
                       realtimeNeo4jConnectedSessionId: null,
                       realtimeConfigPersistStatus: "idle",
                       realtimeConfigPersistedSessionId: null,
@@ -8441,8 +8967,13 @@ const fileInputRef = useRef(null);
         : null;
       setTimeout(() => {
         if (nextId !== null) handleFocusWindow(nextId);
-        else setOrientation("windows");
       }, 0);
+      if (newWindows.length === 0) {
+        const persistedOrientation = typeof window !== "undefined"
+          ? window.localStorage.getItem("linkx_orientation_mode")
+          : null;
+        setOrientation(persistedOrientation === "windows" ? "windows" : "tabs");
+      }
       console.log("closingWindow:",closingWindow, "id:",id)
       const socket = socketRef.current;
       if (closingWindow?.type === "graph" && closingWindow.graphLinkSource) {
@@ -8514,10 +9045,7 @@ const fileInputRef = useRef(null);
     }
 
     const send = () => {
-      iframe.current.contentWindow?.postMessage(
-        { action: msgAction, payload: msgPayload },
-        getTrustedMessageOrigin()
-      );
+      postMessageToIframe(iframe, { action: msgAction, payload: msgPayload });
     };
 
     const iframeSrc = iframe.current.src;
@@ -8752,10 +9280,7 @@ const fileInputRef = useRef(null);
         console.log(11,payload)
         const iframe = payload;
         if (iframe?.current?.contentWindow) {
-          iframe.current.contentWindow.postMessage(
-            { action: "network_components", payload: id}, // Requesting for the nodes and egdes of that specific graph (request is sent to the graph window itself), #id is the graph window id
-              getTrustedMessageOrigin()
-          );
+          postMessageToIframe(iframe, { action: "network_components", payload: id}); // Requesting for the nodes and egdes of that specific graph (request is sent to the graph window itself), #id is the graph window id
         }
         else{
           alert(0)
@@ -8775,10 +9300,7 @@ const fileInputRef = useRef(null);
 
         if (iframe?.current?.contentWindow) {
           console.log(9);
-          iframe.current.contentWindow.postMessage(
-            { action: "network_components", payload: { nodes, edges } },
-            getTrustedMessageOrigin()
-          );
+          postMessageToIframe(iframe, { action: "network_components", payload: { nodes, edges } });
         } else {
           console.log(10, iframe?.current);
         }
@@ -8799,10 +9321,7 @@ const fileInputRef = useRef(null);
               const chartIframeRef = iframeRefs.current[chartWindow.id];
               if (chartIframeRef?.current) {
                 // Example: send message or trigger chart update
-                chartIframeRef.current.contentWindow.postMessage(
-                  { action: "updateSelection", payload:{selectedNodes, selectedEdges} },
-                  getTrustedMessageOrigin()
-                );
+                postMessageToIframe(chartIframeRef, { action: "updateSelection", payload:{selectedNodes, selectedEdges} });
               }
             });
           }            
@@ -8858,10 +9377,7 @@ const fileInputRef = useRef(null);
     setWindows((prev) => prev.map((w) => {
       if (String(w.graphLinkSource || "") !== sessionKey) return w;
       const iframe = iframeRefs.current[w.id];
-      iframe?.current?.contentWindow?.postMessage(
-        { action: "informations", payload: clearedPayload },
-        getTrustedMessageOrigin()
-      );
+      postMessageToIframe(iframe, { action: "informations", payload: clearedPayload });
       return {
         ...w,
         graphLink: false,
@@ -8881,6 +9397,10 @@ const fileInputRef = useRef(null);
 
   const handleGraphActions = (id, menuId, action, payload) => {
     console.log("GraphAction:", id, menuId, action, payload);
+    if (isWorkspaceLocked) {
+      notifyLockedSensitiveAction("graph actions");
+      return;
+    }
     if (menuId === "get_graph" && !requirePermission(PERMISSIONS.GRAPH_READ, "graph data")) return;
 
     // Debounce wrapper for actions that need delay
@@ -9220,8 +9740,8 @@ const fileInputRef = useRef(null);
               sourceTopicText: sourceAutofillDefaults.sourceTopicText,
               toolUrl: sourceAutofillDefaults.toolUrl,
               toolUsername: sourceAutofillDefaults.toolUsername,
-              toolPassword: "",
-              toolPasswordRef: "",
+              toolPassword: sourceAutofillDefaults.toolPassword,
+              toolPasswordRef: sourceAutofillDefaults.toolPasswordRef,
               toolDatabase: sourceAutofillDefaults.toolDatabase,
               batchFilesCollection: [],
               batchFilesSearchResults: null,
@@ -9368,17 +9888,36 @@ const fileInputRef = useRef(null);
             body: JSON.stringify(connectPayload),
           })
           .then((data) => {
+            const backendMessage = getConnectSourceErrorMessage(data, data?.message || "Connection failed!");
+            console.warn("[connect_to_source backend message]", backendMessage);
+            console.warn("[connect_to_source backend response]", {
+              source_window_id: id,
+              menu_id: menuId,
+              address_type: connectPayload?.addressType,
+              backend_message: backendMessage,
+              response: data,
+            });
             setWindows(prev =>
               prev.map(w =>
-                w.id === id ? { ...w, windowRealtimeResponseI: data.message, realtimeStartGuardMessage: isSuccessResponse(data) ? null : (data?.message || w.realtimeStartGuardMessage) } : w
+                w.id === id ? { ...w, windowRealtimeResponseI: backendMessage, realtimeStartGuardMessage: isSuccessResponse(data) ? null : (backendMessage || w.realtimeStartGuardMessage) } : w
               )
             );
           })
           .catch((err) => {
-            console.error(err);
+            const backendMessage = getConnectSourceErrorMessage(err);
+            console.error("[connect_to_source backend message]", backendMessage);
+            console.error("[connect_to_source backend error]", {
+              source_window_id: id,
+              menu_id: menuId,
+              address_type: connectPayload?.addressType,
+              backend_message: backendMessage,
+              status: err?.status,
+              data: err?.data,
+              error: err,
+            });
             setWindows(prev =>
               prev.map(w =>
-                w.id === id ? { ...w, windowRealtimeResponseI: "Connection failed!" } : w
+                w.id === id ? { ...w, windowRealtimeResponseI: backendMessage } : w
               )
             );
           });
@@ -9562,23 +10101,42 @@ const fileInputRef = useRef(null);
               w.id === id ? { ...w, windowResponseI: "Connecting...", sourceStatus: SOURCE_STATUSES.CONNECTING, sourceKind: connectPayload?.addressType || w.sourceAddressType || SOURCE_KINDS.BROKER } : w
             )
           );
+          
           apiFetch("/connect_to_source", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(connectPayload),
           })
-          .then((data) => {
+          .then((data) => {            
+            const backendMessage = getConnectSourceErrorMessage(data, data?.message || "Connection failed!");
+            console.warn("[connect_to_source backend message]", backendMessage);
+            console.warn("[connect_to_source backend response]", {
+              source_window_id: id,
+              menu_id: menuId,
+              address_type: connectPayload?.addressType,
+              backend_message: backendMessage,
+              response: data,
+            });
             setWindows(prev =>
               prev.map(w =>
-                w.id === id ? { ...w, windowResponseI: data.message, sourceStatus: sourceStatusFromResponse(data.message), sourceKind: connectPayload?.addressType || w.sourceKind || w.sourceAddressType || SOURCE_KINDS.BROKER } : w
+                w.id === id ? { ...w, windowResponseI: backendMessage, sourceStatus: sourceStatusFromResponse(backendMessage), sourceKind: connectPayload?.addressType || w.sourceKind || w.sourceAddressType || SOURCE_KINDS.BROKER } : w
               )
             );
           })
-          .catch((err) => {
-            console.error(err);
+          .catch((err) => {          
+            const backendMessage = getConnectSourceErrorMessage(err);
+            console.error("[connect_to_source backend error]", {
+              source_window_id: id,
+              menu_id: menuId,
+              address_type: connectPayload?.addressType,
+              backend_message: backendMessage,
+              status: err?.status,
+              data: err?.data,
+              error: err,
+            });
             setWindows(prev =>
               prev.map(w =>
-                w.id === id ? { ...w, windowResponseI: "Connection failed!", sourceStatus: SOURCE_STATUSES.FAILED } : w
+                w.id === id ? { ...w, windowResponseI: backendMessage, sourceStatus: SOURCE_STATUSES.FAILED } : w
               )
             );
           });        
@@ -9884,6 +10442,42 @@ const fileInputRef = useRef(null);
               };
             };
 
+            const logSearchRequest = (offset, requestBody) => {
+              console.log("[batch search request]", {
+                endpoint: `${API_URL}/live_batch_files`,
+                mode: action,
+                hybrid,
+                strict_mood: isStrictHybridSearch,
+                offset,
+                payload: requestBody,
+              });
+            };
+
+            const logSearchResponse = (offset, requestBody, rawResponse, normalizedResponse) => {
+              console.log("[batch search response]", {
+                endpoint: `${API_URL}/live_batch_files`,
+                mode: action,
+                hybrid,
+                strict_mood: isStrictHybridSearch,
+                offset,
+                payload: requestBody,
+                rawResponse,
+                normalizedResponse,
+              });
+            };
+
+            const logSearchError = (offset, requestBody, error) => {
+              console.error("[batch search error]", {
+                endpoint: `${API_URL}/live_batch_files`,
+                mode: action,
+                hybrid,
+                strict_mood: isStrictHybridSearch,
+                offset,
+                payload: requestBody,
+                error,
+              });
+            };
+
             const handleRawSearchDiagnostics = (data, results) => {
               if (hybrid || results.length !== 0) return;
 
@@ -9942,10 +10536,13 @@ const fileInputRef = useRef(null);
                   )
                 );
 
+                const requestBody = buildPayload(0);
+                logSearchRequest(0, requestBody);
+
                 fetchMaybeQueued(apiFetch, "/live_batch_files", {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify(buildPayload(0))
+                  body: JSON.stringify(requestBody)
                 }, {
                   label: "search",
                   onQueued: (queuedData) => {
@@ -9957,7 +10554,8 @@ const fileInputRef = useRef(null);
                     const searchResponse = normalizeSearchResponse(data);
                     const results = searchResponse.results;
                     const hasMore = searchResponse.has_more;
-                    console.log("[search response normalized]", { response: searchResponse, results, hasMore, payload: buildPayload(0) });
+                    logSearchResponse(0, requestBody, data, searchResponse);
+                    console.log("[search response normalized]", { response: searchResponse, results, hasMore, payload: requestBody });
 
                     handleRawSearchDiagnostics(searchResponse, results);
 
@@ -9985,7 +10583,7 @@ const fileInputRef = useRef(null);
                     }
                   })
                   .catch((err) => {
-                  console.error(err);
+                  logSearchError(0, requestBody, err);
                   setWindows(prev =>
                     prev.map(w =>
                       String(w.id) === String(id)
@@ -10007,6 +10605,7 @@ const fileInputRef = useRef(null);
               }
 
               const offset = batchFilesSearchOffset;
+              const requestBody = buildPayload(offset);
 
               setWindows(prev =>
                 prev.map(w =>
@@ -10021,10 +10620,12 @@ const fileInputRef = useRef(null);
                 )
               );
 
+              logSearchRequest(offset, requestBody);
+
               fetchMaybeQueued(apiFetch, "/live_batch_files", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(buildPayload(offset))
+                body: JSON.stringify(requestBody)
               }, {
                 label: "search",
                 onQueued: (queuedData) => {
@@ -10036,7 +10637,8 @@ const fileInputRef = useRef(null);
                   const searchResponse = normalizeSearchResponse(data);
                   const results = searchResponse.results;
                   const hasMore = searchResponse.has_more;
-                  console.log("[search response normalized]", { response: searchResponse, results, hasMore, payload: buildPayload(offset) });
+                  logSearchResponse(offset, requestBody, data, searchResponse);
+                  console.log("[search response normalized]", { response: searchResponse, results, hasMore, payload: requestBody });
 
                   setBatchFilesSearchResults(prev => [...prev, ...results]);
                   setBatchFilesSearchMoreFiles(hasMore);
@@ -10057,7 +10659,7 @@ const fileInputRef = useRef(null);
                   );
                 })
                 .catch((err) => {
-                  console.error(err);
+                  logSearchError(offset, requestBody, err);
                   setWindows(prev =>
                     prev.map(w =>
                       w.id === id
@@ -10862,10 +11464,7 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
             }
             if (iframe?.current && iframe.current.contentWindow) {
               const settingsToApply = normalizeGraphIframeSettings(iframeSettings[id] || targetWindow?.iframeSettings);
-              iframe.current.contentWindow.postMessage(
-                { action: menuId, payload: { id, settings: settingsToApply } },
-                getTrustedMessageOrigin()
-              );
+              postMessageToIframe(iframe, { action: menuId, payload: { id, settings: settingsToApply } });
               // Store the link in the target window
               setWindows(prev =>
                 prev.map(w =>
@@ -10906,6 +11505,39 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
             delete graphAutoRequestedRef.current[String(id)];
             const sessionKey = sanitizeGraphEndpointId(sourceId);
             const graphWindowId = sanitizeGraphEndpointId(id);
+            const sourceWindow = windowsRef.current.find((windowState) => String(windowState.id) === sessionKey || String(windowState.sessionId) === sessionKey);
+            if (!sourceWindow || !isSourceActiveForGraphLink(sourceWindow)) {
+              const linkBlockedMessage = !sourceWindow
+                ? "The selected source window could not be found."
+                : "The selected source window is not actively ingesting or streaming. Start ingestion or streaming first, then try again.";
+              pushNotification({
+                title: "Graph link blocked",
+                message: linkBlockedMessage,
+                source: "Linkx",
+                level: "warning",
+              });
+              setGraphLinkState(false);
+              setGraphLinkSource(null);
+              setGraphStatusListener(false);
+              setIsSideBarMenuOpen("link_graph_options");
+              setWindows(prev =>
+                prev.map(w =>
+                  w.id === id
+                    ? {
+                        ...w,
+                        selectedContent: selectedContent,
+                        graphStatus: null,
+                        graphRenderStats: null,
+                        graphLink: false,
+                        graphLinkSource: null,
+                        loadscreenState: false,
+                        loadscreenText: null,
+                      }
+                    : w
+                )
+              );
+              return;
+            }
             const newPayload = { id: "link", source_id: sessionKey, graph_window_id: graphWindowId };
             console.log("[graph link request]", { sourceId, graphWindowId: id, payload: newPayload });
 
@@ -11188,13 +11820,10 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
                     }
 
                     const sendGraphMessage = () => {
-                      iframe.current.contentWindow?.postMessage(
-                        {
-                          action: menuId,
-                          payload: { id, file, settings: settingsToApply },
-                        },
-                        getTrustedMessageOrigin()
-                      );
+                      postMessageToIframe(iframe, {
+                        action: menuId,
+                        payload: { id, file, settings: settingsToApply },
+                      });
                     };
 
                     const iframeSrc = iframe.current.src;
@@ -11246,13 +11875,10 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
                   }
 
                   const sendGraphMessage = () => {
-                    iframe.current.contentWindow?.postMessage(
-                      {
-                        action: menuId,
-                        payload: { id, file, settings: settingsToApply },
-                      },
-                      getTrustedMessageOrigin()
-                    );
+                    postMessageToIframe(iframe, {
+                      action: menuId,
+                      payload: { id, file, settings: settingsToApply },
+                    });
                   };
 
                   const iframeSrc = iframe.current.src;
@@ -11290,28 +11916,19 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
         if (menuId === "graph_snapshot") {
           const iframe=payload;          
           if (iframe?.current && iframe.current.contentWindow) {
-            iframe.current.contentWindow.postMessage(
-              { action: menuId, payload: "" },
-              getTrustedMessageOrigin()
-            );
+            postMessageToIframe(iframe, { action: menuId, payload: "" });
           }          
         }
         if (menuId === "graph_print") {
           const iframe=payload;          
           if (iframe?.current && iframe.current.contentWindow) {
-            iframe.current.contentWindow.postMessage(
-              { action: menuId, payload: "" },
-              getTrustedMessageOrigin()
-            );
+            postMessageToIframe(iframe, { action: menuId, payload: "" });
           }          
         }
         if (menuId === "graph_report") {
           const iframe=payload;          
           if (iframe?.current && iframe.current.contentWindow) {
-            iframe.current.contentWindow.postMessage(
-              { action: menuId, payload: { id, format: action || "html" } },
-              getTrustedMessageOrigin()
-            );
+            postMessageToIframe(iframe, { action: menuId, payload: { id, format: action || "html" } });
           }          
         }
         if (menuId === "window_change_view") {
@@ -11337,19 +11954,13 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
           }));
 
           if (iframe?.current && iframe.current.contentWindow) {
-            iframe.current.contentWindow.postMessage(
-              { action: menuId, payload: newSettings},
-              getTrustedMessageOrigin()
-            );
+            postMessageToIframe(iframe, { action: menuId, payload: newSettings});
           }   
         }
         if (menuId === "export_graph") {
           const iframe=payload;          
           if (iframe?.current && iframe.current.contentWindow) {
-            iframe.current.contentWindow.postMessage(
-              { action: menuId, payload: action },
-              getTrustedMessageOrigin()
-            );
+            postMessageToIframe(iframe, { action: menuId, payload: action });
           }          
         }
         // ------------------------------------------------------------------- Graph window contents handling
@@ -11357,10 +11968,7 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
           const { iframe } = payload;
           console.log("here:",iframe)
             if (iframe?.current && iframe.current.contentWindow) {
-              iframe.current.contentWindow.postMessage(
-                { action: menuId, payload: action },
-                getTrustedMessageOrigin()
-              );
+              postMessageToIframe(iframe, { action: menuId, payload: action });
             }
         }      
         if (menuId === "chart_link_form" && action === "link") {
@@ -11429,28 +12037,19 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
         if (menuId === "chart_snapshot") {
           const iframe=payload;          
           if (iframe?.current && iframe.current.contentWindow) {
-            iframe.current.contentWindow.postMessage(
-              { action: menuId, payload: "" },
-              getTrustedMessageOrigin()
-            );
+            postMessageToIframe(iframe, { action: menuId, payload: "" });
           }          
         }
         if (menuId === "chart_print") {
           const iframe=payload;          
           if (iframe?.current && iframe.current.contentWindow) {
-            iframe.current.contentWindow.postMessage(
-              { action: menuId, payload: "" },
-              getTrustedMessageOrigin()
-            );
+            postMessageToIframe(iframe, { action: menuId, payload: "" });
           }          
         }
         if (menuId === "chart_reset") {
           const iframe=payload;          
           if (iframe?.current && iframe.current.contentWindow) {
-            iframe.current.contentWindow.postMessage(
-              { action: menuId, payload: "" },
-              getTrustedMessageOrigin()
-            );
+            postMessageToIframe(iframe, { action: menuId, payload: "" });
           }          
         }
         console.log("batchFilesDataframeInfoI:",batchFilesDataframeInfoI)
@@ -11555,13 +12154,34 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
     if (!token) setIsWorkspaceLocked(false);
   }, [token]);
 
+  const notifyLockedSensitiveAction = useCallback((actionName = "this action") => {
+    pushNotification({
+      title: "Workspace locked",
+      message: "Unlock the workspace to continue with " + actionName + ".",
+      source: "Auth",
+      level: "warning",
+      durationMs: 6000,
+    });
+  }, [pushNotification]);
+
   useIdleTimeout({
-    enabled: Boolean(token) && idleSettings.enabled,
+    enabled: Boolean(token) && idleSettings.enabled && idlePolicyMeta.loaded,
     warningMs: idleSettings.warningMs,
+    lockMs: idleSettings.lockMs,
     timeoutMs: idleSettings.timeoutMs,
     isLocked: isWorkspaceLocked,
     resetKey: idleResetSeq,
     onWarn: () => {
+      const minutesUntilLock = Math.max(1, Math.ceil((idleSettings.lockMs - idleSettings.warningMs) / 60000));
+      pushNotification({
+        title: "Inactivity warning",
+        message: "Your session will lock in about " + minutesUntilLock + " minute" + (minutesUntilLock === 1 ? "" : "s") + " if it stays inactive.",
+        source: "Auth",
+        level: "warning",
+        durationMs: 9000,
+      });
+    },
+    onLock: () => {
       setIsWorkspaceLocked(true);
       apiFetch("/auth/lock", {
         method: "POST",
@@ -11574,7 +12194,7 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
           console.warn("Idle lock notification failed", err);
         }
       });
-      const minutesRemaining = Math.max(1, Math.ceil((idleSettings.timeoutMs - idleSettings.warningMs) / 60000));
+      const minutesRemaining = Math.max(1, Math.ceil((idleSettings.timeoutMs - idleSettings.lockMs) / 60000));
       pushNotification({
         title: "Workspace locked",
         message: "Your workspace is preserved. It will sign out in about " + minutesRemaining + " minute" + (minutesRemaining === 1 ? "" : "s") + " if it remains locked.",
@@ -11609,6 +12229,10 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
     // --- Configuration Actions ---
   const handleConfigurationActions = (id,payload) => {
     const resolvedSessionId = resolveConfigurationSessionId();
+    if (isWorkspaceLocked) {
+      notifyLockedSensitiveAction("configuration controls");
+      return;
+    }
     if (["save", "remove", "upload"].includes(id) && !requirePermission(PERMISSIONS.CONFIG_WRITE, "configuration changes")) return;
     if (id === "load_default" && !requirePermission(PERMISSIONS.CONFIG_READ, "configuration loading")) return;
     if (id === "change"){
@@ -11767,8 +12391,12 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
             }
             console.log("defaultConfig:", result.configuration);
             setConfigurations(result.configuration);
+            const sourceAutofillPatch = buildSourceWindowAutofillPatch(result.configuration || {});
             if (windowsRef.current.some((windowState) => windowState.type === "source" && String(windowState.id) === String(session))) {
-              updateSourceWindowState(session, buildToolCredentialWindowPatch(result.configuration || {}));
+              updateSourceWindowState(session, {
+                ...sourceAutofillPatch,
+                ...buildToolCredentialWindowPatch(result.configuration || {}),
+              });
             }
             setloadscreenState(false);
           })
@@ -11784,6 +12412,10 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
     if (["toggle_menu_new_source_window", "toggle_menu_upload_source_window"].includes(id) && !requirePermission(PERMISSIONS.SOURCE_CREATE, "source windows")) return;
     if (id === "toggle_menu_new_graph_window" && !requirePermission(PERMISSIONS.GRAPH_CREATE, "graph windows")) return;
     if (id === "configurations" && !requirePermission(PERMISSIONS.CONFIG_READ, "configurations")) return;
+    if (isWorkspaceLocked && ["configurations", "toggle_menu_new_graph_window", "toggle_menu_new_chart_window"].includes(id)) {
+      notifyLockedSensitiveAction(id === "configurations" ? "configuration controls" : "graph controls");
+      return;
+    }
     if(id=="toggle_menu_upload_source_window"){
       handleOpenWindows("source", "", null, "upload_source_options");
       setIsToggleMenuOpen(false)
@@ -11836,7 +12468,7 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
   // ------------------------
   return (
     <div
-      className={showDarkHomeOverlay ? "linkx_app_shell linkx_app_shell--dark_home" : "linkx_app_shell"}
+      className={showHomeOverlay ? "linkx_app_shell linkx_app_shell--dark_home" : "linkx_app_shell"}
       style={{ position: 'relative', minHeight: '100vh', overflow: 'hidden' }}
     >
       {/*<NetworkBackground />*/}
@@ -11845,7 +12477,7 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
         data-workspace-locked={isWorkspaceLocked ? "true" : "false"}
         style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, zIndex: 1 }}
       >
-        {themeMode !== "dark" && <NavBar onNavAction={handleNavAction} user={user} />}
+        {themeMode !== "dark" && !showHomeOverlay && <NavBar onNavAction={handleNavAction} user={user} />}
         <ToggleMenu
             onToggle={handleToggleMenu}
             isToggleMenuOpen={isToggleMenuOpen}
@@ -11871,7 +12503,7 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
             </div>
           )}
         <Taskbar windows={windows} isTaskBarOpen={isTaskBarOpen} activeWindowId={activeWindowId} focusWindow={handleFocusWindow} toggleAction={handleToggleMenu} isCtrlHeld={isCtrlHeld}/>
-        <Configurations sessionId={sessionId} actions={handleConfigurationActions} loadscreenState={loadscreenState} setloadscreenState={setloadscreenState} toggleAction={handleToggleMenu} configurations={configurations} isConfigurationsOpen={isConfigurationsOpen} apiFetch={apiFetch} canAccess={canAccess} idleSettings={idleSettings} onIdleSettingsChange={updateIdleSettings}/>
+        <Configurations sessionId={sessionId} actions={handleConfigurationActions} loadscreenState={loadscreenState} setloadscreenState={setloadscreenState} toggleAction={handleToggleMenu} configurations={configurations} isConfigurationsOpen={isConfigurationsOpen} apiFetch={apiFetch} canAccess={canAccess} idleSettings={idleSettings} idlePolicyMeta={idlePolicyMeta} onIdleSettingsChange={updateIdleSettings}/>
         <Settings isSettingsOpen={isSettingsOpen} toggleAction={handleToggleMenu} actor={actor || user} roles={roles} permissions={permissions} canAccess={canAccess} apiFetch={apiFetch} sessionId={sessionId} onNotice={pushNotification} onLogout={() => performLogout("user_logout")} areBackgroundAnimationsEnabled={areBackgroundAnimationsEnabled} onBackgroundAnimationsChange={setBackgroundAnimationsEnabled} />
         <Main userName={userName} setSessionId={setSessionId} API_URL={API_URL} debounceRef={debounceRef} setConfigurations={setConfigurations} configurations={configurations} windows={windows} setWindows={setWindows} openWindows={handleOpenWindows} themeMode={themeMode} areBackgroundAnimationsEnabled={areBackgroundAnimationsEnabled} />
         {isWorkspaceLocked && (
@@ -11880,14 +12512,15 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
             isUnlocking={isUnlockingWorkspace}
             lockMinutes={workspaceIdleLockMinutes}
             logoutMinutes={workspaceIdleLogoutMinutes}
+            lockRequiresReauth={idleSettings.lockRequiresReauth !== false}
             themeMode={themeMode}
             areBackgroundAnimationsEnabled={areBackgroundAnimationsEnabled}
             onUnlock={handleUnlockWorkspace}
             onLogout={() => performLogout("user_logout")}
           />
         )}
-        {showDarkHomeOverlay && (
-          <DarkHomeMenuOverlay
+        {showHomeOverlay && (
+          <HomeMenuOverlay
             orientation={orientation}
             themeMode={themeMode}
             toggleAction={handleToggleMenu}
@@ -11989,6 +12622,8 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
               filterResults={window.filterResults}
               nodeProperties={window.nodeProperties}
               BASE_URL={BASE_URL}
+              themeMode={themeMode}
+              isWorkspaceLocked={isWorkspaceLocked}
               searchButtonRef={searchButtonRef}
               resultContainerRef={resultContainerRef}
               requestConfirmation={requestConfirmation}
@@ -12033,7 +12668,7 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
   );
 }
 
-function WorkspaceLockOverlay({ user, isUnlocking, lockMinutes, logoutMinutes, themeMode, areBackgroundAnimationsEnabled, onUnlock, onLogout }) {
+function WorkspaceLockOverlay({ user, isUnlocking, lockMinutes, logoutMinutes, lockRequiresReauth, themeMode, areBackgroundAnimationsEnabled, onUnlock, onLogout }) {
   const displayName = user?.display_name || user?.username || user?.client_id || "User";
   const backgroundVideoRef = useRef(null);
   const [backgroundVideoSrc, setBackgroundVideoSrc] = useState(workspaceBackgroundVideo);
@@ -12107,12 +12742,13 @@ function WorkspaceLockOverlay({ user, isUnlocking, lockMinutes, logoutMinutes, t
           <div className="workspace_lock_scene_overlay" aria-hidden="true" />
         </>
       ) : (
-        <NetworkBackground name={displayName} themeMode={themeMode} />
+        <div className="workspace_lock_light_plane" aria-hidden="true" />
       )}
       <div className="workspace_lock_panel">
         <h2>Workspace locked</h2>
         <p>{displayName}, your windows and activity are still here.</p>
         <p className="workspace_lock_hint">Locked after {lockMinutes} minute{lockMinutes === 1 ? "" : "s"}. Automatic logout after {logoutMinutes} minute{logoutMinutes === 1 ? "" : "s"} of inactivity.</p>
+        <p className="workspace_lock_hint">{lockRequiresReauth ? "Unlock requires re-authentication." : "Unlock keeps the current authenticated session."}</p>
         <div className="workspace_lock_actions">
           <button type="button" onClick={onUnlock} disabled={isUnlocking}>{isUnlocking ? "Unlocking..." : "Unlock"}</button>
           <button type="button" onClick={onLogout} disabled={isUnlocking}>Log out</button>
@@ -12126,11 +12762,17 @@ function AuthenticatedApp() {
   const auth = useAuth();
 
   if (!auth.isAuthReady) {
-    return <Loadscreen loadingText={auth.isSsoAuthenticating ? "Completing single sign-on" : "Checking authentication"} />;
+    const isParentProjectCallback = typeof window !== "undefined" && window.location.pathname === "/auth/callback";
+    const loadingText = isParentProjectCallback
+      ? "Completing Parent project sign-in"
+      : auth.isSsoAuthenticating
+        ? "Completing single sign-on"
+        : "Checking authentication";
+    return <Loadscreen loadingText={loadingText} />;
   }
 
   if (!auth.isAuthenticated) {
-    return <LoginPage onLogin={auth.login} ssoError={auth.ssoError} isSsoAuthenticating={auth.isSsoAuthenticating} />;
+    return <LoginPage onLogin={auth.login} onParentProjectLogin={auth.startParentProjectLogin} ssoError={auth.ssoError} isSsoAuthenticating={auth.isSsoAuthenticating} />;
   }
 
   return <LinkxWorkspace />;
@@ -12138,13 +12780,8 @@ function AuthenticatedApp() {
 
 function Root() {
   const API_URL = import.meta.env.VITE_API_URL;
-  const SSO_ALLOWED_ORIGINS = [
-    ...String(import.meta.env.VITE_SSO_ALLOWED_ORIGINS || "").split(","),
-    ...String(import.meta.env.VITE_HEADER_ALLOWED_ORIGINS || "").split(","),
-  ].map((item) => item.trim()).filter(Boolean);
-
   return (
-    <AuthProvider apiUrl={API_URL} allowedSsoOrigins={SSO_ALLOWED_ORIGINS}>
+    <AuthProvider apiUrl={API_URL}>
       <AuthenticatedApp />
     </AuthProvider>
   );

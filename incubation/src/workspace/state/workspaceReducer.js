@@ -152,6 +152,25 @@ export function workspaceReducer(state, action) {
       };
     }
 
+    case WORKSPACE_ACTIONS.REORDER_WINDOWS: {
+      const draggedId = action.payload?.draggedId;
+      const targetId = action.payload?.targetId;
+      if (!draggedId || !targetId || draggedId === targetId) return state;
+
+      const draggedIndex = state.windows.findIndex((windowItem) => windowItem.id === draggedId);
+      const targetIndex = state.windows.findIndex((windowItem) => windowItem.id === targetId);
+      if (draggedIndex < 0 || targetIndex < 0) return state;
+
+      const nextWindows = [...state.windows];
+      const [draggedWindow] = nextWindows.splice(draggedIndex, 1);
+      nextWindows.splice(targetIndex, 0, draggedWindow);
+
+      return {
+        ...state,
+        windows: nextWindows,
+      };
+    }
+
     case WORKSPACE_ACTIONS.UPDATE_WINDOW_CUSTOM_TITLE: {
       const windowId = action.payload?.id;
       if (!windowId) return state;

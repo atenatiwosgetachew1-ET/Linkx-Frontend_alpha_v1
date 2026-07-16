@@ -255,8 +255,17 @@ function showSlide(i) {
 
 setInterval(() => showSlide(index + 1), 2500);
 
+const LINKX_PARENT_ORIGIN = (() => {
+  try {
+    const direct = new URLSearchParams(window.location.search).get("parent_origin");
+    if (direct) return direct;
+    if (document.referrer) return new URL(document.referrer).origin;
+  } catch (_) {}
+  return window.location.origin;
+})();
+
 window.addEventListener("message", (event) => {
-  if (event.origin !== window.location.origin) return;
+  if (LINKX_PARENT_ORIGIN && String(event.origin || "") !== LINKX_PARENT_ORIGIN) return;
   if (event?.data?.action === "theme_mode") {
     const nextMode = event.data.payload === "dark" ? "dark" : "light";
     document.documentElement.setAttribute("data-theme", nextMode);
