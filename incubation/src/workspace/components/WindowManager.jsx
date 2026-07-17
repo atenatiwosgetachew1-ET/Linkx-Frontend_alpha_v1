@@ -22,6 +22,7 @@ export default function WindowManager({ workspace }) {
             isActive={workspace.activeWindowId === windowItem.id}
             onFocus={workspace.focusWindow}
             onCustomTitleChange={workspace.updateWindowCustomTitle}
+            onWindowLayoutChange={workspace.updateWindowMetadata}
             onClose={workspace.closeWindow}
           />
         ))}

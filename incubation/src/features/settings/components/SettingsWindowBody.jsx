@@ -1,6 +1,7 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useAuth } from '../../../auth/useAuth.js';
+import { useWorkspace } from '../../../workspace/hooks/useWorkspace.js';
 import { appConfig } from '../../../app/config.js';
 import { authRequest } from '../../../services/authApi.js';
 import { useBackgroundAnimations } from '../../../utils/backgroundAnimations.js';
@@ -268,18 +269,19 @@ function PreferencesPanel({ areBackgroundAnimationsEnabled, setBackgroundAnimati
   );
 }
 
-function UsersPanel({ apiFetch, canManageUsers, canManageSuperusers, currentActor, onNotice, refreshSignal }) {
+function UsersPanel({ apiFetch, canManageUsers, canManageSuperusers, currentActor, onNotice, refreshSignal, initialUiState = {}, onUiStateChange }) {
   const [users, setUsers] = useState([]);
-  const [draft, setDraft] = useState({ username: '', password: '', display_name: '', roles: ['analyst'], is_active: true, permissions: [] });
-  const [editDrafts, setEditDrafts] = useState({});
+  const [draft, setDraft] = useState(() => initialUiState.draft || { username: '', password: '', display_name: '', roles: ['analyst'], is_active: true, permissions: [] });
+  const [editDrafts, setEditDrafts] = useState(() => initialUiState.editDrafts || {});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [isExistingOpen, setIsExistingOpen] = useState(false);
-  const [userSearchQuery, setUserSearchQuery] = useState('');
-  const [userStatusFilter, setUserStatusFilter] = useState('all');
-  const [selectedUserId, setSelectedUserId] = useState('');
-  const [expandedUserId, setExpandedUserId] = useState('');
+  const [isCreateOpen, setIsCreateOpen] = useState(() => !!initialUiState.isCreateOpen);
+  const [isExistingOpen, setIsExistingOpen] = useState(() => !!initialUiState.isExistingOpen);
+  const [userSearchQuery, setUserSearchQuery] = useState(() => initialUiState.userSearchQuery || '');
+  const [userStatusFilter, setUserStatusFilter] = useState(() => initialUiState.userStatusFilter || 'all');
+  const [selectedUserId, setSelectedUserId] = useState(() => initialUiState.selectedUserId || '');
+  const [expandedUserId, setExpandedUserId] = useState(() => initialUiState.expandedUserId || '');
+  const lastPersistedUiRef = useRef('');
   const creatableRoles = useMemo(() => (canManageSuperusers ? ['superuser', 'analyst', 'viewer'] : ['analyst', 'viewer']), [canManageSuperusers]);
   const editableRoles = useMemo(() => {
     const discoveredRoles = users.flatMap((user) => (Array.isArray(user.roles) ? user.roles : []));
@@ -308,13 +310,14 @@ function UsersPanel({ apiFetch, canManageUsers, canManageSuperusers, currentActo
         ? [currentActorUser, ...normalized]
         : normalized;
       setUsers(mergedUsers);
-      setEditDrafts(Object.fromEntries(mergedUsers.map((user) => {
+      setEditDrafts((current) => Object.fromEntries(mergedUsers.map((user) => {
         const roles = Array.isArray(user.roles) && user.roles.length ? user.roles : [creatableRoles[0]];
+        const currentDraft = current[String(user.id)] || {};
         return [String(user.id), {
-          username: user.username || '',
-          role: roles[0],
-          permissions: Array.isArray(user.permissions) ? [...user.permissions] : [],
-          is_active: user.is_active !== false,
+          username: currentDraft.username || user.username || '',
+          role: currentDraft.role || roles[0],
+          permissions: Array.isArray(currentDraft.permissions) ? [...currentDraft.permissions] : (Array.isArray(user.permissions) ? [...user.permissions] : []),
+          is_active: currentDraft.is_active ?? (user.is_active !== false),
         }];
       })));
     } catch (err) {
@@ -452,6 +455,23 @@ function UsersPanel({ apiFetch, canManageUsers, canManageSuperusers, currentActo
     setSelectedUserId((current) => (filteredUsers.some((user) => String(user.id) === current) ? current : String(filteredUsers[0].id)));
     setExpandedUserId((current) => (filteredUsers.some((user) => String(user.id) === current) ? current : ''));
   }, [filteredUsers]);
+  useEffect(() => {
+    const nextUiState = {
+      draft,
+      editDrafts,
+      isCreateOpen,
+      isExistingOpen,
+      userSearchQuery,
+      userStatusFilter,
+      selectedUserId,
+      expandedUserId,
+    };
+    const serialized = JSON.stringify(nextUiState);
+    if (!onUiStateChange || lastPersistedUiRef.current === serialized) return;
+    lastPersistedUiRef.current = serialized;
+    onUiStateChange(nextUiState);
+  }, [draft, editDrafts, isCreateOpen, isExistingOpen, userSearchQuery, userStatusFilter, selectedUserId, expandedUserId, onUiStateChange]);
+
 
   if (!canManageUsers) {
     return (
@@ -755,14 +775,15 @@ function UsersPanel({ apiFetch, canManageUsers, canManageSuperusers, currentActo
   );
 }
 
-function ServiceAccountsPanel({ apiFetch, canManageUsers, onNotice, refreshSignal }) {
+function ServiceAccountsPanel({ apiFetch, canManageUsers, onNotice, refreshSignal, initialUiState = {}, onUiStateChange }) {
   const [accounts, setAccounts] = useState([]);
-  const [draft, setDraft] = useState({ client_id: '', client_secret: generateClientSecret(), display_name: '', is_active: true, permissions: [] });
-  const [editDrafts, setEditDrafts] = useState({});
-  const [newSecret, setNewSecret] = useState('');
+  const [draft, setDraft] = useState(() => initialUiState.draft || { client_id: '', client_secret: generateClientSecret(), display_name: '', is_active: true, permissions: [] });
+  const [editDrafts, setEditDrafts] = useState(() => initialUiState.editDrafts || {});
+  const [newSecret, setNewSecret] = useState(() => initialUiState.newSecret || '');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const lastPersistedUiRef = useRef('');
 
   const loadAccounts = useCallback(async () => {
     if (!canManageUsers) return;
@@ -772,11 +793,14 @@ function ServiceAccountsPanel({ apiFetch, canManageUsers, onNotice, refreshSigna
       const data = await apiFetch('/auth/admin/service-accounts', { method: 'GET' });
       const normalized = normalizeServiceAccountList(data);
       setAccounts(normalized);
-      setEditDrafts(Object.fromEntries(normalized.map((account) => [String(account.id), {
-        display_name: account.display_name,
-        is_active: account.is_active,
-        permissions: account.permissions,
-      }])));
+      setEditDrafts((current) => Object.fromEntries(normalized.map((account) => {
+        const currentDraft = current[String(account.id)] || {};
+        return [String(account.id), {
+          display_name: currentDraft.display_name || account.display_name,
+          is_active: currentDraft.is_active ?? account.is_active,
+          permissions: Array.isArray(currentDraft.permissions) ? [...currentDraft.permissions] : account.permissions,
+        }];
+      })));
     } catch (err) {
       setError(err?.message || 'Failed to load service accounts.');
     } finally {
@@ -882,6 +906,18 @@ function ServiceAccountsPanel({ apiFetch, canManageUsers, onNotice, refreshSigna
       setSaving(false);
     }
   };
+
+  useEffect(() => {
+    const nextUiState = {
+      draft,
+      editDrafts,
+      newSecret,
+    };
+    const serialized = JSON.stringify(nextUiState);
+    if (!onUiStateChange || lastPersistedUiRef.current === serialized) return;
+    lastPersistedUiRef.current = serialized;
+    onUiStateChange(nextUiState);
+  }, [draft, editDrafts, newSecret, onUiStateChange]);
 
   if (!canManageUsers) {
     return (
@@ -1006,7 +1042,9 @@ export default function SettingsWindowBody({ windowItem }) {
   const { user, token, logout, hasPermission } = useAuth();
   const { notify } = useNotifications();
   const { areBackgroundAnimationsEnabled, setBackgroundAnimationsEnabled } = useBackgroundAnimations();
-  const [activeTab, setActiveTab] = useState('profile');
+  const workspace = useWorkspace();
+  const settingsUiState = windowItem?.metadata?.settingsUi || {};
+  const [activeTab, setActiveTab] = useState(() => settingsUiState.activeTab || 'profile');
   const [sessionId, setSessionId] = useState('');
   const [refreshSignal, setRefreshSignal] = useState(0);
   const canManageUsers = hasPermission('users:manage');
@@ -1020,11 +1058,24 @@ export default function SettingsWindowBody({ windowItem }) {
     setSessionId(String(storedSession || ''));
   }, [windowItem?.metadata?.sessionId]);
 
+  const persistSettingsUi = useCallback((patch) => {
+    workspace.updateWindowMetadata(windowItem.id, {
+      metadata: {
+        settingsUi: {
+          ...settingsUiState,
+          ...patch,
+        },
+      },
+    });
+  }, [settingsUiState, workspace, windowItem.id]);
+
   useEffect(() => {
     if ((activeTab === 'users' || activeTab === 'service_accounts') && !canManageUsers) {
       setActiveTab('profile');
+      persistSettingsUi({ activeTab: 'profile' });
     }
-  }, [activeTab, canManageUsers]);
+  }, [activeTab, canManageUsers, persistSettingsUi]);
+
 
   const handleLogout = useCallback(() => {
     logout();
@@ -1042,15 +1093,15 @@ export default function SettingsWindowBody({ windowItem }) {
       case 'preferences':
         return <PreferencesPanel areBackgroundAnimationsEnabled={areBackgroundAnimationsEnabled} setBackgroundAnimationsEnabled={setBackgroundAnimationsEnabled} />;
       case 'users':
-        return <UsersPanel apiFetch={apiFetch} canManageUsers={canManageUsers} canManageSuperusers={canManageSuperusers} currentActor={user} onNotice={notify} refreshSignal={refreshSignal} />;
+        return <UsersPanel apiFetch={apiFetch} canManageUsers={canManageUsers} canManageSuperusers={canManageSuperusers} currentActor={user} onNotice={notify} refreshSignal={refreshSignal} initialUiState={settingsUiState.users || {}} onUiStateChange={(uiState) => persistSettingsUi({ activeTab, users: uiState })} />;
       case 'service_accounts':
-        return <ServiceAccountsPanel apiFetch={apiFetch} canManageUsers={canManageUsers} onNotice={notify} refreshSignal={refreshSignal} />;
+        return <ServiceAccountsPanel apiFetch={apiFetch} canManageUsers={canManageUsers} onNotice={notify} refreshSignal={refreshSignal} initialUiState={settingsUiState.service_accounts || {}} onUiStateChange={(uiState) => persistSettingsUi({ activeTab, service_accounts: uiState })} />;
       case 'integration':
         return <IntegrationPanel />;
       default:
         return null;
     }
-  }, [activeTab, apiFetch, areBackgroundAnimationsEnabled, canManageSuperusers, canManageUsers, notify, refreshSignal, sessionId, setBackgroundAnimationsEnabled, token, user]);
+  }, [activeTab, apiFetch, areBackgroundAnimationsEnabled, canManageSuperusers, canManageUsers, notify, persistSettingsUi, refreshSignal, sessionId, settingsUiState, setBackgroundAnimationsEnabled, token, user]);
 
   return (
     <div className="workspace_window_body settings_window_body">
@@ -1077,7 +1128,10 @@ export default function SettingsWindowBody({ windowItem }) {
                 key={tab.id}
                 type="button"
                 className={activeTab === tab.id ? 'is-active' : ''}
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => {
+                  setActiveTab(tab.id);
+                  persistSettingsUi({ activeTab: tab.id });
+                }}
               >
                 <span aria-hidden="true"></span>
                 <strong>{tab.label}</strong>

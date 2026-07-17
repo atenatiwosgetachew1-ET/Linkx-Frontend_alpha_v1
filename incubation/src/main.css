@@ -1431,10 +1431,12 @@ body{
 	left: 0;
 	display: grid;
 	grid-template-rows: auto minmax(0, 1fr);
-	width: min(1180px, calc(100% - 44px));
-	height: min(740px, calc(100% - 96px));
+	width: min(940px, calc(100% - 44px));
+	height: min(600px, calc(100% - 96px));
+	min-width: min(640px, calc(100% - 44px));
 	min-height: min(420px, calc(100% - 96px));
 	margin: 0;
+	box-sizing: border-box;
 	border: 1px solid rgb(54 64 67 / 32%);
 	border-radius: 3px;
 	box-shadow: inset 0 1px 0 rgba(207, 229, 235, 0.08);
@@ -1550,6 +1552,55 @@ body{
 
 .workspace_window_body p {
 	margin: 0;
+}
+
+.workspace_window_resize_handle {
+	position: absolute;
+	right: 4px;
+	bottom: 4px;
+	z-index: 3;
+	width: 18px;
+	height: 18px;
+	border: 0;
+	border-radius: 0 0 3px 0;
+	background: transparent;
+	color: #cfe5eb;
+	padding: 0;
+	opacity: 0.58;
+	cursor: nwse-resize;
+	pointer-events: auto;
+	touch-action: none;
+}
+
+.workspace_window_resize_handle::before,
+.workspace_window_resize_handle::after {
+	content: '';
+	position: absolute;
+	right: 2px;
+	bottom: 2px;
+	border-right: 2px solid currentColor;
+	border-bottom: 2px solid currentColor;
+	pointer-events: none;
+}
+
+.workspace_window_resize_handle::before {
+	width: 8px;
+	height: 8px;
+	opacity: 0.72;
+}
+
+.workspace_window_resize_handle::after {
+	width: 13px;
+	height: 13px;
+	opacity: 0.36;
+}
+
+.workspace_window_resize_handle:hover {
+	opacity: 0.95;
+}
+
+.workspace_window_resize_handle:active {
+	opacity: 0.62;
 }
 
 

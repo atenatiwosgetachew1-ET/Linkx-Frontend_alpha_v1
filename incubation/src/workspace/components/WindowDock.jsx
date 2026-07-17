@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useLayoutEffect, useRef, useState } from 'react';
 
 import WorkspaceWindowBody from './WorkspaceWindowBody.jsx';
 import { WORKSPACE_WINDOW_TYPES } from '../state/workspaceTypes.js';
@@ -24,23 +24,22 @@ export default function WindowDock({ workspace }) {
   const [draggedWindowId, setDraggedWindowId] = useState(null);
   const [dropTargetWindowId, setDropTargetWindowId] = useState(null);
   const tabsRef = useRef(null);
-  const previousWindowCountRef = useRef(workspace.windows.length);
   const activeWindow = workspace.activeWindow || workspace.windows.at(-1);
 
-  useEffect(() => {
-    const previousWindowCount = previousWindowCountRef.current;
-    const currentWindowCount = workspace.windows.length;
-    previousWindowCountRef.current = currentWindowCount;
-
-    if (currentWindowCount <= previousWindowCount) return;
+  useLayoutEffect(() => {
+    if (!activeWindow) return;
     const tabsElement = tabsRef.current;
     if (!tabsElement) return;
 
-    tabsElement.scrollTo({
-      left: tabsElement.scrollWidth,
+    const activeTabElement = tabsElement.querySelector('[data-window-tab-id="' + activeWindow.id + '"]');
+    if (!activeTabElement) return;
+
+    activeTabElement.scrollIntoView({
       behavior: 'smooth',
+      block: 'nearest',
+      inline: 'nearest',
     });
-  }, [workspace.windows.length]);
+  }, [activeWindow?.id, workspace.windows.length]);
 
   if (!activeWindow) return null;
 
@@ -79,6 +78,7 @@ export default function WindowDock({ workspace }) {
           return (
             <div
               key={windowItem.id}
+              data-window-tab-id={windowItem.id}
               className={
                 'workspace_window_dock_tab' +
                 (isActive ? ' is-active' : '') +
