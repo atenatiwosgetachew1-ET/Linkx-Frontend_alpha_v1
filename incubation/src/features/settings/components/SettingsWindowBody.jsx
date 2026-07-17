@@ -25,7 +25,7 @@ const SETTINGS_STORAGE_KEYS = {
 
 const permissionGroups = [
   { label: 'Session', items: ['session:create', 'session:read'] },
-  { label: 'Config', items: ['config:read', 'config:write'] },
+  { label: 'Configuration', items: ['config:read', 'config:write'] },
   { label: 'Source', items: ['source:create', 'source:connect', 'source:disconnect'] },
   { label: 'Graph', items: ['graph:create', 'graph:read', 'graph:link'] },
   { label: 'Batch', items: ['batch:upload', 'batch:query'] },
@@ -37,7 +37,7 @@ const permissionGroups = [
 const allPermissions = permissionGroups.flatMap((group) => group.items);
 const userPermissionDisplayGroups = [
   { label: 'Session', items: ['session:create', 'session:read'] },
-  { label: 'Config', items: ['config:read', 'config:write'] },
+  { label: 'Configuration', items: ['config:read', 'config:write'] },
   { label: 'Source', items: ['source:create', 'source:connect', 'source:disconnect'] },
   { label: 'Data & Analysis', items: ['batch:upload', 'batch:query', 'analysis:run'] },
   { label: 'Graph', items: ['graph:create', 'graph:read', 'graph:link'] },
@@ -280,8 +280,6 @@ function UsersPanel({ apiFetch, canManageUsers, canManageSuperusers, currentActo
   const [userStatusFilter, setUserStatusFilter] = useState('all');
   const [selectedUserId, setSelectedUserId] = useState('');
   const [expandedUserId, setExpandedUserId] = useState('');
-  const [permissionSearchQuery, setPermissionSearchQuery] = useState('');
-  const [collapsedPermissionGroups, setCollapsedPermissionGroups] = useState({});
   const creatableRoles = useMemo(() => (canManageSuperusers ? ['superuser', 'analyst', 'viewer'] : ['analyst', 'viewer']), [canManageSuperusers]);
   const editableRoles = useMemo(() => {
     const discoveredRoles = users.flatMap((user) => (Array.isArray(user.roles) ? user.roles : []));
@@ -299,17 +297,6 @@ function UsersPanel({ apiFetch, canManageUsers, canManageSuperusers, currentActo
       is_locked: !!currentActor.is_locked,
     };
   }, [currentActor]);
-  const visiblePermissionGroups = useMemo(() => {
-    const query = permissionSearchQuery.trim().toLowerCase();
-    return userPermissionDisplayGroups
-      .map((group) => ({
-        ...group,
-        visibleItems: !query
-          ? group.items
-          : group.items.filter((item) => item.toLowerCase().includes(query) || group.label.toLowerCase().includes(query)),
-      }))
-      .filter((group) => group.visibleItems.length > 0);
-  }, [permissionSearchQuery]);
 
   const loadUsers = useCallback(async () => {
     if (!canManageUsers) return;
@@ -389,39 +376,11 @@ function UsersPanel({ apiFetch, canManageUsers, canManageSuperusers, currentActo
     });
   };
 
-  const setPermissionGroupSelection = (userId, items, enabled) => {
-    updateUserPermissions(userId, (currentPermissions) => {
-      const next = new Set(currentPermissions);
-      items.forEach((item) => {
-        if (enabled) next.add(item);
-        else next.delete(item);
-      });
-      return Array.from(next);
-    });
-  };
-
-  const setAllUserPermissions = (userId, enabled) => {
-    updateUserPermissions(userId, () => (enabled ? [...allPermissions] : []));
-  };
-
-  const toggleUserPermissionGroup = (groupLabel) => {
-    setCollapsedPermissionGroups((current) => ({ ...current, [groupLabel]: !current[groupLabel] }));
-  };
-
-  const toggleAllPermissionGroups = () => {
-    const hasExpandedGroup = userPermissionDisplayGroups.some((group) => !collapsedPermissionGroups[group.label]);
-    setCollapsedPermissionGroups(Object.fromEntries(userPermissionDisplayGroups.map((group) => [group.label, hasExpandedGroup])));
-  };
-
   const toggleUserEditor = (user) => {
     const userId = String(user.id);
     const willExpand = expandedUserId !== userId;
     setSelectedUserId(userId);
     setExpandedUserId(willExpand ? userId : '');
-    if (willExpand) {
-      setPermissionSearchQuery('');
-      setCollapsedPermissionGroups({});
-    }
   };
 
   const openResetPasswordMessage = (user) => {
@@ -488,7 +447,6 @@ function UsersPanel({ apiFetch, canManageUsers, canManageSuperusers, currentActo
     if (filteredUsers.length === 0) {
       setSelectedUserId('');
       setExpandedUserId('');
-      setPermissionSearchQuery('');
       return;
     }
     setSelectedUserId((current) => (filteredUsers.some((user) => String(user.id) === current) ? current : String(filteredUsers[0].id)));
@@ -641,9 +599,8 @@ function UsersPanel({ apiFetch, canManageUsers, canManageSuperusers, currentActo
                 };
                 const isExpanded = expandedUserId === userId;
                 const selectedPermissionCount = (editDraft.permissions || []).filter((permission) => allPermissions.includes(permission)).length;
-                const areAllPermissionsSelected = selectedPermissionCount === allPermissions.length;
-                const hasExpandedGroup = userPermissionDisplayGroups.some((group) => !collapsedPermissionGroups[group.label]);
                 const rowStatusText = editDraft.is_active ? 'Active' : 'Inactive';
+                const userInitial = String(editDraft.username || user.username || '?').trim().charAt(0).toUpperCase() || '?';
 
                 return (
                   <div className={'settings_user_browser_record' + (isExpanded ? ' is-expanded' : '')} key={user.id}>
@@ -706,131 +663,76 @@ function UsersPanel({ apiFetch, canManageUsers, canManageSuperusers, currentActo
                     </div>
                     {isExpanded ? (
                       <div className="settings_user_browser_editor" onClick={(event) => event.stopPropagation()}>
-                        <section className="settings_user_browser_details_panel">
-                          <h4>User details</h4>
-                          <label className="settings_user_browser_field">
-                            <span>Username</span>
-                            <input
-                              className="settings_input settings_user_browser_input"
-                              value={editDraft.username || ''}
-                              maxLength={120}
-                              onChange={(event) => updateEditDraft(userId, { username: sanitizeIdentifier(event.target.value, { maxLength: 120 }) })}
-                            />
-                          </label>
-                          <label className="settings_user_browser_field">
-                            <span>Role</span>
-                            <select
-                              className="settings_input settings_user_browser_input settings_user_browser_select"
-                              value={editDraft.role || editableRoles[0] || ''}
-                              onChange={(event) => updateEditDraft(userId, { role: event.target.value })}
-                            >
-                              {editableRoles.map((role) => <option key={role} value={role}>{role}</option>)}
-                            </select>
-                          </label>
-                          <div className="settings_user_browser_details_footer">
-                            <div className="settings_user_browser_field settings_user_browser_status_field">
-                              <span>Status</span>
-                              <label className="settings_user_browser_status_toggle">
+                        <div className="settings_user_browser_editor_titles" aria-hidden="true">
+                          <span>User details</span>
+                          <span>Privileges</span>
+                        </div>
+                        <div className="settings_user_browser_editor_body">
+                          <section className="settings_user_browser_details_matrix" aria-label="User details">
+                            <div className="settings_user_browser_avatar" aria-hidden="true">{userInitial}</div>
+                            <div className="settings_user_browser_detail_rows">
+                              <label className="settings_user_browser_detail_row">
+                                <span>Username</span>
                                 <input
-                                  type="checkbox"
-                                  checked={!!editDraft.is_active}
-                                  onChange={(event) => updateEditDraft(userId, { is_active: event.target.checked })}
+                                  className="settings_input settings_user_browser_input settings_user_browser_table_input"
+                                  value={editDraft.username || ''}
+                                  maxLength={120}
+                                  onChange={(event) => updateEditDraft(userId, { username: sanitizeIdentifier(event.target.value, { maxLength: 120 }) })}
                                 />
-                                <small>{rowStatusText}</small>
                               </label>
-                            </div>
-                            <div className="settings_user_browser_field settings_user_browser_reset_field">
-                              <span>Reset password</span>
-                              <button
-                                type="button"
-                                className="settings_button settings_user_browser_reset_button"
-                                onClick={() => openResetPasswordMessage(user)}
-                              >
-                                Reset
-                              </button>
-                            </div>
-                          </div>
-                        </section>
-                        <section className="settings_user_browser_privileges_panel">
-                          <div className="settings_user_browser_privileges_header">
-                            <div className="settings_user_browser_privileges_heading">
-                              <h4>Privileges</h4>
-                              <label className="settings_user_browser_select_all">
-                                <input
-                                  type="checkbox"
-                                  checked={areAllPermissionsSelected}
-                                  onChange={(event) => setAllUserPermissions(userId, event.target.checked)}
-                                />
-                                <span>Select all</span>
+                              <label className="settings_user_browser_detail_row">
+                                <span>Role</span>
+                                <select
+                                  className="settings_input settings_user_browser_input settings_user_browser_select settings_user_browser_table_input"
+                                  value={editDraft.role || editableRoles[0] || ''}
+                                  onChange={(event) => updateEditDraft(userId, { role: event.target.value })}
+                                >
+                                  {editableRoles.map((role) => <option key={role} value={role}>{role}</option>)}
+                                </select>
                               </label>
-                            </div>
-                            <div className="settings_user_browser_privileges_actions">
-                              <label className="settings_user_browser_privilege_search">
-                                <input
-                                  type="text"
-                                  value={permissionSearchQuery}
-                                  placeholder="Search privileges"
-                                  onChange={(event) => setPermissionSearchQuery(sanitizeText(event.target.value, { maxLength: 80 }))}
-                                />
-                                <svg className="source_window_mode_icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                                  <circle cx="11" cy="11" r="6" fill="none" stroke="currentColor" strokeWidth="1.8" />
-                                  <path d="m16 16 4 4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                                </svg>
+                              <label className="settings_user_browser_detail_row">
+                                <span>Status</span>
+                                <span className="settings_user_browser_status_toggle settings_user_browser_table_toggle">
+                                  <input
+                                    type="checkbox"
+                                    checked={!!editDraft.is_active}
+                                    onChange={(event) => updateEditDraft(userId, { is_active: event.target.checked })}
+                                  />
+                                  <small>{rowStatusText}</small>
+                                </span>
                               </label>
-                              <button type="button" className="settings_button settings_user_browser_collapse_button" onClick={toggleAllPermissionGroups}>
-                                {hasExpandedGroup ? 'Collapse all' : 'Expand all'}
-                                <svg className="source_window_mode_icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                                  <path d="m7 14 5-5 5 5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                                </svg>
-                              </button>
+                              <div className="settings_user_browser_detail_row">
+                                <span>Reset password</span>
+                                <button
+                                  type="button"
+                                  className="settings_button settings_user_browser_reset_button settings_user_browser_table_button"
+                                  onClick={() => openResetPasswordMessage(user)}
+                                >
+                                  Reset
+                                </button>
+                              </div>
                             </div>
-                          </div>
-                          <div className="settings_user_browser_group_grid">
-                            {visiblePermissionGroups.length > 0 ? visiblePermissionGroups.map((group) => {
-                              const isCollapsed = !!collapsedPermissionGroups[group.label];
-                              const groupSelectedCount = group.items.filter((permission) => (editDraft.permissions || []).includes(permission)).length;
-                              const isGroupSelected = groupSelectedCount === group.items.length;
-                              return (
-                                <section className={'settings_user_browser_group_card' + (isCollapsed ? ' is-collapsed' : '')} key={group.label}>
-                                  <div className="settings_user_browser_group_top">
-                                    <label className="settings_user_browser_group_select">
+                          </section>
+                          <section className="settings_user_browser_privileges_matrix" aria-label="User privileges">
+                            {userPermissionDisplayGroups.map((group) => (
+                              <div className="settings_user_browser_permission_matrix_row" key={group.label}>
+                                <span className="settings_user_browser_permission_matrix_group">{group.label}</span>
+                                <div className="settings_user_browser_permission_matrix_items">
+                                  {group.items.map((permission) => (
+                                    <label className="settings_user_browser_permission_option" key={permission}>
                                       <input
                                         type="checkbox"
-                                        checked={isGroupSelected}
-                                        onChange={(event) => setPermissionGroupSelection(userId, group.items, event.target.checked)}
+                                        checked={(editDraft.permissions || []).includes(permission)}
+                                        onChange={() => toggleUserPermission(userId, permission)}
                                       />
-                                      <span>{group.label}</span>
+                                      <span>{permission}</span>
                                     </label>
-                                    <button
-                                      type="button"
-                                      className="settings_user_browser_group_toggle"
-                                      onClick={() => toggleUserPermissionGroup(group.label)}
-                                      aria-label={(isCollapsed ? 'Expand ' : 'Collapse ') + group.label + ' permissions'}
-                                    >
-                                      <svg className="source_window_mode_icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                                        <path d={isCollapsed ? 'm7 10 5 5 5-5' : 'm7 14 5-5 5 5'} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                                      </svg>
-                                    </button>
-                                  </div>
-                                  {!isCollapsed ? (
-                                    <div className="settings_user_browser_group_items">
-                                      {group.visibleItems.map((permission) => (
-                                        <label className="settings_user_browser_permission_option" key={permission}>
-                                          <input
-                                            type="checkbox"
-                                            checked={(editDraft.permissions || []).includes(permission)}
-                                            onChange={() => toggleUserPermission(userId, permission)}
-                                          />
-                                          <span>{permission}</span>
-                                        </label>
-                                      ))}
-                                    </div>
-                                  ) : null}
-                                </section>
-                              );
-                            }) : <p className="settings_user_browser_no_privileges">No matching privileges.</p>}
-                          </div>
-                        </section>
+                                  ))}
+                                </div>
+                              </div>
+                            ))}
+                          </section>
+                        </div>
                       </div>
                     ) : null}
                   </div>
