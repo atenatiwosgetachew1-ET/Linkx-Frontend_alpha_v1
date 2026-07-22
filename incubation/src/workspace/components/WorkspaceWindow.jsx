@@ -24,6 +24,22 @@ const WINDOW_SIZE_LIMITS = {
   maxHeight: 780,
 };
 
+const RESIZE_DIRECTIONS = {
+  LEFT: 'left',
+  RIGHT: 'right',
+  BOTTOM: 'bottom',
+  BOTTOM_LEFT: 'bottom-left',
+  BOTTOM_RIGHT: 'bottom-right',
+};
+
+const RESIZE_HANDLES = [
+  { direction: RESIZE_DIRECTIONS.LEFT, className: 'is-left' },
+  { direction: RESIZE_DIRECTIONS.RIGHT, className: 'is-right' },
+  { direction: RESIZE_DIRECTIONS.BOTTOM, className: 'is-bottom' },
+  { direction: RESIZE_DIRECTIONS.BOTTOM_LEFT, className: 'is-bottom-left' },
+  { direction: RESIZE_DIRECTIONS.BOTTOM_RIGHT, className: 'is-bottom-right' },
+];
+
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 
 const getInitialWindowPosition = (windowItem, stackIndex) => {
@@ -61,6 +77,7 @@ export default function WorkspaceWindow({ windowItem, stackIndex = 0, isActive, 
   const dragRef = useRef(null);
   const resizeRef = useRef(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [isResizing, setIsResizing] = useState(false);
   const [position, setPosition] = useState(() => getInitialWindowPosition(windowItem, stackIndex));
   const [size, setSize] = useState(() => getInitialWindowSize(windowItem));
 
@@ -84,6 +101,17 @@ export default function WorkspaceWindow({ windowItem, stackIndex = 0, isActive, 
       y: clamp(nextPosition.y, 0, maxY),
     };
   }, [size.height, size.width]);
+
+  const persistLayout = useCallback((nextPosition, nextSize) => {
+    if (!onWindowLayoutChange) return;
+
+    onWindowLayoutChange(windowItem.id, {
+      metadata: {
+        windowPosition: nextPosition,
+        windowSize: nextSize,
+      },
+    });
+  }, [onWindowLayoutChange, windowItem.id]);
 
   const handleDragStart = useCallback((event) => {
     if (event.button !== 0) return;
@@ -119,13 +147,8 @@ export default function WorkspaceWindow({ windowItem, stackIndex = 0, isActive, 
     const dragState = dragRef.current;
     if (!dragState || dragState.pointerId !== event.pointerId) return;
 
-    if (dragState?.nextPosition && onWindowLayoutChange) {
-      onWindowLayoutChange(windowItem.id, {
-        metadata: {
-          windowPosition: dragState.nextPosition,
-          windowSize: size,
-        },
-      });
+    if (dragState?.nextPosition) {
+      persistLayout(dragState.nextPosition, size);
     }
 
     dragRef.current = null;
@@ -133,7 +156,7 @@ export default function WorkspaceWindow({ windowItem, stackIndex = 0, isActive, 
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
-  }, [onWindowLayoutChange, size, windowItem.id]);
+  }, [persistLayout, size]);
 
   const handleCustomTitleChange = useCallback((event) => {
     onCustomTitleChange(windowItem.id, event.target.value);
@@ -142,19 +165,25 @@ export default function WorkspaceWindow({ windowItem, stackIndex = 0, isActive, 
   const handleResizeStart = useCallback((event) => {
     if (event.button !== 0) return;
 
+    const direction = event.currentTarget.dataset.resizeDirection;
+    if (!direction) return;
+
     event.preventDefault();
     event.stopPropagation();
     onFocus(windowItem.id);
+    setIsResizing(true);
     resizeRef.current = {
       pointerId: event.pointerId,
       startX: event.clientX,
       startY: event.clientY,
-      originWidth: size.width,
-      originHeight: size.height,
+      direction,
+      originPosition: { x: position.x, y: position.y },
+      originSize: { width: size.width, height: size.height },
+      nextPosition: { x: position.x, y: position.y },
       nextSize: { width: size.width, height: size.height },
     };
     event.currentTarget.setPointerCapture(event.pointerId);
-  }, [onFocus, size.height, size.width, windowItem.id]);
+  }, [onFocus, position.x, position.y, size.height, size.width, windowItem.id]);
 
   const handleResizeMove = useCallback((event) => {
     const resizeState = resizeRef.current;
@@ -165,38 +194,81 @@ export default function WorkspaceWindow({ windowItem, stackIndex = 0, isActive, 
     const currentWindow = windowRef.current;
     const parent = currentWindow?.parentElement;
     const parentRect = parent?.getBoundingClientRect();
-    const nextWidthFromPointer = resizeState.originWidth + event.clientX - resizeState.startX;
-    const nextHeightFromPointer = resizeState.originHeight + event.clientY - resizeState.startY;
-    const parentMaxWidth = parentRect ? Math.max(parentRect.width - position.x, WINDOW_SIZE_LIMITS.minWidth) : WINDOW_SIZE_LIMITS.maxWidth;
-    const parentMaxHeight = parentRect ? Math.max(parentRect.height - position.y, WINDOW_SIZE_LIMITS.minHeight) : WINDOW_SIZE_LIMITS.maxHeight;
-    const maxWidth = Math.min(WINDOW_SIZE_LIMITS.maxWidth, parentMaxWidth);
-    const maxHeight = Math.min(WINDOW_SIZE_LIMITS.maxHeight, parentMaxHeight);
-    const nextSize = {
-      width: clamp(nextWidthFromPointer, WINDOW_SIZE_LIMITS.minWidth, maxWidth),
-      height: clamp(nextHeightFromPointer, WINDOW_SIZE_LIMITS.minHeight, maxHeight),
-    };
+    const parentWidth = Number(parentRect?.width) || 0;
+    const parentHeight = Number(parentRect?.height) || 0;
+    const deltaX = event.clientX - resizeState.startX;
+    const deltaY = event.clientY - resizeState.startY;
+    let nextPosition = { ...resizeState.originPosition };
+    let nextSize = { ...resizeState.originSize };
 
+    const canResizeLeft = resizeState.direction === RESIZE_DIRECTIONS.LEFT || resizeState.direction === RESIZE_DIRECTIONS.BOTTOM_LEFT;
+    const canResizeRight = resizeState.direction === RESIZE_DIRECTIONS.RIGHT || resizeState.direction === RESIZE_DIRECTIONS.BOTTOM_RIGHT;
+    const canResizeBottom = resizeState.direction === RESIZE_DIRECTIONS.BOTTOM || resizeState.direction === RESIZE_DIRECTIONS.BOTTOM_LEFT || resizeState.direction === RESIZE_DIRECTIONS.BOTTOM_RIGHT;
+
+    if (canResizeLeft) {
+      const maxShiftLeft = resizeState.originPosition.x;
+      const maxShiftRight = resizeState.originSize.width - WINDOW_SIZE_LIMITS.minWidth;
+      const shiftX = clamp(deltaX, -maxShiftLeft, maxShiftRight);
+      nextPosition = {
+        ...nextPosition,
+        x: resizeState.originPosition.x + shiftX,
+      };
+      nextSize = {
+        ...nextSize,
+        width: resizeState.originSize.width - shiftX,
+      };
+    }
+
+    if (canResizeRight) {
+      const availableWidth = parentWidth > 0
+        ? Math.max(parentWidth - resizeState.originPosition.x, WINDOW_SIZE_LIMITS.minWidth)
+        : WINDOW_SIZE_LIMITS.maxWidth;
+      const maxWidth = Math.min(WINDOW_SIZE_LIMITS.maxWidth, availableWidth);
+      const widthDelta = clamp(
+        deltaX,
+        -(resizeState.originSize.width - WINDOW_SIZE_LIMITS.minWidth),
+        maxWidth - resizeState.originSize.width,
+      );
+      nextSize = {
+        ...nextSize,
+        width: resizeState.originSize.width + widthDelta,
+      };
+    }
+
+    if (canResizeBottom) {
+      const availableHeight = parentHeight > 0
+        ? Math.max(parentHeight - resizeState.originPosition.y, WINDOW_SIZE_LIMITS.minHeight)
+        : WINDOW_SIZE_LIMITS.maxHeight;
+      const maxHeight = Math.min(WINDOW_SIZE_LIMITS.maxHeight, availableHeight);
+      const heightDelta = clamp(
+        deltaY,
+        -(resizeState.originSize.height - WINDOW_SIZE_LIMITS.minHeight),
+        maxHeight - resizeState.originSize.height,
+      );
+      nextSize = {
+        ...nextSize,
+        height: resizeState.originSize.height + heightDelta,
+      };
+    }
+
+    resizeState.nextPosition = nextPosition;
     resizeState.nextSize = nextSize;
+    setPosition(nextPosition);
     setSize(nextSize);
-  }, [position.x, position.y]);
+  }, []);
 
   const handleResizeEnd = useCallback((event) => {
     const resizeState = resizeRef.current;
     if (!resizeState || resizeState.pointerId !== event.pointerId) return;
 
-    if (resizeState?.nextSize && onWindowLayoutChange) {
-      onWindowLayoutChange(windowItem.id, {
-        metadata: {
-          windowSize: resizeState.nextSize,
-        },
-      });
-    }
+    persistLayout(resizeState.nextPosition, resizeState.nextSize);
 
     resizeRef.current = null;
+    setIsResizing(false);
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
-  }, [onWindowLayoutChange, windowItem.id]);
+  }, [persistLayout]);
 
   const stopHeaderControlDrag = useCallback((event) => {
     event.stopPropagation();
@@ -210,7 +282,7 @@ export default function WorkspaceWindow({ windowItem, stackIndex = 0, isActive, 
   return (
     <article
       ref={windowRef}
-      className={'workspace_window' + (isActive ? ' is-active' : '') + (isDragging ? ' is-dragging' : '')}
+      className={'workspace_window' + (isActive ? ' is-active' : '') + (isDragging ? ' is-dragging' : '') + (isResizing ? ' is-resizing' : '')}
       aria-label={windowItem.customTitle ? windowItem.title + ': ' + windowItem.customTitle : windowItem.title}
       onMouseDown={() => onFocus(windowItem.id)}
       style={{
@@ -255,18 +327,21 @@ export default function WorkspaceWindow({ windowItem, stackIndex = 0, isActive, 
         </button>
       </header>
       <WorkspaceWindowBody windowItem={windowItem} />
-      <button
-        className="workspace_window_resize_handle linkx_tooltip_anchor"
-        type="button"
-        data-tooltip="Resize window"
-        aria-label="Resize window"
-        onPointerDown={handleResizeStart}
-        onPointerMove={handleResizeMove}
-        onPointerUp={handleResizeEnd}
-        onPointerCancel={handleResizeEnd}
-        onMouseDown={stopHeaderControlDrag}
-        onClick={stopHeaderControlDrag}
-      />
+      {RESIZE_HANDLES.map((handle) => (
+        <button
+          key={handle.direction}
+          className={'workspace_window_resize_handle ' + handle.className}
+          type="button"
+          aria-label="Resize window"
+          data-resize-direction={handle.direction}
+          onPointerDown={handleResizeStart}
+          onPointerMove={handleResizeMove}
+          onPointerUp={handleResizeEnd}
+          onPointerCancel={handleResizeEnd}
+          onMouseDown={stopHeaderControlDrag}
+          onClick={stopHeaderControlDrag}
+        />
+      ))}
     </article>
   );
 }
