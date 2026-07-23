@@ -8,7 +8,11 @@ import WorkspaceFrame from '../workspace/components/WorkspaceFrame.jsx';
 import { WorkspaceProvider } from '../workspace/state/WorkspaceContext.jsx';
 import { extractMainSessionConfiguration, initializeMainSession } from '../services/sessionApi.js';
 import { NotificationProvider } from '../shared/notifications/NotificationContext.jsx';
+import { ThemeProvider } from '../shared/theme/ThemeContext.jsx';
 import { appConfig } from './config.js';
+
+import WorkspaceLockOverlay from '../auth/WorkspaceLockOverlay.jsx';
+import { useIdleTimeout } from '../auth/useIdleTimeout.js';
 
 const loginLogo = import.meta.env.BASE_URL + 'site_images/Linkx square Icon (256x256).png';
 
@@ -17,6 +21,27 @@ function IncubationShell() {
   const [mainSessionId, setMainSessionId] = useState(() => localStorage.getItem('session') || sessionStorage.getItem('session') || '');
   const [sessionConfiguration, setSessionConfiguration] = useState({});
   const [sessionError, setSessionError] = useState('');
+  const [isWorkspaceLocked, setIsWorkspaceLocked] = useState(false);
+  const [isUnlocking, setIsUnlocking] = useState(false);
+
+  useIdleTimeout({
+    enabled: Boolean(token),
+    warningMs: 12 * 60 * 1000,
+    lockMs: 15 * 60 * 1000,
+    timeoutMs: 30 * 60 * 1000,
+    isLocked: isWorkspaceLocked,
+    onWarn: () => {},
+    onLock: () => setIsWorkspaceLocked(true),
+    onTimeout: () => logout(),
+  });
+
+  const handleUnlock = () => {
+    setIsUnlocking(true);
+    setTimeout(() => {
+      setIsWorkspaceLocked(false);
+      setIsUnlocking(false);
+    }, 350);
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -51,6 +76,17 @@ function IncubationShell() {
         onSignOut={logout}
         logoSrc={loginLogo}
       />
+      {isWorkspaceLocked && (
+        <WorkspaceLockOverlay
+          user={user}
+          isUnlocking={isUnlocking}
+          lockMinutes={15}
+          logoutMinutes={30}
+          onUnlock={handleUnlock}
+          onLogout={logout}
+          logoSrc={loginLogo}
+        />
+      )}
     </WorkspaceProvider>
   );
 }
@@ -85,10 +121,12 @@ function IncubationApp() {
 
 export default function App() {
   return (
-    <AuthProvider apiUrl={appConfig.apiUrl} allowedSsoOrigins={appConfig.allowedSsoOrigins}>
-      <NotificationProvider>
-        <IncubationApp />
-      </NotificationProvider>
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider apiUrl={appConfig.apiUrl} allowedSsoOrigins={appConfig.allowedSsoOrigins}>
+        <NotificationProvider>
+          <IncubationApp />
+        </NotificationProvider>
+      </AuthProvider>
+    </ThemeProvider>
   );
 }

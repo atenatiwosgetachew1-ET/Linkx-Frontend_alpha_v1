@@ -13,15 +13,15 @@ const WINDOW_STAGGER = {
 };
 
 const DEFAULT_WINDOW_SIZE = {
-  width: 940,
-  height: 600,
+  width: 1120,
+  height: 720,
 };
 
 const WINDOW_SIZE_LIMITS = {
   minWidth: 640,
   minHeight: 420,
-  maxWidth: 1240,
-  maxHeight: 780,
+  maxWidth: 1600,
+  maxHeight: 1000,
 };
 
 const RESIZE_DIRECTIONS = {
