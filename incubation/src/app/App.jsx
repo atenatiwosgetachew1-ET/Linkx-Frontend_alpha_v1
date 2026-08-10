@@ -9,6 +9,7 @@ import { WorkspaceProvider } from '../workspace/state/WorkspaceContext.jsx';
 import { extractMainSessionConfiguration, initializeMainSession } from '../services/sessionApi.js';
 import { NotificationProvider } from '../shared/notifications/NotificationContext.jsx';
 import { ThemeProvider } from '../shared/theme/ThemeContext.jsx';
+import VisualElementPicker from '../shared/theme/VisualElementPicker.jsx';
 import { appConfig } from './config.js';
 
 import WorkspaceLockOverlay from '../auth/WorkspaceLockOverlay.jsx';
@@ -127,6 +128,7 @@ export default function App() {
           <IncubationApp />
         </NotificationProvider>
       </AuthProvider>
+      <VisualElementPicker />
     </ThemeProvider>
   );
 }

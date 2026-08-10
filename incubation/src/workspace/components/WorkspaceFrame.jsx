@@ -1,17 +1,14 @@
 import React, { useEffect, useState } from 'react';
 
-import { useBackgroundAnimations } from '../../utils/backgroundAnimations.js';
 import WorkspaceHome from './WorkspaceHome.jsx';
-import WorkspaceContextPanel from './WorkspaceContextPanel.jsx';
+import NetworkBackground from './NetworkBackground.jsx';
+import RightWorkspace from './RightWorkspace.jsx';
 import WindowManager from './WindowManager.jsx';
 import { useWorkspace } from '../hooks/useWorkspace.js';
 import { closeSourceWindow, initializeSourceWindow } from '../../services/sourceApi.js';
 import { WORKSPACE_CONTEXT_TABS, WORKSPACE_ORIENTATIONS, WORKSPACE_WINDOW_TYPES } from '../state/workspaceTypes.js';
 
-const workspaceBackgroundVideo = import.meta.env.BASE_URL + 'site_videos/background.mp4';
-const fallbackWorkspaceBackgroundVideo = '/site_videos/background.mp4';
-const workspaceBackgroundImage = import.meta.env.BASE_URL + 'site_images/Linkx_background_basic.webp';
-const fallbackWorkspaceBackgroundImage = '/site_images/Linkx_background_basic.webp';
+
 
 const launcherItems = [
   {
@@ -34,6 +31,28 @@ const launcherItems = [
     windowType: WORKSPACE_WINDOW_TYPES.CHART,
     contextTab: WORKSPACE_CONTEXT_TABS.OVERVIEW,
     path: 'M5 20V10m7 10V4m7 16v-7M3 20h18',
+  },
+  {
+    id: 'reports',
+    label: 'Reports',
+    windowType: WORKSPACE_WINDOW_TYPES.REPORTS,
+    contextTab: WORKSPACE_CONTEXT_TABS.OVERVIEW,
+    disabled: true,
+    path: 'M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5.586a1 1 0 0 1 .707.293l5.414 5.414a1 1 0 0 1 .293.707V19a2 2 0 0 1-2 2z',
+  },
+  {
+    id: 'tasks',
+    label: 'Tasks',
+    windowType: WORKSPACE_WINDOW_TYPES.TASKS,
+    contextTab: WORKSPACE_CONTEXT_TABS.OVERVIEW,
+    path: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4',
+  },
+  {
+    id: 'libraries',
+    label: 'Libraries',
+    windowType: WORKSPACE_WINDOW_TYPES.LIBRARIES,
+    contextTab: WORKSPACE_CONTEXT_TABS.OVERVIEW,
+    path: 'M8 14v3m4-3v3m4-3v3M3 21h18M3 10h18M3 7l9-4 9 4M4 10h16v11H4V10z',
   },
   {
     id: 'configuration',
@@ -81,38 +100,14 @@ function LauncherIcon({ path, className = 'workspace_launcher_icon' }) {
 export default function WorkspaceFrame({ user, token, apiUrl, mainSessionId, sessionError, onSignOut, logoSrc }) {
   const displayName = user?.display_name || user?.username || user?.client_id || 'Analyst';
   const avatarLetter = displayName.trim().charAt(0).toUpperCase() || 'A';
-  const videoRef = React.useRef(null);
   const launcherRef = React.useRef(null);
-  const [videoSrc, setVideoSrc] = useState(workspaceBackgroundVideo);
-  const [isVideoUnavailable, setIsVideoUnavailable] = useState(false);
-  const [imageSrc, setImageSrc] = useState(workspaceBackgroundImage);
-  const [isImageLoaded, setIsImageLoaded] = useState(false);
   const [isLauncherExpanded, setIsLauncherExpanded] = useState(false);
+  const [isRightCollapsed, setIsRightCollapsed] = useState(false);
   const [sourceOpenError, setSourceOpenError] = useState('');
   const [isOpeningSource, setIsOpeningSource] = useState(false);
   const [isSidebarOverviewOpen, setIsSidebarOverviewOpen] = useState(false);
-  const { areBackgroundAnimationsEnabled } = useBackgroundAnimations();
   const workspace = useWorkspace();
 
-  const playBackgroundVideo = (videoElement = videoRef.current) => {
-    if (!videoElement) return;
-    videoElement.play?.().catch(() => {});
-  };
-
-  const handleVideoError = () => {
-    if (videoSrc === workspaceBackgroundVideo) {
-      setVideoSrc(fallbackWorkspaceBackgroundVideo);
-      return;
-    }
-    setIsVideoUnavailable(true);
-  };
-
-  const handleImageError = () => {
-    if (imageSrc === workspaceBackgroundImage) {
-      setIsImageLoaded(false);
-      setImageSrc(fallbackWorkspaceBackgroundImage);
-    }
-  };
 
   useEffect(() => {
     if (!isLauncherExpanded) return undefined;
@@ -191,47 +186,10 @@ export default function WorkspaceFrame({ user, token, apiUrl, mainSessionId, ses
     workspace.setContextTab(item.contextTab);
   };
 
-  useEffect(() => {
-    if (!areBackgroundAnimationsEnabled) return;
-    setIsVideoUnavailable(false);
-    setVideoSrc(workspaceBackgroundVideo);
-    videoRef.current?.load?.();
-    playBackgroundVideo();
-  }, [areBackgroundAnimationsEnabled]);
-
   return (
     <main className="workspace_shell">
-      {areBackgroundAnimationsEnabled && !isVideoUnavailable ? (
-        <video
-          key={videoSrc}
-          ref={videoRef}
-          className="workspace_background_media"
-          autoPlay
-          muted
-          loop
-          playsInline
-          preload="auto"
-          aria-hidden="true"
-          onCanPlay={(event) => playBackgroundVideo(event.currentTarget)}
-          onError={handleVideoError}
-        >
-          <source src={videoSrc} type="video/mp4" />
-        </video>
-      ) : (
-        <img
-          key={imageSrc}
-          className={`workspace_background_media workspace_background_image${isImageLoaded ? ' is-loaded' : ''}`}
-          src={imageSrc}
-          alt=""
-          aria-hidden="true"
-          decoding="async"
-          fetchPriority="high"
-          loading="eager"
-          onLoad={() => setIsImageLoaded(true)}
-          onError={handleImageError}
-        />
-      )}
       <div className="workspace_background_overlay" aria-hidden="true" />
+      <NetworkBackground />
       <div className={`workspace_frame${isLauncherExpanded ? ' is-launcher-expanded' : ''}`}>
         <aside ref={launcherRef} className="workspace_zone workspace_zone_left" aria-label="Workspace launcher">
           <nav className="workspace_launcher" aria-label="Workspace launcher">
@@ -257,7 +215,7 @@ export default function WorkspaceFrame({ user, token, apiUrl, mainSessionId, ses
                   type="button"
                   data-tooltip={item.label}
                   aria-label={item.label}
-                  disabled={item.windowType === WORKSPACE_WINDOW_TYPES.SOURCE && isOpeningSource}
+                  disabled={Boolean(item.disabled || (item.windowType === WORKSPACE_WINDOW_TYPES.SOURCE && isOpeningSource))}
                   onClick={() => handleLauncherAction(item)}
                 >
                   <LauncherIcon path={item.path} />
@@ -338,13 +296,16 @@ export default function WorkspaceFrame({ user, token, apiUrl, mainSessionId, ses
             </div>
           </nav>
         </aside>
-        <div className="workspace_work_area">
+        <div className={`workspace_work_area${isRightCollapsed ? ' is-right-collapsed' : ''}`}>
           <section className="workspace_canvas" aria-label="Workspace canvas">
             <div className="workspace_identity" aria-label="Current user">
               <span className="workspace_avatar" aria-hidden="true">{avatarLetter}</span>
               <span>{displayName}</span>
             </div>
-            {workspace.windows.length === 0 && <WorkspaceHome openWindowsCount={workspace.windows.length} />}
+            <WorkspaceHome
+              openWindowsCount={workspace.windows.length}
+              onOpenWindow={workspace.openWindow}
+            />
             {(sessionError || sourceOpenError) && (
               <div className="workspace_session_notice" role="status">
                 {sourceOpenError || sessionError}
@@ -352,12 +313,12 @@ export default function WorkspaceFrame({ user, token, apiUrl, mainSessionId, ses
             )}
             {workspace.orientation === WORKSPACE_ORIENTATIONS.DOCKED && <WindowManager workspace={windowWorkspace} />}
           </section>
-          <aside className="workspace_zone workspace_zone_right" aria-label="Workspace context">
-            <WorkspaceContextPanel
-              displayName={displayName}
-              workspace={workspace}
-            />
-          </aside>
+          <RightWorkspace
+            displayName={displayName}
+            workspace={workspace}
+            isRightCollapsed={isRightCollapsed}
+            onToggleCollapse={() => setIsRightCollapsed((current) => !current)}
+          />
           {workspace.orientation === WORKSPACE_ORIENTATIONS.FLOATING && <WindowManager workspace={windowWorkspace} />}
         </div>
       </div>

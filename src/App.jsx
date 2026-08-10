@@ -388,7 +388,8 @@ const normalizeStrReportSocketEmitList = (socketEmit) => {
 
 const applyStrReportSocketEmitList = (socket, analysisSessionId, socketEmit) => {
   if (!socket || !analysisSessionId) return;
-  const emitList = normalizeStrReportSocketEmitList(socketEmit);
+  const emitList = normalizeStrReportSocketEmitL
+  ist(socketEmit);
   emitList.forEach(({ event, data }) => {
     const emitPayload = typeof data === "object" && data !== null ? { ...data } : { value: data };
     if (emitPayload.session_id == null || emitPayload.session_id === "") {

@@ -2,6 +2,9 @@ export const WORKSPACE_WINDOW_TYPES = Object.freeze({
   SOURCE: 'source',
   GRAPH: 'graph',
   CHART: 'chart',
+  REPORTS: 'reports',
+  TASKS: 'tasks',
+  LIBRARIES: 'libraries',
   CONFIGURATION: 'configuration',
   SETTINGS: 'settings',
 });
@@ -35,6 +38,9 @@ export const WORKSPACE_WINDOW_LABELS = Object.freeze({
   [WORKSPACE_WINDOW_TYPES.SOURCE]: 'Source',
   [WORKSPACE_WINDOW_TYPES.GRAPH]: 'Graph',
   [WORKSPACE_WINDOW_TYPES.CHART]: 'Chart',
+  [WORKSPACE_WINDOW_TYPES.REPORTS]: 'Reports',
+  [WORKSPACE_WINDOW_TYPES.TASKS]: 'Tasks',
+  [WORKSPACE_WINDOW_TYPES.LIBRARIES]: 'Libraries',
   [WORKSPACE_WINDOW_TYPES.CONFIGURATION]: 'Configuration',
   [WORKSPACE_WINDOW_TYPES.SETTINGS]: 'Settings',
 });
