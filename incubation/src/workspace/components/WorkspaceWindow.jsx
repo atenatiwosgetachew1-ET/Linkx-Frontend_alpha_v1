@@ -81,26 +81,79 @@ export default function WorkspaceWindow({ windowItem, stackIndex = 0, isActive, 
   const [position, setPosition] = useState(() => getInitialWindowPosition(windowItem, stackIndex));
   const [size, setSize] = useState(() => getInitialWindowSize(windowItem));
 
-  const clampPosition = useCallback((nextPosition, currentSize = size) => {
+  // Returns the element to use as the boundary for window positioning & resizing.
+  // Collapsed right panel → constrain to .workspace_canvas (don't cover tab rail)
+  // Expanded right panel  → allow overflow into .workspace_work_area (panel is fully visible underneath)
+  const getBoundsElement = useCallback(() => {
     const currentWindow = windowRef.current;
-    const parent = currentWindow?.parentElement;
+    if (!currentWindow) return null;
+    const workArea = currentWindow.closest('.workspace_work_area');
+    const isCollapsed = workArea?.classList.contains('is-right-collapsed');
+    if (isCollapsed) {
+      return currentWindow.closest('.workspace_canvas') || currentWindow.parentElement;
+    }
+    return workArea || currentWindow.closest('.workspace_canvas') || currentWindow.parentElement;
+  }, []);
 
-    if (!currentWindow || !parent) {
+  const clampPosition = useCallback((nextPosition, currentSize = size) => {
+    const boundsEl = getBoundsElement();
+
+    if (!boundsEl) {
       return {
         x: Math.max(0, nextPosition.x),
         y: Math.max(0, nextPosition.y),
       };
     }
 
-    const parentRect = parent.getBoundingClientRect();
-    const maxX = Math.max(parentRect.width - currentSize.width, 0);
-    const maxY = Math.max(parentRect.height - currentSize.height, 0);
+    const boundsRect = boundsEl.getBoundingClientRect();
+    const canvasEl = windowRef.current?.closest('.workspace_canvas');
+    const canvasRect = canvasEl?.getBoundingClientRect();
+    // x is relative to the window layer which starts at canvas left edge,
+    // so max x must account for the offset between canvas and bounds element
+    const rightOverflow = canvasRect && boundsRect
+      ? Math.max(0, boundsRect.right - canvasRect.left - currentSize.width - 8)
+      : Math.max(boundsRect.width - currentSize.width - 8, 0);
+    const maxY = Math.max(boundsRect.height - currentSize.height - 8, 0);
 
     return {
-      x: clamp(nextPosition.x, 0, maxX),
+      x: clamp(nextPosition.x, 0, rightOverflow),
       y: clamp(nextPosition.y, 0, maxY),
     };
-  }, [size.height, size.width]);
+  }, [getBoundsElement, size.height, size.width]);
+
+  // React to canvas size changes from panel expand/collapse
+  // - Canvas shrinks (panel expanding) → push windows left so they clear the panel
+  // - Canvas grows (panel collapsing) → leave windows exactly where they are
+  React.useEffect(() => {
+    const currentWindow = windowRef.current;
+    const canvasEl = currentWindow?.closest('.workspace_canvas');
+    if (!canvasEl) return;
+
+    let prevCanvasWidth = canvasEl.getBoundingClientRect().width;
+
+    const handleBoundsChange = () => {
+      const canvasRect = canvasEl.getBoundingClientRect();
+      const currentCanvasWidth = canvasRect.width;
+      const delta = currentCanvasWidth - prevCanvasWidth;
+
+      if (delta < 0) {
+        // Canvas shrank (panel expanding) → push windows left by the shrink amount
+        const shrinkAmount = Math.abs(delta);
+        setPosition((prevPos) => {
+          const newX = Math.max(0, prevPos.x - shrinkAmount);
+          return newX !== prevPos.x ? { x: newX, y: prevPos.y } : prevPos;
+        });
+      }
+      // Canvas grew (panel collapsing) → do nothing, windows stay put
+
+      prevCanvasWidth = currentCanvasWidth;
+    };
+
+    const resizeObserver = new ResizeObserver(handleBoundsChange);
+    resizeObserver.observe(canvasEl);
+
+    return () => resizeObserver.disconnect();
+  }, []);
 
   const persistLayout = useCallback((nextPosition, nextSize) => {
     if (!onWindowLayoutChange) return;
@@ -192,10 +245,19 @@ export default function WorkspaceWindow({ windowItem, stackIndex = 0, isActive, 
     event.preventDefault();
 
     const currentWindow = windowRef.current;
-    const parent = currentWindow?.parentElement;
-    const parentRect = parent?.getBoundingClientRect();
-    const parentWidth = Number(parentRect?.width) || 0;
-    const parentHeight = Number(parentRect?.height) || 0;
+    const canvasEl = currentWindow?.closest('.workspace_canvas');
+    const workArea = currentWindow?.closest('.workspace_work_area');
+    const isCollapsed = workArea?.classList.contains('is-right-collapsed');
+    const boundsEl = isCollapsed ? canvasEl : (workArea || canvasEl);
+
+    const boundsRect = boundsEl?.getBoundingClientRect();
+    const canvasRect = canvasEl?.getBoundingClientRect();
+    // maxRight = how far the window's right edge can extend (relative to window layer origin = canvas left)
+    const maxRight = (boundsRect && canvasRect)
+      ? Math.max(0, boundsRect.right - canvasRect.left)
+      : 0;
+    const maxBottom = Number(boundsRect?.height) || 0;
+
     const deltaX = event.clientX - resizeState.startX;
     const deltaY = event.clientY - resizeState.startY;
     let nextPosition = { ...resizeState.originPosition };
@@ -207,7 +269,8 @@ export default function WorkspaceWindow({ windowItem, stackIndex = 0, isActive, 
 
     if (canResizeLeft) {
       const maxShiftLeft = resizeState.originPosition.x;
-      const maxShiftRight = resizeState.originSize.width - WINDOW_SIZE_LIMITS.minWidth;
+      const minWidth = Math.min(WINDOW_SIZE_LIMITS.minWidth, resizeState.originSize.width);
+      const maxShiftRight = resizeState.originSize.width - minWidth;
       const shiftX = clamp(deltaX, -maxShiftLeft, maxShiftRight);
       nextPosition = {
         ...nextPosition,
@@ -220,14 +283,15 @@ export default function WorkspaceWindow({ windowItem, stackIndex = 0, isActive, 
     }
 
     if (canResizeRight) {
-      const availableWidth = parentWidth > 0
-        ? Math.max(parentWidth - resizeState.originPosition.x, WINDOW_SIZE_LIMITS.minWidth)
+      const maxAllowedWidth = maxRight > 0
+        ? Math.max(0, maxRight - resizeState.originPosition.x)
         : WINDOW_SIZE_LIMITS.maxWidth;
-      const maxWidth = Math.min(WINDOW_SIZE_LIMITS.maxWidth, availableWidth);
+      const maxWidth = Math.min(WINDOW_SIZE_LIMITS.maxWidth, maxAllowedWidth);
+      const minWidth = Math.min(WINDOW_SIZE_LIMITS.minWidth, maxWidth);
       const widthDelta = clamp(
         deltaX,
-        -(resizeState.originSize.width - WINDOW_SIZE_LIMITS.minWidth),
-        maxWidth - resizeState.originSize.width,
+        -(resizeState.originSize.width - minWidth),
+        Math.max(0, maxWidth - resizeState.originSize.width),
       );
       nextSize = {
         ...nextSize,
@@ -236,14 +300,15 @@ export default function WorkspaceWindow({ windowItem, stackIndex = 0, isActive, 
     }
 
     if (canResizeBottom) {
-      const availableHeight = parentHeight > 0
-        ? Math.max(parentHeight - resizeState.originPosition.y, WINDOW_SIZE_LIMITS.minHeight)
+      const maxAllowedHeight = maxBottom > 0
+        ? Math.max(0, maxBottom - resizeState.originPosition.y)
         : WINDOW_SIZE_LIMITS.maxHeight;
-      const maxHeight = Math.min(WINDOW_SIZE_LIMITS.maxHeight, availableHeight);
+      const maxHeight = Math.min(WINDOW_SIZE_LIMITS.maxHeight, maxAllowedHeight);
+      const minHeight = Math.min(WINDOW_SIZE_LIMITS.minHeight, maxHeight);
       const heightDelta = clamp(
         deltaY,
-        -(resizeState.originSize.height - WINDOW_SIZE_LIMITS.minHeight),
-        maxHeight - resizeState.originSize.height,
+        -(resizeState.originSize.height - minHeight),
+        Math.max(0, maxHeight - resizeState.originSize.height),
       );
       nextSize = {
         ...nextSize,

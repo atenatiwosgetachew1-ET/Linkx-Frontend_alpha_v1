@@ -312,14 +312,15 @@ export default function WorkspaceFrame({ user, token, apiUrl, mainSessionId, ses
               </div>
             )}
             {workspace.orientation === WORKSPACE_ORIENTATIONS.DOCKED && <WindowManager workspace={windowWorkspace} />}
+            {workspace.orientation === WORKSPACE_ORIENTATIONS.FLOATING && <WindowManager workspace={windowWorkspace} />}
           </section>
           <RightWorkspace
             displayName={displayName}
             workspace={workspace}
+            logoSrc={logoSrc}
             isRightCollapsed={isRightCollapsed}
             onToggleCollapse={() => setIsRightCollapsed((current) => !current)}
           />
-          {workspace.orientation === WORKSPACE_ORIENTATIONS.FLOATING && <WindowManager workspace={windowWorkspace} />}
         </div>
       </div>
     </main>

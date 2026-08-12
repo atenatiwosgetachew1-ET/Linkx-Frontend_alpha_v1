@@ -38,20 +38,38 @@ function SettingsTabIcon() {
   );
 }
 
+function AssistantTabIcon() {
+  return (
+    <svg className="workspace_tab_icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+    </svg>
+  );
+}
+
 const contextTabs = [
-  { id: 'overview', label: 'Overview', icon: OverviewTabIcon, panelId: 'workspace-context-overview' },
-  { id: 'info', label: 'Info', icon: InfoTabIcon, panelId: 'workspace-context-info' },
-  { id: 'filter', label: 'Filter', icon: FilterTabIcon, panelId: 'workspace-context-filter' },
-  { id: 'settings', label: 'Settings', icon: SettingsTabIcon, panelId: 'workspace-context-settings' },
+  { id: 'overview', label: 'Overview', tooltip: 'Session Overview', icon: OverviewTabIcon, panelId: 'workspace-context-overview' },
+  { id: 'assistant', label: 'Assistant', tooltip: 'Co-Analyst', icon: AssistantTabIcon, panelId: 'workspace-context-assistant' },
+  { id: 'info', label: 'Info', tooltip: 'Informations', icon: InfoTabIcon, panelId: 'workspace-context-info' },
+  { id: 'filter', label: 'Filter', tooltip: 'Filter entities', icon: FilterTabIcon, panelId: 'workspace-context-filter' },
+  { id: 'settings', label: 'Settings', tooltip: 'Analysis settings', icon: SettingsTabIcon, panelId: 'workspace-context-settings' },
 ];
 
-export default function WorkspaceContextTabs({ activeTab, onSelectTab, isCollapsed = false }) {
+export default function WorkspaceContextTabs({ activeTab, onSelectTab, isCollapsed = false, isPanelDisabled = false, disabledTabs = [] }) {
   return (
-    <div className={`workspace_context_tabs${isCollapsed ? ' is-collapsed' : ''}`} role="tablist" aria-label="Workspace context tabs">
+    <div className={`workspace_context_tabs${isCollapsed ? ' is-collapsed' : ''}${isPanelDisabled ? ' is-disabled' : ''}`} role="tablist" aria-label="Workspace context tabs">
       {contextTabs.map((tab) => {
         const Icon = tab.icon;
         const isActive = activeTab === tab.id;
-        const showTooltip = isCollapsed || !isActive;
+        const isTabDisabled = isPanelDisabled || disabledTabs.includes(tab.id);
+        const showTooltip = isCollapsed || !isActive || isTabDisabled;
+        
+        let tooltipText = tab.tooltip || tab.label;
+        if (isPanelDisabled) {
+          tooltipText = `${tab.tooltip || tab.label} (Disabled)`;
+        } else if (isTabDisabled) {
+          tooltipText = `${tab.tooltip || tab.label} (Requires Graph or Chart active window)`;
+        }
+
         return (
           <button
             key={tab.id}
@@ -59,11 +77,15 @@ export default function WorkspaceContextTabs({ activeTab, onSelectTab, isCollaps
             role="tab"
             id={`workspace-context-tab-${tab.id}`}
             aria-selected={isActive}
+            aria-disabled={isTabDisabled}
+            disabled={isTabDisabled}
             aria-controls={tab.panelId}
-            className={`workspace_context_tab_btn${isActive ? ' is-active' : ''}${showTooltip ? ' linkx_tooltip_anchor' : ''}`}
-            data-tooltip={showTooltip ? tab.label : undefined}
-            aria-label={tab.label}
-            onClick={() => onSelectTab(tab.id)}
+            className={`workspace_context_tab_btn${isActive ? ' is-active' : ''}${isTabDisabled ? ' is-disabled' : ''}${showTooltip ? ' linkx_tooltip_anchor' : ''}`}
+            data-tooltip={showTooltip ? tooltipText : undefined}
+            aria-label={tooltipText}
+            onClick={() => {
+              if (!isTabDisabled) onSelectTab(tab.id);
+            }}
           >
             <Icon />
             {isActive && !isCollapsed && <span className="workspace_tab_label">{tab.label}</span>}

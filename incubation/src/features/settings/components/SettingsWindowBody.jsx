@@ -366,6 +366,7 @@ function PreferencesPanel({ areBackgroundAnimationsEnabled, setBackgroundAnimati
 function LiveThemeCustomizerStudio() {
   const { theme, setTheme, themes, categories, customOverrides, setCustomVariable, resetCustomOverrides, exportThemeConfig, importThemeConfig, inspectorActive, toggleInspector } = useTheme();
   const [selectedCategoryId, setSelectedCategoryId] = useState(categories[0]?.id || 'shell');
+  const [searchQuery, setSearchQuery] = useState('');
   const [importJson, setImportJson] = useState('');
   const [copyNotice, setCopyNotice] = useState('');
 
@@ -373,6 +374,46 @@ function LiveThemeCustomizerStudio() {
     () => categories.find((cat) => cat.id === selectedCategoryId) || categories[0],
     [categories, selectedCategoryId]
   );
+
+  const normalizedQuery = searchQuery.trim().toLowerCase();
+
+  // Match counts per category when searching
+  const categoryMatchCounts = useMemo(() => {
+    if (!normalizedQuery) return {};
+    const counts = {};
+    categories.forEach((cat) => {
+      const matchingTokens = cat.tokens.filter(
+        (t) =>
+          t.label.toLowerCase().includes(normalizedQuery) ||
+          t.key.toLowerCase().includes(normalizedQuery)
+      );
+      counts[cat.id] = matchingTokens.length;
+    });
+    return counts;
+  }, [categories, normalizedQuery]);
+
+  // Auto-switch to first category with matching items if current category has 0 matches
+  useEffect(() => {
+    if (!normalizedQuery) return;
+    const currentCount = categoryMatchCounts[selectedCategoryId] || 0;
+    if (currentCount === 0) {
+      const firstMatchingCat = categories.find((cat) => (categoryMatchCounts[cat.id] || 0) > 0);
+      if (firstMatchingCat) {
+        setSelectedCategoryId(firstMatchingCat.id);
+      }
+    }
+  }, [normalizedQuery, categoryMatchCounts, selectedCategoryId, categories]);
+
+  // Filter visible tokens within selected category
+  const visibleTokens = useMemo(() => {
+    if (!selectedCategory) return [];
+    if (!normalizedQuery) return selectedCategory.tokens;
+    return selectedCategory.tokens.filter(
+      (t) =>
+        t.label.toLowerCase().includes(normalizedQuery) ||
+        t.key.toLowerCase().includes(normalizedQuery)
+    );
+  }, [selectedCategory, normalizedQuery]);
 
   const getEffectiveValue = (token) => {
     if (customOverrides[token.key]) return customOverrides[token.key];
@@ -447,18 +488,48 @@ function LiveThemeCustomizerStudio() {
         </div>
       </div>
 
+      {/* Customization Items Search Box */}
+      <div className="theme_studio_search_row">
+        <div className="theme_studio_search_input_wrapper">
+          <span className="theme_studio_search_icon">🔍</span>
+          <input
+            type="text"
+            className="settings_input theme_studio_search_input"
+            placeholder="Search customization items (e.g. Session, Gradient, Opacity, Card, Text, Border)..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              className="theme_studio_search_clear"
+              onClick={() => setSearchQuery('')}
+              aria-label="Clear search"
+            >
+              ✕
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* Category Tabs */}
       <div className="theme_studio_category_tabs">
-        {categories.map((cat) => (
-          <button
-            key={cat.id}
-            type="button"
-            className={`theme_studio_cat_btn ${selectedCategoryId === cat.id ? 'is-active' : ''}`}
-            onClick={() => setSelectedCategoryId(cat.id)}
-          >
-            {cat.name}
-          </button>
-        ))}
+        {categories.map((cat) => {
+          const matchCount = categoryMatchCounts[cat.id];
+          return (
+            <button
+              key={cat.id}
+              type="button"
+              className={`theme_studio_cat_btn ${selectedCategoryId === cat.id ? 'is-active' : ''}`}
+              onClick={() => setSelectedCategoryId(cat.id)}
+            >
+              <span>{cat.name}</span>
+              {normalizedQuery && matchCount > 0 && (
+                <span className="theme_studio_cat_badge">{matchCount}</span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
       {/* Selected Category Token Editor */}
@@ -469,69 +540,80 @@ function LiveThemeCustomizerStudio() {
             <p>{selectedCategory.description}</p>
           </div>
 
-          <div className="theme_studio_token_grid">
-            {selectedCategory.tokens.map((token) => {
-              const currentValue = getEffectiveValue(token);
-              const isOverridden = Boolean(customOverrides[token.key]);
+          {visibleTokens.length === 0 ? (
+            <div className="theme_studio_empty_search">
+              <p>No customization items matching "<strong>{searchQuery}</strong>" in <em>{selectedCategory.name}</em>.</p>
+              {Object.values(categoryMatchCounts).some((count) => count > 0) && (
+                <p className="theme_studio_search_hint">
+                  💡 Try switching category tabs above to view matching results in other categories.
+                </p>
+              )}
+            </div>
+          ) : (
+            <div className="theme_studio_token_grid">
+              {visibleTokens.map((token) => {
+                const currentValue = getEffectiveValue(token);
+                const isOverridden = Boolean(customOverrides[token.key]);
 
-              return (
-                <div key={token.key} className={`theme_studio_token_row ${isOverridden ? 'is-overridden' : ''}`}>
-                  <div className="theme_studio_token_label">
-                    <strong>{token.label}</strong>
-                    <code>{token.key}</code>
-                  </div>
+                return (
+                  <div key={token.key} className={`theme_studio_token_row ${isOverridden ? 'is-overridden' : ''}`}>
+                    <div className="theme_studio_token_label">
+                      <strong>{token.label}</strong>
+                      <code>{token.key}</code>
+                    </div>
 
-                  <div className="theme_studio_token_controls">
-                    {token.type === 'range' ? (
-                      <>
-                        <input
-                          type="range"
-                          className="theme_studio_range_slider"
-                          min="0"
-                          max="1"
-                          step="0.01"
-                          value={parseFloat(currentValue) || 0}
-                          onChange={(e) => handleColorChange(token.key, e.target.value)}
-                        />
+                    <div className="theme_studio_token_controls">
+                      {token.type === 'range' ? (
+                        <>
+                          <input
+                            type="range"
+                            className="theme_studio_range_slider"
+                            min="0"
+                            max="1"
+                            step="0.01"
+                            value={parseFloat(currentValue) || 0}
+                            onChange={(e) => handleColorChange(token.key, e.target.value)}
+                          />
+                          <input
+                            type="text"
+                            className="settings_input theme_studio_hex_input"
+                            value={currentValue}
+                            onChange={(e) => handleColorChange(token.key, e.target.value)}
+                            placeholder="0.0 — 1.0"
+                            style={{ maxWidth: 64 }}
+                          />
+                        </>
+                      ) : token.type === 'text' ? (
                         <input
                           type="text"
                           className="settings_input theme_studio_hex_input"
                           value={currentValue}
                           onChange={(e) => handleColorChange(token.key, e.target.value)}
-                          placeholder="0.0 — 1.0"
-                          style={{ maxWidth: 64 }}
+                          placeholder={token.placeholder || 'e.g. 180deg, 45deg'}
+                          style={{ minWidth: 120, flex: '1 1 120px' }}
                         />
-                      </>
-                    ) : token.type === 'text' ? (
-                      <input
-                        type="text"
-                        className="settings_input theme_studio_hex_input"
-                        value={currentValue}
-                        onChange={(e) => handleColorChange(token.key, e.target.value)}
-                        placeholder={token.placeholder || 'e.g. 180deg, 45deg'}
-                        style={{ minWidth: 120, flex: '1 1 120px' }}
-                      />
-                    ) : (
-                      <ColorAlphaPicker
-                        value={currentValue}
-                        onChange={(val) => handleColorChange(token.key, val)}
-                      />
-                    )}
-                    {isOverridden && (
-                      <button
-                        type="button"
-                        className="theme_studio_reset_btn"
-                        title="Reset token override"
-                        onClick={() => handleColorChange(token.key, undefined)}
-                      >
-                        ✕
-                      </button>
-                    )}
+                      ) : (
+                        <ColorAlphaPicker
+                          value={currentValue}
+                          onChange={(val) => handleColorChange(token.key, val)}
+                        />
+                      )}
+                      {isOverridden && (
+                        <button
+                          type="button"
+                          className="theme_studio_reset_btn"
+                          title="Reset token override"
+                          onClick={() => handleColorChange(token.key, undefined)}
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
