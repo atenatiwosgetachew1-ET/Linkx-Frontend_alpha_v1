@@ -173,6 +173,7 @@ export const THEME_COMPONENT_CATEGORIES = [
       { key: '--central-scrollbar-track-bg', label: '📜 Panel Scrollbar — Track Background', type: 'color', default: 'transparent' },
       { key: '--central-scrollbar-thumb-bg', label: '📜 Panel Scrollbar — Thumb Color', type: 'color', default: 'rgba(174, 135, 79, 0.4)' },
       { key: '--central-scrollbar-thumb-hover-bg', label: '📜 Panel Scrollbar — Thumb Hover Color', type: 'color', default: 'rgba(174, 135, 79, 0.65)' },
+      { key: '--central-scrollbar-thumb-active-bg', label: '📜 Panel Scrollbar — Thumb Active (Pressed) Color', type: 'color', default: 'rgba(174, 135, 79, 0.9)' },
       { key: '--central-scrollbar-thumb-border', label: '📜 Panel Scrollbar — Thumb Border', type: 'color', default: 'transparent' },
 
       // === 🗑️ Drop Confirmation Modal (Identity-Separated) ===
@@ -532,11 +533,156 @@ export const THEME_COMPONENT_CATEGORIES = [
       { key: '--mode-grid-btn-active-title-color', label: 'Mode Card Title Text Color (Selected)', type: 'color', default: '#131e2a' },
       { key: '--mode-grid-btn-active-desc-color', label: 'Mode Card Description Text Color (Selected)', type: 'color', default: '#131e2a' },
 
-      // === Choose Step Customization ===
-      { key: '--source-choose-step-bg', label: 'Choose Step Background (source_window_choose_step)', type: 'color', default: 'transparent' },
+      // Mode Card Active / Click Pressed State
+      { key: '--mode-grid-btn-pressed-bg', label: 'Mode Card Background (Pressed / Active)', type: 'color', default: 'rgba(252, 198, 118, 0.32)' },
+      { key: '--mode-grid-btn-pressed-border', label: 'Mode Card Border (Pressed / Active)', type: 'color', default: '#e5a845' },
+      { key: '--mode-grid-btn-pressed-shadow', label: 'Mode Card Shadow (Pressed / Active)', type: 'text', default: '0 2px 6px rgba(0, 0, 0, 0.12)' },
+      { key: '--mode-grid-btn-pressed-icon', label: 'Mode Card Icon Color (Pressed / Active)', type: 'color', default: '#131e2a' },
+      { key: '--mode-grid-btn-pressed-title-color', label: 'Mode Card Title Text Color (Pressed / Active)', type: 'color', default: '#131e2a' },
+      { key: '--mode-grid-btn-pressed-desc-color', label: 'Mode Card Description Text Color (Pressed / Active)', type: 'color', default: '#131e2a' },
+
+      // Mode Card Disabled State
+      { key: '--mode-grid-btn-disabled-bg', label: 'Mode Card Background (Disabled)', type: 'color', default: 'rgba(235, 235, 235, 0.6)' },
+      { key: '--mode-grid-btn-disabled-border', label: 'Mode Card Border (Disabled)', type: 'color', default: 'rgba(174, 135, 79, 0.18)' },
+      { key: '--mode-grid-btn-disabled-shadow', label: 'Mode Card Shadow (Disabled)', type: 'text', default: 'none' },
+      { key: '--mode-grid-btn-disabled-opacity', label: 'Mode Card Opacity (Disabled)', type: 'text', default: '0.45' },
+      { key: '--mode-grid-btn-disabled-icon', label: 'Mode Card Icon Color (Disabled)', type: 'color', default: '#a0aec0' },
+      { key: '--mode-grid-btn-disabled-title-color', label: 'Mode Card Title Text Color (Disabled)', type: 'color', default: '#a0aec0' },
+      { key: '--mode-grid-btn-disabled-desc-color', label: 'Mode Card Description Text Color (Disabled)', type: 'color', default: '#a0aec0' },
+
+      // === Window Connection Grid Component - Step 2 (Head-to-Toe) ===
+      // Connection Card Idle State
+      { key: '--connection-grid-btn-bg', label: 'Connection Card Background (Idle)', type: 'color', default: '#FFFFFF' },
+      { key: '--connection-grid-btn-border', label: 'Connection Card Border (Idle)', type: 'color', default: 'rgba(174, 135, 79, 0.35)' },
+      { key: '--connection-grid-btn-shadow', label: 'Connection Card Shadow (Idle)', type: 'text', default: 'none' },
+      { key: '--connection-grid-btn-icon', label: 'Connection Card Icon Color (Idle)', type: 'color', default: '#8896a6' },
+      { key: '--connection-grid-btn-title-color', label: 'Connection Card Title Text Color (Idle)', type: 'color', default: '#131e2a' },
+      { key: '--connection-grid-btn-badge-color', label: 'Connection Card Sub-text / Badge Color (Idle)', type: 'color', default: '#8896a6' },
+
+      // Connection Card Hover State
+      { key: '--connection-grid-btn-hover-bg', label: 'Connection Card Background (Hover)', type: 'color', default: 'rgba(252, 198, 118, 0.12)' },
+      { key: '--connection-grid-btn-hover-border', label: 'Connection Card Border (Hover)', type: 'color', default: 'rgba(174, 135, 79, 0.55)' },
+      { key: '--connection-grid-btn-hover-shadow', label: 'Connection Card Shadow (Hover)', type: 'text', default: '0 4px 12px rgba(0, 0, 0, 0.08)' },
+      { key: '--connection-grid-btn-hover-icon', label: 'Connection Card Icon Color (Hover)', type: 'color', default: '#131e2a' },
+      { key: '--connection-grid-btn-hover-title-color', label: 'Connection Card Title Text Color (Hover)', type: 'color', default: '#131e2a' },
+      { key: '--connection-grid-btn-hover-badge-color', label: 'Connection Card Sub-text / Badge Color (Hover)', type: 'color', default: '#131e2a' },
+
+      // Connection Card Active / Pressed Click State
+      { key: '--connection-grid-btn-pressed-bg', label: 'Connection Card Background (Pressed / Active)', type: 'color', default: 'rgba(252, 198, 118, 0.32)' },
+      { key: '--connection-grid-btn-pressed-border', label: 'Connection Card Border (Pressed / Active)', type: 'color', default: '#e5a845' },
+      { key: '--connection-grid-btn-pressed-shadow', label: 'Connection Card Shadow (Pressed / Active)', type: 'text', default: '0 2px 6px rgba(0, 0, 0, 0.12)' },
+      { key: '--connection-grid-btn-pressed-icon', label: 'Connection Card Icon Color (Pressed / Active)', type: 'color', default: '#131e2a' },
+      { key: '--connection-grid-btn-pressed-title-color', label: 'Connection Card Title Text Color (Pressed / Active)', type: 'color', default: '#131e2a' },
+      { key: '--connection-grid-btn-pressed-badge-color', label: 'Connection Card Sub-text / Badge Color (Pressed / Active)', type: 'color', default: '#131e2a' },
+
+      // Connection Card Selected State
+      { key: '--connection-grid-btn-active-bg', label: 'Connection Card Background (Selected)', type: 'color', default: 'rgba(252, 198, 118, 0.22)' },
+      { key: '--connection-grid-btn-active-border', label: 'Connection Card Border (Selected)', type: 'color', default: '#FCC676' },
+      { key: '--connection-grid-btn-active-shadow', label: 'Connection Card Shadow (Selected)', type: 'text', default: '0 0 0 1px #FCC676, 0 6px 16px rgba(252, 198, 118, 0.25)' },
+      { key: '--connection-grid-btn-active-icon', label: 'Connection Card Icon Color (Selected)', type: 'color', default: '#131e2a' },
+      { key: '--connection-grid-btn-active-title-color', label: 'Connection Card Title Text Color (Selected)', type: 'color', default: '#131e2a' },
+      { key: '--connection-grid-btn-active-badge-color', label: 'Connection Card Sub-text / Badge Color (Selected / Active)', type: 'color', default: '#131e2a' },
+
+      // Connection Card Disabled State
+      { key: '--connection-grid-btn-disabled-bg', label: 'Connection Card Background (Disabled)', type: 'color', default: 'rgba(235, 235, 235, 0.6)' },
+      { key: '--connection-grid-btn-disabled-border', label: 'Connection Card Border (Disabled)', type: 'color', default: 'rgba(174, 135, 79, 0.18)' },
+      { key: '--connection-grid-btn-disabled-shadow', label: 'Connection Card Shadow (Disabled)', type: 'text', default: 'none' },
+      { key: '--connection-grid-btn-disabled-opacity', label: 'Connection Card Opacity (Disabled)', type: 'text', default: '0.45' },
+      { key: '--connection-grid-btn-disabled-icon', label: 'Connection Card Icon Color (Disabled)', type: 'color', default: '#a0aec0' },
+      { key: '--connection-grid-btn-disabled-title-color', label: 'Connection Card Title Text Color (Disabled)', type: 'color', default: '#a0aec0' },
+      { key: '--connection-grid-btn-disabled-badge-color', label: 'Connection Card Sub-text / Badge Color (Disabled)', type: 'color', default: '#a0aec0' },
+
+      // === Window Config Preview Component - Step 3 (Head-to-Toe) ===
+      // Config Card Idle State
+      { key: '--config-preview-btn-bg', label: 'Config Card Background (Idle)', type: 'color', default: '#FFFFFF' },
+      { key: '--config-preview-btn-border', label: 'Config Card Border (Idle)', type: 'color', default: 'rgba(174, 135, 79, 0.35)' },
+      { key: '--config-preview-btn-shadow', label: 'Config Card Shadow (Idle)', type: 'text', default: 'none' },
+      { key: '--config-preview-btn-icon', label: 'Config Card Icon Color (Idle)', type: 'color', default: '#8896a6' },
+      { key: '--config-preview-btn-title-color', label: 'Config Card Title Text Color (Idle)', type: 'color', default: '#131e2a' },
+      { key: '--config-preview-btn-desc-color', label: 'Config Card Description Color (Idle)', type: 'color', default: '#4a5568' },
+
+      // Config Card Hover State
+      { key: '--config-preview-btn-hover-bg', label: 'Config Card Background (Hover)', type: 'color', default: 'rgba(252, 198, 118, 0.12)' },
+      { key: '--config-preview-btn-hover-border', label: 'Config Card Border (Hover)', type: 'color', default: 'rgba(174, 135, 79, 0.55)' },
+      { key: '--config-preview-btn-hover-shadow', label: 'Config Card Shadow (Hover)', type: 'text', default: '0 4px 12px rgba(0, 0, 0, 0.08)' },
+      { key: '--config-preview-btn-hover-icon', label: 'Config Card Icon Color (Hover)', type: 'color', default: '#131e2a' },
+      { key: '--config-preview-btn-hover-title-color', label: 'Config Card Title Text Color (Hover)', type: 'color', default: '#131e2a' },
+      { key: '--config-preview-btn-hover-desc-color', label: 'Config Card Description Color (Hover)', type: 'color', default: '#131e2a' },
+
+      // Config Card Active / Pressed Click State
+      { key: '--config-preview-btn-pressed-bg', label: 'Config Card Background (Pressed / Active)', type: 'color', default: 'rgba(252, 198, 118, 0.32)' },
+      { key: '--config-preview-btn-pressed-border', label: 'Config Card Border (Pressed / Active)', type: 'color', default: '#e5a845' },
+      { key: '--config-preview-btn-pressed-shadow', label: 'Config Card Shadow (Pressed / Active)', type: 'text', default: '0 2px 6px rgba(0, 0, 0, 0.12)' },
+      { key: '--config-preview-btn-pressed-icon', label: 'Config Card Icon Color (Pressed / Active)', type: 'color', default: '#131e2a' },
+      { key: '--config-preview-btn-pressed-title-color', label: 'Config Card Title Text Color (Pressed / Active)', type: 'color', default: '#131e2a' },
+      { key: '--config-preview-btn-pressed-desc-color', label: 'Config Card Description Color (Pressed / Active)', type: 'color', default: '#131e2a' },
+
+      // Config Card Selected State
+      { key: '--config-preview-btn-active-bg', label: 'Config Card Background (Selected)', type: 'color', default: 'rgba(252, 198, 118, 0.22)' },
+      { key: '--config-preview-btn-active-border', label: 'Config Card Border (Selected)', type: 'color', default: '#FCC676' },
+      { key: '--config-preview-btn-active-shadow', label: 'Config Card Shadow (Selected)', type: 'text', default: '0 0 0 1px #FCC676, 0 6px 16px rgba(252, 198, 118, 0.25)' },
+      { key: '--config-preview-btn-active-icon', label: 'Config Card Icon Color (Selected)', type: 'color', default: '#131e2a' },
+      { key: '--config-preview-btn-active-title-color', label: 'Config Card Title Text Color (Selected)', type: 'color', default: '#131e2a' },
+      { key: '--config-preview-btn-active-desc-color', label: 'Config Card Description Color (Selected)', type: 'color', default: '#131e2a' },
+
+      // Config Card Disabled State
+      { key: '--config-preview-btn-disabled-bg', label: 'Config Card Background (Disabled)', type: 'color', default: 'rgba(235, 235, 235, 0.6)' },
+      { key: '--config-preview-btn-disabled-border', label: 'Config Card Border (Disabled)', type: 'color', default: 'rgba(174, 135, 79, 0.18)' },
+      { key: '--config-preview-btn-disabled-shadow', label: 'Config Card Shadow (Disabled)', type: 'text', default: 'none' },
+      { key: '--config-preview-btn-disabled-opacity', label: 'Config Card Opacity (Disabled)', type: 'text', default: '0.45' },
+      { key: '--config-preview-btn-disabled-icon', label: 'Config Card Icon Color (Disabled)', type: 'color', default: '#a0aec0' },
+      { key: '--config-preview-btn-disabled-title-color', label: 'Config Card Title Text Color (Disabled)', type: 'color', default: '#a0aec0' },
+      { key: '--config-preview-btn-disabled-desc-color', label: 'Config Card Description Color (Disabled)', type: 'color', default: '#a0aec0' },
+
+      // === Choose Step Gradient Background Customization ===
+      { key: '--source-choose-step-label-bg', label: 'Step Label Section Background (source_window_choose_step_label)', type: 'color', default: 'transparent' },
+      { key: '--source-choose-step-gradient-top', label: 'Choose Step Gradient Top Color', type: 'color', default: 'rgba(255, 255, 255, 0.98)' },
+      { key: '--source-choose-step-gradient-bottom', label: 'Choose Step Gradient Bottom Color', type: 'color', default: 'rgba(246, 239, 234, 0.92)' },
+      { key: '--source-choose-step-gradient-angle', label: 'Choose Step Gradient Angle', type: 'text', default: '180deg' },
       { key: '--window-card-subtext-color', label: 'Card Sub-text Color (e.g. "Import, search, or load data...")', type: 'color', default: '#4a5568' },
       { key: '--window-card-hover-subtext-color', label: 'Card Sub-text Color (Hover)', type: 'color', default: '#131e2a' },
       { key: '--window-card-active-subtext-color', label: 'Card Sub-text Color (Selected)', type: 'color', default: '#131e2a' },
+
+      // === 📜 Floating Window Scrollbar Identity Tokens ===
+      { key: '--window-scrollbar-track-bg', label: '📜 Window Scrollbar — Track Background', type: 'color', default: 'transparent' },
+      { key: '--window-scrollbar-thumb-bg', label: '📜 Window Scrollbar — Thumb Color (Idle)', type: 'color', default: 'rgba(174, 135, 79, 0.4)' },
+      { key: '--window-scrollbar-thumb-hover-bg', label: '📜 Window Scrollbar — Thumb Hover Color', type: 'color', default: 'rgba(174, 135, 79, 0.65)' },
+      { key: '--window-scrollbar-thumb-active-bg', label: '📜 Window Scrollbar — Thumb Active (Pressed) Color', type: 'color', default: 'rgba(174, 135, 79, 0.9)' },
+      { key: '--window-scrollbar-thumb-border', label: '📜 Window Scrollbar — Thumb Border Color', type: 'color', default: 'transparent' },
+      { key: '--window-scrollbar-width', label: '📜 Window Scrollbar — Width / Thickness', type: 'text', default: '6px' },
+
+      // === 🦶 Window Footer Component Customization ===
+      // Left Text & Info Icon
+      { key: '--window-footer-text-color', label: '🦶 Window Footer — Left Text Color', type: 'color', default: '#7f5523' },
+      { key: '--window-footer-info-icon-color', label: '🦶 Window Footer — Info ("i") Icon Color', type: 'color', default: '#7f5523' },
+
+      // Footer Buttons — Enabled Idle State
+      { key: '--window-footer-btn-bg-top', label: '🦶 Footer Button BG Gradient Top (Idle)', type: 'color', default: '#FFFFFF' },
+      { key: '--window-footer-btn-bg-bottom', label: '🦶 Footer Button BG Gradient Bottom (Idle)', type: 'color', default: 'rgba(246, 239, 234, 0.92)' },
+      { key: '--window-footer-btn-bg-angle', label: '🦶 Footer Button BG Gradient Angle (Idle)', type: 'text', default: '180deg' },
+      { key: '--window-footer-btn-text', label: '🦶 Footer Button Text Color (Idle)', type: 'color', default: '#131e2a' },
+      { key: '--window-footer-btn-border', label: '🦶 Footer Button Border Color (Idle)', type: 'color', default: 'rgba(174, 135, 79, 0.45)' },
+
+      // Footer Buttons — Enabled Hover State
+      { key: '--window-footer-btn-hover-bg-top', label: '🦶 Footer Button BG Gradient Top (Hover)', type: 'color', default: 'rgba(252, 198, 118, 0.25)' },
+      { key: '--window-footer-btn-hover-bg-bottom', label: '🦶 Footer Button BG Gradient Bottom (Hover)', type: 'color', default: 'rgba(252, 198, 118, 0.12)' },
+      { key: '--window-footer-btn-hover-bg-angle', label: '🦶 Footer Button BG Gradient Angle (Hover)', type: 'text', default: '180deg' },
+      { key: '--window-footer-btn-hover-text', label: '🦶 Footer Button Text Color (Hover)', type: 'color', default: '#131e2a' },
+      { key: '--window-footer-btn-hover-border', label: '🦶 Footer Button Border Color (Hover)', type: 'color', default: '#FCC676' },
+      { key: '--window-footer-btn-hover-opacity', label: '🦶 Footer Button Opacity (Hover)', type: 'text', default: '1' },
+
+      // Footer Buttons — Enabled Active Pressed State
+      { key: '--window-footer-btn-pressed-bg-top', label: '🦶 Footer Button BG Gradient Top (Pressed / Active)', type: 'color', default: 'rgba(252, 198, 118, 0.4)' },
+      { key: '--window-footer-btn-pressed-bg-bottom', label: '🦶 Footer Button BG Gradient Bottom (Pressed / Active)', type: 'color', default: 'rgba(252, 198, 118, 0.25)' },
+      { key: '--window-footer-btn-pressed-bg-angle', label: '🦶 Footer Button BG Gradient Angle (Pressed / Active)', type: 'text', default: '180deg' },
+      { key: '--window-footer-btn-pressed-text', label: '🦶 Footer Button Text Color (Pressed / Active)', type: 'color', default: '#131e2a' },
+      { key: '--window-footer-btn-pressed-border', label: '🦶 Footer Button Border Color (Pressed / Active)', type: 'color', default: '#e5a845' },
+
+      // Footer Buttons — Disabled State
+      { key: '--window-footer-btn-disabled-bg', label: '🦶 Footer Button Background Color (Disabled)', type: 'color', default: 'rgba(235, 235, 235, 0.6)' },
+      { key: '--window-footer-btn-disabled-text', label: '🦶 Footer Button Text Color (Disabled)', type: 'color', default: '#a0aec0' },
+      { key: '--window-footer-btn-disabled-border', label: '🦶 Footer Button Border Color (Disabled)', type: 'color', default: 'rgba(174, 135, 79, 0.18)' },
+      { key: '--window-footer-btn-disabled-opacity', label: '🦶 Footer Button Opacity (Disabled)', type: 'text', default: '0.5' },
     ],
   },
   {

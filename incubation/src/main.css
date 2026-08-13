@@ -1,7 +1,12 @@
 * {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(181, 202, 218, 0.379) rgba(8, 17, 23, 0.48);
   user-select: none;
+}
+
+@supports (-moz-appearance: none) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--central-scrollbar-thumb-bg, rgba(174, 135, 79, 0.4)) var(--central-scrollbar-track-bg, transparent);
+  }
 }
 
 input,
@@ -145,10 +150,117 @@ select,
   --mode-grid-btn-active-icon: #131e2a;
   --mode-grid-btn-active-title-color: #131e2a;
   --mode-grid-btn-active-desc-color: #131e2a;
-  --source-choose-step-bg: transparent;
+  --mode-grid-btn-pressed-bg: rgba(252, 198, 118, 0.32);
+  --mode-grid-btn-pressed-border: #e5a845;
+  --mode-grid-btn-pressed-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+  --mode-grid-btn-pressed-icon: #131e2a;
+  --mode-grid-btn-pressed-title-color: #131e2a;
+  --mode-grid-btn-pressed-desc-color: #131e2a;
+  --mode-grid-btn-disabled-bg: rgba(235, 235, 235, 0.6);
+  --mode-grid-btn-disabled-border: rgba(174, 135, 79, 0.18);
+  --mode-grid-btn-disabled-shadow: none;
+  --mode-grid-btn-disabled-opacity: 0.45;
+  --mode-grid-btn-disabled-icon: #a0aec0;
+  --mode-grid-btn-disabled-title-color: #a0aec0;
+  --mode-grid-btn-disabled-desc-color: #a0aec0;
+  --connection-grid-btn-bg: #FFFFFF;
+  --connection-grid-btn-border: rgba(174, 135, 79, 0.35);
+  --connection-grid-btn-shadow: none;
+  --connection-grid-btn-icon: #8896a6;
+  --connection-grid-btn-title-color: #131e2a;
+  --connection-grid-btn-badge-color: #8896a6;
+  --connection-grid-btn-hover-bg: rgba(252, 198, 118, 0.12);
+  --connection-grid-btn-hover-border: rgba(174, 135, 79, 0.55);
+  --connection-grid-btn-hover-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --connection-grid-btn-hover-icon: #131e2a;
+  --connection-grid-btn-hover-title-color: #131e2a;
+  --connection-grid-btn-hover-badge-color: #131e2a;
+  --connection-grid-btn-pressed-bg: rgba(252, 198, 118, 0.32);
+  --connection-grid-btn-pressed-border: #e5a845;
+  --connection-grid-btn-pressed-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+  --connection-grid-btn-pressed-icon: #131e2a;
+  --connection-grid-btn-pressed-title-color: #131e2a;
+  --connection-grid-btn-pressed-badge-color: #131e2a;
+  --connection-grid-btn-active-bg: rgba(252, 198, 118, 0.22);
+  --connection-grid-btn-active-border: #FCC676;
+  --connection-grid-btn-active-shadow: 0 0 0 1px #FCC676, 0 6px 16px rgba(252, 198, 118, 0.25);
+  --connection-grid-btn-active-icon: #131e2a;
+  --connection-grid-btn-active-title-color: #131e2a;
+  --connection-grid-btn-active-badge-color: #131e2a;
+  --connection-grid-btn-disabled-bg: rgba(235, 235, 235, 0.6);
+  --connection-grid-btn-disabled-border: rgba(174, 135, 79, 0.18);
+  --connection-grid-btn-disabled-shadow: none;
+  --connection-grid-btn-disabled-opacity: 0.45;
+  --connection-grid-btn-disabled-icon: #a0aec0;
+  --connection-grid-btn-disabled-title-color: #a0aec0;
+  --connection-grid-btn-disabled-badge-color: #a0aec0;
+  --config-preview-btn-bg: #FFFFFF;
+  --config-preview-btn-border: rgba(174, 135, 79, 0.35);
+  --config-preview-btn-shadow: none;
+  --config-preview-btn-icon: #8896a6;
+  --config-preview-btn-title-color: #131e2a;
+  --config-preview-btn-desc-color: #4a5568;
+  --config-preview-btn-hover-bg: rgba(252, 198, 118, 0.12);
+  --config-preview-btn-hover-border: rgba(174, 135, 79, 0.55);
+  --config-preview-btn-hover-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --config-preview-btn-hover-icon: #131e2a;
+  --config-preview-btn-hover-title-color: #131e2a;
+  --config-preview-btn-hover-desc-color: #131e2a;
+  --config-preview-btn-pressed-bg: rgba(252, 198, 118, 0.32);
+  --config-preview-btn-pressed-border: #e5a845;
+  --config-preview-btn-pressed-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+  --config-preview-btn-pressed-icon: #131e2a;
+  --config-preview-btn-pressed-title-color: #131e2a;
+  --config-preview-btn-pressed-desc-color: #131e2a;
+  --config-preview-btn-active-bg: rgba(252, 198, 118, 0.22);
+  --config-preview-btn-active-border: #FCC676;
+  --config-preview-btn-active-shadow: 0 0 0 1px #FCC676, 0 6px 16px rgba(252, 198, 118, 0.25);
+  --config-preview-btn-active-icon: #131e2a;
+  --config-preview-btn-active-title-color: #131e2a;
+  --config-preview-btn-active-desc-color: #131e2a;
+  --config-preview-btn-disabled-bg: rgba(235, 235, 235, 0.6);
+  --config-preview-btn-disabled-border: rgba(174, 135, 79, 0.18);
+  --config-preview-btn-disabled-shadow: none;
+  --config-preview-btn-disabled-opacity: 0.45;
+  --config-preview-btn-disabled-icon: #a0aec0;
+  --config-preview-btn-disabled-title-color: #a0aec0;
+  --config-preview-btn-disabled-desc-color: #a0aec0;
+  --source-choose-step-label-bg: transparent;
+  --source-choose-step-gradient-top: rgba(255, 255, 255, 0.98);
+  --source-choose-step-gradient-bottom: rgba(246, 239, 234, 0.92);
+  --source-choose-step-gradient-angle: 180deg;
+  --source-choose-step-bg: linear-gradient(var(--source-choose-step-gradient-angle, 180deg), var(--source-choose-step-gradient-top, rgba(255, 255, 255, 0.98)), var(--source-choose-step-gradient-bottom, rgba(246, 239, 234, 0.92)));
   --window-card-subtext-color: #4a5568;
   --window-card-hover-subtext-color: #131e2a;
   --window-card-active-subtext-color: #131e2a;
+  --window-scrollbar-track-bg: transparent;
+  --window-scrollbar-thumb-bg: rgba(174, 135, 79, 0.4);
+  --window-scrollbar-thumb-hover-bg: rgba(174, 135, 79, 0.65);
+  --window-scrollbar-thumb-active-bg: rgba(174, 135, 79, 0.9);
+  --window-scrollbar-thumb-border: transparent;
+  --window-scrollbar-width: 6px;
+  --window-footer-text-color: #7f5523;
+  --window-footer-info-icon-color: #7f5523;
+  --window-footer-btn-bg-top: #FFFFFF;
+  --window-footer-btn-bg-bottom: rgba(246, 239, 234, 0.92);
+  --window-footer-btn-bg-angle: 180deg;
+  --window-footer-btn-text: #131e2a;
+  --window-footer-btn-border: rgba(174, 135, 79, 0.45);
+  --window-footer-btn-hover-bg-top: rgba(252, 198, 118, 0.25);
+  --window-footer-btn-hover-bg-bottom: rgba(252, 198, 118, 0.12);
+  --window-footer-btn-hover-bg-angle: 180deg;
+  --window-footer-btn-hover-text: #131e2a;
+  --window-footer-btn-hover-border: #FCC676;
+  --window-footer-btn-hover-opacity: 1;
+  --window-footer-btn-pressed-bg-top: rgba(252, 198, 118, 0.4);
+  --window-footer-btn-pressed-bg-bottom: rgba(252, 198, 118, 0.25);
+  --window-footer-btn-pressed-bg-angle: 180deg;
+  --window-footer-btn-pressed-text: #131e2a;
+  --window-footer-btn-pressed-border: #e5a845;
+  --window-footer-btn-disabled-bg: rgba(235, 235, 235, 0.6);
+  --window-footer-btn-disabled-text: #a0aec0;
+  --window-footer-btn-disabled-border: rgba(174, 135, 79, 0.18);
+  --window-footer-btn-disabled-opacity: 0.5;
   --linkx-card-bg: #FFFFFF;
   --linkx-card-border: rgba(174, 135, 79, 0.45);
   --linkx-card-hover-border: #FCC676;
@@ -478,6 +590,7 @@ select,
   --central-scrollbar-track-bg: transparent;
   --central-scrollbar-thumb-bg: rgba(174, 135, 79, 0.4);
   --central-scrollbar-thumb-hover-bg: rgba(174, 135, 79, 0.65);
+  --central-scrollbar-thumb-active-bg: rgba(174, 135, 79, 0.9);
   --central-scrollbar-thumb-border: transparent;
   /* Drop Confirmation Modal Identity Variables */
   --central-drop-modal-overlay-bg: rgba(0, 0, 0, 0.55);
@@ -2163,7 +2276,7 @@ body{
 	content: '';
 	position: absolute;
 	inset: 0;
-	z-index: 3;
+	z-index: 4999 !important;
 	background: transparent;
 	pointer-events: none;
 	transition: background-color 180ms ease;
@@ -2171,11 +2284,12 @@ body{
 
 .workspace_frame.is-launcher-expanded .workspace_work_area::before {
 	background: var(--central-overlay-bg);
+	pointer-events: auto !important;
 }
 
 .workspace_zone_left {
 	position: relative;
-	z-index: 4;
+	z-index: 5000 !important;
 	width: 48px;
 	min-width: 0;
 	overflow: visible;
@@ -2189,6 +2303,7 @@ body{
 
 
 .workspace_frame.is-launcher-expanded .workspace_zone_left {
+	z-index: 5000 !important;
 	width: 200px;
 	background: var(--linkx-launcher-bg);
 	box-shadow: 40px 0 40px var(--launcher-expanded-shadow, rgba(0, 0, 0, 0.25));
@@ -5556,7 +5671,6 @@ body{
 }
 
 .source_window_mode_grid small,
-.source_window_connection_grid small,
 .source_window_config_preview small,
 [class*="_window_mode_grid"] small,
 [class*="_window_input_mode_grid"] small {
@@ -5567,7 +5681,6 @@ body{
 }
 
 .source_window_mode_grid button:hover:not(.is-selected) small,
-.source_window_connection_grid button:hover:not(.is-selected) small,
 .source_window_config_preview:hover small,
 [class*="_window_mode_grid"] button:hover:not(.is-selected) small,
 [class*="_window_input_mode_grid"] button:hover:not(.is-selected) small {
@@ -5575,7 +5688,6 @@ body{
 }
 
 .source_window_mode_grid button.is-selected small,
-.source_window_connection_grid button.is-selected small,
 [class*="_window_mode_grid"] button.is-selected small,
 [class*="_window_input_mode_grid"] button.is-selected small {
 	color: var(--window-card-active-subtext-color, #131e2a) !important;
@@ -5609,103 +5721,388 @@ body{
 	color: var(--mode-grid-btn-active-icon, #131e2a) !important;
 }
 
-.source_window_connection_grid {
+/* Mode Grid Active / Pressed State */
+.source_window_mode_grid button:active:not(:disabled),
+[class*="_window_mode_grid"] button:active:not(:disabled),
+[class*="_window_input_mode_grid"] button:active:not(:disabled) {
+	border-color: var(--mode-grid-btn-pressed-border, #e5a845) !important;
+	background: var(--mode-grid-btn-pressed-bg, rgba(252, 198, 118, 0.32)) !important;
+	box-shadow: var(--mode-grid-btn-pressed-shadow, 0 2px 6px rgba(0, 0, 0, 0.12)) !important;
+}
+
+.source_window_mode_grid button:active:not(:disabled) strong,
+[class*="_window_mode_grid"] button:active:not(:disabled) strong,
+[class*="_window_input_mode_grid"] button:active:not(:disabled) strong {
+	color: var(--mode-grid-btn-pressed-title-color, #131e2a) !important;
+}
+
+.source_window_mode_grid button:active:not(:disabled) small,
+[class*="_window_mode_grid"] button:active:not(:disabled) small,
+[class*="_window_input_mode_grid"] button:active:not(:disabled) small {
+	color: var(--mode-grid-btn-pressed-desc-color, #131e2a) !important;
+}
+
+.source_window_mode_grid button:active:not(:disabled) .source_window_mode_icon,
+[class*="_window_mode_grid"] button:active:not(:disabled) svg,
+[class*="_window_input_mode_grid"] button:active:not(:disabled) svg {
+	color: var(--mode-grid-btn-pressed-icon, #131e2a) !important;
+	stroke: var(--mode-grid-btn-pressed-icon, #131e2a) !important;
+}
+
+/* Mode Grid Disabled State */
+.source_window_mode_grid button:disabled,
+[class*="_window_mode_grid"] button:disabled,
+[class*="_window_input_mode_grid"] button:disabled {
+	border-color: var(--mode-grid-btn-disabled-border, rgba(174, 135, 79, 0.18)) !important;
+	background: var(--mode-grid-btn-disabled-bg, rgba(235, 235, 235, 0.6)) !important;
+	box-shadow: var(--mode-grid-btn-disabled-shadow, none) !important;
+	opacity: var(--mode-grid-btn-disabled-opacity, 0.45) !important;
+	cursor: not-allowed !important;
+}
+
+.source_window_mode_grid button:disabled strong,
+[class*="_window_mode_grid"] button:disabled strong,
+[class*="_window_input_mode_grid"] button:disabled strong {
+	color: var(--mode-grid-btn-disabled-title-color, #a0aec0) !important;
+}
+
+.source_window_mode_grid button:disabled small,
+[class*="_window_mode_grid"] button:disabled small,
+[class*="_window_input_mode_grid"] button:disabled small {
+	color: var(--mode-grid-btn-disabled-desc-color, #a0aec0) !important;
+}
+
+.source_window_mode_grid button:disabled .source_window_mode_icon,
+[class*="_window_mode_grid"] button:disabled svg,
+[class*="_window_input_mode_grid"] button:disabled svg {
+	color: var(--mode-grid-btn-disabled-icon, #a0aec0) !important;
+	stroke: var(--mode-grid-btn-disabled-icon, #a0aec0) !important;
+}
+
+/* Step 2 Connection Grid Component Customization */
+.source_window_connection_grid,
+[class*="_window_connection_grid"] {
 	display: grid;
 	grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
 	gap: 14px;
 	min-width: 0;
 }
 
-.source_window_connection_grid button {
+.source_window_connection_grid button,
+[class*="_window_connection_grid"] button {
 	display: grid;
 	place-items: center;
 	align-content: center;
 	gap: 10px;
 	min-height: 120px;
-	border: 1px solid var(--source-border);
+	border: 1px solid var(--connection-grid-btn-border, rgba(174, 135, 79, 0.35)) !important;
 	border-radius: 4px;
-	background: var(--source-card-bg);
-	color: var(--source-text-secondary);
+	background: var(--connection-grid-btn-bg, #FFFFFF) !important;
+	box-shadow: var(--connection-grid-btn-shadow, none) !important;
+	color: var(--connection-grid-btn-title-color, #131e2a) !important;
 	padding: 14px;
 	cursor: pointer;
-	transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
+	transition: background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease, color 160ms ease, opacity 160ms ease !important;
 }
 
-.source_window_connection_grid button:hover:not(:disabled) {
-	border-color: var(--source-card-border);
-	background: var(--source-card-bg);
-	color: var(--source-text);
-}
-
-.source_window_connection_grid button.is-selected {
-	border-color: var(--source-accent);
-	background: var(--source-card-bg);
-	color: var(--source-text);
-}
-.source_window_connection_grid button.is-selected:hover {
-	border-color: var(--source-accent);
-	background: var(--source-card-bg);
-	color: var(--source-text);
-}
-.source_window_connection_grid button:disabled {
-	cursor: not-allowed;
-	opacity: 0.35;
-}
-
-.source_window_connection_grid strong,
-.source_window_connection_grid small,
-.source_window_config_preview strong,
-.source_window_config_preview small {
+.source_window_connection_grid button strong,
+[class*="_window_connection_grid"] button strong {
 	display: block;
 	min-width: 0;
 	text-align: center;
-}
-
-.source_window_connection_grid strong,
-.source_window_config_preview strong {
-	color: var(--source-text);
+	color: var(--connection-grid-btn-title-color, #131e2a) !important;
 	font-size: 13px;
 	line-height: 1.25;
+	transition: color 160ms ease !important;
 }
 
-.source_window_connection_grid small,
-.source_window_config_preview small {
-	color: var(--source-text-muted);
+.source_window_connection_grid button small,
+[class*="_window_connection_grid"] button small {
+	display: block;
+	min-width: 0;
+	text-align: center;
+	color: var(--connection-grid-btn-badge-color, #8896a6) !important;
 	font-size: 10px;
 	font-weight: 400;
 	line-height: 1.35;
+	transition: color 160ms ease !important;
 }
 
-.source_window_config_preview {
+.source_window_connection_grid button svg,
+[class*="_window_connection_grid"] button svg {
+	color: var(--connection-grid-btn-icon, #8896a6) !important;
+	stroke: var(--connection-grid-btn-icon, #8896a6) !important;
+	transition: color 160ms ease, stroke 160ms ease !important;
+}
+
+/* Connection Grid Hover State */
+.source_window_connection_grid button:hover:not(:disabled):not(.is-selected),
+[class*="_window_connection_grid"] button:hover:not(:disabled):not(.is-selected) {
+	border-color: var(--connection-grid-btn-hover-border, rgba(174, 135, 79, 0.55)) !important;
+	background: var(--connection-grid-btn-hover-bg, rgba(252, 198, 118, 0.12)) !important;
+	box-shadow: var(--connection-grid-btn-hover-shadow, 0 4px 12px rgba(0, 0, 0, 0.08)) !important;
+}
+
+.source_window_connection_grid button:hover:not(:disabled):not(.is-selected) strong,
+[class*="_window_connection_grid"] button:hover:not(:disabled):not(.is-selected) strong {
+	color: var(--connection-grid-btn-hover-title-color, #131e2a) !important;
+}
+
+.source_window_connection_grid button:hover:not(:disabled):not(.is-selected) small,
+[class*="_window_connection_grid"] button:hover:not(:disabled):not(.is-selected) small {
+	color: var(--connection-grid-btn-hover-badge-color, #131e2a) !important;
+}
+
+.source_window_connection_grid button:hover:not(:disabled):not(.is-selected) svg,
+[class*="_window_connection_grid"] button:hover:not(:disabled):not(.is-selected) svg {
+	color: var(--connection-grid-btn-hover-icon, #131e2a) !important;
+	stroke: var(--connection-grid-btn-hover-icon, #131e2a) !important;
+}
+
+/* Connection Grid Active / Click Pressed State */
+.source_window_connection_grid button:active:not(:disabled),
+[class*="_window_connection_grid"] button:active:not(:disabled) {
+	border-color: var(--connection-grid-btn-pressed-border, #e5a845) !important;
+	background: var(--connection-grid-btn-pressed-bg, rgba(252, 198, 118, 0.32)) !important;
+	box-shadow: var(--connection-grid-btn-pressed-shadow, 0 2px 6px rgba(0, 0, 0, 0.12)) !important;
+}
+
+.source_window_connection_grid button:active:not(:disabled) strong,
+[class*="_window_connection_grid"] button:active:not(:disabled) strong {
+	color: var(--connection-grid-btn-pressed-title-color, #131e2a) !important;
+}
+
+.source_window_connection_grid button:active:not(:disabled) small,
+[class*="_window_connection_grid"] button:active:not(:disabled) small {
+	color: var(--connection-grid-btn-pressed-badge-color, #131e2a) !important;
+}
+
+.source_window_connection_grid button:active:not(:disabled) svg,
+[class*="_window_connection_grid"] button:active:not(:disabled) svg {
+	color: var(--connection-grid-btn-pressed-icon, #131e2a) !important;
+	stroke: var(--connection-grid-btn-pressed-icon, #131e2a) !important;
+}
+
+/* Connection Grid Selected State (including hover on selected) */
+.source_window_connection_grid button.is-selected,
+[class*="_window_connection_grid"] button.is-selected,
+.source_window_connection_grid button.is-selected:hover,
+[class*="_window_connection_grid"] button.is-selected:hover {
+	border-color: var(--connection-grid-btn-active-border, #FCC676) !important;
+	background: var(--connection-grid-btn-active-bg, rgba(252, 198, 118, 0.22)) !important;
+	box-shadow: var(--connection-grid-btn-active-shadow, 0 0 0 1px #FCC676, 0 6px 16px rgba(252, 198, 118, 0.25)) !important;
+}
+
+.source_window_connection_grid button.is-selected strong,
+[class*="_window_connection_grid"] button.is-selected strong,
+.source_window_connection_grid button.is-selected:hover strong,
+[class*="_window_connection_grid"] button.is-selected:hover strong {
+	color: var(--connection-grid-btn-active-title-color, #131e2a) !important;
+}
+
+.source_window_connection_grid button.is-selected small,
+[class*="_window_connection_grid"] button.is-selected small,
+.source_window_connection_grid button.is-selected:hover small,
+[class*="_window_connection_grid"] button.is-selected:hover small {
+	color: var(--connection-grid-btn-active-badge-color, var(--window-card-active-subtext-color, #131e2a)) !important;
+}
+
+.source_window_connection_grid button.is-selected svg,
+[class*="_window_connection_grid"] button.is-selected svg,
+.source_window_connection_grid button.is-selected:hover svg,
+[class*="_window_connection_grid"] button.is-selected:hover svg {
+	color: var(--connection-grid-btn-active-icon, #131e2a) !important;
+	stroke: var(--connection-grid-btn-active-icon, #131e2a) !important;
+}
+
+/* Connection Grid Disabled State */
+.source_window_connection_grid button:disabled,
+[class*="_window_connection_grid"] button:disabled {
+	border-color: var(--connection-grid-btn-disabled-border, rgba(174, 135, 79, 0.18)) !important;
+	background: var(--connection-grid-btn-disabled-bg, rgba(235, 235, 235, 0.6)) !important;
+	box-shadow: var(--connection-grid-btn-disabled-shadow, none) !important;
+	opacity: var(--connection-grid-btn-disabled-opacity, 0.45) !important;
+	cursor: not-allowed !important;
+}
+
+.source_window_connection_grid button:disabled strong,
+[class*="_window_connection_grid"] button:disabled strong {
+	color: var(--connection-grid-btn-disabled-title-color, #a0aec0) !important;
+}
+
+.source_window_connection_grid button:disabled small,
+[class*="_window_connection_grid"] button:disabled small {
+	color: var(--connection-grid-btn-disabled-badge-color, #a0aec0) !important;
+}
+
+.source_window_connection_grid button:disabled svg,
+[class*="_window_connection_grid"] button:disabled svg {
+	color: var(--connection-grid-btn-disabled-icon, #a0aec0) !important;
+	stroke: var(--connection-grid-btn-disabled-icon, #a0aec0) !important;
+}
+
+/* Step 3 Config Preview Component Customization */
+.source_window_config_preview,
+[class*="_window_config_preview"] {
 	display: grid;
 	grid-template-columns: 58px minmax(0, 1fr);
 	align-items: center;
 	gap: 16px;
 	min-width: 0;
 	width: 100%;
-	border: 1px solid var(--source-border);
+	border: 1px solid var(--config-preview-btn-border, rgba(174, 135, 79, 0.35)) !important;
 	border-radius: 4px;
-	background: var(--source-card-bg);
-	color: var(--source-text-secondary);
+	background: var(--config-preview-btn-bg, #FFFFFF) !important;
+	box-shadow: var(--config-preview-btn-shadow, none) !important;
+	color: var(--config-preview-btn-desc-color, #4a5568) !important;
 	padding: 18px;
 	font: inherit;
 	text-align: left;
 	cursor: pointer;
-	transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
-}
-
-.source_window_config_preview:hover {
-	border-color: var(--source-card-border);
-	background: var(--source-card-bg);
-	color: var(--source-text);
+	transition: background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease, color 160ms ease, opacity 160ms ease !important;
 }
 
 .source_window_config_preview strong,
-.source_window_config_preview small {
+[class*="_window_config_preview"] strong {
+	display: block;
+	min-width: 0;
 	text-align: left;
+	color: var(--config-preview-btn-title-color, #131e2a) !important;
+	font-size: 14px;
+	line-height: 1.25;
+	transition: color 160ms ease !important;
 }
 
-.source_window_choose_footer {
+.source_window_config_preview small,
+[class*="_window_config_preview"] small {
+	display: block;
+	min-width: 0;
+	text-align: left;
+	color: var(--config-preview-btn-desc-color, #4a5568) !important;
+	font-size: 12px;
+	font-weight: 400;
+	line-height: 1.45;
+	transition: color 160ms ease !important;
+}
+
+.source_window_config_preview svg,
+[class*="_window_config_preview"] svg {
+	color: var(--config-preview-btn-icon, #8896a6) !important;
+	stroke: var(--config-preview-btn-icon, #8896a6) !important;
+	transition: color 160ms ease, stroke 160ms ease !important;
+}
+
+/* Config Preview Hover State */
+.source_window_config_preview:hover:not(:disabled):not(.is-selected),
+[class*="_window_config_preview"]:hover:not(:disabled):not(.is-selected) {
+	border-color: var(--config-preview-btn-hover-border, rgba(174, 135, 79, 0.55)) !important;
+	background: var(--config-preview-btn-hover-bg, rgba(252, 198, 118, 0.12)) !important;
+	box-shadow: var(--config-preview-btn-hover-shadow, 0 4px 12px rgba(0, 0, 0, 0.08)) !important;
+}
+
+.source_window_config_preview:hover:not(:disabled):not(.is-selected) strong,
+[class*="_window_config_preview"]:hover:not(:disabled):not(.is-selected) strong {
+	color: var(--config-preview-btn-hover-title-color, #131e2a) !important;
+}
+
+.source_window_config_preview:hover:not(:disabled):not(.is-selected) small,
+[class*="_window_config_preview"]:hover:not(:disabled):not(.is-selected) small {
+	color: var(--config-preview-btn-hover-desc-color, #131e2a) !important;
+}
+
+.source_window_config_preview:hover:not(:disabled):not(.is-selected) svg,
+[class*="_window_config_preview"]:hover:not(:disabled):not(.is-selected) svg {
+	color: var(--config-preview-btn-hover-icon, #131e2a) !important;
+	stroke: var(--config-preview-btn-hover-icon, #131e2a) !important;
+}
+
+/* Config Preview Active / Click Pressed State */
+.source_window_config_preview:active:not(:disabled),
+[class*="_window_config_preview"]:active:not(:disabled) {
+	border-color: var(--config-preview-btn-pressed-border, #e5a845) !important;
+	background: var(--config-preview-btn-pressed-bg, rgba(252, 198, 118, 0.32)) !important;
+	box-shadow: var(--config-preview-btn-pressed-shadow, 0 2px 6px rgba(0, 0, 0, 0.12)) !important;
+}
+
+.source_window_config_preview:active:not(:disabled) strong,
+[class*="_window_config_preview"]:active:not(:disabled) strong {
+	color: var(--config-preview-btn-pressed-title-color, #131e2a) !important;
+}
+
+.source_window_config_preview:active:not(:disabled) small,
+[class*="_window_config_preview"]:active:not(:disabled) small {
+	color: var(--config-preview-btn-pressed-desc-color, #131e2a) !important;
+}
+
+.source_window_config_preview:active:not(:disabled) svg,
+[class*="_window_config_preview"]:active:not(:disabled) svg {
+	color: var(--config-preview-btn-pressed-icon, #131e2a) !important;
+	stroke: var(--config-preview-btn-pressed-icon, #131e2a) !important;
+}
+
+/* Config Preview Selected State */
+.source_window_config_preview.is-selected,
+[class*="_window_config_preview"].is-selected,
+.source_window_config_preview.is-selected:hover,
+[class*="_window_config_preview"].is-selected:hover {
+	border-color: var(--config-preview-btn-active-border, #FCC676) !important;
+	background: var(--config-preview-btn-active-bg, rgba(252, 198, 118, 0.22)) !important;
+	box-shadow: var(--config-preview-btn-active-shadow, 0 0 0 1px #FCC676, 0 6px 16px rgba(252, 198, 118, 0.25)) !important;
+}
+
+.source_window_config_preview.is-selected strong,
+[class*="_window_config_preview"].is-selected strong,
+.source_window_config_preview.is-selected:hover strong,
+[class*="_window_config_preview"].is-selected:hover strong {
+	color: var(--config-preview-btn-active-title-color, #131e2a) !important;
+}
+
+.source_window_config_preview.is-selected small,
+[class*="_window_config_preview"].is-selected small,
+.source_window_config_preview.is-selected:hover small,
+[class*="_window_config_preview"].is-selected:hover small {
+	color: var(--config-preview-btn-active-desc-color, #131e2a) !important;
+}
+
+.source_window_config_preview.is-selected svg,
+[class*="_window_config_preview"].is-selected svg,
+.source_window_config_preview.is-selected:hover svg,
+[class*="_window_config_preview"].is-selected:hover svg {
+	color: var(--config-preview-btn-active-icon, #131e2a) !important;
+	stroke: var(--config-preview-btn-active-icon, #131e2a) !important;
+}
+
+/* Config Preview Disabled State */
+.source_window_config_preview:disabled,
+[class*="_window_config_preview"]:disabled {
+	border-color: var(--config-preview-btn-disabled-border, rgba(174, 135, 79, 0.18)) !important;
+	background: var(--config-preview-btn-disabled-bg, rgba(235, 235, 235, 0.6)) !important;
+	box-shadow: var(--config-preview-btn-disabled-shadow, none) !important;
+	opacity: var(--config-preview-btn-disabled-opacity, 0.45) !important;
+	cursor: not-allowed !important;
+}
+
+.source_window_config_preview:disabled strong,
+[class*="_window_config_preview"]:disabled strong {
+	color: var(--config-preview-btn-disabled-title-color, #a0aec0) !important;
+}
+
+.source_window_config_preview:disabled small,
+[class*="_window_config_preview"]:disabled small {
+	color: var(--config-preview-btn-disabled-desc-color, #a0aec0) !important;
+}
+
+.source_window_config_preview:disabled svg,
+[class*="_window_config_preview"]:disabled svg {
+	color: var(--config-preview-btn-disabled-icon, #a0aec0) !important;
+	stroke: var(--config-preview-btn-disabled-icon, #a0aec0) !important;
+}
+
+/* Window Footer Component Theme Rules */
+.source_window_choose_footer,
+.settings_window_footer,
+[class*="_window_footer"],
+[class*="_window_choose_footer"] {
 	grid-area: footer;
 	display: flex;
 	align-items: center;
@@ -5713,47 +6110,139 @@ body{
 	gap: 14px;
 	min-width: 0;
 	min-height: 0;
-	padding-top: 14px;
+	padding: 0 !important;
+	margin: 0 !important;
+	border: none !important;
+	border-top: none !important;
 }
 
-.source_window_choose_footer > span {
-	color: var(--source-text-muted);
+.source_window_choose_footer > span,
+.settings_window_footer > span,
+[class*="_window_footer"] > span,
+[class*="_window_choose_footer"] > span {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	padding-left: 35px !important;
+	color: var(--window-footer-text-color, #7f5523) !important;
 	font-size: 12px;
+	line-height: 1.4;
+	transition: color 160ms ease !important;
 }
 
-.source_window_choose_footer div {
-	display: flex;
-	gap: 12px;
+/* Info Icon ('i') positioned inside 35px left padding */
+.window_footer_info_icon,
+.source_window_choose_footer > span > svg,
+.settings_window_footer > span > svg,
+[class*="_window_footer"] > span > svg,
+[class*="_window_choose_footer"] > span > svg {
+	position: absolute;
+	left: 8px;
+	top: 50%;
+	transform: translateY(-50%);
+	width: 16px;
+	height: 16px;
+	color: var(--window-footer-info-icon-color, var(--window-footer-text-color, #7f5523)) !important;
+	stroke: var(--window-footer-info-icon-color, var(--window-footer-text-color, #7f5523)) !important;
+	flex-shrink: 0;
+	transition: color 160ms ease, stroke 160ms ease !important;
 }
 
-.source_window_choose_footer button {
-	min-width: 112px;
-	border: 1px solid transparent;
-	border-radius: 4px;
-	background: var(--source-dock-active);
-	color: var(--source-text-secondary);
-	padding: 10px 14px;
-	font-size: 12px;
+/* CSS 'i' Info Icon Fallback if no SVG present */
+.source_window_choose_footer > span:not(:has(svg))::before,
+.settings_window_footer > span:not(:has(svg))::before,
+[class*="_window_footer"] > span:not(:has(svg))::before,
+[class*="_window_choose_footer"] > span:not(:has(svg))::before {
+	content: 'i';
+	position: absolute;
+	left: 8px;
+	top: 50%;
+	transform: translateY(-50%);
+	display: inline-grid;
+	place-items: center;
+	width: 16px;
+	height: 16px;
+	border-radius: 50%;
+	border: 1.5px solid var(--window-footer-info-icon-color, var(--window-footer-text-color, #7f5523));
+	color: var(--window-footer-info-icon-color, var(--window-footer-text-color, #7f5523));
+	font-size: 11px;
 	font-weight: 700;
+	font-style: italic;
+	font-family: serif;
+	line-height: 1;
+}
+
+.source_window_choose_footer div,
+.settings_window_footer_actions,
+[class*="_window_footer"] div {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	margin: 0 !important;
+	padding: 0 !important;
+}
+
+/* Window Footer Buttons — Enabled Idle State (Gradient Background) */
+.source_window_choose_footer button,
+.settings_window_footer button,
+.settings_button,
+[class*="_window_footer"] button,
+[class*="_window_choose_footer"] button {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 90px;
+	height: 34px !important;
+	min-height: 34px !important;
+	padding: 0 16px !important;
+	margin: 0 !important;
+	font-size: 12px;
+	font-weight: 600;
+	border-radius: 4px;
 	cursor: pointer;
-	transition: background-color 160ms ease, color 160ms ease;
+	border: 1px solid var(--window-footer-btn-border, rgba(174, 135, 79, 0.45)) !important;
+	color: var(--window-footer-btn-text, #131e2a) !important;
+	background-color: transparent !important;
+	background-image: linear-gradient(var(--window-footer-btn-bg-angle, 180deg), var(--window-footer-btn-bg-top, #FFFFFF), var(--window-footer-btn-bg-bottom, rgba(246, 239, 234, 0.92))) !important;
+	opacity: 1 !important;
+	transition: background-image 160ms ease, border-color 160ms ease, color 160ms ease, opacity 160ms ease, box-shadow 160ms ease !important;
 }
 
-.source_window_choose_footer button:hover:not(:disabled) {
-	border-color: transparent;
-	background: var(--source-highlight-strong);
-	color: var(--source-text);
+/* Window Footer Buttons — Enabled Hover State (Gradient + Opacity) */
+.source_window_choose_footer button:hover:not(:disabled),
+.settings_window_footer button:hover:not(:disabled),
+[class*="_window_footer"] button:hover:not(:disabled),
+[class*="_window_choose_footer"] button:hover:not(:disabled) {
+	border-color: var(--window-footer-btn-hover-border, #FCC676) !important;
+	color: var(--window-footer-btn-hover-text, #131e2a) !important;
+	background-color: transparent !important;
+	background-image: linear-gradient(var(--window-footer-btn-hover-bg-angle, 180deg), var(--window-footer-btn-hover-bg-top, rgba(252, 198, 118, 0.25)), var(--window-footer-btn-hover-bg-bottom, rgba(252, 198, 118, 0.12))) !important;
+	opacity: var(--window-footer-btn-hover-opacity, 1) !important;
 }
 
-.source_window_choose_footer button:active:not(:disabled) {
-	border-color: transparent;
-	background: var(--source-dock-active);
-	color: var(--source-text);
+/* Window Footer Buttons — Enabled Active Pressed State (Gradient) */
+.source_window_choose_footer button:active:not(:disabled),
+.settings_window_footer button:active:not(:disabled),
+[class*="_window_footer"] button:active:not(:disabled),
+[class*="_window_choose_footer"] button:active:not(:disabled) {
+	border-color: var(--window-footer-btn-pressed-border, #e5a845) !important;
+	color: var(--window-footer-btn-pressed-text, #131e2a) !important;
+	background-color: transparent !important;
+	background-image: linear-gradient(var(--window-footer-btn-pressed-bg-angle, 180deg), var(--window-footer-btn-pressed-bg-top, rgba(252, 198, 118, 0.4)), var(--window-footer-btn-pressed-bg-bottom, rgba(252, 198, 118, 0.25))) !important;
 }
 
-.source_window_choose_footer button:disabled {
-	cursor: not-allowed;
-	opacity: 0.35;
+/* Window Footer Buttons — Disabled State (Border, Text, BG, Opacity) */
+.source_window_choose_footer button:disabled,
+.settings_window_footer button:disabled,
+[class*="_window_footer"] button:disabled,
+[class*="_window_choose_footer"] button:disabled {
+	border-color: var(--window-footer-btn-disabled-border, rgba(174, 135, 79, 0.18)) !important;
+	color: var(--window-footer-btn-disabled-text, #a0aec0) !important;
+	background-color: var(--window-footer-btn-disabled-bg, rgba(235, 235, 235, 0.6)) !important;
+	background-image: none !important;
+	opacity: var(--window-footer-btn-disabled-opacity, 0.5) !important;
+	cursor: not-allowed !important;
 }
 
 .source_window_workspace {
@@ -6192,9 +6681,15 @@ body{
 	gap: 28px;
 	min-width: 0;
 	padding: 18px;
-	border-radius: 5px;
-	background: var(--source-choose-step-bg, transparent);
+	border-radius: 6px;
+	background-color: transparent !important;
+	background-image: linear-gradient(var(--source-choose-step-gradient-angle, 180deg), var(--source-choose-step-gradient-top, rgba(255, 255, 255, 0.98)), var(--source-choose-step-gradient-bottom, rgba(246, 239, 234, 0.92))) !important;
 	border-bottom: none !important;
+}
+
+.source_window_step_body,
+[class*="_window_step_body"] {
+	background: transparent !important;
 }
 
 .source_window_choose_step:last-child,
@@ -6202,13 +6697,15 @@ body{
 	border-bottom: none !important;
 }
 
-.source_window_choose_step_label {
+.source_window_choose_step_label,
+[class*="_window_choose_step_label"] {
 	position: relative;
 	display: grid;
 	grid-template-columns: 32px minmax(0, 1fr);
 	align-content: start;
 	gap: 8px 12px;
 	min-width: 0;
+	background: var(--source-choose-step-label-bg, transparent) !important;
 }
 
 .source_window_choose_step:not(:last-child) .source_window_choose_step_label::after,
@@ -9273,13 +9770,17 @@ body{
 }
 
 .settings_window_workspace {
-	display: flex;
-	flex-direction: column;
+	display: grid;
+	min-height: 0;
 	width: 100%;
 	height: 100%;
-	min-width: 0;
-	min-height: 0;
-	gap: 14px;
+	grid-template-areas:
+		'header'
+		'main'
+		'footer';
+	grid-template-rows: clamp(92px, 15%, 118px) minmax(0, 1fr) clamp(58px, 10%, 74px);
+	gap: clamp(12px, 1.5%, 18px);
+	align-items: stretch;
 	padding: 18px;
 	box-sizing: border-box;
 	overflow: hidden;
@@ -9504,9 +10005,11 @@ body{
 	align-items: center;
 	justify-content: space-between;
 	gap: 12px;
-	border-top: 1px solid rgb(54 64 67 / 32%);
-	padding-top: 12px;
-	color: var(--settings-text-muted);
+	border: none !important;
+	border-top: none !important;
+	padding: 0 !important;
+	margin: 0 !important;
+	color: var(--window-footer-text-color, #7f5523) !important;
 	font-size: 12px;
 }
 
@@ -11040,12 +11543,14 @@ html:has(.element_picker_overlay) *:not(.element_picker_panel *):not(.element_pi
 
 
 /* Central Workspace & Panel Scrollbar Theme */
-.workspace_home_panel,
-.workspace_home_panel *,
-.workspace_home,
-.workspace_home * {
-	scrollbar-width: thin;
-	scrollbar-color: var(--central-scrollbar-thumb-bg, rgba(174, 135, 79, 0.4)) var(--central-scrollbar-track-bg, transparent);
+@supports (-moz-appearance: none) {
+  .workspace_home_panel,
+  .workspace_home_panel *,
+  .workspace_home,
+  .workspace_home * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--central-scrollbar-thumb-bg, rgba(174, 135, 79, 0.4)) var(--central-scrollbar-track-bg, transparent);
+  }
 }
 
 .workspace_home_panel::-webkit-scrollbar,
@@ -11060,7 +11565,7 @@ html:has(.element_picker_overlay) *:not(.element_picker_panel *):not(.element_pi
 .workspace_home_panel *::-webkit-scrollbar-track,
 .workspace_home::-webkit-scrollbar-track,
 .workspace_home *::-webkit-scrollbar-track {
-	background: var(--central-scrollbar-track-bg, transparent);
+	background: var(--central-scrollbar-track-bg, transparent) !important;
 	border-radius: 4px;
 }
 
@@ -11068,8 +11573,8 @@ html:has(.element_picker_overlay) *:not(.element_picker_panel *):not(.element_pi
 .workspace_home_panel *::-webkit-scrollbar-thumb,
 .workspace_home::-webkit-scrollbar-thumb,
 .workspace_home *::-webkit-scrollbar-thumb {
-	background: var(--central-scrollbar-thumb-bg, rgba(174, 135, 79, 0.4));
-	border: 1px solid var(--central-scrollbar-thumb-border, transparent);
+	background: var(--central-scrollbar-thumb-bg, rgba(174, 135, 79, 0.4)) !important;
+	border: 1px solid var(--central-scrollbar-thumb-border, transparent) !important;
 	border-radius: 4px;
 }
 
@@ -11077,7 +11582,88 @@ html:has(.element_picker_overlay) *:not(.element_picker_panel *):not(.element_pi
 .workspace_home_panel *::-webkit-scrollbar-thumb:hover,
 .workspace_home::-webkit-scrollbar-thumb:hover,
 .workspace_home *::-webkit-scrollbar-thumb:hover {
-	background: var(--central-scrollbar-thumb-hover-bg, rgba(174, 135, 79, 0.65));
+	background: var(--central-scrollbar-thumb-hover-bg, rgba(174, 135, 79, 0.65)) !important;
+}
+
+.workspace_home_panel::-webkit-scrollbar-thumb:active,
+.workspace_home_panel *::-webkit-scrollbar-thumb:active,
+.workspace_home::-webkit-scrollbar-thumb:active,
+.workspace_home *::-webkit-scrollbar-thumb:active {
+	background: var(--central-scrollbar-thumb-active-bg, rgba(174, 135, 79, 0.9)) !important;
+}
+
+/* Floating Workspace Windows & Window Bodies Scrollbar Theme */
+@supports (-moz-appearance: none) {
+  .workspace_window_body,
+  .workspace_window_body *,
+  .source_window_body,
+  .source_window_body *,
+  [class*="_window_body"],
+  [class*="_window_body"] *,
+  .source_window_choose,
+  .source_window_choose * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--window-scrollbar-thumb-bg, var(--central-scrollbar-thumb-bg, rgba(174, 135, 79, 0.4))) var(--window-scrollbar-track-bg, var(--central-scrollbar-track-bg, transparent));
+  }
+}
+
+.workspace_window_body::-webkit-scrollbar,
+.workspace_window_body *::-webkit-scrollbar,
+.source_window_body::-webkit-scrollbar,
+.source_window_body *::-webkit-scrollbar,
+[class*="_window_body"]::-webkit-scrollbar,
+[class*="_window_body"] *::-webkit-scrollbar,
+.source_window_choose::-webkit-scrollbar,
+.source_window_choose *::-webkit-scrollbar {
+	width: var(--window-scrollbar-width, 6px);
+	height: var(--window-scrollbar-width, 6px);
+}
+
+.workspace_window_body::-webkit-scrollbar-track,
+.workspace_window_body *::-webkit-scrollbar-track,
+.source_window_body::-webkit-scrollbar-track,
+.source_window_body *::-webkit-scrollbar-track,
+[class*="_window_body"]::-webkit-scrollbar-track,
+[class*="_window_body"] *::-webkit-scrollbar-track,
+.source_window_choose::-webkit-scrollbar-track,
+.source_window_choose *::-webkit-scrollbar-track {
+	background: var(--window-scrollbar-track-bg, var(--central-scrollbar-track-bg, transparent)) !important;
+	border-radius: 4px;
+}
+
+.workspace_window_body::-webkit-scrollbar-thumb,
+.workspace_window_body *::-webkit-scrollbar-thumb,
+.source_window_body::-webkit-scrollbar-thumb,
+.source_window_body *::-webkit-scrollbar-thumb,
+[class*="_window_body"]::-webkit-scrollbar-thumb,
+[class*="_window_body"] *::-webkit-scrollbar-thumb,
+.source_window_choose::-webkit-scrollbar-thumb,
+.source_window_choose *::-webkit-scrollbar-thumb {
+	background: var(--window-scrollbar-thumb-bg, var(--central-scrollbar-thumb-bg, rgba(174, 135, 79, 0.4))) !important;
+	border: 1px solid var(--window-scrollbar-thumb-border, var(--central-scrollbar-thumb-border, transparent)) !important;
+	border-radius: 4px;
+}
+
+.workspace_window_body::-webkit-scrollbar-thumb:hover,
+.workspace_window_body *::-webkit-scrollbar-thumb:hover,
+.source_window_body::-webkit-scrollbar-thumb:hover,
+.source_window_body *::-webkit-scrollbar-thumb:hover,
+[class*="_window_body"]::-webkit-scrollbar-thumb:hover,
+[class*="_window_body"] *::-webkit-scrollbar-thumb:hover,
+.source_window_choose::-webkit-scrollbar-thumb:hover,
+.source_window_choose *::-webkit-scrollbar-thumb:hover {
+	background: var(--window-scrollbar-thumb-hover-bg, var(--central-scrollbar-thumb-hover-bg, rgba(174, 135, 79, 0.65))) !important;
+}
+
+.workspace_window_body::-webkit-scrollbar-thumb:active,
+.workspace_window_body *::-webkit-scrollbar-thumb:active,
+.source_window_body::-webkit-scrollbar-thumb:active,
+.source_window_body *::-webkit-scrollbar-thumb:active,
+[class*="_window_body"]::-webkit-scrollbar-thumb:active,
+[class*="_window_body"] *::-webkit-scrollbar-thumb:active,
+.source_window_choose::-webkit-scrollbar-thumb:active,
+.source_window_choose *::-webkit-scrollbar-thumb:active {
+	background: var(--window-scrollbar-thumb-active-bg, var(--central-scrollbar-thumb-active-bg, rgba(174, 135, 79, 0.9))) !important;
 }
 
 

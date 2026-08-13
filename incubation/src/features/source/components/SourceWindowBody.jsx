@@ -470,10 +470,10 @@ function ModeChooser({ sourceSessionId, onSelectMode, onOpenConfiguration, onCop
   const [selectedInputMode, setSelectedInputMode] = useState(SOURCE_MODES.BATCH);
   const [selectedConnectionType, setSelectedConnectionType] = useState('upload');
   const connectionOptions = [
-    { id: 'upload', label: 'Upload file', badge: 'Recommended', icon: 'upload' },
-    { id: 'storage', label: 'Storage', icon: 'storage' },
-    { id: 'broker', label: 'Message broker', icon: 'broker' },
-    { id: 'search', label: 'Elastic Search', icon: 'search' },
+    { id: 'upload', label: 'Upload file', badge: 'Upload local files', icon: 'upload' },
+    { id: 'storage', label: 'Storage', badge: 'Fetch from data warehouse', icon: 'storage' },
+    { id: 'broker', label: 'Message broker', badge: 'Kafka/ REST API', icon: 'broker' },
+    { id: 'search', label: 'Elastic Search', badge: 'Search data from warehouse', icon: 'search' },
     { id: 'cloud', label: 'Cloud dataset', badge: 'Coming soon', icon: 'cloud', disabled: true },
   ];
   const selectableConnections = connectionOptions.map((option) => ({
@@ -572,7 +572,14 @@ function ModeChooser({ sourceSessionId, onSelectMode, onOpenConfiguration, onCop
       </div>
 
       <footer className="source_window_choose_footer">
-        <span>Learn more about data input options</span>
+        <span>
+          <svg className="window_footer_info_icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="16" x2="12" y2="12" />
+            <line x1="12" y1="8" x2="12.01" y2="8" />
+          </svg>
+          Learn more about data input options
+        </span>
         <div>
           <button type="button" disabled>Back</button>
           <button type="button" onClick={() => onSelectMode(selectedInputMode, selectedConnectionType)}>Continue</button>
@@ -1763,7 +1770,14 @@ export default function SourceWindowBody({ windowItem }) {
         />
         </div>
         <footer className="source_window_choose_footer">
-          <span>{workflowFooterMessage}</span>
+          <span>
+            <svg className="window_footer_info_icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="16" x2="12" y2="12" />
+              <line x1="12" y1="8" x2="12.01" y2="8" />
+            </svg>
+            {workflowFooterMessage}
+          </span>
           <div>
             <button type="button" onClick={goBackInWorkflow}>Back</button>
             <button type="button" disabled={!canContinueWorkflow} onClick={continueWorkflow}>{continueButtonLabel}</button>
