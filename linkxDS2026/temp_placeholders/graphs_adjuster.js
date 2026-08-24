@@ -6764,27 +6764,55 @@ function printGraph() {
 
   const dataUrl = canvas.toDataURL("image/png");
 
-  const printWindow = window.open("", "_blank");
-  printWindow.document.write(`
-    <html>
-      <head>
-        <title>Print Graph</title>
-        <style>
-          body { margin: 0; text-align: center; }
-          img { max-width: 100%; height: auto; }
-        </style>
-      </head>
-      <body>
-        <img src="${dataUrl}" alt="Graph Snapshot"/>
-        <script>
-          window.onload = function() {
-            window.print();
-          };
-        </script>
-      </body>
-    </html>
-  `);
-  printWindow.document.close();
+  // Remove previous print elements if any
+  const oldImg = document.getElementById("print-snapshot-image");
+  if (oldImg) oldImg.remove();
+  const oldStyle = document.getElementById("print-snapshot-style");
+  if (oldStyle) oldStyle.remove();
+
+  // Create an image element for printing
+  const img = document.createElement("img");
+  img.src = dataUrl;
+  img.id = "print-snapshot-image";
+  img.style.display = "none";
+  img.style.maxWidth = "100%";
+  img.style.height = "auto";
+  document.body.appendChild(img);
+
+  // Add print-specific styles
+  const style = document.createElement("style");
+  style.id = "print-snapshot-style";
+  style.innerHTML = `
+    @media print {
+      body > *:not(#print-snapshot-image) {
+        visibility: hidden;
+      }
+      #print-snapshot-image {
+        visibility: visible;
+        display: block !important;
+        position: absolute;
+        left: 0;
+        top: 0;
+      }
+    }
+  `;
+  document.head.appendChild(style);
+
+  // Trigger print after rendering
+  setTimeout(() => {
+    window.print();
+  }, 100);
+
+  // Cleanup after print
+  const cleanup = () => {
+    if (document.body.contains(img)) img.remove();
+    if (document.head.contains(style)) style.remove();
+    window.removeEventListener("afterprint", cleanup);
+  };
+  
+  window.addEventListener("afterprint", cleanup);
+  // Fallback cleanup in case afterprint isn't fired
+  setTimeout(cleanup, 120000); // 2 minutes
 }
 
 function resetGraph(settings) {

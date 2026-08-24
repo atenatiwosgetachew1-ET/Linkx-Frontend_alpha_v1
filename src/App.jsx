@@ -554,7 +554,7 @@ const getSourceFlowState = (win = {}) => {
   const sourceStatus = win.sourceStatus || sourceStatusFromResponse(win.windowResponseI);
   const toolStatus = win.toolStatus || toolStatusFromResponse(win.formToolResponse);
   const dataframeStatus = win.dataframeStatus || (Array.isArray(win.batchFilesDataframeInfoI) && win.batchFilesDataframeInfoI.length > 0 ? DATAFRAME_STATUSES.READY : DATAFRAME_STATUSES.NONE);
-  const streamStatus = win.streamStatus || (win.sourceStreamListener || win.windowResponseI === "Session running..." ? STREAM_STATUSES.RUNNING : STREAM_STATUSES.IDLE);
+  const streamStatus = win.streamStatus || (win.sourceStreamListener || win.windowResponseI === "Streaming..." ? STREAM_STATUSES.RUNNING : STREAM_STATUSES.IDLE);
   const sourceStep = win.sourceStep || sourceStepFromSubContent(win.selectedSubContent);
 
   return { sourceKind, sourceStatus, toolStatus, dataframeStatus, streamStatus, sourceStep };
@@ -588,7 +588,7 @@ const getStatusToneStyle = (statusValue) => {
     };
   }
 
-  if (status === "Session running...") {
+  if (status === "Streaming...") {
     return {
       color: "var(--status-info-text)",
       backgroundColor: "var(--status-info-bg)"
@@ -911,10 +911,11 @@ function ToggleMenu({ onToggle, isToggleMenuOpen, toggleAction, isMaximized, win
   );
 }
 function NavBar({ onNavAction, user }) {
-  const label = user?.display_name || user?.username || "User";
   return (
     <nav id="nav_bar">
-      <span onClick={() => onNavAction("logout")}>Logout ({label})</span>
+      <span className="nav_status_badge" style={{ cursor: "default", opacity: 0.9 }}>
+        Admin (Logged in)
+      </span>
       <span onClick={() => onNavAction("about")}>About</span>
     </nav>
   );
@@ -1046,7 +1047,7 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
         ? {
             ...entry,
             [field]: field === "category"
-              ? (String(value) === "Risk" ? "Risk" : "Trusted")
+              ? (["Risk", "PEP", "Sanction"].includes(String(value)) ? String(value) : "Trusted")
               : sanitizeText(value, { maxLength: field === "key" ? 160 : 500 }),
           }
         : entry
@@ -1122,6 +1123,27 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
                   className="input_text"
                   placeholder="Kafka / API address"
                   value={parsedConfig?.kafka_custom_address || ""}
+                  onChange={(e) => actions("change", { name: e.target.name, value: e.target.value })}
+                />
+
+                <label>Topics</label>
+                <select
+                  name="active_kafka_topic"
+                  value={parsedConfig?.active_kafka_topic || ""}
+                  onChange={(e) => actions("change", { name: e.target.name, value: e.target.value })}
+                >
+                  <option disabled>Custom</option>
+                  {parsedConfig?.kafka_topics?.map((topic, idx) => (
+                    <option key={idx} value={topic}>{topic}</option>
+                  ))}
+                </select>
+
+                <input
+                  type="text"
+                  name="kafka_custom_topic"
+                  className="input_text"
+                  placeholder="Kafka topic"
+                  value={parsedConfig?.kafka_custom_topic || ""}
                   onChange={(e) => actions("change", { name: e.target.name, value: e.target.value })}
                 />
               </fieldset>
@@ -1560,6 +1582,8 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
                           >
                             <option value="Trusted">Trusted</option>
                             <option value="Risk">Risk</option>
+                            <option value="PEP">PEP</option>
+                            <option value="Sanction">Sanction</option>
                           </select>
                         </td>
                         <td className="config_trusted_list_actions">
@@ -1728,12 +1752,12 @@ const JOB_POLL_DEFAULT_TIMEOUT_MS = 15 * 60 * 1000;
 const GRAPH_STATUS_REFRESH_INTERVAL_MS = 5000;
 const UPLOAD_ALLOWED_EXTENSIONS = [".csv", ".json", ".parquet", ".xlsx"];
 const MAX_UPLOAD_FILE_COUNT = Number(import.meta.env.VITE_MAX_UPLOAD_FILE_COUNT || 25);
-const MAX_UPLOAD_BYTES = Number(import.meta.env.VITE_MAX_UPLOAD_BYTES || 10 * 1024 * 1024);
-const MAX_UPLOAD_TOTAL_BYTES = Number(import.meta.env.VITE_MAX_UPLOAD_TOTAL_BYTES || MAX_UPLOAD_BYTES * MAX_UPLOAD_FILE_COUNT);
+const MAX_UPLOAD_BYTES = Number(import.meta.env.VITE_MAX_UPLOAD_BYTES || 50 * 1024 * 1024);
+const MAX_UPLOAD_TOTAL_BYTES = Number(import.meta.env.VITE_MAX_UPLOAD_TOTAL_BYTES || 50 * 1024 * 1024);
 const WINDOW_CAPS = {
-  source: { soft: 3, hard: 5, label: "source windows" },
-  graph: { soft: 6, hard: 10, label: "graph windows" },
-  chart: { soft: 6, hard: 10, label: "chart windows" },
+  source: { soft: 2, hard: 3, label: "source windows" },
+  graph: { soft: 3, hard: 5, label: "graph windows" },
+  chart: { soft: 3, hard: 5, label: "chart windows" },
 };
 const JOB_SUCCESS_STATUSES = new Set(["succeeded", "success", "finished", "completed", "done"]);
 const JOB_PENDING_STATUSES = new Set(["queued", "pending", "running", "started", "processing", "in_progress"]);
@@ -1988,14 +2012,23 @@ const resolveStreamResponseLogFilename = (response) => {
   ).trim();
 };
 
-const pollJob = async (apiFetch, jobIdOrPath, { intervalMs = JOB_POLL_DEFAULT_INTERVAL_MS, timeoutMs = JOB_POLL_DEFAULT_TIMEOUT_MS, signal, timeoutMessage = "Job timed out", cancelledMessage = "Job request cancelled", label = "job" } = {}) => {
+const pollJob = async (apiFetch, jobIdOrPath, { intervalMs = JOB_POLL_DEFAULT_INTERVAL_MS, timeoutMs, signal, timeoutMessage = "Job timed out", cancelledMessage = "Job request cancelled", label = "job" } = {}) => {
+  let effectiveTimeoutMs = timeoutMs;
+  if (!effectiveTimeoutMs) {
+    if (label === "ingestion" || label === "analysis") {
+      effectiveTimeoutMs = 7200 * 1000; // 2 hours
+    } else {
+      effectiveTimeoutMs = JOB_POLL_DEFAULT_TIMEOUT_MS;
+    }
+  }
+
   const startedAt = Date.now();
   const pollPath = String(jobIdOrPath || "").startsWith("/")
     ? String(jobIdOrPath)
     : "/jobs/" + encodeURIComponent(jobIdOrPath);
   let attempt = 0;
 
-  while (Date.now() - startedAt < timeoutMs) {
+  while (Date.now() - startedAt < effectiveTimeoutMs) {
     if (signal?.aborted) throw new DOMException("Job request was cancelled", "AbortError");
 
     const job = await apiFetch(pollPath, {
@@ -2448,6 +2481,28 @@ const parseMaybeSerializedGraphPayload = (value) => {
   }
 };
 
+const getContrastColor = (hexcolor) => {
+  if (!hexcolor) return "#FFF";
+  let r, g, b;
+  if (hexcolor.startsWith("rgb")) {
+    const match = hexcolor.match(/\d+/g);
+    if (match && match.length >= 3) {
+      r = parseInt(match[0]);
+      g = parseInt(match[1]);
+      b = parseInt(match[2]);
+    } else return "#FFF";
+  } else {
+    let hex = hexcolor.replace("#", "");
+    if (hex.length === 3) hex = hex.split("").map((c) => c + c).join("");
+    if (hex.length !== 6) return "#FFF";
+    r = parseInt(hex.substr(0, 2), 16);
+    g = parseInt(hex.substr(2, 2), 16);
+    b = parseInt(hex.substr(4, 2), 16);
+  }
+  const yiq = (r * 299 + g * 587 + b * 114) / 1000;
+  return yiq >= 128 ? "#333333" : "#FFFFFF";
+};
+
 const normalizeGraphRelationships = (value) => {
   const source =
     Array.isArray(value)
@@ -2470,12 +2525,16 @@ const normalizeGraphRelationships = (value) => {
       if (!item || typeof item !== "object") return null;
       const type = String(item.type ?? item.relationship ?? item.name ?? item.label ?? item.id ?? "").trim();
       if (!type) return null;
+      
+      const bgcolor = item.bgcolor ?? item.bgColor ?? item.bg_color ?? item.backgroundColor ?? item.color ?? "#555555";
+      const textcolor = item.textcolor ?? item.textColor ?? item.text_color ?? item.fontColor ?? item.font_color ?? item.labelColor ?? item.label_color ?? getContrastColor(bgcolor);
+      
       return {
         ...item,
         id: item.id ?? type ?? index,
         type,
-        textcolor: item.textcolor ?? item.textColor ?? item.color,
-        bgcolor: item.bgcolor ?? item.bgColor ?? item.backgroundColor,
+        textcolor,
+        bgcolor,
       };
     })
     .filter(Boolean);
@@ -2576,7 +2635,13 @@ const requestGraphFetch = async (apiFetch, payload, signal, options = {}) => {
 };
 
 const extractConfigurationPayload = (data) => (
-  data?.results?.data ?? data?.results?.configuration ?? data?.configuration ?? data?.data ?? null
+  data?.results?.configuration ??
+  data?.results?.configurations ??
+  data?.results?.data ??
+  data?.configuration ??
+  data?.configurations ??
+  data?.data ??
+  null
 );
 
 const parseConfigurationValue = (value) => {
@@ -2706,7 +2771,7 @@ const normalizeClassifiedEntityEntries = (trustedValue, riskValue, options = {})
     return sourceEntries.map((item) => ({
       key: sanitizeText(item?.key ?? item?.name ?? "", { maxLength: 160 }),
       value: sanitizeText(item?.value ?? item?.data ?? "", { maxLength: 500 }),
-      category: String(item?.category || "Trusted") === "Risk" ? "Risk" : "Trusted",
+      category: ["Risk", "PEP", "Sanction"].includes(String(item?.category)) ? String(item.category) : "Trusted",
     })).filter((item) => preserveEmpty || item.key !== "" || item.value !== "");
   }
 
@@ -2842,21 +2907,23 @@ const getSourceWindowAutofillDefaults = (configurations) => {
 
   const brokerAddress = getConfigValue(configurations, ["active_kafka_adress", "kafka_custom_address", "active_REST_API"]);
   const storageAddress = getConfigValue(configurations, ["active_storage_address", "storage_custom_address", "storage_address"]);
+  const brokerTopic = getConfigValue(configurations, ["active_kafka_topic", "kafka_custom_topic"]);
 
   const toolUrl = getConfigValue(configurations, ["active_tool_url", "active_tool_protocol"]);
   const toolUsername = getConfigValue(configurations, "active_tool_username");
   const toolDatabase = getConfigValue(configurations, ["active_tool_database", "custom_tool_database"]);
   const toolPasswordRef = getConfigurationToolPasswordRef(configurations);
-  const maskedToolPassword = toolPasswordRef ? "***" : "";
+  const rawToolPassword = getConfigValue(configurations, ["active_tool_password", "tool_password", "neo4j_password"]);
+  const maskedToolPassword = toolPasswordRef ? "***" : (rawToolPassword || "");
 
   return {
     sourceAddressType: "broker",
     sourceAddressText: brokerAddress,
     sourceStorageText: storageAddress,
-    sourceTopicText: "",
+    sourceTopicText: brokerTopic,
     sourceRealtimeAddressType: "broker",
     sourceRealtimeAddressText: brokerAddress,
-    sourceRealtimeTopicText: "",
+    sourceRealtimeTopicText: brokerTopic,
     toolUrl,
     toolUsername,
     toolPassword: maskedToolPassword,
@@ -2918,7 +2985,8 @@ const getConfigurationToolPasswordRef = (configuration) => (
 
 const buildToolCredentialWindowPatch = (configuration) => {
   const passwordRef = getConfigurationToolPasswordRef(configuration);
-  const maskedPassword = passwordRef ? "***" : "";
+  const rawToolPassword = getConfigValue(configuration, ["active_tool_password", "tool_password", "neo4j_password"]);
+  const maskedPassword = passwordRef ? "***" : (rawToolPassword || "");
   return {
     toolUrl: getConfigValue(configuration, ["active_tool_url", "active_tool_protocol"]),
     toolUsername: getConfigValue(configuration, "active_tool_username"),
@@ -2980,7 +3048,16 @@ const normalizeLoadedConfiguration = (payload) => {
     });
     parsed.kafka_addresses = kafkaAddressState.list;
     if (kafkaAddressState.active) parsed.active_kafka_adress = kafkaAddressState.active;
-    if (kafkaAddressState.pending) parsed.kafka_custom_address = kafkaAddressState.pending;
+    parsed.kafka_custom_address = "";
+
+    const kafkaTopicState = mergeConfigAddressOptions({
+      list: parsed.kafka_topics,
+      activeValue: parsed.active_kafka_topic,
+      pendingValue: parsed.kafka_custom_topic,
+    });
+    parsed.kafka_topics = kafkaTopicState.list;
+    if (kafkaTopicState.active) parsed.active_kafka_topic = kafkaTopicState.active;
+    parsed.kafka_custom_topic = "";
 
     const storageAddressState = mergeConfigAddressOptions({
       list: parsed.storage_addresses,
@@ -2989,7 +3066,7 @@ const normalizeLoadedConfiguration = (payload) => {
     });
     parsed.storage_addresses = storageAddressState.list;
     if (storageAddressState.active) parsed.active_storage_address = storageAddressState.active;
-    if (storageAddressState.pending) parsed.storage_custom_address = storageAddressState.pending;
+    parsed.storage_custom_address = "";
 
     if (parsed.auto_fill_fields === undefined || parsed.auto_fill_fields === null || parsed.auto_fill_fields === "") {
       parsed.auto_fill_fields = true;
@@ -3039,6 +3116,15 @@ const buildConfigurationSavePayload = (configuration) => {
   rest.kafka_addresses = kafkaAddressState.list;
   rest.active_kafka_adress = kafkaAddressState.active;
   rest.kafka_custom_address = "";
+
+  const kafkaTopicState = mergeConfigAddressOptions({
+    list: rest.kafka_topics,
+    activeValue: rest.active_kafka_topic,
+    pendingValue: rest.kafka_custom_topic,
+  });
+  rest.kafka_topics = kafkaTopicState.list;
+  rest.active_kafka_topic = kafkaTopicState.active;
+  rest.kafka_custom_topic = "";
 
   const storageAddressState = mergeConfigAddressOptions({
     list: rest.storage_addresses,
@@ -3731,7 +3817,7 @@ function WindowVerticalSplitPanels({id, type, sourceId, initialTopHeight, minTop
 
   const settings = normalizeGraphIframeSettings(iframeSettings[id]);
   const search = Array.isArray(iframeSearch[id]) ? iframeSearch[id] : ["", false, {}, { nodes: 0, edges: 0 }];
-  const relationships = normalizeGraphRelationships(graphStatus);
+  const relationships = activeGraph === "graph_placeholder" ? [] : normalizeGraphRelationships(graphStatus);
   const renderedGraphStats = graphRenderStats && typeof graphRenderStats === "object" ? graphRenderStats : {};
   const graphNodeCount = Number(
     renderedGraphStats.visible_nodes ??
@@ -4325,6 +4411,7 @@ function WindowVerticalSplitPanels({id, type, sourceId, initialTopHeight, minTop
               id={`window_${id}_all_relationships`}
               name={`window_${id}_relationship`}
               type="radio"
+              disabled={relationships.filter(r => r.type !== '*').length === 0}
               onChange={() =>
                 graphAction(id, "get_graph", "relationship", {
                   graphId: id,
@@ -4369,8 +4456,8 @@ function IframeEmbed({wId,id,fileName,title,activeGraph,graphAction,iframeRef,BA
   const iframeBasePath = `${normalizedBaseUrl}/linkxDS2026/temp_placeholders`;
   const iframeVersion = "20260704-sourceplaceholder1";
   const parentOriginParam = encodeURIComponent(getTrustedMessageOrigin());
-  const strictSandbox = "allow-scripts allow-downloads allow-modals";
-  const relaxedSandbox = "allow-scripts allow-same-origin allow-downloads allow-modals";
+  const strictSandbox = "allow-scripts allow-downloads allow-modals allow-popups allow-popups-to-escape-sandbox";
+  const relaxedSandbox = "allow-scripts allow-same-origin allow-downloads allow-modals allow-popups allow-popups-to-escape-sandbox";
   const frameIdentity = String(activeGraph || id || "").toLowerCase();
   const isPlaceholderFrame = frameIdentity.includes("placeholder");
   const shouldShowFitGraphControl = frameIdentity.includes("graph") && !isPlaceholderFrame;
@@ -4530,7 +4617,7 @@ function DraggableWindow({ children, initialPos = { top: 0, left: 0 }, orientati
     </div>
   );
 }
-function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText, loadscreenState, isSideBarMenuOpen, orientation, configurations, windowAction, graphAction, chartAction, selectedContent, selectedSubContent, selectedNodes, selectedEdges,windowResponseI,windowResponseII,windowRealtimeResponseI,formToolResponse,formRealtimeToolResponse,sourceAddressType,sourceAddressText,sourceStorageText,sourceTopicText,sourceKind,sourceStatus,toolStatus,dataframeStatus,streamStatus,sourceStep,sourceRealtimeAddressType,sourceRealtimeAddressText,sourceRealtimeTopicText,toolUrl,toolUsername,toolPassword,toolDatabase,realtimeToolUrl,realtimeToolUsername,realtimeToolPassword,realtimeToolDatabase,realtimeNeo4jConnectedSessionId,realtimeConfigPersistStatus,realtimeConfigPersistedSessionId,realtimeConfigPersistMessage,realtimeStartGuardMessage,batchFilesSearchHybrid,batchFilesSearchHybridQuery,batchFilesSearchStrict,searchText,batchFilesSearchLimit,batchFilesSearchResults,batchFilesSearchMoreFiles,searchResultsVisible,searchPlaceholder,batchFilesCollection, batchFilesDataframeInfoI, batchFilesDataframeInfoII, batchFilesDataframeActionValue, batchFilesDataframeSourceValue, batchFilesDataframeTargetValue, batchFilesDataframeRelationshipValue, batchFilesDataframeRuleValue, sourceSessionLog, sourceStreams , sourceStreamListener, fileInputRef, textareaRefs, onClose, onMove, zIndex, onFocus, covered, graphLink, graphLinkId, graphLinkSource, graphStatus, graphStatusBySession, graphRenderStats, activeGraph, chartLink, chartLinkId, activechart, iframeRef, iframeFilters, iframeSettings, iframeSearch, iframePerformanceMood, selectedPropertyTab, filterPropertyKeys, filterResults, nodeProperties, BASE_URL, searchButtonRef, resultContainerRef, requestConfirmation, themeMode, isWorkspaceLocked }) {
+function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText, loadscreenState, isSideBarMenuOpen, orientation, configurations, windowAction, handleOpenWindows, graphAction, chartAction, selectedContent, selectedSubContent, selectedNodes, selectedEdges,windowResponseI,windowResponseII,windowRealtimeResponseI,formToolResponse,formRealtimeToolResponse,sourceAddressType,sourceAddressText,sourceStorageText,sourceTopicText,sourceKind,sourceStatus,toolStatus,dataframeStatus,streamStatus,sourceStep,sourceRealtimeAddressType,sourceRealtimeAddressText,sourceRealtimeTopicText,toolUrl,toolUsername,toolPassword,toolDatabase,realtimeToolUrl,realtimeToolUsername,realtimeToolPassword,realtimeToolDatabase,realtimeNeo4jConnectedSessionId,realtimeConfigPersistStatus,realtimeConfigPersistedSessionId,realtimeConfigPersistMessage,realtimeStartGuardMessage,batchFilesSearchHybrid,batchFilesSearchHybridQuery,batchFilesSearchStrict,searchText,batchFilesSearchLimit,batchFilesSearchResults,batchFilesSearchMoreFiles,searchResultsVisible,searchPlaceholder,batchFilesCollection, batchFilesDataframeInfoI, batchFilesDataframeInfoII, batchFilesDataframeActionValue, batchFilesDataframeSourceValue, batchFilesDataframeTargetValue, batchFilesDataframeRelationshipValue, batchFilesDataframeRuleValue, sourceSessionLog, sourceStreams , sourceStreamListener, fileInputRef, textareaRefs, onClose, onMove, zIndex, onFocus, covered, graphLink, graphLinkId, graphLinkSource, graphStatus, graphStatusBySession, graphRenderStats, activeGraph, chartLink, chartLinkId, activechart, iframeRef, iframeFilters, iframeSettings, iframeSearch, iframePerformanceMood, selectedPropertyTab, filterPropertyKeys, filterResults, nodeProperties, BASE_URL, searchButtonRef, resultContainerRef, requestConfirmation, themeMode, isWorkspaceLocked }) {
   const canCancelGraphStaging = type === "graph" && typeof loadscreenText === "string" && (
     loadscreenText.toLowerCase().startsWith("staging graph") ||
     loadscreenText.toLowerCase().startsWith("fetching graph")
@@ -4638,7 +4725,7 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
                 {selectedContent === "live_source_options" && (
                   <div className="live_source_options_container">
                     <div className="source_window_section_heading">Pick a source input</div>
-                    <div className="live_source_option" onClick={() => windowAction(id,"real_time_input","update")}>
+                    <div className="live_source_option" onClick={() => { windowAction(id,"real_time_input","update"); setTimeout(() => windowAction(id,"real_time_input_form","auto_connect"), 50); }}>
                       <span className="live_source_option_icon">
                         <Icons id="window_live_source_option" type="realTime_input" condition="True"/> 
                       </span>
@@ -4647,7 +4734,7 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
                         <p style={sourceOptionBodyStyle}>Connect to a Broker/API and consume data as a Real-time messages.</p>
                       </span>
                     </div>
-                    <div className="live_source_option" onClick={() => windowAction(id,"batch_input","update")}>
+                    <div className="live_source_option" onClick={() => { windowAction(id,"batch_input","update"); setTimeout(() => windowAction(id,"batch_input_form","auto_connect"), 50); }}>
                       <span className="live_source_option_icon">
                         <Icons id="window_live_source_option" type="batch_input" condition="True"/> 
                       </span>
@@ -5172,32 +5259,33 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
                             <fieldset className="batch_files_search_form_fieldset">
                               <legend><b>Search</b> from storage</legend>
                               <div className="batch_files_search_form" onSubmit={(e) => { e.preventDefault()}}>
-                                <div id="batch_files_search_container" className="batch_files_search_container">
-                                  <input id="batch_files_search_input" className="batch_files_search_text_input" type="text" placeholder="Type here to seach" required/>
-                                  <input id="batch_files_search_date" className="batch_files_search_date_input" type="date"/>
-                                  <button ref={searchButtonRef} id="batch_files_search_button" title="Search" onClick={() => windowAction(id,"batch_files_search_input","search",[document.getElementById("batch_files_search_input").value,document.getElementById("batch_files_search_date").value,batchFilesSearchHybrid,document.getElementById("batch_files_search_column").value,document.getElementById("batch_files_search_strict").checked])}>
+                                <div id={`batch_files_search_container_${id}`} className="batch_files_search_container">
+                                  <input id={`batch_files_search_input_${id}`} className="batch_files_search_text_input" type="text" placeholder="Type here to seach" required/>
+                                  <input id={`batch_files_search_date_${id}`} className="batch_files_search_date_input" type="date"/>
+                                  <button ref={searchButtonRef} id={`batch_files_search_button_${id}`} title="Search" onClick={() => windowAction(id,"batch_files_search_input","search",[document.getElementById(`batch_files_search_input_${id}`).value,document.getElementById(`batch_files_search_date_${id}`).value,batchFilesSearchHybrid,document.getElementById(`batch_files_search_column_${id}`).value,document.getElementById(`batch_files_search_strict_${id}`).checked])}>
                                    <Icons id="window_live_source_option" type="search" condition="True"/>
                                   </button>
                                   <button title="Search"><Icons id="window_live_source_option" type="inbox-files" condition="True"/></button>
                                 </div>
-                                <div id="batch_files_search_options_container" className="batch_files_search_options_container">
-                                  <input id="batch_files_search_files" title="Raw files search" defaultChecked type="radio" name="useSearch" onClick={() =>windowAction(id,"batch_files_search_useSearch","files","")}/>
-                                  <label htmlFor="batch_files_search_files" title="Raw files search">Files</label>
-                                  <input id="batch_files_search_es" title="Elastic keyword search" type="radio" name="useSearch" onClick={() =>windowAction(id,"batch_files_search_useSearch","hybrid","")}/>
-                                  <label htmlFor="batch_files_search_es" title="Elastic keyword search">Hybrid (Elastic + Hive search)</label>                                                             
+                                <div id={`batch_files_search_options_container_${id}`} className="batch_files_search_options_container">
+                                  <input id={`batch_files_search_files_${id}`} title="Raw files search" defaultChecked type="radio" name={`useSearch_${id}`} onClick={() =>windowAction(id,"batch_files_search_useSearch","files","")}/>
+                                  <label htmlFor={`batch_files_search_files_${id}`} title="Raw files search">Files</label>
+                                  <input id={`batch_files_search_es_${id}`} title="Elastic keyword search" type="radio" name={`useSearch_${id}`} onClick={() =>windowAction(id,"batch_files_search_useSearch","hybrid","")}/>
+                                  <label htmlFor={`batch_files_search_es_${id}`} title="Elastic keyword search">Hybrid (Elastic + Hive search)</label>                                                             
                                 </div>
                                 <div className='batch_files_search_options_containerI' style={{ opacity: !batchFilesSearchHybrid ? 0.5 : 1 }}>                                                                    
-                                   <select id="batch_files_search_column" className="col_select_option" name="" disabled={!batchFilesSearchHybrid} required={batchFilesSearchHybrid && batchFilesSearchStrict}>
+                                   <select id={`batch_files_search_column_${id}`} className="col_select_option" name="" disabled={!batchFilesSearchHybrid} required={batchFilesSearchHybrid && batchFilesSearchStrict}>
                                     <option value="">{batchFilesSearchStrict ? "Select strict column" : "All columns (auto)"}</option>
                                     {(batchFilesSearchStrict ? configurations.search_columns_strict : configurations.search_columns_fuzzy).map((col) => (
-                                      <option key={col} value={col}>{col}</option>
-                                    ))}
-                                  </select> 
-                                    <label htmlFor="batch_files_search_column" title="Search in column">Search column {batchFilesSearchStrict}</label>                                      
-                                    <input id='batch_files_search_strict' type='checkbox' checked={batchFilesSearchStrict ? true:false} style={{ opacity: !batchFilesSearchHybrid ? 0.5 : 1 }} disabled={!batchFilesSearchHybrid} onChange={() =>windowAction(id,"batch_files_search_strict","strict","")}/>
-                                    <label htmlFor="batch_files_search_strict" title="Strict search">Strict mood</label>    
+                                      <option key={col} value={col}>{col.replace(/_/g, " ")}</option>
+                                    ))}                                    
+                                   </select>
+                                   <div className='batch_files_search_options_containerII' style={{ opacity: !batchFilesSearchHybrid ? 0.5 : 1 }}>
+                                    <input id={`batch_files_search_strict_${id}`} title="Elastic keyword search" type="checkbox" disabled={!batchFilesSearchHybrid} name="useSearch" onClick={() =>windowAction(id,"batch_files_search_strict","","")}/>
+                                    <label htmlFor={`batch_files_search_strict_${id}`} title="Elastic keyword search">Strict Match</label>                                                                   
+                                   </div>                                
                                 </div>
-                                <div ref={resultContainerRef} id="batch_files_search_result_container"
+                                <div ref={resultContainerRef} id={`batch_files_search_result_container_${id}`}
                                     className="batch_files_search_result_container"
                                     style={{
                                       '--searching-text': `'${searchPlaceholder}'`,
@@ -5314,11 +5402,11 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
                                                       "batch_files_search_input",
                                                       "load_more",
                                                       [
-                                                        document.getElementById("batch_files_search_input").value,
-                                                        document.getElementById("batch_files_search_date")?.value || "",
+                                                        document.getElementById(`batch_files_search_input_${id}`).value,
+                                                        document.getElementById(`batch_files_search_date_${id}`)?.value || "",
                                                         batchFilesSearchHybrid,
-                                                        document.getElementById("batch_files_search_column")?.value || "",
-                                                        document.getElementById("batch_files_search_strict")?.checked || false,
+                                                        document.getElementById(`batch_files_search_column_${id}`)?.value || "",
+                                                        document.getElementById(`batch_files_search_strict_${id}`)?.checked || false,
                                                       ]
                                                     )
                                                   }
@@ -5586,7 +5674,7 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
                                   windowResponseI === null ? "loadingx" :
                                   windowResponseI === "Connecting..." ? "loadingx" :
                                   windowResponseI === "..." ? "loadingx" :
-                                  windowResponseI === "Session running..." ? "streamx" :
+                                  windowResponseI === "Streaming..." ? "streamx" :
                                   windowResponseI === "Connection established!" ? "correctx" : "errorx"
                                 }
                                 condition="True"
@@ -5680,8 +5768,12 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
                           }
                         }}
                         disabled={
-                          selectedSubContent !== "batch_input_form_pageI" && selectedSubContent !== "batch_input_form_pageIV" ||
-                          selectedSubContent === "batch_input_form_pageIV" && !sourceStreamListener ? '': 'True' 
+                          (isRealtimeSourceWorkflow && selectedSubContent === "batch_input_form_pageIII") ||
+                          getPreviousBatchSourceStep(batchSourceFlow) === SOURCE_FLOW_STEPS.CONNECT ||
+                          !(
+                            (selectedSubContent !== "batch_input_form_pageI" && selectedSubContent !== "batch_input_form_pageIV") ||
+                            (selectedSubContent === "batch_input_form_pageIV" && !sourceStreamListener)
+                          ) ? 'True' : ''
                         }>
                         {"Back"}    
                       </button>
@@ -5737,6 +5829,24 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
                         {selectedSubContent === "batch_input_form_pageIII" || selectedSubContent === "batch_input_form_pageIV" && !sourceStreamListener ? "Stream Graph":
                         selectedSubContent === "batch_input_form_pageIV" ? "Terminate"  : "Next"}
                       </button>
+                      {selectedSubContent === "batch_input_form_pageIV" && sourceStreamListener && (
+                        <button
+                          onClick={() => {
+                            if (!handleOpenWindows) return;
+                            const newGraphId = handleOpenWindows("graph", "");
+                            if (newGraphId) {
+                              setTimeout(() => {
+                                windowAction(newGraphId, "graph_link_form", "link", {
+                                  sourceId: id,
+                                  graphId: newGraphId
+                                });
+                              }, 150);
+                            }
+                          }}
+                        >
+                          Open Graph
+                        </button>
+                      )}
                     </div>
                   </div>
                 )}
@@ -6120,9 +6230,9 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
                 id={id}
                 type={type}
                 sourceId={graphLinkSource}
-                initialTopHeight="100%"
-                minTopHeight="20%"
-                maxTopHeight="100%"
+                initialTopHeight="75%"
+                minTopHeight="5%"
+                maxTopHeight="90%"
                 graphStatus={graphStatus}
                 graphStatusBySession={graphStatusBySession}
                 graphRenderStats={graphRenderStats}
@@ -6838,6 +6948,9 @@ const fileInputRef = useRef(null);
       method: "POST",
       body: { id: "load", session_id: sessionKey },
     }).then((data) => {
+      const extracted = extractConfigurationPayload(data);
+      const normalized = normalizeLoadedConfiguration(extracted);
+
       if (!isSuccessResponse(data)) {
         return {
           ok: false,
@@ -6850,11 +6963,41 @@ const fileInputRef = useRef(null);
       return {
         ok: true,
         sessionId: sessionKey,
+        configuration: normalized,
+        data,
+      };
+    });
+  };
+
+  const resetConfigurationForSession = (targetSessionId) => {
+    const sessionKey = normalizeSessionId(targetSessionId);
+    if (!sessionKey) {
+      return Promise.resolve({ ok: false, message: "Session is still initializing." });
+    }
+
+    return apiFetch("/configuration", {
+      method: "POST",
+      body: { id: "reset", session_id: sessionKey },
+    }).then((data) => {
+      if (!isSuccessResponse(data)) {
+        return {
+          ok: false,
+          sessionId: sessionKey,
+          message: getConfigurationErrorMessage(data, "Could not reset configuration. Try again."),
+          data,
+        };
+      }
+
+      return {
+        ok: true,
+        sessionId: sessionKey,
         configuration: normalizeLoadedConfiguration(extractConfigurationPayload(data)),
         data,
       };
     });
   };
+
+
 
   const persistRealtimeToolConfigurationForWindow = (targetSessionId, overrides = {}) => {
     const sessionKey = normalizeSessionId(targetSessionId);
@@ -7591,7 +7734,6 @@ const fileInputRef = useRef(null);
           existing_session: oldSession,
           socket_id: socketRef.current?.id || null,
         };
-        console.log("[init request]", payload);
         apiFetch("/init", {
           method: "POST",
           body: payload,
@@ -7600,7 +7742,6 @@ const fileInputRef = useRef(null);
             if (isSuccessResponse(data)) {
               const session = extractMainSessionId(data) || oldSession || "";
               const configs = extractInitConfiguration(data);
-              console.log("init_config:", configs)
               setConfigurations(configs)
               setSessionId(session || null);
               sessionIdRef.current = session || null;
@@ -7683,9 +7824,9 @@ const fileInputRef = useRef(null);
   }, [configurations]);
 
   useEffect(() => {
-    if (!token) return;
+    const activeToken = token || localStorage.getItem("linkx_auth_token") || "";
     const socket = io(API_URL, {
-      auth: { token },
+      auth: activeToken ? { token: activeToken } : {},
     });
     socketRef.current = socket;
 
@@ -8163,7 +8304,7 @@ const fileInputRef = useRef(null);
 
         setWindows(prev =>
           prev.map(w =>
-            targetWindows.find(tw => tw.id === w.id)
+            targetWindows.find(tw => tw.id === w.id) && String(w.graphLinkSource || "") === sessionKey
               ? { ...w, graphStatus: relationships }
               : w
           )
@@ -8582,18 +8723,22 @@ const fileInputRef = useRef(null);
     setActiveWindowId(id)
   };
   const generateWindowId = () => {
-    if (typeof windowIdRef.current !== "number") { //Happens for source windows (since it has '_' between the window id and session id)
-      const parts = String(windowIdRef.current).split('_');
-      const last_id = parseInt(parts[0], 10);
-      if (!isNaN(last_id)){
-        windowIdRef.current = last_id + 1;
-      } else {
-        windowIdRef.current = 1;
+    let maxId = 0;
+    // Iterate over all windows to find the absolute highest numeric ID in use
+    windowsRef.current.forEach(w => {
+      const parts = String(w.id).split('_');
+      const num = parseInt(parts[0], 10);
+      if (!isNaN(num) && num > maxId) {
+        maxId = num;
       }
-      return windowIdRef.current;
+    });
+    // Protect against rapid clicks before React flushes state
+    if (typeof windowIdRef.current === "number" && windowIdRef.current > maxId) {
+      maxId = windowIdRef.current;
     }
-    windowIdRef.current += 1;
-    return windowIdRef.current;
+    const nextId = maxId + 1;
+    windowIdRef.current = nextId; // keep ref in sync just in case
+    return nextId;
   };
   const handleCreateWindows = (sessionId, type, iframeRef, initialContent = null) => {
     if (type === "source" && !requirePermission(PERMISSIONS.SOURCE_CREATE, "source windows")) return null;
@@ -8786,33 +8931,34 @@ const fileInputRef = useRef(null);
     if (type==="source"){
       if (link===""){
         //If theres no link just creates the window
-        handleCreateWindows(sessionId,type,iframeRef,initialContent);
+        return handleCreateWindows(sessionId,type,iframeRef,initialContent);
       }
       else{
-        return;
+        return null;
       }
     }
     if (type==="graph"){
       if (link===""){
         //If theres no link just creates the window
-        handleCreateWindows(sessionId,type,iframeRef);
+        return handleCreateWindows(sessionId,type,iframeRef);
       }
       else{
-        return;
+        return null;
       }
     }
     if (type==="chart"){
       if (link===""){
         //If theres no link just creates the window
-        handleCreateWindows(sessionId,type,iframeRef);
+        return handleCreateWindows(sessionId,type,iframeRef);
       }
       else{
-        return;
+        return null;
       }
     }
     if (type==="parent"){
-      handleCreateWindows(type);
+      return handleCreateWindows(type);
     }
+    return null;
   };
   // ------------------------------------------------------- str report link analysis (backend-driven graph) ---
   const bindStrReportGraphWindow = (graphWindowId, analysisSessionId, socketEmit) => {
@@ -9010,6 +9156,22 @@ const fileInputRef = useRef(null);
         });
         socket.emit("graph_status_unsubscribe", { session_id: id });
         graphStatusSubscribedSessionsRef.current.delete(String(id));
+        
+        return newWindows.map(w => 
+          w.type === "graph" && String(w.graphLinkSource) === sessionKey
+            ? {
+                ...w,
+                activeGraph: "graph_placeholder",
+                graphStatus: null,
+                graphRenderStats: null,
+                graphLinkSource: null,
+                filterPropertyKeys: null,
+                selectedContent: null,
+                graphLink: false,
+                loadscreenState: false
+              }
+            : w
+        );
       }
       return newWindows;
     });
@@ -9681,6 +9843,7 @@ const fileInputRef = useRef(null);
                       w.id === id ? { ...w,loadscreenState: false ,loadscreenText:null,selectedContent:newContent,selectedSubContent:newSubContent,windowResponseI:"Dataset uploaded!",sourceKind:SOURCE_KINDS.UPLOAD,sourceStatus:SOURCE_STATUSES.UPLOADED,sourceStep:SOURCE_FLOW_STEPS.CONNECT,batchFilesCollection:newBatchFilesCollection} : w
                     )
                   );
+                  setTimeout(() => handleWindowActions(id, "upload_form", "auto_connect"), 50);
                 } 
                 else {
                   alert(getConfigurationErrorMessage(data))
@@ -10253,6 +10416,170 @@ const fileInputRef = useRef(null);
                 )
               );
             });        
+        }
+        if ((menuId === "batch_input_form" || menuId === "real_time_input_form") && action === "auto_connect") {
+            const mode = menuId === "batch_input_form" ? "batch" : "realtime";
+            const sourceAutofillDefaults = getSourceWindowAutofillDefaults(configurations);
+            const sessionKey = normalizeSessionId(id);
+            
+            const sourcePayload = {
+               addressType: mode === "batch" ? "storage" : "broker",
+               address: mode === "batch" ? sourceAutofillDefaults.sourceAddressText : sourceAutofillDefaults.sourceRealtimeAddressText,
+               broker: mode === "batch" ? sourceAutofillDefaults.sourceAddressText : sourceAutofillDefaults.sourceRealtimeAddressText,
+               storage: sourceAutofillDefaults.sourceStorageText,
+               hdfs: sourceAutofillDefaults.sourceStorageText,
+               topic: mode === "batch" ? sourceAutofillDefaults.sourceTopicText : sourceAutofillDefaults.sourceRealtimeTopicText,
+               mode: mode,
+               session_id: sessionKey
+            };
+            
+            const sourceValidation = validateSchema(sourcePayload, sourceConnectionSchema);
+            const connectSourcePayload = sourceValidation.ok 
+                ? { ...sourcePayload, ...sourceValidation.value, session_id: sessionKey }
+                : sourcePayload;
+            
+            const initialToolPayload = {
+               tool_name: 'neo4j',
+               url: mode === "batch" ? sourceAutofillDefaults.toolUrl : sourceAutofillDefaults.realtimeToolUrl,
+               username: mode === "batch" ? sourceAutofillDefaults.toolUsername : sourceAutofillDefaults.realtimeToolUsername,
+               password: mode === "batch" ? sourceAutofillDefaults.toolPassword : sourceAutofillDefaults.realtimeToolPassword,
+               database: mode === "batch" ? sourceAutofillDefaults.toolDatabase : sourceAutofillDefaults.realtimeToolDatabase,
+               source_id: sessionKey
+            };
+            
+            const passwordRef = mode === "batch" ? sourceAutofillDefaults.toolPasswordRef : sourceAutofillDefaults.realtimeToolPasswordRef;
+            const connectPayloadResult = buildConnectToToolPayload({
+               payload: initialToolPayload,
+               validatedValues: initialToolPayload,
+               sessionKey: sessionKey,
+               passwordRef: passwordRef
+            });
+            
+            const toolPayload = connectPayloadResult.ok ? connectPayloadResult.payload : initialToolPayload;
+
+            setWindows(prev => prev.map(win => win.id === id ? {
+               ...win,
+               sourceStatus: SOURCE_STATUSES.CONNECTING,
+               toolStatus: TOOL_STATUSES.CONNECTING,
+               ...(mode === "realtime" ? {
+                   windowRealtimeResponseI: "Connecting...",
+                   formRealtimeToolResponse: "Connecting..."
+               } : {
+                   windowResponseI: "Connecting...",
+                   formToolResponse: "Connecting..."
+               })
+            } : win));
+
+            Promise.all([
+               apiFetch("/connect_to_source", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(connectSourcePayload) }).catch(err => err),
+               apiFetch("/connect_to_tool", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(toolPayload) }).catch(err => err)
+            ]).then(([sourceData, toolData]) => {
+               const sourceBackendMsg = getConnectSourceErrorMessage(sourceData, sourceData?.message || "Connection failed!");
+               const isSourceSuccess = isSuccessResponse(sourceData) || sourceBackendMsg.includes("successful") || sourceBackendMsg.includes("established");
+               
+               const toolBackendMsg = getConnectToolErrorMessage(toolData, toolData?.message || "Connection failed!");
+               const isToolSuccess = toolStatusFromResponse(toolData?.message) === TOOL_STATUSES.CONNECTED;
+
+               if (isSourceSuccess && isToolSuccess) {
+                  handleWindowActions(id, "batch_input_form_swap", "page_II", { addressType: sourcePayload.addressType, address: sourcePayload.address, topic: sourcePayload.topic, mode }, { skipSideBarToggle: true });
+                  
+                  setWindows(prev => prev.map(win => win.id === id ? {
+                     ...win,
+                     ...(mode === "realtime" ? {
+                         windowRealtimeResponseI: "Connection established!",
+                         formRealtimeToolResponse: "Connected!",
+                         realtimeNeo4jConnectedSessionId: id,
+                         realtimeLastConnectSessionId: id,
+                         realtimeConfigPersistStatus: "saved",
+                         realtimeConfigPersistedSessionId: id,
+                         realtimeConfigPersistMessage: "Auto-connected from saved configuration."
+                     } : {
+                         windowResponseI: sourceBackendMsg,
+                         formToolResponse: toolData?.message || toolBackendMsg,
+                     }),
+                     sourceStatus: SOURCE_STATUSES.CONNECTED,
+                     sourceKind: sourcePayload.addressType,
+                     toolStatus: TOOL_STATUSES.CONNECTED
+                  } : win));
+               } else {
+                  setWindows(prev => prev.map(win => win.id === id ? {
+                     ...win,
+                     ...(mode === "realtime" ? {
+                         windowRealtimeResponseI: sourceBackendMsg,
+                         formRealtimeToolResponse: isToolSuccess ? "Connected!" : "Connection failed!",
+                         realtimeNeo4jConnectedSessionId: isToolSuccess ? id : null,
+                         realtimeLastConnectSessionId: isToolSuccess ? id : null,
+                         realtimeConfigPersistStatus: isToolSuccess ? "saved" : "idle",
+                         realtimeConfigPersistedSessionId: isToolSuccess ? id : null,
+                         realtimeConfigPersistMessage: isToolSuccess ? "Auto-connected from saved configuration." : ""
+                     } : {
+                         windowResponseI: sourceBackendMsg,
+                         formToolResponse: toolData?.message || toolBackendMsg,
+                     }),
+                     sourceStatus: isSourceSuccess ? SOURCE_STATUSES.CONNECTED : SOURCE_STATUSES.FAILED,
+                     sourceKind: sourcePayload.addressType,
+                     toolStatus: isToolSuccess ? TOOL_STATUSES.CONNECTED : TOOL_STATUSES.FAILED
+                  } : win));
+               }
+            });
+            return { ...w };
+        }
+        if (menuId === "upload_form" && action === "auto_connect") {
+            const sourceAutofillDefaults = getSourceWindowAutofillDefaults(configurations);
+            const sessionKey = normalizeSessionId(id);
+            
+            const initialToolPayload = {
+               tool_name: 'neo4j',
+               url: sourceAutofillDefaults.toolUrl,
+               username: sourceAutofillDefaults.toolUsername,
+               password: sourceAutofillDefaults.toolPassword,
+               database: sourceAutofillDefaults.toolDatabase,
+               source_id: sessionKey
+            };
+            
+            const connectPayloadResult = buildConnectToToolPayload({
+               payload: initialToolPayload,
+               validatedValues: initialToolPayload,
+               sessionKey: sessionKey,
+               passwordRef: sourceAutofillDefaults.toolPasswordRef
+            });
+            
+            const toolPayload = connectPayloadResult.ok ? connectPayloadResult.payload : initialToolPayload;
+
+            setWindows(prev => prev.map(win => win.id === id ? {
+               ...win,
+               toolStatus: TOOL_STATUSES.CONNECTING,
+               formToolResponse: "Connecting..."
+            } : win));
+
+            apiFetch("/connect_to_tool", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(toolPayload) })
+            .then(toolData => {
+               const toolBackendMsg = getConnectToolErrorMessage(toolData, toolData?.message || "Connection failed!");
+               const isToolSuccess = toolStatusFromResponse(toolData?.message) === TOOL_STATUSES.CONNECTED;
+
+               if (isToolSuccess) {
+                  handleWindowActions(id, "batch_input_form_swap", "page_III", null, { skipSideBarToggle: true });
+                  
+                  setWindows(prev => prev.map(win => win.id === id ? {
+                     ...win,
+                     formToolResponse: toolData?.message || toolBackendMsg,
+                     toolStatus: TOOL_STATUSES.CONNECTED
+                  } : win));
+               } else {
+                  setWindows(prev => prev.map(win => win.id === id ? {
+                     ...win,
+                     formToolResponse: toolData?.message || toolBackendMsg,
+                     toolStatus: TOOL_STATUSES.FAILED
+                  } : win));
+               }
+            }).catch(err => {
+               setWindows(prev => prev.map(win => win.id === id ? {
+                  ...win,
+                  formToolResponse: "Connection failed!",
+                  toolStatus: TOOL_STATUSES.FAILED
+               } : win));
+            });
+            return { ...w };
         }
         if (menuId === "batch_input_form_swap" && action === "page_I") {
           newContent = sourceWorkflowContent;
@@ -11077,10 +11404,7 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
               String(w.id) === sessionKey
                 ? {
                     ...w,
-                    windowResponseI:
-                      streamStatus === STREAM_STATUSES.STARTING
-                        ? "Session queued..."
-                        : "Session running...",
+                    windowResponseI: "Streaming...",
                     streamStatus,
                     sourceStep: SOURCE_FLOW_STEPS.STREAM,
                     batchFilesDataframeInfoI: w.batchFilesDataframeInfoI,
@@ -11222,7 +11546,19 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
                         streamStatus: STREAM_STATUSES.TERMINATED,
                         loadscreenState: false,
                       }
-                    : w
+                    : String(w.graphLinkSource) === sessionKey 
+                      ? {
+                          ...w,
+                          activeGraph:"graph_placeholder",
+                          graphStatus:null,
+                          graphRenderStats:null,
+                          graphLinkSource:null,
+                          filterPropertyKeys:null,
+                          selectedContent:null,
+                          graphLink:false,
+                          loadscreenState: false
+                        }
+                      : w
                 )
               );
               return;
@@ -11275,7 +11611,19 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
                       streamStatus: STREAM_STATUSES.FAILED,
                       loadscreenState: false,
                     }
-                  : w
+                  : String(w.graphLinkSource) === sessionKey 
+                    ? {
+                        ...w,
+                        activeGraph:"graph_placeholder",
+                        graphStatus:null,
+                        graphRenderStats:null,
+                        graphLinkSource:null,
+                        filterPropertyKeys:null,
+                        selectedContent:null,
+                        graphLink:false,
+                        loadscreenState: false
+                      }
+                    : w
               )
             );
           }
@@ -12059,18 +12407,18 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
           selectedContent: newContent, 
           selectedSubContent: newSubContent,
           sourceStep: nextSourceStep,
-          batchFilesSearchHybrid: batchFilesSearchHybrid,
-          batchFilesSearchHiveQuery: batchFilesSearchHiveQuery,
+          batchFilesSearchHybrid: w.batchFilesSearchHybrid,
+          batchFilesSearchHiveQuery: w.batchFilesSearchHiveQuery,
           batchFilesSearchResults: newBatchSearchResult, 
-          searchResultsVisible: searchResultsVisible,
+          searchResultsVisible: w.searchResultsVisible,
           batchFilesCollection : newBatchFilesCollection,
-          searchPlaceholder: searchPlaceholder,
+          searchPlaceholder: w.searchPlaceholder,
           batchFilesDataframeInfoI: w.batchFilesDataframeInfoI,
-          batchFilesDataframeInfoII: batchFilesDataframeInfoII,
+          batchFilesDataframeInfoII: w.batchFilesDataframeInfoII,
           loadscreenState: loadscreenState,
           sourceStreams: sourceStreams,
           textareaRefs: textareaRefs,
-          isMaximized:isMaximized
+          isMaximized: w.isMaximized
         };
       })
     );
@@ -12286,12 +12634,10 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
               if (ruleNameInput) ruleNameInput.value = "";
               setConfigurations((prev) => ({ ...prev, rule_name: "" }));
               alert("Rule uploaded!");
-              handleConfigurationActions("load_default");
             } else {
               alert("Configuration saved!");
-              handleConfigurationActions("load_default");
             }
-            setloadscreenState(false);
+            fetchConfigurationForSession(resolvedSessionId).then((res) => { if (res.ok) setConfigurations(res.configuration); }).finally(() => setloadscreenState(false));
           } 
           else {
             alert(getConfigurationErrorMessage(data))
@@ -12327,11 +12673,11 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
       .then((data) => {
         if (isSuccessResponse(data)) {
           alert("Rule removed!");
-          handleConfigurationActions("load_default");
+          fetchConfigurationForSession(resolvedSessionId).then((res) => { if (res.ok) setConfigurations(res.configuration); }).finally(() => setloadscreenState(false));
         } else {
           alert(getConfigurationErrorMessage(data, "Could not remove the selected rule. Try again."));
+          setloadscreenState(false);
         }
-        setloadscreenState(false);
       })
       .catch((err) => {
         console.error("ConfigRemoveErr", err);
@@ -12362,12 +12708,12 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
       .then((data) => {
         if (isSuccessResponse(data)) {
           alert("Configuration uploaded!");
-          handleConfigurationActions("load_default");
+          fetchConfigurationForSession(resolvedSessionId).then((res) => { if (res.ok) setConfigurations(res.configuration); }).finally(() => setloadscreenState(false));
         } else {
           alert(getGraphFetchErrorMessage(data));
+          setloadscreenState(false);
         }
         if (importInput) importInput.value = "";
-        setloadscreenState(false);
       })
       .catch((err) => {
         console.error("ConfigUploadErr", err);
@@ -12383,7 +12729,7 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
       }
       debounceRef.current = setTimeout(() => {  
         setloadscreenState(true);
-        fetchConfigurationForSession(session)
+        resetConfigurationForSession(session)
           .then((result) => {
             if (!result.ok) {
               alert(getConfigurationErrorMessage(result, result.message));
@@ -12447,7 +12793,6 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
       setIsTaskBarOpen(prev => !prev);
     }
     else if(id === "configurations") {
-      handleConfigurationActions("load_default")
       setIsConfigurationsOpen(prev => !prev);
       setIsSettingsOpen(false);
     }
@@ -12552,6 +12897,7 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
               loadscreenState={window.loadscreenState}
               loadscreenText={window.loadscreenText}
               windowAction={handleWindowActions}
+              handleOpenWindows={handleOpenWindows}
               graphAction={handleGraphActions}
               chartAction={handleChartActions}
               selectedContent={window.selectedContent}
@@ -12770,10 +13116,6 @@ function AuthenticatedApp() {
         ? "Completing single sign-on"
         : "Checking authentication";
     return <Loadscreen loadingText={loadingText} />;
-  }
-
-  if (!auth.isAuthenticated) {
-    return <LoginPage onLogin={auth.login} onParentProjectLogin={auth.startParentProjectLogin} ssoError={auth.ssoError} isSsoAuthenticating={auth.isSsoAuthenticating} />;
   }
 
   return <LinkxWorkspace />;

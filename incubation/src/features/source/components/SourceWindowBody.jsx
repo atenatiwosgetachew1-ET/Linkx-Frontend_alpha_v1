@@ -444,19 +444,31 @@ function SessionBadge({ sessionId, onCopySession }) {
 
 
 function WorkflowTimeline({ activeStep, steps, accessibleSteps, onStepChange }) {
+  const activeIndex = steps.findIndex((s) => s.id === activeStep);
+
   return (
     <aside className="source_window_timeline" aria-label="Source workflow timeline">
       {steps.map((step, index) => {
         const isLocked = !accessibleSteps.has(step.id);
+        const isActive = activeStep === step.id;
+        const isFulfilled = accessibleSteps.has(step.id) && index < activeIndex;
+        const isInactive = !isActive && !isFulfilled;
+
+        const stateClass = isActive
+          ? 'is-active'
+          : isFulfilled
+          ? 'is-fulfilled'
+          : 'is-inactive';
+
         return (
           <button
             key={step.id}
             type="button"
-            className={(activeStep === step.id ? 'is-active' : '') + (isLocked ? ' is-locked' : '')}
+            className={`${stateClass}${isLocked ? ' is-locked' : ''}`}
             disabled={isLocked}
             onClick={() => onStepChange(step.id)}
           >
-            <span>{index + 1}</span>
+            <span>{isFulfilled ? '✓' : index + 1}</span>
             <strong>{step.label}</strong>
             <small>{step.value}</small>
           </button>
@@ -745,6 +757,7 @@ function ConnectStep({ mode, state, windowId, validationMessage, onPatchModeStat
 function UploadStep({ state, onPatchModeState }) {
   const selectedFiles = state.selectedFiles || [];
   const [uploadError, setUploadError] = useState('');
+  const [isDragOver, setIsDragOver] = useState(false);
 
   const applyFiles = (fileList) => {
     const files = Array.from(fileList || []);
@@ -791,11 +804,23 @@ function UploadStep({ state, onPatchModeState }) {
           <span className="source_window_hint">Drag and drop files, or browse from this workstation.</span>
         </header>
         <label
-          className="source_window_upload_drop"
+          className={`source_window_upload_drop${isDragOver ? ' is-drag-over' : ''}`}
           htmlFor="source-window-upload-input"
-          onDragOver={(event) => event.preventDefault()}
+          onDragOver={(event) => {
+            event.preventDefault();
+            if (!isDragOver) setIsDragOver(true);
+          }}
+          onDragEnter={(event) => {
+            event.preventDefault();
+            setIsDragOver(true);
+          }}
+          onDragLeave={(event) => {
+            event.preventDefault();
+            setIsDragOver(false);
+          }}
           onDrop={(event) => {
             event.preventDefault();
+            setIsDragOver(false);
             applyFiles(event.dataTransfer.files);
           }}
         >
@@ -810,12 +835,35 @@ function UploadStep({ state, onPatchModeState }) {
             <SourceModeIcon type="upload" />
           </span>
           <span className="source_window_upload_text">
-            <strong>File upload</strong>
-            <small>Drop source files here or browse to stage them for dataframe creation.</small>
+            <strong>{isDragOver ? 'Release to upload files' : 'File upload'}</strong>
+            <small>{isDragOver ? 'Drop files now to stage them for dataframe creation.' : 'Drop source files here or browse to stage them for dataframe creation.'}</small>
           </span>
         </label>
         <div className="source_window_upload_summary">
-          <strong>{selectedFiles.length ? selectedFiles.length + ' file(s) selected' : 'No files selected yet'}</strong>
+          <div className="source_window_upload_summary_header">
+            <strong>{selectedFiles.length ? selectedFiles.length + ' file(s) selected' : 'No files selected yet'}</strong>
+            {selectedFiles.length > 0 && (
+              <button
+                type="button"
+                className="source_window_upload_clear_btn linkx_tooltip_anchor"
+                data-tooltip="Drop staged files"
+                aria-label="Drop staged files"
+                onClick={() => {
+                  setUploadError('');
+                  onPatchModeState({
+                    selectedFiles: [],
+                    sourceStatus: SOURCE_STATUSES.IDLE,
+                    sourceMessage: 'Not connected.',
+                  });
+                }}
+              >
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="3 6 5 6 21 6" />
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                </svg>
+              </button>
+            )}
+          </div>
           {uploadError && <p className="source_window_validation" role="status">{uploadError}</p>}
           {selectedFiles.length > 0 && (
             <ul>
@@ -1337,6 +1385,14 @@ function DataframeStep({ mode, state, onPatchModeState, onOpenConfiguration }) {
           </span>
         </header>
         <div className="source_window_dataframe_form_grid">
+          <div className="source_window_dataframe_action_description">
+            <span className="source_window_dataframe_info_mark" aria-hidden="true">i</span>
+            <div>
+              <p>{selectedActionDescription.text}</p>
+              <small>{selectedActionDescription.detail}</small>
+            </div>
+          </div>
+
           <div className="source_window_dataframe_action_area">
             <div className="source_window_dataframe_action_group" role="group" aria-label="Dataframe action">
               {sampleActions.map((action) => (
@@ -1350,14 +1406,6 @@ function DataframeStep({ mode, state, onPatchModeState, onOpenConfiguration }) {
                   <span>{action}</span>
                 </button>
               ))}
-            </div>
-          </div>
-
-          <div className="source_window_dataframe_action_description">
-            <span className="source_window_dataframe_info_mark" aria-hidden="true">i</span>
-            <div>
-              <p>{selectedActionDescription.text}</p>
-              <small>{selectedActionDescription.detail}</small>
             </div>
           </div>
 
@@ -1405,14 +1453,17 @@ function DataframeStep({ mode, state, onPatchModeState, onOpenConfiguration }) {
 
 function StreamStep({ state }) {
   return (
-    <div className="source_window_step_body source_window_step_body_single">
-      <section className="source_window_section">
-        <header>
-          <h3>Streaming</h3>
+    <div className="source_window_step_body source_window_step_body_stream">
+      <section className="source_window_stream_card">
+        <header className="source_window_stream_header">
+          <span className="source_window_panel_title">
+            <SourceModeIcon type="realtime" />
+            <h3>Streaming</h3>
+          </span>
           <StatusPill label="Stream" status={state.streamStatus} />
         </header>
         <textarea
-          className="source_window_log"
+          className="source_window_log source_window_stream_log"
           readOnly
           value={'Session log will appear here after streaming integration is restored.\nNo streaming request is sent from this step yet.'}
         />

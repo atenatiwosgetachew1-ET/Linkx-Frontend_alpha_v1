@@ -3969,7 +3969,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 	height: 80%;
 	padding: 0;
 	width: 98.5%;
-	display: block;
+	display: flex;
 	margin: auto;
 	left: 0;
 	right: 0;
@@ -4764,26 +4764,29 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 	background-color: #DEDEDE;
 }
 .window .properties_container .reference_container .bottom_panel{
-	display: block;
+	display: flex;
+	flex-direction: column;
 	flex: 1; 
  	background-color: inherit;
+	overflow: hidden;
 }
 .window .properties_container .reference_container .bottom_panel .bottom_panel_title{
 	display: block;
 	width: 90%;
 	color: #333;
-	height: 3vh;
+	min-height: 3vh;
 	padding: 4% 5%;
 	text-align: left;
 	font-size: 1.5vh;
 	background-image:linear-gradient(rgba(29,95,159,0.1),rgba(29,95,159,0.1));
 	border-bottom: 1px solid #EEE;
 	box-shadow: 0 -4px 4px rgba(40,96,151,0.1);
+	flex-shrink: 0;
 }
 .window .properties_container .reference_container .bottom_panel ul{
-	position: absolute;
-	max-height: 48vh;
-	overflow: hidden;
+	position: relative;
+	flex: 1;
+	overflow-y: auto;
 	width: 96%;
 	margin: 0;
 	padding: 5% 2%;
@@ -4806,17 +4809,22 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 	overflow: hidden;
 	border: none;
 }
-.window .properties_container .reference_container .bottom_panel ul li:first-child:hover{
+.window .properties_container .reference_container .bottom_panel ul li:has(input[id$="_all_relationships"]):hover{
 	filter: brightness(150%);
 }
-.window .properties_container .reference_container .bottom_panel ul li:hover{
+.window .properties_container .reference_container .bottom_panel ul li:hover:not(:has(input[id$="_all_relationships"])){
 	filter: saturate(75%);
 }
 .window .properties_container .reference_container .bottom_panel ul li:active{
 	filter: saturate(55%);
 	color: #BBB;
 }
-.window .properties_container .reference_container .bottom_panel ul li:first-child:has(input[type="radio"]:checked){
+.window .properties_container .reference_container .bottom_panel ul li:has(input:disabled){
+	opacity: 0.3;
+	pointer-events: none;
+	filter: grayscale(100%);
+}
+.window .properties_container .reference_container .bottom_panel ul li:has(input[id$="_all_relationships"]:checked){
   background-color: #EEE !important;
   color: #333;
  	filter: invert(0);
@@ -4824,7 +4832,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
  	filter: contrast(50%);
  	opacity: 0.7;
 }
-.window .properties_container .reference_container .bottom_panel ul li:has(input[type="radio"]:checked){
+.window .properties_container .reference_container .bottom_panel ul li:has(input[type="radio"]:checked):not(:has(input[id$="_all_relationships"])){
   background-color: #EEE !important;
   color: #FFF;
  	filter: invert(0);
@@ -5715,18 +5723,18 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 [data-theme="dark"] .window .properties_container .bottom_panel ul li {
   color: #e4edf5 !important;
 }
-[data-theme="dark"] .window .properties_container .bottom_panel ul li:first-child:has(input[type="radio"]:checked) {
+[data-theme="dark"] .window .properties_container .bottom_panel ul li:has(input[id$="_all_relationships"]:checked) {
   background-color: #2e465a !important;
   color: #e4edf5 !important;
   opacity: 0.95 !important;
 }
-[data-theme="dark"] .window .properties_container .bottom_panel ul li:has(input[type="radio"]:checked) {
+[data-theme="dark"] .window .properties_container .bottom_panel ul li:has(input[type="radio"]:checked):not(:has(input[id$="_all_relationships"])) {
   background-color: #2e465a !important;
   color: #e4edf5 !important;
   opacity: 0.82 !important;
 }
 [data-theme="dark"] .window .properties_container .bottom_panel ul li label {
-  color: inherit !important;
+  /* color: inherit !important; removed to allow inline styles */
 }
 
 /* Force-dark override for broad filter_form wildcard rule */
@@ -6535,8 +6543,8 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   background-color: #1d3040 !important;
   color: #d8e4ee !important;
 }
-[data-theme="dark"] .window .properties_container .reference_container .bottom_panel ul li:has(input[type="radio"]:checked),
-[data-theme="dark"] .window .properties_container .reference_container .bottom_panel ul li:first-child:has(input[type="radio"]:checked) {
+[data-theme="dark"] .window .properties_container .reference_container .bottom_panel ul li:has(input[type="radio"]:checked):not(:has(input[id$="_all_relationships"])),
+[data-theme="dark"] .window .properties_container .reference_container .bottom_panel ul li:has(input[id$="_all_relationships"]:checked) {
   background-color: #2a4054 !important;
   color: #e4edf5 !important;
 }
@@ -8575,7 +8583,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 }
 
 .window .properties_container .reference_container .bottom_panel {
-  flex: 0 1 auto;
+  flex: 1;
   min-height: 0;
   overflow: hidden;
 }

@@ -13,15 +13,15 @@ const WINDOW_STAGGER = {
 };
 
 const DEFAULT_WINDOW_SIZE = {
-  width: 1120,
-  height: 720,
+  width: 1179,
+  height: 823,
 };
 
 const WINDOW_SIZE_LIMITS = {
   minWidth: 640,
   minHeight: 420,
-  maxWidth: 1600,
-  maxHeight: 1000,
+  maxWidth: 1800,
+  maxHeight: 1200,
 };
 
 const RESIZE_DIRECTIONS = {
@@ -154,6 +154,25 @@ export default function WorkspaceWindow({ windowItem, stackIndex = 0, isActive, 
 
     return () => resizeObserver.disconnect();
   }, []);
+
+  // Center the first window (stackIndex === 0) strictly in the central workspace canvas (.workspace_canvas) on initial load
+  React.useEffect(() => {
+    const hasStoredPos = Boolean(windowItem?.metadata?.windowPosition);
+    if (hasStoredPos) return;
+
+    const currentWindow = windowRef.current;
+    if (!currentWindow) return;
+
+    const canvasEl = currentWindow.closest('.workspace_canvas');
+    if (!canvasEl) return;
+
+    const canvasRect = canvasEl.getBoundingClientRect();
+    if (canvasRect.width > 0 && canvasRect.height > 0 && stackIndex === 0) {
+      const centerX = Math.max(0, Math.round((canvasRect.width - size.width) / 2));
+      const centerY = Math.max(0, Math.round((canvasRect.height - size.height) / 2));
+      setPosition({ x: centerX, y: centerY });
+    }
+  }, [stackIndex, size.width, size.height, windowItem?.metadata?.windowPosition]);
 
   const persistLayout = useCallback((nextPosition, nextSize) => {
     if (!onWindowLayoutChange) return;

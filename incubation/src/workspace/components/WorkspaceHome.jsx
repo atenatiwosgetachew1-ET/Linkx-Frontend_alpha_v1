@@ -29,6 +29,97 @@ const mockFindingsData = {
 
 const footerLinks = ['Privacy Policy', 'Terms of Service', 'Contact Us', 'Help'];
 
+function ChevronDownIcon() {
+  return (
+    <svg className="workspace_home_svg_icon workspace_home_scroll_down_icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
+      <polyline points="6 9 12 15 18 9" />
+    </svg>
+  );
+}
+
+function ChevronUpIcon() {
+  return (
+    <svg className="workspace_home_svg_icon workspace_home_scroll_up_icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
+      <polyline points="18 15 12 9 6 15" />
+    </svg>
+  );
+}
+
+function MockLineGraph() {
+  return (
+    <div className="workspace_home_graph_container" aria-label="Ingestion throughput line graph">
+      <div className="workspace_home_graph_meta">
+        <span className="workspace_home_graph_val">4.8 MB/s</span>
+        <span className="workspace_home_graph_trend is-up">+14.2%</span>
+      </div>
+      <svg className="workspace_home_svg_graph" viewBox="0 0 280 64" preserveAspectRatio="none">
+        <defs>
+          <linearGradient id="lineGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="var(--central-graph-stroke, #FCC676)" stopOpacity="0.35" />
+            <stop offset="100%" stopColor="var(--central-graph-stroke, #FCC676)" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <line x1="0" y1="18" x2="280" y2="18" stroke="var(--central-graph-grid, rgba(174, 135, 79, 0.18))" strokeDasharray="4 4" />
+        <line x1="0" y1="42" x2="280" y2="42" stroke="var(--central-graph-grid, rgba(174, 135, 79, 0.18))" strokeDasharray="4 4" />
+        <path d="M0,52 Q40,20 80,36 T160,12 T240,28 T280,8 L280,64 L0,64 Z" fill="url(#lineGrad)" />
+        <path d="M0,52 Q40,20 80,36 T160,12 T240,28 T280,8" fill="none" stroke="var(--central-graph-stroke, #FCC676)" strokeWidth="2.5" strokeLinecap="round" />
+        <circle cx="80" cy="36" r="3" fill="var(--central-secondary-card-bg, #FFFFFF)" stroke="var(--central-graph-stroke, #FCC676)" strokeWidth="2" />
+        <circle cx="160" cy="12" r="3" fill="var(--central-secondary-card-bg, #FFFFFF)" stroke="var(--central-graph-stroke, #FCC676)" strokeWidth="2" />
+        <circle cx="280" cy="8" r="3" fill="var(--central-graph-stroke, #FCC676)" strokeWidth="2" />
+      </svg>
+    </div>
+  );
+}
+
+function MockNetworkGraph() {
+  return (
+    <div className="workspace_home_graph_container" aria-label="Graph analytics network map">
+      <div className="workspace_home_graph_meta">
+        <span className="workspace_home_graph_val">1,248 Nodes</span>
+        <span className="workspace_home_graph_badge">3 Clusters</span>
+      </div>
+      <svg className="workspace_home_svg_graph" viewBox="0 0 280 64">
+        <line x1="40" y1="32" x2="90" y2="16" stroke="var(--central-graph-grid, rgba(174, 135, 79, 0.35))" strokeWidth="1.5" />
+        <line x1="40" y1="32" x2="80" y2="48" stroke="var(--central-graph-grid, rgba(174, 135, 79, 0.35))" strokeWidth="1.5" />
+        <line x1="90" y1="16" x2="140" y2="28" stroke="var(--central-graph-grid, rgba(174, 135, 79, 0.35))" strokeWidth="1.5" />
+        <line x1="80" y1="48" x2="140" y2="28" stroke="var(--central-graph-grid, rgba(174, 135, 79, 0.35))" strokeWidth="1.5" />
+        <line x1="140" y1="28" x2="200" y2="16" stroke="var(--central-graph-grid, rgba(174, 135, 79, 0.35))" strokeWidth="1.5" />
+        <line x1="140" y1="28" x2="190" y2="48" stroke="var(--central-graph-grid, rgba(174, 135, 79, 0.35))" strokeWidth="1.5" />
+        <line x1="200" y1="16" x2="250" y2="32" stroke="var(--central-graph-grid, rgba(174, 135, 79, 0.35))" strokeWidth="1.5" />
+        <line x1="190" y1="48" x2="250" y2="32" stroke="var(--central-graph-grid, rgba(174, 135, 79, 0.35))" strokeWidth="1.5" />
+
+        <circle cx="40" cy="32" r="6" fill="var(--central-graph-stroke, #FCC676)" />
+        <circle cx="90" cy="16" r="4.5" fill="var(--central-graph-node, #213447)" stroke="var(--central-graph-stroke, #FCC676)" strokeWidth="1.5" />
+        <circle cx="80" cy="48" r="4.5" fill="var(--central-graph-node, #213447)" stroke="var(--central-graph-stroke, #FCC676)" strokeWidth="1.5" />
+        <circle cx="140" cy="28" r="8" fill="var(--central-graph-stroke, #FCC676)" />
+        <circle cx="200" cy="16" r="4.5" fill="var(--central-graph-node, #213447)" stroke="var(--central-graph-stroke, #FCC676)" strokeWidth="1.5" />
+        <circle cx="190" cy="48" r="4.5" fill="var(--central-graph-node, #213447)" stroke="var(--central-graph-stroke, #FCC676)" strokeWidth="1.5" />
+        <circle cx="250" cy="32" r="6" fill="var(--central-graph-stroke, #FCC676)" />
+      </svg>
+    </div>
+  );
+}
+
+function MockBarGraph() {
+  return (
+    <div className="workspace_home_graph_container" aria-label="Security compliance bar graph">
+      <div className="workspace_home_graph_meta">
+        <span className="workspace_home_graph_val">99.98%</span>
+        <span className="workspace_home_graph_trend is-neutral">0 Violations</span>
+      </div>
+      <svg className="workspace_home_svg_graph" viewBox="0 0 280 64">
+        <line x1="0" y1="56" x2="280" y2="56" stroke="var(--central-graph-grid, rgba(174, 135, 79, 0.25))" />
+        <rect x="20" y="24" width="22" height="32" rx="3" fill="var(--central-graph-fill, rgba(174, 135, 79, 0.35))" />
+        <rect x="60" y="16" width="22" height="40" rx="3" fill="var(--central-graph-fill, rgba(174, 135, 79, 0.35))" />
+        <rect x="100" y="36" width="22" height="20" rx="3" fill="var(--central-graph-fill, rgba(174, 135, 79, 0.35))" />
+        <rect x="140" y="12" width="22" height="44" rx="3" fill="var(--central-graph-stroke, #FCC676)" />
+        <rect x="180" y="20" width="22" height="36" rx="3" fill="var(--central-graph-fill, rgba(174, 135, 79, 0.35))" />
+        <rect x="220" y="8" width="22" height="48" rx="3" fill="var(--central-graph-stroke, #FCC676)" />
+      </svg>
+    </div>
+  );
+}
+
 function UploadIcon() {
   return (
     <svg className="workspace_home_upload_icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -167,11 +258,47 @@ export default function WorkspaceHome({ openWindowsCount = 0, onOpenWindow }) {
   const [analysisResult, setAnalysisResult] = useState(null);
   const [showDropConfirmModal, setShowDropConfirmModal] = useState(false);
   const [isResetSpinning, setIsResetSpinning] = useState(false);
+  const [isSecondaryResetSpinning, setIsSecondaryResetSpinning] = useState(false);
   const [analyzeButtonLabelText, setAnalyzeButtonLabelText] = useState('Analyze');
   const [analyzingActiveLabelText, setAnalyzingActiveLabelText] = useState('Analyzing');
 
+  const handleResetSecondaryPanel = () => {
+    if (isSecondaryResetSpinning) return;
+    setIsSecondaryResetSpinning(true);
+    setTimeout(() => {
+      setIsSecondaryResetSpinning(false);
+    }, 700);
+  };
+
+  const [isScrolledToSecondary, setIsScrolledToSecondary] = useState(false);
   const liveTimeoutsRef = useRef([]); // Only tracks live progress overlay timeouts
   const activeAnalysisSubRef = useRef(null);
+  const workspaceHomeRef = useRef(null);
+  const secondaryBoxRef = useRef(null);
+  const panelsContainerRef = useRef(null);
+
+  const handleToggleScroll = () => {
+    setIsScrolledToSecondary((prev) => !prev);
+  };
+
+  const handleScrollTop = () => {
+    setIsScrolledToSecondary(false);
+  };
+
+  const handleScrollBottom = () => {
+    setIsScrolledToSecondary(true);
+  };
+
+  useEffect(() => {
+    const container = panelsContainerRef.current;
+    if (!container) return;
+    const handleScroll = () => {
+      const isBottom = container.scrollTop > container.clientHeight * 0.35;
+      setIsScrolledToSecondary(isBottom);
+    };
+    container.addEventListener('scroll', handleScroll, { passive: true });
+    return () => container.removeEventListener('scroll', handleScroll);
+  }, []);
 
   useEffect(() => {
     const updateLabels = () => {
@@ -259,16 +386,16 @@ export default function WorkspaceHome({ openWindowsCount = 0, onOpenWindow }) {
     }
   };
 
-  // Analyze CTA button is active ONLY if files are attached OR a source option + active sub-menu option is selected
-  const isCanAnalyze = uploadedFiles.length > 0 || (selectedSourceMode !== null && selectedSubOption !== null);
-  const isAnalyzeDisabled = isAnalyzing || !isCanAnalyze;
+  // Analyze CTA button is active by default for workspace quick analysis
+  const isCanAnalyze = true;
+  const isAnalyzeDisabled = isAnalyzing;
 
   const handleStartAnalysis = () => {
     if (isAnalyzeDisabled) return;
     clearLiveAnalysisTimeouts();
 
     // Capture current sub-option protocol locally for this task instance
-    const currentSub = selectedSubOption;
+    const currentSub = selectedSubOption || 'realtime';
     activeAnalysisSubRef.current = currentSub;
     if (currentSub && !lockedSubOptions.includes(currentSub)) {
       setLockedSubOptions((prev) => [...prev, currentSub]);
@@ -452,11 +579,37 @@ export default function WorkspaceHome({ openWindowsCount = 0, onOpenWindow }) {
   const isOverlayVisible = isAnalyzing;
 
   return (
-    <div className="workspace_home" aria-label="Workspace start">
-      <section
-        className={`workspace_home_panel${showExpandedReview || analysisResult ? ' is-expanded' : ''}`}
-        aria-label="Quick analysis"
-      >
+    <div className="workspace_home" ref={workspaceHomeRef} aria-label="Workspace start">
+      {/* Vertical Page Dots Indicator (Left-Middle, High Z-Index Level) */}
+      <nav className="workspace_home_page_dots" aria-label="Central panel page navigation">
+        <button
+          type="button"
+          className={`workspace_home_page_dot linkx_tooltip_anchor${!isScrolledToSecondary ? ' is-active' : ''}`}
+          data-tooltip="Quick Analysis Panel"
+          aria-label="Navigate to Quick Analysis Panel"
+          onClick={handleScrollTop}
+        />
+        <button
+          type="button"
+          className={`workspace_home_page_dot linkx_tooltip_anchor${isScrolledToSecondary ? ' is-active' : ''}`}
+          data-tooltip="System Overview Panel"
+          aria-label="Navigate to System Overview Panel"
+          onClick={handleScrollBottom}
+        />
+      </nav>
+
+      {/* Container holding the sliding full-page panels track */}
+      <div className="workspace_home_panels_container" ref={panelsContainerRef}>
+        <div
+          className="workspace_home_panels_track"
+          style={{ transform: `translateY(${isScrolledToSecondary ? '-100%' : '0%'})` }}
+        >
+        {/* Full-Page Viewport Section 1: Quick Analysis Panel */}
+        <div className="workspace_home_viewport_section workspace_home_section_primary">
+        <section
+          className={`workspace_home_panel${showExpandedReview || analysisResult ? ' is-expanded' : ''}`}
+          aria-label="Quick analysis"
+        >
         {/* Semi-transparent Full-Panel Cover Overlay during Analysis */}
         {isOverlayVisible && (
           <div className="workspace_home_analysis_overlay" aria-label="Analysis overlay">
@@ -861,6 +1014,65 @@ export default function WorkspaceHome({ openWindowsCount = 0, onOpenWindow }) {
           </div>
         )}
       </section>
+      </div>
+
+      {/* Full-Page Viewport Section 2: Secondary Central Box */}
+      <div className="workspace_home_viewport_section workspace_home_section_secondary" ref={secondaryBoxRef}>
+        <section className="workspace_home_secondary_box" aria-label="Central workspace overview">
+          <header className="workspace_home_secondary_header">
+            <div className="workspace_home_secondary_title_group">
+              <div className="workspace_home_panel_badge">Central workspace overview</div>
+              <h3>Overview & System Status</h3>
+              <p>Detailed analysis telemetry, pipeline logs, and resource allocation overview.</p>
+            </div>
+            <button
+              type="button"
+              className={`workspace_home_panel_reset_btn linkx_tooltip_anchor${isSecondaryResetSpinning ? ' is-spinning' : ''}`}
+              data-tooltip="Refresh system overview"
+              aria-label="Refresh system overview"
+              onClick={handleResetSecondaryPanel}
+            >
+              <ResetIcon />
+            </button>
+          </header>
+
+          <div className="workspace_home_secondary_content">
+            <div className="workspace_home_secondary_grid">
+              <div className="workspace_home_secondary_card">
+                <div className="workspace_home_secondary_card_header">
+                  <span className="workspace_home_secondary_card_icon">⚡</span>
+                  <strong>Pipeline Ingestion Engine</strong>
+                </div>
+                <p>Auto-detect ingestion engine initialized for real-time streaming & batch workloads.</p>
+                <MockLineGraph />
+                <div className="workspace_home_secondary_pill">Engine: Active</div>
+              </div>
+
+              <div className="workspace_home_secondary_card">
+                <div className="workspace_home_secondary_card_header">
+                  <span className="workspace_home_secondary_card_icon">📊</span>
+                  <strong>Graph Analytics Engine</strong>
+                </div>
+                <p>GDS centrality algorithms and Louvain community detection pre-configured for graph queries.</p>
+                <MockNetworkGraph />
+                <div className="workspace_home_secondary_pill">Algorithms: Ready</div>
+              </div>
+
+              <div className="workspace_home_secondary_card">
+                <div className="workspace_home_secondary_card_header">
+                  <span className="workspace_home_secondary_card_icon">🛡️</span>
+                  <strong>Security & Compliance</strong>
+                </div>
+                <p>Encrypted multi-tenant workspace pipeline with automated privilege validation and session logs.</p>
+                <MockBarGraph />
+                <div className="workspace_home_secondary_pill">Status: Protected</div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+      </div>
+      </div>
 
       {/* Confirmation Window Modal for Dropping Analysis */}
       {showDropConfirmModal && (
@@ -904,8 +1116,18 @@ export default function WorkspaceHome({ openWindowsCount = 0, onOpenWindow }) {
         </div>
       )}
 
+      {/* Static Footer (Anchored statically at default central bottom position) */}
       <footer className="workspace_home_footer" aria-label="Workspace footer">
         <p>© 2026 Linkx. All rights reserved. Authorized use only.</p>
+        <button
+          type="button"
+          className={`workspace_home_footer_round_btn linkx_tooltip_anchor${isScrolledToSecondary ? ' is-active-up' : ''}`}
+          data-tooltip={isScrolledToSecondary ? 'Scroll to quick panel' : 'Scroll to system panel'}
+          aria-label="Scroll workspace panel"
+          onClick={handleToggleScroll}
+        >
+          {isScrolledToSecondary ? <ChevronUpIcon /> : <ChevronDownIcon />}
+        </button>
         <nav aria-label="Footer links">
           {footerLinks.map((label) => (
             <button type="button" key={label}>{label}</button>
