@@ -35,7 +35,6 @@
     }
   },
   "dependencies": {
-    "@linkx/graph-preview": "github:atenatiwosgetachew1-ET/linkx-graph-preview-sdk#v0.1.0",
     "vis-data": "^7.1.9",
     "vis-network": "^9.1.11"
   },

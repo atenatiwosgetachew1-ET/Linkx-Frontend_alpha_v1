@@ -304,14 +304,22 @@ export class GraphRenderer {
     // Loading overlay
     this._loadingEl = document.createElement('div');
     this._loadingEl.className = 'linkx-graph-preview__loading';
-    this._loadingEl.innerHTML = '<div class="linkx-graph-preview__spinner"></div>';
+    const spinner = document.createElement('div');
+    spinner.className = 'linkx-graph-preview__spinner';
+    this._loadingEl.appendChild(spinner);
     this._loadingEl.style.display = 'none';
     this._wrapper.appendChild(this._loadingEl);
 
     // Empty state
     this._emptyEl = document.createElement('div');
     this._emptyEl.className = 'linkx-graph-preview__empty';
-    this._emptyEl.innerHTML = '<div class="linkx-graph-preview__empty-icon">◇</div><div>No graph data</div>';
+    const emptyIcon = document.createElement('div');
+    emptyIcon.className = 'linkx-graph-preview__empty-icon';
+    emptyIcon.textContent = '◇';
+    const emptyText = document.createElement('div');
+    emptyText.textContent = 'No graph data';
+    this._emptyEl.appendChild(emptyIcon);
+    this._emptyEl.appendChild(emptyText);
     this._emptyEl.style.display = 'none';
     this._wrapper.appendChild(this._emptyEl);
 
@@ -325,7 +333,7 @@ export class GraphRenderer {
     if (this._options.showExploreButton) {
       this._exploreBtn = document.createElement('button');
       this._exploreBtn.className = 'linkx-graph-preview__explore-btn';
-      this._exploreBtn.innerHTML = '⬈ Explore Graph';
+      this._exploreBtn.textContent = '⬈ Explore Graph';
       this._exploreBtn.addEventListener('click', () => {
         this._emit('explore', this.getGraphData());
       });
