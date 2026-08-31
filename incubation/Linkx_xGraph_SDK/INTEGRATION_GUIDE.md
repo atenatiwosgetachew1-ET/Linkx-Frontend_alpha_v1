@@ -5,22 +5,11 @@ This guide explains how to seamlessly embed the read-only Link Analysis graph pr
 The SDK handles all complex physics, theming, and layout calculations internally, exposing a very simple API.
 
 ## Step 1: Install the Package
-Since we are not using a private NPM registry, you can install this SDK using one of the following methods depending on your setup:
+Because this is an internal package hosted on GitHub, you can install it directly using the Git URL. We strongly recommend appending `#v0.1.0` (or whatever the latest stable version tag is) to lock your project to a stable release.
 
-**Option A: Install via Tarball (Easiest)**
-1. The SDK team will provide a `.tgz` file (e.g., `linkx-graph-preview-0.1.0.tgz`). Place this file in your project directory.
-2. Run: `npm install ./linkx-graph-preview-0.1.0.tgz`
-
-**Option B: Install via Git Repository**
-If the SDK has been pushed to a private Git repository, install it directly via the URL:
+Run this command in your project directory:
 ```bash
-npm install git+ssh://git@your-git-server.com:your-org/linkx-graph-preview.git
-```
-
-**Option C: Local File Path (Monorepos / Local Dev)**
-If your project and the SDK folder are on the same machine/repo:
-```bash
-npm install ../path/to/Linkx_xGraph_SDK
+npm install git+https://github.com/atenatiwosgetachew1-ET/linkx-graph-preview-sdk.git#v0.1.0
 ```
 
 ## Step 2: Import the Component

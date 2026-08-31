@@ -27,17 +27,22 @@
     "react-dom": ">=18.0.0"
   },
   "peerDependenciesMeta": {
-    "react": { "optional": true },
-    "react-dom": { "optional": true }
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    }
   },
   "dependencies": {
-    "vis-network": "^9.1.11",
-    "vis-data": "^7.1.9"
+    "@linkx/graph-preview": "github:atenatiwosgetachew1-ET/linkx-graph-preview-sdk#v0.1.0",
+    "vis-data": "^7.1.9",
+    "vis-network": "^9.1.11"
   },
   "devDependencies": {
+    "@vitejs/plugin-react": "^4.4.1",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
-    "@vitejs/plugin-react": "^4.4.1",
     "vite": "^6.3.5"
   }
 }
