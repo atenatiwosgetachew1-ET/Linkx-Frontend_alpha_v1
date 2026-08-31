@@ -1,0 +1,43 @@
+{
+  "name": "@linkx/graph-preview",
+  "version": "0.1.0",
+  "description": "Read-only Link Analysis graph preview SDK for embedding in sibling platform modules",
+  "type": "module",
+  "main": "./dist/linkx-graph-preview.umd.cjs",
+  "module": "./dist/linkx-graph-preview.es.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/linkx-graph-preview.es.js",
+      "require": "./dist/linkx-graph-preview.umd.cjs"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "prepare": "npm run build"
+  },
+  "peerDependencies": {
+    "react": ">=18.0.0",
+    "react-dom": ">=18.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react": { "optional": true },
+    "react-dom": { "optional": true }
+  },
+  "dependencies": {
+    "vis-network": "^9.1.11",
+    "vis-data": "^7.1.9"
+  },
+  "devDependencies": {
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "@vitejs/plugin-react": "^4.4.1",
+    "vite": "^6.3.5"
+  }
+}
