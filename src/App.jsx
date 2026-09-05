@@ -680,30 +680,36 @@ function HomeMenuOverlay({ toggleAction, canAccess = () => true, areBackgroundAn
   const actionItems = [
     {
       label: "New source",
-      icon: "+",
+      icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ width: "1em", height: "1em", opacity: 0.9 }}><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>,
       action: "toggle_menu_new_source_window",
       permission: PERMISSIONS.SOURCE_CREATE,
     },
     {
       label: "New Graph",
-      icon: "✣",
+      icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ width: "1em", height: "1em", opacity: 0.9 }}><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>,
       action: "toggle_menu_new_graph_window",
       permission: PERMISSIONS.GRAPH_CREATE,
     },
     {
+      label: "Reports",
+      icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ width: "1em", height: "1em", opacity: 0.9 }}><path d="M11 6h10"></path><path d="M11 12h10"></path><path d="M11 18h10"></path><polyline points="3 6 4 7 7 4"></polyline><polyline points="3 12 4 13 7 10"></polyline><polyline points="3 18 4 19 7 16"></polyline></svg>,
+      action: "toggle_menu_new_report_window",
+      permission: PERMISSIONS.GRAPH_CREATE,
+    },
+    {
       label: "Saved Graphs",
-      icon: "▣",
+      icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" style={{ width: "1em", height: "1em", opacity: 0.9 }}><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>,
       action: "saved_graphs",
       disabled: true,
     },
     {
       label: "Settings",
-      icon: "⚙",
+      icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ width: "1em", height: "1em", opacity: 0.9 }}><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>,
       action: "settings",
     },
     {
       label: "Configurations",
-      icon: "☷",
+      icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ width: "1em", height: "1em", opacity: 0.9 }}><path d="M21 7.5a6 6 0 0 1-8.5 5.5L6.1 19.4a2.1 2.1 0 0 1-3-3l6.4-6.4A6 6 0 0 1 15 3l-3.1 3.1a1.2 1.2 0 0 0 0 1.7l1.3 1.3a1.2 1.2 0 0 0 1.7 0L18 6a6 6 0 0 1 3-.5Z"></path></svg>,
       action: "configurations",
       permission: PERMISSIONS.CONFIG_READ,
     },
@@ -843,19 +849,21 @@ function ToggleMenu({ onToggle, isToggleMenuOpen, toggleAction, isMaximized, win
               <ul>
                 <div className="toogle_side_list_menu_container">  
                   {canAccess(PERMISSIONS.SOURCE_CREATE) && (
-                  <li onClick={() => toggleAction("toggle_menu_new_source_window")}>    
-                    {/*<i>
-                      <Icons id="toggle_menu" type="source_window" condition="True"/>
-                    </i> */}  
-                    <span>&#10011; &nbsp;Source window</span>
+                  <li onClick={() => toggleAction("toggle_menu_new_source_window")} style={{ display: "flex", alignItems: "center", gap: "10px" }}>    
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ width: "16px", height: "16px" }}><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>
+                    <span>Source window</span>
                   </li>
                   )}
                   {canAccess(PERMISSIONS.GRAPH_CREATE) && (
-                  <li onClick={() => toggleAction("toggle_menu_new_graph_window")}>    
-                    {/*<i>
-                      <Icons id="toggle_menu" type="garph_window" condition="True"/>
-                    </i>  */}            
-                    <span>&#10011; &nbsp;Graph window</span>
+                  <li onClick={() => toggleAction("toggle_menu_new_graph_window")} style={{ display: "flex", alignItems: "center", gap: "10px" }}>    
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ width: "16px", height: "16px" }}><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>
+                    <span>Graph window</span>
+                  </li>
+                  )}
+                  {canAccess(PERMISSIONS.GRAPH_CREATE) && (
+                  <li onClick={() => toggleAction("toggle_menu_new_report_window")} style={{ display: "flex", alignItems: "center", gap: "10px" }}>    
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ width: "16px", height: "16px" }}><path d="M11 6h10"></path><path d="M11 12h10"></path><path d="M11 18h10"></path><polyline points="3 6 4 7 7 4"></polyline><polyline points="3 12 4 13 7 10"></polyline><polyline points="3 18 4 19 7 16"></polyline></svg>
+                    <span>Reports</span>
                   </li>
                   )}
                   {/*<li onClick={() => toggleAction("toggle_menu_new_chart_window")}>    
@@ -6785,6 +6793,7 @@ function LinkxWorkspace() {
   const [configurations, setConfigurations] = useState({});
   const [isConfigurationsOpen, setIsConfigurationsOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isReportsOpen, setIsReportsOpen] = useState(false);
   const [isWorkspaceLocked, setIsWorkspaceLocked] = useState(false);
   const [isUnlockingWorkspace, setIsUnlockingWorkspace] = useState(false);
   const [idleResetSeq, setIdleResetSeq] = useState(0);
@@ -7161,7 +7170,7 @@ const fileInputRef = useRef(null);
   // }, [orientation]);
 
   const hasOpenWindows = windows.length > 0;
-  const hasVisibleWorkspacePanel = hasOpenWindows || isConfigurationsOpen || isSettingsOpen;
+  const hasVisibleWorkspacePanel = hasOpenWindows || isConfigurationsOpen || isSettingsOpen || isReportsOpen;
   const showHomeOverlay = !hasVisibleWorkspacePanel;
   const showDarkFloatingMenu = themeMode === "dark" && !isToggleMenuOpen && hasOpenWindows && orientation === "windows";
 
@@ -9321,7 +9330,7 @@ const fileInputRef = useRef(null);
         setWindows((prev) =>
           prev.map((windowState) =>
             String(windowState.id) === graphWindowId
-              ? { ...windowState, loadscreenState: false, loadscreenText: null, activeGraph: 'graphs_basic' }
+              ? { ...windowState, loadscreenState: false, loadscreenText: null, activeGraph: 'graphs_basic', selectedContent: 'graph_content' }
               : windowState
           )
         );
@@ -9362,7 +9371,13 @@ const fileInputRef = useRef(null);
         setWindows((prev) =>
           prev.map((windowState) =>
             String(windowState.id) === graphWindowId
-              ? { ...windowState, loadscreenState: false, loadscreenText: null, activeGraph: isSuccessResponse(data) ? "graphs_basic" : null }
+              ? {
+                  ...windowState,
+                  loadscreenState: false,
+                  loadscreenText: null,
+                  activeGraph: isSuccessResponse(data) ? "graphs_basic" : null,
+                  selectedContent: isSuccessResponse(data) ? "graph_content" : windowState.selectedContent
+                }
               : windowState
           )
         );
@@ -9567,7 +9582,7 @@ const fileInputRef = useRef(null);
     if (menuId === "get_graph" && !requirePermission(PERMISSIONS.GRAPH_READ, "graph data")) return;
 
     // Debounce wrapper for actions that need delay
-    runScopedDebounce(graphActionDebounceRef, id, () => {
+    runScopedDebounce(graphActionDebounceRef, `${id}_${menuId}`, () => {
       setWindows(prev =>
         prev.map(w => {
           if (w.id !== id) return w;
@@ -12795,10 +12810,18 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
     else if(id === "configurations") {
       setIsConfigurationsOpen(prev => !prev);
       setIsSettingsOpen(false);
+      setIsReportsOpen(false);
+    }
+    else if(id === "toggle_menu_new_report_window") {
+      setIsReportsOpen(prev => !prev);
+      setIsSettingsOpen(false);
+      setIsConfigurationsOpen(false);
+      setIsToggleMenuOpen(false);
     }
     else if(id === "settings") {
       setIsSettingsOpen(prev => !prev);
       setIsConfigurationsOpen(false);
+      setIsReportsOpen(false);
     }
     else if (id === "toggle_menu_mood") {
       setThemeMode(prev => (prev === "light" ? "dark" : "light"));
@@ -12851,6 +12874,7 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
         <Taskbar windows={windows} isTaskBarOpen={isTaskBarOpen} activeWindowId={activeWindowId} focusWindow={handleFocusWindow} toggleAction={handleToggleMenu} isCtrlHeld={isCtrlHeld}/>
         <Configurations sessionId={sessionId} actions={handleConfigurationActions} loadscreenState={loadscreenState} setloadscreenState={setloadscreenState} toggleAction={handleToggleMenu} configurations={configurations} isConfigurationsOpen={isConfigurationsOpen} apiFetch={apiFetch} canAccess={canAccess} idleSettings={idleSettings} idlePolicyMeta={idlePolicyMeta} onIdleSettingsChange={updateIdleSettings}/>
         <Settings isSettingsOpen={isSettingsOpen} toggleAction={handleToggleMenu} actor={actor || user} roles={roles} permissions={permissions} canAccess={canAccess} apiFetch={apiFetch} sessionId={sessionId} onNotice={pushNotification} onLogout={() => performLogout("user_logout")} areBackgroundAnimationsEnabled={areBackgroundAnimationsEnabled} onBackgroundAnimationsChange={setBackgroundAnimationsEnabled} />
+        <Reports isReportsOpen={isReportsOpen} toggleAction={handleToggleMenu} handleOpenWindows={handleOpenWindows} graphAction={handleGraphActions} actor={actor || user} roles={roles} permissions={permissions} canAccess={canAccess} apiFetch={apiFetch} sessionId={sessionId} onNotice={pushNotification} onLogout={() => performLogout("user_logout")} areBackgroundAnimationsEnabled={areBackgroundAnimationsEnabled} onBackgroundAnimationsChange={setBackgroundAnimationsEnabled} />
         <Main userName={userName} setSessionId={setSessionId} API_URL={API_URL} debounceRef={debounceRef} setConfigurations={setConfigurations} configurations={configurations} windows={windows} setWindows={setWindows} openWindows={handleOpenWindows} themeMode={themeMode} areBackgroundAnimationsEnabled={areBackgroundAnimationsEnabled} />
         {isWorkspaceLocked && (
           <WorkspaceLockOverlay
@@ -13100,6 +13124,490 @@ function WorkspaceLockOverlay({ user, isUnlocking, lockMinutes, logoutMinutes, l
           <button type="button" onClick={onUnlock} disabled={isUnlocking}>{isUnlocking ? "Unlocking..." : "Unlock"}</button>
           <button type="button" onClick={onLogout} disabled={isUnlocking}>Log out</button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function formatJSON(json) {
+  if (!json) return "";
+  let str = JSON.stringify(json, null, 2);
+  str = str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return str.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, function (match) {
+    let cls = 'json_number';
+    if (/^"/.test(match)) {
+      if (/:$/.test(match)) {
+        cls = 'json_key';
+      } else {
+        cls = 'json_string';
+      }
+    } else if (/true|false/.test(match)) {
+      cls = 'json_boolean';
+    } else if (/null/.test(match)) {
+      cls = 'json_null';
+    }
+    return '<span class="' + cls + '">' + match + '</span>';
+  });
+}
+
+function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, actor, roles = [], permissions = [], canAccess, apiFetch, sessionId, onNotice, onLogout, areBackgroundAnimationsEnabled = true, onBackgroundAnimationsChange }) {
+  const [activeReportsTab, setActiveReportsTab] = useState("parent");
+  const [reportsData, setReportsData] = useState([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [offset, setOffset] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [selectedReport, setSelectedReport] = useState(null);
+
+  const limit = 50;
+
+  const tabs = [
+    { id: "parent", label: "Alert reports", endpoint: "/api/v1/reports/parent" },
+    { id: "xvigilance", label: "System reports", endpoint: "/api/v1/reports/xvigilance" },
+    { id: "evidence", label: "Service evedences", endpoint: "/api/v1/reports/evidence" },
+  ];
+
+  const handleShowGraph = (traceId) => {
+    if (!traceId) {
+      onNotice({ title: "Error", message: "No trace ID found for this report.", level: "error" });
+      return;
+    }
+    if (typeof handleOpenWindows === "function" && typeof graphAction === "function") {
+      const newGraphId = handleOpenWindows("graph", "");
+      if (newGraphId) {
+        toggleAction("toggle_menu_new_report_window");
+        setTimeout(() => {
+          graphAction(newGraphId, "get_graph", "evidence", { fetchType: "evidence", traceId: traceId });
+        }, 150);
+      }
+    } else {
+      onNotice({ title: "Error", message: "Graph manager not available.", level: "error" });
+    }
+  };
+
+  useEffect(() => {
+    if (isReportsOpen) {
+      loadReports();
+    }
+  }, [isReportsOpen, activeReportsTab, offset]);
+
+  const loadReports = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const tabConf = tabs.find(t => t.id === activeReportsTab);
+      const url = `${tabConf.endpoint}?limit=${limit}&offset=${offset}`;
+      const data = await apiFetch(url, { suppressForbiddenHandler: true });
+      setReportsData(data.data || []);
+      setTotalCount(data.count || 0);
+    } catch (err) {
+      setError(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleTabClick = (tabId) => {
+    if (activeReportsTab !== tabId) {
+      setActiveReportsTab(tabId);
+      setOffset(0);
+      setSelectedReport(null);
+    }
+  };
+
+  const handleNext = () => {
+    if (offset + limit < totalCount) {
+      setOffset(prev => prev + limit);
+      setSelectedReport(null);
+    }
+  };
+
+  const handlePrev = () => {
+    if (offset - limit >= 0) {
+      setOffset(prev => prev - limit);
+      setSelectedReport(null);
+    }
+  };
+
+
+
+  const renderContent = () => {
+    if (error && error.status === 403) {
+      return (
+        <div style={{ padding: "40px", textAlign: "center", color: "#e74c3c" }}>
+          <h2>Access Denied</h2>
+          <p>You do not have permission to view this report data.</p>
+        </div>
+      );
+    }
+    
+    if (error) {
+      return <div style={{ padding: "20px", color: "#e74c3c" }}>Error: {error.message}</div>;
+    }
+
+    if (loading && reportsData.length === 0) {
+      return <div style={{ padding: "20px" }}>Loading reports...</div>;
+    }
+
+    return (
+      <div className="cleanup_audit_table_wrap" style={{ height: "100%", maxHeight: "none", overflowY: "auto" }}>
+          <table className="cleanup_audit_table" cellSpacing="0" cellPadding="0" style={{ width: "100%", height: reportsData.length === 0 ? "100%" : "auto", tableLayout: "fixed" }}>
+          <colgroup>
+            <col style={{ width: "25%" }} />
+            <col style={{ width: "30%" }} />
+            <col style={{ width: "20%" }} />
+            <col style={{ width: "25%" }} />
+          </colgroup>
+          <thead>
+            <tr>
+              <th>Type</th>
+              <th>Source</th>
+              <th>Status</th>
+              <th>Date</th>
+            </tr>
+          </thead>
+          <tbody>
+            {reportsData.length === 0 ? (
+              <tr>
+                <td colSpan="4" style={{ textAlign: "center", padding: "40px 20px", color: "inherit", opacity: 0.6, borderBottom: "none", verticalAlign: "middle" }}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ width: "40px", height: "40px", marginBottom: "10px", opacity: 0.5 }}>
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                  </svg>
+                  <div style={{ fontSize: "14px", fontWeight: "500" }}>No reports found</div>
+                  <div style={{ fontSize: "12px", marginTop: "4px" }}>Try adjusting your filters or date range.</div>
+                </td>
+              </tr>
+            ) : (
+              reportsData.map(report => {
+                const s = (report.status || "").toLowerCase();
+                let statusStyle = { background: "rgba(241, 196, 15, 0.15)", color: "#f39c12", border: "1px solid rgba(241, 196, 15, 0.4)" };
+                if (s === "completed" || s === "success" || s === "new") statusStyle = { background: "rgba(46, 204, 113, 0.15)", color: "#27ae60", border: "1px solid rgba(46, 204, 113, 0.4)" };
+                else if (s === "failed" || s === "error") statusStyle = { background: "rgba(231, 76, 60, 0.15)", color: "#c0392b", border: "1px solid rgba(231, 76, 60, 0.4)" };
+                else if (s === "resolved") statusStyle = { background: "rgba(149, 165, 166, 0.15)", color: "#7f8c8d", border: "1px solid rgba(149, 165, 166, 0.4)" };
+
+                return (
+                  <tr 
+                    key={report.id} 
+                    onClick={() => setSelectedReport(report)}
+                    className={selectedReport?.id === report.id ? "active_row" : ""}
+                    style={{ cursor: "pointer", transition: "background 0.2s" }}
+                  >
+                    <td>
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ width: "12px", height: "12px", opacity: 0.5 }}>
+                          <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path>
+                          <line x1="7" y1="7" x2="7.01" y2="7"></line>
+                        </svg>
+                        <b style={{ fontWeight: "600", fontSize: "12px" }}>{report.report_type}</b>
+                      </div>
+                    </td>
+                    <td>
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ width: "12px", height: "12px", opacity: 0.5 }}>
+                          <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
+                          <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path>
+                          <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
+                        </svg>
+                        <span style={{ fontWeight: "500", fontSize: "12px", opacity: 0.9 }}>{report.source_system}</span>
+                      </div>
+                    </td>
+                    <td>
+                      <span style={{ 
+                        background: statusStyle.background, 
+                        color: statusStyle.color, 
+                        border: statusStyle.border,
+                        padding: "3px 8px", 
+                        borderRadius: "12px", 
+                        fontSize: "10px", 
+                        fontWeight: "700",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.5px",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "4px"
+                      }}>
+                        <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: statusStyle.color }} />
+                        {report.status}
+                      </span>
+                    </td>
+                    <td style={{ opacity: 0.6, fontSize: "11px", fontWeight: "500" }}>
+                      {new Date(report.created_at).toLocaleString()}
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
+  return (
+    <div id="configurations_container" style={{ display: isReportsOpen ? "block" : "none" }}>
+      <div className="configurations_options_container settings_options_container" style={{ display: "flex", flexDirection: "row", width: "90%", maxWidth: "1200px" }}>
+        
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
+          <div className="configurations_options_container_bar">
+            <span onClick={() => toggleAction("toggle_menu_new_report_window")}>x</span>
+            <label>Reports</label>
+          </div>
+          <div className="configurations_options" style={{ display: "flex", flexDirection: "column", height: "calc(100% - 30px)" }}>
+            <div className="configurations_tabs">
+              {tabs.map((tab) => (
+                <button key={tab.id} type="button" className={activeReportsTab === tab.id ? "active" : ""} onClick={() => handleTabClick(tab.id)}>
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+            <form className="configurations_tab_form" onSubmit={(event) => event.preventDefault()} style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+              <div className="configurations_options_panel" style={{ flex: 1, overflow: "hidden", padding: 0 }}>
+                {renderContent()}
+              </div>
+            </form>
+            <div className="cleanup_audit_actions">
+              <span className="sublabel" style={{ fontWeight: "500", opacity: 0.8 }}>
+                Showing {reportsData.length > 0 ? offset + 1 : 0} to {Math.min(offset + limit, totalCount)} of {totalCount}
+              </span>
+              <div style={{ display: "flex", gap: "12px" }}>
+                <button type="button" onClick={handlePrev} disabled={offset === 0 || loading}>Previous</button>
+                <button type="button" onClick={handleNext} disabled={offset + limit >= totalCount || loading}>Next</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Detail Panel */}
+        {selectedReport && (() => {
+          const s = (selectedReport.status || "").toLowerCase();
+          let statusStyle = { background: "rgba(241, 196, 15, 0.15)", color: "#f39c12" };
+          if (s === "completed" || s === "success" || s === "new") statusStyle = { background: "rgba(46, 204, 113, 0.15)", color: "#27ae60" };
+          else if (s === "failed" || s === "error") statusStyle = { background: "rgba(231, 76, 60, 0.15)", color: "#c0392b" };
+          else if (s === "resolved") statusStyle = { background: "rgba(149, 165, 166, 0.15)", color: "#7f8c8d" };
+          
+          return (
+            <div id="report_detail_panel_wrap" style={{ width: "340px", display: "flex", flexDirection: "column", background: "rgb(255, 255, 255)", borderLeft: "1px dashed rgb(217, 197, 177)", zIndex: 2, animation: "slideInPanel 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards", overflow: "hidden" }}>
+              {/* Header */}
+              <div style={{ padding: "16px 30px", borderBottom: "1px solid rgba(128,128,128,0.15)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                  <div style={{ 
+                    width: "28px", 
+                    height: "28px", 
+                    borderRadius: "50%", 
+                    background: "var(--window-parent-bar-bg-color, #131e2a)", 
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    boxShadow: "0 2px 5px rgba(0,0,0,0.15)"
+                  }}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ width: "13px", height: "13px" }}>
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                      <polyline points="14 2 14 8 20 8"></polyline>
+                      <line x1="16" y1="13" x2="8" y2="13"></line>
+                      <line x1="16" y1="17" x2="8" y2="17"></line>
+                      <polyline points="10 9 9 9 8 9"></polyline>
+                    </svg>
+                  </div>
+                  <h3 style={{ margin: 0, fontSize: "16px", fontWeight: "600", letterSpacing: "0.5px", color: "var(--window-parent-bar-bg-color, #131e2a)" }}>Report Details</h3>
+                </div>
+                <button 
+                  type="button" 
+                  onClick={() => {
+                    const panel = document.getElementById("report_detail_panel_wrap");
+                    if(panel) {
+                      panel.style.animation = "slideOutPanel 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards";
+                      setTimeout(() => setSelectedReport(null), 280);
+                    } else {
+                      setSelectedReport(null);
+                    }
+                  }} 
+                  style={{ 
+                    background: "rgba(128,128,128,0.08)", 
+                    border: "1px solid rgba(128,128,128,0.2)", 
+                    cursor: "pointer", 
+                    width: "26px", 
+                    height: "26px", 
+                    borderRadius: "6px", 
+                    display: "flex", 
+                    alignItems: "center", 
+                    justifyContent: "center", 
+                    color: "inherit", 
+                    opacity: 0.7, 
+                    transition: "opacity 0.2s" 
+                  }} 
+                  onMouseOver={(e) => e.target.style.opacity = 1} 
+                  onMouseOut={(e) => e.target.style.opacity = 0.7}
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: "14px", height: "14px" }}>
+                    <polyline points="15 18 9 12 15 6"></polyline>
+                  </svg>
+                </button>
+              </div>
+              
+              {/* Body */}
+              <div style={{ flex: 1, overflowY: "auto", padding: "20px 30px" }}>
+                
+                {/* Top Pills / Cards */}
+                <div style={{ display: "flex", gap: "8px", marginBottom: "25px", flexWrap: "wrap" }}>
+                  
+                  {/* Type Card */}
+                  <div style={{ 
+                    flex: "1 1 30%",
+                    padding: "8px", 
+                    borderRadius: "8px", 
+                    background: "rgba(52, 152, 219, 0.06)", 
+                    border: "1px solid rgba(52, 152, 219, 0.25)",
+                    color: "#2980b9",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px"
+                  }}>
+                    <div style={{ background: "rgba(52, 152, 219, 0.15)", padding: "5px", borderRadius: "6px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ width: "12px", height: "12px" }}>
+                        <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path>
+                        <line x1="7" y1="7" x2="7.01" y2="7"></line>
+                      </svg>
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "1px", minWidth: 0 }}>
+                      <span style={{ opacity: 0.8, fontSize: "9px", textTransform: "uppercase", letterSpacing: "0.5px", color: "inherit" }}>Type</span>
+                      <span style={{ fontSize: "11px", fontWeight: "700", color: "inherit", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{selectedReport.report_type}</span>
+                    </div>
+                  </div>
+                  
+                  {/* Source Card */}
+                  <div style={{ 
+                    flex: "1 1 30%",
+                    padding: "8px", 
+                    borderRadius: "8px", 
+                    background: "rgba(155, 89, 182, 0.06)", 
+                    border: "1px solid rgba(155, 89, 182, 0.25)",
+                    color: "#8e44ad",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px"
+                  }}>
+                    <div style={{ background: "rgba(155, 89, 182, 0.15)", padding: "5px", borderRadius: "6px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ width: "12px", height: "12px" }}>
+                        <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
+                        <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path>
+                        <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
+                      </svg>
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "1px", minWidth: 0 }}>
+                      <span style={{ opacity: 0.8, fontSize: "9px", textTransform: "uppercase", letterSpacing: "0.5px", color: "inherit" }}>Source</span>
+                      <span style={{ fontSize: "11px", fontWeight: "700", color: "inherit", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{selectedReport.source_system}</span>
+                    </div>
+                  </div>
+                  
+                  {/* Status Card */}
+                  <div style={{ 
+                    flex: "1 1 30%",
+                    padding: "8px", 
+                    borderRadius: "8px", 
+                    background: statusStyle.background, 
+                    border: `1px solid ${statusStyle.color}40`,
+                    color: statusStyle.color,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px"
+                  }}>
+                    <div style={{ background: `${statusStyle.color}25`, padding: "5px", borderRadius: "6px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ width: "12px", height: "12px" }}>
+                        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                      </svg>
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "1px", minWidth: 0 }}>
+                      <span style={{ opacity: 0.8, fontSize: "9px", textTransform: "uppercase", letterSpacing: "0.5px", color: "inherit" }}>Status</span>
+                      <span style={{ fontSize: "11px", fontWeight: "700", textTransform: "uppercase", color: "inherit", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{selectedReport.status}</span>
+                    </div>
+                  </div>
+
+                </div>
+
+                {/* Main Grid */}
+                <div className="profile_grid" style={{ border: "none", padding: "0" }}>
+                  <span>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                      <polyline points="14 2 14 8 20 8"></polyline>
+                      <line x1="16" y1="13" x2="8" y2="13"></line>
+                      <line x1="16" y1="17" x2="8" y2="17"></line>
+                      <polyline points="10 9 9 9 8 9"></polyline>
+                    </svg>
+                    ID
+                  </span>
+                  <b>{selectedReport.id}</b>
+                  
+                  <span>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+                      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+                    </svg>
+                    Ref ID
+                  </span>
+                  <b>{selectedReport.external_reference_id || "-"}</b>
+                  
+                  <span>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <polyline points="12 6 12 12 16 14"></polyline>
+                    </svg>
+                    Created
+                  </span>
+                  <b>{new Date(selectedReport.created_at).toLocaleString()}</b>
+                </div>
+                
+                {/* Payload Section */}
+                <div style={{ borderTop: "1px solid rgba(128,128,128,0.15)", paddingTop: "20px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+                    <span style={{ display: "block", opacity: 0.7, fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Payload Data</span>
+                    <button 
+                      type="button" 
+                      onClick={() => {
+                        navigator.clipboard.writeText(JSON.stringify(selectedReport.payload, null, 2));
+                        onNotice({ title: "Copied", message: "Payload copied to clipboard", level: "info" });
+                      }}
+                      style={{ background: "transparent", border: "1px solid rgba(128,128,128,0.3)", borderRadius: "4px", padding: "4px 8px", fontSize: "10px", cursor: "pointer", opacity: 0.8, color: "inherit", transition: "opacity 0.2s" }}
+                      onMouseOver={(e) => e.target.style.opacity = 1}
+                      onMouseOut={(e) => e.target.style.opacity = 0.8}
+                    >
+                      Copy JSON
+                    </button>
+                  </div>
+                  <div style={{ padding: "12px", background: "rgba(128,128,128,0.05)", border: "1px solid rgba(128,128,128,0.1)", borderRadius: "6px" }}>
+                    <pre 
+                      style={{ margin: 0, fontSize: "inherit", whiteSpace: "pre-wrap", wordBreak: "break-word", color: "inherit" }}
+                      dangerouslySetInnerHTML={{ __html: formatJSON(selectedReport.payload) }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer Action */}
+              <div style={{ padding: "16px 30px", borderTop: "1px solid rgba(128,128,128,0.15)", background: "rgba(128,128,128,0.02)" }}>
+                <button 
+                  type="button"
+                  className="report_tab_btn active"
+                  style={{ 
+                    width: "100%", 
+                    padding: "10px", 
+                    fontWeight: "600", 
+                    borderRadius: "6px",
+                    cursor: "pointer",
+                    transition: "opacity 0.2s, box-shadow 0.2s"
+                  }}
+                  onMouseOver={(e) => e.target.style.opacity = 0.85}
+                  onMouseOut={(e) => e.target.style.opacity = 1}
+                  onClick={() => handleShowGraph(selectedReport.external_reference_id || selectedReport.id)}
+                >
+                  Show Graph
+                </button>
+              </div>
+            </div>
+          );
+        })()}
+
       </div>
     </div>
   );
