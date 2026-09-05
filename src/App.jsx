@@ -9220,13 +9220,295 @@ const fileInputRef = useRef(null);
       postMessageToIframe(iframe, { action: msgAction, payload: msgPayload });
     };
 
-    const iframeSrc = iframe.current.src;
+    const iframeSrc = iframe.current.src || "";
     if (iframeSrc.includes("graphs_basic")) {
       send();
     } else {
-      iframe.current.onload = send;
+      const handleLoad = () => {
+        if (iframe.current && iframe.current.src.includes("graphs_basic")) {
+          send();
+        } else if (iframe.current) {
+          iframe.current.onload = handleLoad; // Wait for the next load
+        }
+      };
+      iframe.current.onload = handleLoad;
     }
   };
+  const requestEvidenceGraph = (windowId, payload, options = {}) => {
+    const iframe = payload?.iframe || null;
+    const traceId = String(payload?.traceId || "").trim();
+    const requestOrigin = options.requestOrigin || "manual";
+    const graphWindowId = String(windowId || "").trim();
+
+    if (!graphWindowId || !traceId) {
+      logGraphWindowDebug("graph fetch skipped", {
+        reason: "missing_required_payload",
+        graph_window_id: graphWindowId,
+        trace_id: traceId,
+        request_origin: requestOrigin,
+      });
+      return;
+    }
+
+    const newPayload = {
+      id: "evidence",
+      trace_id: traceId,
+    };
+
+    if (graphFetchAbortControllersRef.current[graphWindowId]) {
+      graphFetchAbortControllersRef.current[graphWindowId].abort();
+      delete graphFetchAbortControllersRef.current[graphWindowId];
+    }
+    const controller = new AbortController();
+    graphFetchAbortControllersRef.current[graphWindowId] = controller;
+    delete graphProgressRenderedRef.current[graphWindowId];
+    graphAutoRequestedRef.current[graphWindowId] = requestOrigin === "auto_relationships";
+
+    logGraphWindowDebug("graph fetch request", {
+      graph_window_id: graphWindowId,
+      trace_id: traceId,
+      request_origin: requestOrigin,
+    });
+
+    const buildGraphProgressPayload = (response, complete = false) => {
+      const responseResults = response?.results && typeof response.results === "object" ? response.results : {};
+      const summary = responseResults?.result && typeof responseResults.result === "object" ? responseResults.result : {};
+      const currentNodes = Array.isArray(responseResults.nodes) ? responseResults.nodes.length : 0;
+      const currentEdges = Array.isArray(responseResults.edges) ? responseResults.edges.length : 0;
+      const totalNodes = Number(summary.total_nodes);
+      const totalEdges = Number(summary.total_edges);
+      const total = Number.isFinite(totalNodes) && Number.isFinite(totalEdges)
+        ? Math.max(1, totalNodes + totalEdges)
+        : null;
+      return {
+        title: "Fetching graph data...",
+        current: currentNodes + currentEdges,
+        total,
+        status: complete ? "done" : (response?.status || "fetching"),
+        trace_id: traceId,
+        complete,
+      };
+    };
+
+    const processFinalData = (data) => {
+        console.log("[graph evidence fetch received raw]", {
+          graph_window_id: graphWindowId,
+          trace_id: traceId,
+          request_origin: requestOrigin,
+          data,
+        });
+        if (!graphFetchAbortControllersRef.current[graphWindowId] || graphFetchAbortControllersRef.current[graphWindowId] !== controller) return;
+        const normalizedResults = data?.results || {};
+        const nodes = Array.isArray(normalizedResults.nodes) ? normalizedResults.nodes : [];
+        const edges = Array.isArray(normalizedResults.edges) ? normalizedResults.edges : [];
+
+        setWindows((prev) =>
+          prev.map((windowState) =>
+            String(windowState.id) === graphWindowId
+              ? {
+                  ...windowState,
+                  loadscreenState: false,
+                  loadscreenText: null,
+                  activeGraph: isSuccessResponse(data) ? "graphs_basic" : null,
+                  selectedContent: isSuccessResponse(data) ? "graph_content" : windowState.selectedContent
+                }
+              : windowState
+          )
+        );
+
+        const progress = buildGraphProgressPayload(data, true);
+        console.log("[graph debug] graph fetch response", {
+          graph_window_id: graphWindowId,
+          trace_id: traceId,
+          request_origin: requestOrigin,
+          node_count: nodes.length,
+          edge_count: edges.length,
+          ok: isSuccessResponse(data),
+        });
+
+        if (isSuccessResponse(data)) {
+          delete activeGraphJobsRef.current[graphWindowId];
+          const hasRenderedGraph = graphProgressRenderedRef.current[graphWindowId] === true;
+          const messageAction = hasRenderedGraph ? "graph_chunk_update" : "new_graph";
+          const sourceWindowState = windowsRef.current.find((windowState) => String(windowState.id) === graphWindowId);
+          const settingsToApply = normalizeGraphIframeSettings(iframeSettings[graphWindowId] || sourceWindowState?.iframeSettings);
+          if (!hasRenderedGraph) {
+            settingsToApply[2] = normalizeGraphLimitRange({ min: 0, max: 25 }, 25);
+            updateIframeSettings(graphWindowId, 2, { min: 0, max: 25 });
+          }
+          const targetIframe = iframe || iframeRefs.current[graphWindowId];
+          console.log("[evidence debug iframe]", { graphWindowId, iframePassed: !!iframe, targetIframe, targetIframeCurrent: targetIframe?.current, iframeRefsKeys: Object.keys(iframeRefs.current || {}) });
+        sendGraphMessageToIframe(targetIframe, messageAction, {
+            id: graphWindowId,
+            nodes,
+            edges,
+            settings: settingsToApply,
+            progress: buildGraphProgressPayload(data, true),
+          });
+          graphProgressRenderedRef.current[graphWindowId] = true;
+          
+          if (!hasRenderedGraph) {
+            setTimeout(() => {
+              postMessageToIframe(targetIframe, { action: "graph_physics", payload: { enabled: true } });
+            }, 100);
+          }
+        }
+    };
+    
+    if (options.initialData) {
+      processFinalData(options.initialData);
+      return;
+    }
+
+    requestGraphFetch(apiFetch, newPayload, controller.signal, {
+      onQueued: (queuedData) => {
+        const jobId = getQueuedJobId(queuedData);
+        const status = getJobStatus(queuedData);
+        if (jobId) {
+          activeGraphJobsRef.current[graphWindowId] = jobId;
+        }
+        logGraphWindowDebug("graph fetch queued", {
+          graph_window_id: graphWindowId,
+          trace_id: traceId,
+          request_origin: requestOrigin,
+          job_id: jobId || null,
+          status: status || null,
+        });
+      },
+      onProgress: (partialData, progressMeta) => {
+        if (!graphFetchAbortControllersRef.current[graphWindowId] || graphFetchAbortControllersRef.current[graphWindowId] !== controller) return;
+        const partialResults = partialData?.results || {};
+        const nodes = Array.isArray(partialResults.nodes) ? partialResults.nodes : [];
+        const edges = Array.isArray(partialResults.edges) ? partialResults.edges : [];
+        console.log('[graph fetch progress]', {
+          graph_window_id: graphWindowId,
+          trace_id: traceId,
+          request_origin: requestOrigin,
+          status: progressMeta?.status || null,
+          after_event_id: progressMeta?.afterEventId ?? null,
+          chunk_count: progressMeta?.chunkCount ?? null,
+          node_count: nodes.length,
+          edge_count: edges.length,
+          data: partialData,
+        });
+        if (nodes.length === 0 && edges.length === 0) return;
+
+        setWindows((prev) =>
+          prev.map((windowState) =>
+            String(windowState.id) === graphWindowId
+              ? { ...windowState, loadscreenState: false, loadscreenText: null, activeGraph: 'graphs_basic', selectedContent: 'graph_content' }
+              : windowState
+          )
+        );
+
+        const progress = buildGraphProgressPayload(partialData, false);
+
+        const hasRenderedGraph = graphProgressRenderedRef.current[graphWindowId] === true;
+        const messageAction = hasRenderedGraph ? "graph_chunk_update" : "new_graph";
+        const sourceWindowState = windowsRef.current.find((windowState) => String(windowState.id) === graphWindowId);
+        const settingsToApply = normalizeGraphIframeSettings(iframeSettings[graphWindowId] || sourceWindowState?.iframeSettings);
+        if (!hasRenderedGraph) {
+          settingsToApply[2] = normalizeGraphLimitRange({ min: 0, max: 25 }, 25);
+          updateIframeSettings(graphWindowId, 2, { min: 0, max: 25 });
+        }
+        const targetIframe = iframe || iframeRefs.current[graphWindowId];
+        sendGraphMessageToIframe(targetIframe, messageAction, {
+          id: graphWindowId,
+          nodes,
+          edges,
+          settings: settingsToApply,
+          progress,
+        });
+        graphProgressRenderedRef.current[graphWindowId] = true;
+      }
+    })
+      .then((data) => {
+        console.log("[graph evidence fetch received raw]", {
+          graph_window_id: graphWindowId,
+          trace_id: traceId,
+          request_origin: requestOrigin,
+          data,
+        });
+        if (!graphFetchAbortControllersRef.current[graphWindowId] || graphFetchAbortControllersRef.current[graphWindowId] !== controller) return;
+        const normalizedResults = data?.results || {};
+        const nodes = Array.isArray(normalizedResults.nodes) ? normalizedResults.nodes : [];
+        const edges = Array.isArray(normalizedResults.edges) ? normalizedResults.edges : [];
+
+        setWindows((prev) =>
+          prev.map((windowState) =>
+            String(windowState.id) === graphWindowId
+              ? {
+                  ...windowState,
+                  loadscreenState: false,
+                  loadscreenText: null,
+                  activeGraph: isSuccessResponse(data) ? "graphs_basic" : null,
+                  selectedContent: isSuccessResponse(data) ? "graph_content" : windowState.selectedContent
+                }
+              : windowState
+          )
+        );
+
+        logGraphWindowDebug("graph fetch response", {
+          graph_window_id: graphWindowId,
+          trace_id: traceId,
+          request_origin: requestOrigin,
+          node_count: nodes.length,
+          edge_count: edges.length,
+          ok: isSuccessResponse(data),
+        });
+
+        if (isSuccessResponse(data)) {
+          delete activeGraphJobsRef.current[graphWindowId];
+          if (nodes.length === 0 && edges.length === 0) {
+            pushNotification({ title: "Graph Empty", message: "No graph data found for this evidence.", level: "info" });
+            handleCloseWindow(graphWindowId);
+            return;
+          }
+          const hasRenderedGraph = graphProgressRenderedRef.current[graphWindowId] === true;
+          const messageAction = hasRenderedGraph ? "graph_chunk_update" : "new_graph";
+          const sourceWindowState = windowsRef.current.find((windowState) => String(windowState.id) === graphWindowId);
+          const settingsToApply = normalizeGraphIframeSettings(iframeSettings[graphWindowId] || sourceWindowState?.iframeSettings);
+          if (!hasRenderedGraph) {
+            settingsToApply[2] = normalizeGraphLimitRange({ min: 0, max: 25 }, 25);
+            updateIframeSettings(graphWindowId, 2, { min: 0, max: 25 });
+          }
+          const targetIframe = iframe || iframeRefs.current[graphWindowId];
+          console.log("[evidence debug iframe]", { graphWindowId, iframePassed: !!iframe, targetIframe, targetIframeCurrent: targetIframe?.current, iframeRefsKeys: Object.keys(iframeRefs.current || {}) });
+        sendGraphMessageToIframe(targetIframe, messageAction, {
+            id: graphWindowId,
+            nodes,
+            edges,
+            settings: settingsToApply,
+            progress: buildGraphProgressPayload(data, true),
+          });
+          graphProgressRenderedRef.current[graphWindowId] = true;
+        } else {
+          delete graphAutoRequestedRef.current[graphWindowId];
+          alert(getGraphFetchErrorMessage(data));
+        }
+      })
+      .catch((err) => {
+        if (err?.name === "AbortError") return;
+        delete activeGraphJobsRef.current[graphWindowId];
+        delete graphProgressRenderedRef.current[graphWindowId];
+        delete graphAutoRequestedRef.current[graphWindowId];
+        console.error("[evidence graph request catch]", {
+          graph_window_id: graphWindowId,
+          trace_id: traceId,
+          request_origin: requestOrigin,
+          error: err,
+        });
+        setWindows((prev) =>
+          prev.map((windowState) =>
+            String(windowState.id) === graphWindowId
+              ? { ...windowState, loadscreenState: false, loadscreenText: null }
+              : windowState
+          )
+        );
+        pushNotification({ title: "Graph Fetch Failed", message: err?.message || "An error occurred fetching the graph.", level: "error" });
+      });
+  };
+
   const requestRelationshipGraph = (windowId, payload, options = {}) => {
     const iframe = payload?.iframe || null;
     const relationship = sanitizeGraphRelationshipValue(payload?.relationship, { maxLength: 128 });
@@ -9345,7 +9627,8 @@ const fileInputRef = useRef(null);
           settingsToApply[2] = normalizeGraphLimitRange({ min: 0, max: 25 }, 25);
           updateIframeSettings(graphWindowId, 2, { min: 0, max: 25 });
         }
-        sendGraphMessageToIframe(iframe, messageAction, {
+        const targetIframe = iframe || iframeRefs.current[graphWindowId];
+        sendGraphMessageToIframe(targetIframe, messageAction, {
           id: graphWindowId,
           nodes,
           edges,
@@ -9393,6 +9676,11 @@ const fileInputRef = useRef(null);
 
         if (isSuccessResponse(data)) {
           delete activeGraphJobsRef.current[graphWindowId];
+          if (nodes.length === 0 && edges.length === 0) {
+            pushNotification({ title: "Graph Empty", message: "No graph data found for this evidence.", level: "info" });
+            handleCloseWindow(graphWindowId);
+            return;
+          }
           const hasRenderedGraph = graphProgressRenderedRef.current[graphWindowId] === true;
           const messageAction = hasRenderedGraph ? "graph_chunk_update" : "new_graph";
           const sourceWindowState = windowsRef.current.find((windowState) => String(windowState.id) === graphWindowId);
@@ -9401,7 +9689,9 @@ const fileInputRef = useRef(null);
             settingsToApply[2] = normalizeGraphLimitRange({ min: 0, max: 25 }, 25);
             updateIframeSettings(graphWindowId, 2, { min: 0, max: 25 });
           }
-          sendGraphMessageToIframe(iframe, messageAction, {
+          const targetIframe = iframe || iframeRefs.current[graphWindowId];
+          console.log("[evidence debug iframe]", { graphWindowId, iframePassed: !!iframe, targetIframe, targetIframeCurrent: targetIframe?.current, iframeRefsKeys: Object.keys(iframeRefs.current || {}) });
+        sendGraphMessageToIframe(targetIframe, messageAction, {
             id: graphWindowId,
             nodes,
             edges,
@@ -9573,7 +9863,7 @@ const fileInputRef = useRef(null);
     console.log("[graph status cleared for terminated source]", { session_id: sessionKey, reason });
   };
 
-  const handleGraphActions = (id, menuId, action, payload) => {
+  const handleGraphActions = (id, menuId, action, payload, options = {}) => {
     console.log("GraphAction:", id, menuId, action, payload);
     if (isWorkspaceLocked) {
       notifyLockedSensitiveAction("graph actions");
@@ -9595,6 +9885,13 @@ const fileInputRef = useRef(null);
             requestRelationshipGraph(id, payload, { requestOrigin: "manual" });
             updates.loadscreenState = true;
             updates.loadscreenText = "Fetching graph...";
+          }
+          if (menuId === "get_graph" && action === "evidence") {
+            requestEvidenceGraph(id, payload, { requestOrigin: "manual", ...options });
+            if (!options.initialData) {
+              updates.loadscreenState = true;
+              updates.loadscreenText = "Fetching evidence graph...";
+            }
           }
 
           // ------------------ Property tabs ------------------
@@ -13167,21 +13464,47 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
     { id: "evidence", label: "Service evedences", endpoint: "/api/v1/reports/evidence" },
   ];
 
-  const handleShowGraph = (traceId) => {
+  const handleShowGraph = async (traceId) => {
     if (!traceId) {
       onNotice({ title: "Error", message: "No trace ID found for this report.", level: "error" });
       return;
     }
-    if (typeof handleOpenWindows === "function" && typeof graphAction === "function") {
-      const newGraphId = handleOpenWindows("graph", "");
-      if (newGraphId) {
-        toggleAction("toggle_menu_new_report_window");
-        setTimeout(() => {
-          graphAction(newGraphId, "get_graph", "evidence", { fetchType: "evidence", traceId: traceId });
-        }, 150);
+
+    const notificationId = `fetch-evidence-${traceId}`;
+    pushNotification({ id: notificationId, title: "Loading", message: "Checking evidence graph data...", level: "info" });
+    
+    try {
+      const payload = { id: "evidence", trace_id: traceId };
+      const controller = new AbortController();
+      const data = await requestGraphFetch(apiFetch, payload, controller.signal, {
+        onQueued: () => {
+          pushNotification({ id: notificationId, title: "Queued", message: "Evidence graph request is queued...", level: "info" });
+        }
+      });
+      
+      const nodes = Array.isArray(data?.results?.nodes) ? data.results.nodes : [];
+      const edges = Array.isArray(data?.results?.edges) ? data.results.edges : [];
+      
+      if (nodes.length === 0 && edges.length === 0) {
+        pushNotification({ id: notificationId, title: "Archived", message: "This graph evidence is older and has been moved to archive. Please contact the system administrator.", level: "warning" });
+        return;
       }
-    } else {
-      onNotice({ title: "Error", message: "Graph manager not available.", level: "error" });
+      
+      removeNotification(notificationId);
+      
+      if (typeof handleOpenWindows === "function" && typeof graphAction === "function") {
+        const newGraphId = handleOpenWindows("graph", "");
+        if (newGraphId) {
+          toggleAction("toggle_menu_new_report_window");
+          setTimeout(() => {
+            graphAction(newGraphId, "get_graph", "evidence", { fetchType: "evidence", traceId: traceId }, { initialData: data });
+          }, 150);
+        }
+      } else {
+        onNotice({ title: "Error", message: "Graph manager not available.", level: "error" });
+      }
+    } catch (e) {
+      pushNotification({ id: notificationId, title: "Error", message: e.message || "Failed to fetch graph data.", level: "error" });
     }
   };
 
@@ -13285,13 +13608,21 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
                 if (s === "completed" || s === "success" || s === "new") statusStyle = { background: "rgba(46, 204, 113, 0.15)", color: "#27ae60", border: "1px solid rgba(46, 204, 113, 0.4)" };
                 else if (s === "failed" || s === "error") statusStyle = { background: "rgba(231, 76, 60, 0.15)", color: "#c0392b", border: "1px solid rgba(231, 76, 60, 0.4)" };
                 else if (s === "resolved") statusStyle = { background: "rgba(149, 165, 166, 0.15)", color: "#7f8c8d", border: "1px solid rgba(149, 165, 166, 0.4)" };
+                
+                const isArchived = (new Date() - new Date(report.created_at)) > 180 * 24 * 60 * 60 * 1000;
 
                 return (
                   <tr 
                     key={report.id} 
                     onClick={() => setSelectedReport(report)}
                     className={selectedReport?.id === report.id ? "active_row" : ""}
-                    style={{ cursor: "pointer", transition: "background 0.2s" }}
+                    title={isArchived ? "Archived (Older than 180 days)" : ""}
+                    style={{ 
+                      cursor: "pointer", 
+                      transition: "background 0.2s",
+                      opacity: isArchived ? 0.5 : 1,
+                      filter: isArchived ? "grayscale(80%)" : "none"
+                    }}
                   >
                     <td>
                       <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
