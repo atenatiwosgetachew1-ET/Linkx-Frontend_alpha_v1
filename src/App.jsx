@@ -13171,7 +13171,7 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
         <Taskbar windows={windows} isTaskBarOpen={isTaskBarOpen} activeWindowId={activeWindowId} focusWindow={handleFocusWindow} toggleAction={handleToggleMenu} isCtrlHeld={isCtrlHeld}/>
         <Configurations sessionId={sessionId} actions={handleConfigurationActions} loadscreenState={loadscreenState} setloadscreenState={setloadscreenState} toggleAction={handleToggleMenu} configurations={configurations} isConfigurationsOpen={isConfigurationsOpen} apiFetch={apiFetch} canAccess={canAccess} idleSettings={idleSettings} idlePolicyMeta={idlePolicyMeta} onIdleSettingsChange={updateIdleSettings}/>
         <Settings isSettingsOpen={isSettingsOpen} toggleAction={handleToggleMenu} actor={actor || user} roles={roles} permissions={permissions} canAccess={canAccess} apiFetch={apiFetch} sessionId={sessionId} onNotice={pushNotification} onLogout={() => performLogout("user_logout")} areBackgroundAnimationsEnabled={areBackgroundAnimationsEnabled} onBackgroundAnimationsChange={setBackgroundAnimationsEnabled} />
-        <Reports isReportsOpen={isReportsOpen} toggleAction={handleToggleMenu} handleOpenWindows={handleOpenWindows} graphAction={handleGraphActions} actor={actor || user} roles={roles} permissions={permissions} canAccess={canAccess} apiFetch={apiFetch} sessionId={sessionId} onNotice={pushNotification} onLogout={() => performLogout("user_logout")} areBackgroundAnimationsEnabled={areBackgroundAnimationsEnabled} onBackgroundAnimationsChange={setBackgroundAnimationsEnabled} />
+        <Reports isReportsOpen={isReportsOpen} toggleAction={handleToggleMenu} handleOpenWindows={handleOpenWindows} graphAction={handleGraphActions} actor={actor || user} roles={roles} permissions={permissions} canAccess={canAccess} apiFetch={apiFetch} sessionId={sessionId} onNotice={pushNotification} removeNotification={removeNotification} onLogout={() => performLogout("user_logout")} areBackgroundAnimationsEnabled={areBackgroundAnimationsEnabled} onBackgroundAnimationsChange={setBackgroundAnimationsEnabled} />
         <Main userName={userName} setSessionId={setSessionId} API_URL={API_URL} debounceRef={debounceRef} setConfigurations={setConfigurations} configurations={configurations} windows={windows} setWindows={setWindows} openWindows={handleOpenWindows} themeMode={themeMode} areBackgroundAnimationsEnabled={areBackgroundAnimationsEnabled} />
         {isWorkspaceLocked && (
           <WorkspaceLockOverlay
@@ -13447,7 +13447,7 @@ function formatJSON(json) {
   });
 }
 
-function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, actor, roles = [], permissions = [], canAccess, apiFetch, sessionId, onNotice, onLogout, areBackgroundAnimationsEnabled = true, onBackgroundAnimationsChange }) {
+function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, actor, roles = [], permissions = [], canAccess, apiFetch, sessionId, onNotice, removeNotification, onLogout, areBackgroundAnimationsEnabled = true, onBackgroundAnimationsChange }) {
   const [activeReportsTab, setActiveReportsTab] = useState("parent");
   const [reportsData, setReportsData] = useState([]);
   const [totalCount, setTotalCount] = useState(0);
@@ -13471,14 +13471,14 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
     }
 
     const notificationId = `fetch-evidence-${traceId}`;
-    pushNotification({ id: notificationId, title: "Loading", message: "Checking evidence graph data...", level: "info" });
+    onNotice({ id: notificationId, title: "Loading", message: "Checking evidence graph data...", level: "info" });
     
     try {
       const payload = { id: "evidence", trace_id: traceId };
       const controller = new AbortController();
       const data = await requestGraphFetch(apiFetch, payload, controller.signal, {
         onQueued: () => {
-          pushNotification({ id: notificationId, title: "Queued", message: "Evidence graph request is queued...", level: "info" });
+          onNotice({ id: notificationId, title: "Queued", message: "Evidence graph request is queued...", level: "info" });
         }
       });
       
@@ -13486,7 +13486,7 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
       const edges = Array.isArray(data?.results?.edges) ? data.results.edges : [];
       
       if (nodes.length === 0 && edges.length === 0) {
-        pushNotification({ id: notificationId, title: "Archived", message: "This graph evidence is older and has been moved to archive. Please contact the system administrator.", level: "warning" });
+        onNotice({ id: notificationId, title: "Archived", message: "This graph evidence is older and has been moved to archive. Please contact the system administrator.", level: "warning" });
         return;
       }
       
