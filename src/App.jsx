@@ -323,7 +323,10 @@ const postMessageToIframe = (frameOrRef, payload) => {
 };
 const buildIframeMessage = (action, payload = {}) => ({ channel: LINKX_IFRAME_CHANNEL, version: LINKX_IFRAME_VERSION, action, payload });
 const getIframeMessageAction = (data) => data?.action || data?.type || "";
-const isTrustedMessageOrigin = (event) => String(event?.origin || "") === getTrustedMessageOrigin();
+const isTrustedMessageOrigin = (event) => {
+  const origin = String(event?.origin || "");
+  return origin === getTrustedMessageOrigin() || origin === "null";
+};
 const isRegisteredIframeSource = (source, iframeRefs = {}) => Object.values(iframeRefs || {}).some((frameRef) => frameRef?.current?.contentWindow === source);
 
 
@@ -656,10 +659,12 @@ window.addEventListener("message", e => {
 
   if (e.data?.type === "clipboard_get") {
     const payload = serializeClipboardPayload(clipboard);
+    const targetOrigin = e.origin === "null" ? "*" : e.origin;
     e.source?.postMessage(
       { type: "clipboard_data", payload },
-      e.origin
+      targetOrigin
     );
+    window.dispatchEvent(new CustomEvent("linkx_iframe_ready", { detail: { source: e.source } }));
   }
 
   if (e.data?.type === "clipboard_set") {
@@ -4547,6 +4552,13 @@ function IframeEmbed({wId,id,fileName,title,activeGraph,graphAction,iframeRef,BA
           height="98%"
           style={{ border: "none" }}
           title={title}
+          onLoad={(e) => {
+             if (iframeFile.includes("graphs_basic")) {
+               window.dispatchEvent(new CustomEvent("linkx_iframe_load_event", { 
+                 detail: { wId } 
+               }));
+             }
+          }}
         />
         {shouldShowFitGraphControl ? fitGraphControl : null}
       </div>
@@ -9212,7 +9224,7 @@ const fileInputRef = useRef(null);
   }
   const sendGraphMessageToIframe = (iframe, msgAction, msgPayload) => {
     if (!iframe?.current) {
-      alert("Iframe not found!");
+      console.warn("Iframe not found!");
       return;
     }
 
@@ -9221,17 +9233,25 @@ const fileInputRef = useRef(null);
     };
 
     const iframeSrc = iframe.current.src || "";
+    const windowId = msgPayload?.id;
+    
+    // If it's already on the graphs_basic page, send immediately
     if (iframeSrc.includes("graphs_basic")) {
       send();
     } else {
-      const handleLoad = () => {
-        if (iframe.current && iframe.current.src.includes("graphs_basic")) {
+      // Otherwise, wait for the global ready event
+      const handleIframeReady = (e) => {
+        if (iframe.current && e.detail.source === iframe.current.contentWindow) {
           send();
-        } else if (iframe.current) {
-          iframe.current.onload = handleLoad; // Wait for the next load
+          window.removeEventListener("linkx_iframe_ready", handleIframeReady);
         }
       };
-      iframe.current.onload = handleLoad;
+      window.addEventListener("linkx_iframe_ready", handleIframeReady);
+      
+      // Cleanup after 30s
+      setTimeout(() => {
+        window.removeEventListener("linkx_iframe_ready", handleIframeReady);
+      }, 30000);
     }
   };
   const requestEvidenceGraph = (windowId, payload, options = {}) => {
