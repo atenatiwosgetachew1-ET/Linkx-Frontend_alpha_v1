@@ -7181,7 +7181,7 @@ async function renderReportCanvasFromTemplate(report) {
   iframe.style.left = "-12000px";
   iframe.style.top = "0";
   iframe.style.width = "1040px";
-  iframe.style.height = "1800px";
+  iframe.style.height = "1470px";
   iframe.style.border = "0";
   iframe.style.opacity = "0";
   iframe.style.pointerEvents = "none";
@@ -7671,14 +7671,23 @@ async function generateEvidenceReport(payload) {
   }
   
   if (network) {
-    network.fit();
+    network.setOptions({ physics: false });
   }
+
+  if (typeof applyManualLayout === "function") {
+    applyManualLayout("concentric", { fitToView: true, redraw: true });
+  }
+
   suspendGraphHistoryEnd();
 
   setTimeout(() => {
-    if (network) network.fit();
-    generateGraphReport(payload);
-  }, 2500);
+    if (network) {
+      network.fit({ animation: false });
+    }
+    setTimeout(() => {
+      generateGraphReport(payload);
+    }, 200);
+  }, 1000);
 }
 
 async function generateGraphReport(payload) {

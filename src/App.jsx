@@ -14056,9 +14056,10 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
 
       {/* Hidden Graph Renderer for PDF Generation */}
       {hiddenRendererState && (
-        <div style={{ position: "fixed", top: "-9999px", left: "-9999px", width: "1600px", height: "900px", opacity: 0, pointerEvents: "none" }}>
-          <IframeEmbed 
-            wId={hiddenRendererState.windowId}
+        <div className="window" style={{ position: "fixed", top: "-9999px", left: "-9999px", width: "1600px", height: "900px", opacity: 0, pointerEvents: "none" }}>
+          <div className="content_container" style={{ width: "100%", height: "100%" }}>
+            <IframeEmbed 
+              wId={hiddenRendererState.windowId}
             id="graphs_basic"
             fileName="graphs_basic"
             activeGraph="graphs_basic"
@@ -14066,6 +14067,7 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
             BASE_URL={import.meta.env.VITE_API_URL || ""}
             themeMode="light"
           />
+          </div>
         </div>
       )}
     </div>
