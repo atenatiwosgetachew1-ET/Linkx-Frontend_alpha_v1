@@ -7176,7 +7176,7 @@ function waitForFrames(frameCount = 2) {
 async function renderReportCanvasFromTemplate(report) {
   const html2canvasRef = await ensureHtml2Canvas();
   const iframe = document.createElement("iframe");
-  iframe.src = "../temp_placeholders/graph_reports.html?parent_origin=" + encodeURIComponent(window.location.origin || "null");
+  iframe.src = "../temp_placeholders/graph_reports.html?t=" + Date.now() + "&parent_origin=" + encodeURIComponent(window.location.origin || "null");
   iframe.style.position = "fixed";
   iframe.style.left = "-12000px";
   iframe.style.top = "0";
