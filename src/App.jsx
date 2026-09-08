@@ -13484,6 +13484,10 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
     { id: "evidence", label: "Service evedences", endpoint: "/api/v1/reports/evidence" },
   ];
 
+  const handleDownloadReport = (report) => {
+    onNotice({ title: "Coming Soon", message: "Download Report logic will be implemented here.", level: "info" });
+  };
+
   const handleShowGraph = async (traceId) => {
     if (!traceId) {
       onNotice({ title: "Error", message: "No trace ID found for this report.", level: "error" });
@@ -13722,6 +13726,14 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
                 Showing {reportsData.length > 0 ? offset + 1 : 0} to {Math.min(offset + limit, totalCount)} of {totalCount}
               </span>
               <div style={{ display: "flex", gap: "12px" }}>
+                <button type="button" onClick={() => loadReports()} disabled={loading} style={{ display: "flex", alignItems: "center", gap: "6px" }} title="Refresh reports">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: "14px", height: "14px" }}>
+                    <polyline points="23 4 23 10 17 10"></polyline>
+                    <polyline points="1 20 1 14 7 14"></polyline>
+                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                  </svg>
+                  Refresh
+                </button>
                 <button type="button" onClick={handlePrev} disabled={offset === 0 || loading}>Previous</button>
                 <button type="button" onClick={handleNext} disabled={offset + limit >= totalCount || loading}>Next</button>
               </div>
@@ -13953,6 +13965,26 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
                   onClick={() => handleShowGraph(selectedReport.external_reference_id || selectedReport.id)}
                 >
                   Show Graph
+                </button>
+                <button 
+                  type="button" 
+                  className="report_tab_btn"
+                  style={{ 
+                    width: "100%", 
+                    padding: "10px", 
+                    fontWeight: "600", 
+                    borderRadius: "6px",
+                    cursor: "pointer",
+                    background: "transparent",
+                    color: "inherit",
+                    border: "1px solid rgba(128,128,128,0.3)",
+                    transition: "opacity 0.2s, background 0.2s"
+                  }}
+                  onMouseOver={(e) => { e.target.style.background = "rgba(128,128,128,0.1)"; }}
+                  onMouseOut={(e) => { e.target.style.background = "transparent"; }}
+                  onClick={() => handleDownloadReport(selectedReport)}
+                >
+                  Download Report
                 </button>
               </div>
             </div>
