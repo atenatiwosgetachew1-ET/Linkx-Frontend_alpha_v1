@@ -13483,7 +13483,7 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
   useEffect(() => {
     if (!hiddenRendererState || !hiddenIframeRef.current) return;
     
-    const { windowId, nodes, edges, notificationId } = hiddenRendererState;
+    const { windowId, nodes, edges, notificationId, traceId, selectedReport } = hiddenRendererState;
     
     const handleReady = (e) => {
       if (String(e.detail.wId) === String(windowId)) {
@@ -13491,7 +13491,7 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
         
         postMessageToIframe(hiddenIframeRef, {
           action: "generate_evidence_report",
-          payload: { id: windowId, nodes, edges }
+          payload: { id: traceId, nodes, edges, reportInfo: selectedReport }
         });
         
         setTimeout(() => {
@@ -13541,7 +13541,9 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
         windowId: `hidden_${traceId}_${Date.now()}`,
         nodes,
         edges,
-        notificationId
+        notificationId,
+        traceId,
+        selectedReport: report
       });
     } catch(e) {
       pushNotification({ id: notificationId, title: "Error", message: e.message || "Failed to fetch data.", level: "error" });

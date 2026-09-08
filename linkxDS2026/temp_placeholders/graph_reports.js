@@ -153,11 +153,12 @@
     const caseRef = report.sourceWindowId == null
       ? "INV-UNASSIGNED"
       : `INV-${String(report.sourceWindowId)}`;
-    const caseStatus = deriveCaseStatus(report);
+    const caseStatus = report.reportInfo?.status || deriveCaseStatus(report);
 
-    setText("report_source_id", report.sourceWindowId);
     setText("report_case_reference", caseRef);
     setText("report_case_status", caseStatus);
+    setText("report_type_value", report.reportInfo?.report_type || "Graph Evidence");
+    setText("report_source_system", report.reportInfo?.source_system || "System Generated");
     setText("report_generated_at", report.generatedAt);
     setText("report_visible_nodes", formatNumber(report.visibleNodes));
     setText("report_visible_edges", formatNumber(report.visibleEdges));
