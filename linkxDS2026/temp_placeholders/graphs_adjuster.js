@@ -158,6 +158,10 @@ window.addEventListener("message", (event) => {
       exportGraph(payload);
       break;      
 
+    case "generate_evidence_report":
+      generateEvidenceReport(payload);
+      break;      
+
     case "reset_graph":      
       resetGraph(payload);
       break;
@@ -7597,6 +7601,84 @@ async function downloadGraphReport(report) {
   if (!savedByBlob) {
     doc.save(filename);
   }
+}
+
+async function generateEvidenceReport(payload) {
+  const { id, nodes, edges } = payload;
+  
+  window.currentGraphWindowId = id || window.currentGraphWindowId || null;
+  resetGraphHistoryBuffer();
+  suspendGraphHistoryStart();
+  
+  nodesData.clear();
+  edgesData.clear();
+  FULL_GRAPH.edgesByNode = null;
+  
+  initializeFullGraph({ nodes, edges });
+  setCurrentGraphScope("");
+
+  if (FULL_GRAPH.nodes.size > 0) {
+    const degreeCounter = new Map();
+    const originalIdMap = new Map();
+    
+    for (const node of FULL_GRAPH.nodes.keys()) {
+      const strId = String(node);
+      degreeCounter.set(strId, 0);
+      originalIdMap.set(strId, node);
+    }
+    
+    for (const edge of FULL_GRAPH.edges.values()) {
+      const from = String(edge.from);
+      const to = String(edge.to);
+      degreeCounter.set(from, (degreeCounter.get(from) || 0) + 1);
+      degreeCounter.set(to, (degreeCounter.get(to) || 0) + 1);
+    }
+    
+    const sortedNodes = Array.from(degreeCounter.entries())
+      .sort((a, b) => b[1] - a[1]);
+      
+    const topNodes = sortedNodes.slice(0, 100).map(n => n[0]);
+    const topNodesSet = new Set(topNodes);
+    
+    VISIBLE_STATE.nodes.clear();
+    VISIBLE_STATE.edges.clear();
+    
+    for (const strId of topNodes) {
+      const originalId = originalIdMap.get(strId);
+      if (originalId !== undefined) {
+        VISIBLE_STATE.nodes.add(originalId);
+      }
+    }
+    
+    for (const [edgeId, edge] of FULL_GRAPH.edges.entries()) {
+      if (topNodesSet.has(String(edge.from)) && topNodesSet.has(String(edge.to))) {
+        VISIBLE_STATE.edges.add(edgeId);
+      }
+    }
+  }
+
+  window.currentSettings.layoutType = "concentric";
+  window.currentSettings.showLabels = true;
+  window.currentSettings.limit = 100;
+  window.limitOverridden = true;
+  
+  try { updateGraphOption("layout_type", "concentric"); } catch(e) {}
+  
+  if (typeof renderVisibleGraphBatch === "function") {
+    renderVisibleGraphBatch();
+  } else if (typeof renderVisibleGraph === "function") {
+    renderVisibleGraph();
+  }
+  
+  if (network) {
+    network.fit();
+  }
+  suspendGraphHistoryEnd();
+
+  setTimeout(() => {
+    if (network) network.fit();
+    generateGraphReport(payload);
+  }, 2500);
 }
 
 async function generateGraphReport(payload) {

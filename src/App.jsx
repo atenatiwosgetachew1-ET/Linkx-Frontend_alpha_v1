@@ -13475,8 +13475,36 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [selectedReport, setSelectedReport] = useState(null);
+  const [hiddenRendererState, setHiddenRendererState] = useState(null);
+  const hiddenIframeRef = useRef(null);
 
   const limit = 50;
+
+  useEffect(() => {
+    if (!hiddenRendererState || !hiddenIframeRef.current) return;
+    
+    const { windowId, nodes, edges, notificationId } = hiddenRendererState;
+    
+    const handleReady = (e) => {
+      if (String(e.detail.wId) === String(windowId)) {
+        window.removeEventListener("linkx_iframe_load_event", handleReady);
+        
+        postMessageToIframe(hiddenIframeRef, {
+          action: "generate_evidence_report",
+          payload: { id: windowId, nodes, edges }
+        });
+        
+        setTimeout(() => {
+          removeNotification(notificationId);
+          onNotice({ title: "Success", message: "Report PDF generated successfully.", level: "success" });
+          setHiddenRendererState(null);
+        }, 5000); // Wait enough time for PDF generation to complete before cleanup
+      }
+    };
+    
+    window.addEventListener("linkx_iframe_load_event", handleReady);
+    return () => window.removeEventListener("linkx_iframe_load_event", handleReady);
+  }, [hiddenRendererState]);
 
   const tabs = [
     { id: "parent", label: "Alert reports", endpoint: "/api/v1/reports/parent" },
@@ -13484,8 +13512,40 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
     { id: "evidence", label: "Service evedences", endpoint: "/api/v1/reports/evidence" },
   ];
 
-  const handleDownloadReport = (report) => {
-    onNotice({ title: "Coming Soon", message: "Download Report logic will be implemented here.", level: "info" });
+  const handleDownloadReport = async (report) => {
+    const traceId = report.external_reference_id || report.id;
+    if (!traceId) {
+      onNotice({ title: "Error", message: "No trace ID found for this report.", level: "error" });
+      return;
+    }
+
+    const notificationId = `download-report-${traceId}`;
+    onNotice({ id: notificationId, title: "Generating Report", message: "Fetching graph data...", level: "info" });
+    
+    try {
+      const payload = { id: "evidence", trace_id: traceId };
+      const controller = new AbortController();
+      const data = await requestGraphFetch(apiFetch, payload, controller.signal);
+      
+      const nodes = Array.isArray(data?.results?.nodes) ? data.results.nodes : [];
+      const edges = Array.isArray(data?.results?.edges) ? data.results.edges : [];
+      
+      if (nodes.length === 0 && edges.length === 0) {
+        onNotice({ id: notificationId, title: "Archived", message: "Graph data is empty or archived. Cannot generate report.", level: "warning" });
+        return;
+      }
+      
+      onNotice({ id: notificationId, title: "Rendering", message: "Rendering graph and building PDF...", level: "info" });
+      
+      setHiddenRendererState({
+        windowId: `hidden_${traceId}_${Date.now()}`,
+        nodes,
+        edges,
+        notificationId
+      });
+    } catch(e) {
+      pushNotification({ id: notificationId, title: "Error", message: e.message || "Failed to fetch data.", level: "error" });
+    }
   };
 
   const handleShowGraph = async (traceId) => {
@@ -13983,8 +14043,9 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
                   onMouseOver={(e) => { e.target.style.background = "rgba(128,128,128,0.1)"; }}
                   onMouseOut={(e) => { e.target.style.background = "transparent"; }}
                   onClick={() => handleDownloadReport(selectedReport)}
+                  disabled={hiddenRendererState !== null}
                 >
-                  Download Report
+                  {hiddenRendererState ? "Generating..." : "Download Report"}
                 </button>
               </div>
             </div>
@@ -13992,6 +14053,21 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
         })()}
 
       </div>
+
+      {/* Hidden Graph Renderer for PDF Generation */}
+      {hiddenRendererState && (
+        <div style={{ position: "fixed", top: "-9999px", left: "-9999px", width: "1600px", height: "900px", opacity: 0, pointerEvents: "none" }}>
+          <IframeEmbed 
+            wId={hiddenRendererState.windowId}
+            id="graphs_basic"
+            fileName="graphs_basic"
+            activeGraph="graphs_basic"
+            iframeRef={hiddenIframeRef}
+            BASE_URL={import.meta.env.VITE_API_URL || ""}
+            themeMode="light"
+          />
+        </div>
+      )}
     </div>
   );
 }
