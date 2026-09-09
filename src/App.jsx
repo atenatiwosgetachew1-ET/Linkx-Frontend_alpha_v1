@@ -3835,13 +3835,20 @@ function SmartVigilancePanel({ apiFetch }) {
         <legend>Audit Log</legend>
         <div className="cleanup_audit_table_wrap" style={{ flex: 1, minHeight: 0, overflowY: "auto", maxHeight: "none" }}>
           <table className="cleanup_audit_table" cellSpacing="0" cellPadding="0" style={{ width: "100%", tableLayout: "fixed" }}>
-            <thead style={{ position: "sticky", top: 0, background: "var(--window-bg, #f8f9fa)", zIndex: 1 }}>
+            <colgroup>
+              <col style={{ width: "15%" }} />
+              <col style={{ width: "50%" }} />
+              <col style={{ width: "15%" }} />
+              <col style={{ width: "10%" }} />
+              <col style={{ width: "10%" }} />
+            </colgroup>
+            <thead>
               <tr>
-                <th style={{ padding: "8px", textAlign: "left", borderBottom: "1px solid var(--panel-border, #ddd)" }}>Run ID</th>
-                <th style={{ padding: "8px", textAlign: "left", borderBottom: "1px solid var(--panel-border, #ddd)", whiteSpace: "nowrap", minWidth: "300px" }}>Window</th>
-                <th style={{ padding: "8px", textAlign: "right", borderBottom: "1px solid var(--panel-border, #ddd)" }}>Duration (ms)</th>
-                <th style={{ padding: "8px", textAlign: "right", borderBottom: "1px solid var(--panel-border, #ddd)" }}>Records</th>
-                <th style={{ padding: "8px", textAlign: "center", borderBottom: "1px solid var(--panel-border, #ddd)" }}>Status</th>
+                <th>Run ID</th>
+                <th>Window</th>
+                <th>Duration (ms)</th>
+                <th>Records</th>
+                <th>Status</th>
               </tr>
             </thead>
             <tbody>
@@ -3850,13 +3857,13 @@ function SmartVigilancePanel({ apiFetch }) {
                 const isSuccess = sLower === "success" || sLower === "succeeded";
                 return (
                 <tr key={run.run_id} style={{ backgroundColor: !isSuccess ? "rgba(231, 76, 60, 0.1)" : "transparent" }}>
-                  <td style={{ padding: "8px", borderBottom: "1px solid var(--panel-border, #eee)" }}>{run.run_id}</td>
-                  <td style={{ padding: "8px", borderBottom: "1px solid var(--panel-border, #eee)", fontSize: "12px", whiteSpace: "nowrap" }}>
+                  <td>{run.run_id}</td>
+                  <td style={{ fontSize: "12px" }}>
                     {run.window_start} - {run.window_end}
                   </td>
-                  <td style={{ padding: "8px", borderBottom: "1px solid var(--panel-border, #eee)", textAlign: "right" }}>{run.duration_ms}</td>
-                  <td style={{ padding: "8px", borderBottom: "1px solid var(--panel-border, #eee)", textAlign: "right" }}>{run.records_count}</td>
-                  <td style={{ padding: "8px", borderBottom: "1px solid var(--panel-border, #eee)", textAlign: "center" }}>
+                  <td>{run.duration_ms}</td>
+                  <td>{run.records_count}</td>
+                  <td>
                     <span style={{ 
                       color: !isSuccess ? "#e74c3c" : "#27ae60",
                       fontWeight: "bold",
@@ -3870,6 +3877,7 @@ function SmartVigilancePanel({ apiFetch }) {
               )}
             </tbody>
           </table>
+
         </div>
       </fieldset>
     </div>

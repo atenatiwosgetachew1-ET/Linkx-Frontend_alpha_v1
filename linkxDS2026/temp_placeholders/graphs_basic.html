@@ -1523,7 +1523,9 @@ smooth: {
 									// First pass: store all nodes in FULL_GRAPH only
 									for (const rawNode of graphData.nodes) {
 										const node = normalizeIncomingNodeForTheme(rawNode);
+										if (typeof normalizeGraphId === "function") node.id = normalizeGraphId(node.id);
 										FULL_GRAPH.nodes.set(node.id, node);
+
 										FULL_GRAPH.adjacency.set(node.id, new Set());
 										nodeMap.set(node.id, node);
 										progressCounter += 1;
@@ -1536,6 +1538,10 @@ smooth: {
 									const edgeMap = new Map();
 									for (const rawEdge of graphData.edges) {
 										const edge = normalizeIncomingEdgeForTheme(rawEdge);
+										if (typeof normalizeGraphId === "function") {
+											edge.from = normalizeGraphId(edge.from);
+											edge.to = normalizeGraphId(edge.to);
+										}
 										const id = edge.id ?? `${edge.from}_${edge.to}`;
 										// Store edge with minimal processing
 										const weightedEdge = {

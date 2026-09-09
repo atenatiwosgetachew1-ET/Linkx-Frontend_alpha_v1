@@ -2775,14 +2775,13 @@ function ensureAdjacencyNode(nodeId) {
 function invalidateGraphEdgeIndexes() {
   FULL_GRAPH.edgesByNode = null;
 }
-
 function upsertFullGraphNode(node) {
   if (!node || node.id == null) return null;
+  node.id = normalizeGraphId(node.id);
   FULL_GRAPH.nodes.set(node.id, node);
   ensureAdjacencyNode(node.id);
   return node;
 }
-
 function upsertFullGraphEdge(edge) {
   if (!edge) return null;
   const id = edge.id == null ? createUniqueEdgeId("edge") : edge.id;
@@ -4194,8 +4193,14 @@ async function runFindAllPathsForSelection(selectedNodes) {
 }
 
 function bringNodeToFront(nodeId) {
-  const focusId = normalizeGraphId(nodeId);
-  if (!FULL_GRAPH.nodes.has(focusId)) return;
+  let focusId = nodeId;
+  if (!FULL_GRAPH.nodes.has(focusId)) {
+    focusId = normalizeGraphId(nodeId);
+    if (!FULL_GRAPH.nodes.has(focusId)) {
+      focusId = String(nodeId);
+      if (!FULL_GRAPH.nodes.has(focusId)) return;
+    }
+  }
   queueGraphHistoryCapture();
 
   const nextVisible = new Set([focusId]);
