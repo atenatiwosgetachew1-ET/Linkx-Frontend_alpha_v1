@@ -3411,7 +3411,7 @@ function ActivityAuditPanel({ apiFetch, canAccess, isActive }) {
           <span>{audit.total ? audit.offset + 1 : 0}-{audit.offset + audit.items.length} of {audit.total}</span>
         </div>
         {error && <div className="settings_error">{error}</div>}
-        <div className="cleanup_audit_table_wrap">
+        <div className="cleanup_audit_table_wrap" >
           <table className="cleanup_audit_table">
             <thead>
               <tr><th>Created</th><th>Session</th><th>Type</th><th>Status</th><th>Owner</th><th>Artifacts</th><th>Error</th></tr>
@@ -13469,6 +13469,11 @@ function formatJSON(json) {
 
 function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, actor, roles = [], permissions = [], canAccess, apiFetch, sessionId, onNotice, removeNotification, onLogout, areBackgroundAnimationsEnabled = true, onBackgroundAnimationsChange }) {
   const [activeReportsTab, setActiveReportsTab] = useState("parent");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterStatus, setFilterStatus] = useState("all");
+  const [filterBand, setFilterBand] = useState("all");
+  const [sortBy, setSortBy] = useState("date_desc");
+
   const [reportsData, setReportsData] = useState([]);
   const [totalCount, setTotalCount] = useState(0);
   const [offset, setOffset] = useState(0);
@@ -13591,6 +13596,7 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
       }
     } catch (e) {
       pushNotification({ id: notificationId, title: "Error", message: e.message || "Failed to fetch graph data.", level: "error" });
+
     }
   };
 
@@ -13658,27 +13664,153 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
       return <div style={{ padding: "20px" }}>Loading reports...</div>;
     }
 
+
+    let processedData = [...reportsData];
+
+    if (searchQuery.trim() !== "") {
+      const q = searchQuery.toLowerCase();
+      processedData = processedData.filter(r => {
+        let pObj = {};
+        try { pObj = typeof r.payload === "string" ? JSON.parse(r.payload) : (r.payload || {}); } catch(e) {}
+        return (
+          (r.report_type || "").toLowerCase().includes(q) ||
+          (r.source_system || "").toLowerCase().includes(q) ||
+          (pObj.anomaly_type || "").toLowerCase().includes(q) ||
+          (pObj.reason || "").toLowerCase().includes(q)
+        );
+      });
+    }
+
+    if (filterStatus !== "all") {
+      processedData = processedData.filter(r => {
+        const s = (r.status || "").toLowerCase();
+        if (filterStatus === "success") return s === "success" || s === "completed" || s === "succeeded";
+        if (filterStatus === "error") return s === "error" || s === "failed";
+        return s === filterStatus;
+      });
+    }
+
+    if (filterBand !== "all" && (activeReportsTab === "xvigilance" || activeReportsTab === "evidence")) {
+      processedData = processedData.filter(r => {
+        let pObj = {};
+        try { pObj = typeof r.payload === "string" ? JSON.parse(r.payload) : (r.payload || {}); } catch(e) {}
+        const sb = (pObj.score_band || "").toLowerCase();
+        return sb === filterBand;
+      });
+    }
+
+    processedData.sort((a, b) => {
+      let pObjA = {}, pObjB = {};
+      try { pObjA = typeof a.payload === "string" ? JSON.parse(a.payload) : (a.payload || {}); } catch(e) {}
+      try { pObjB = typeof b.payload === "string" ? JSON.parse(b.payload) : (b.payload || {}); } catch(e) {}
+
+      if (sortBy === "date_desc") {
+        return new Date(b.created_at) - new Date(a.created_at);
+      } else if (sortBy === "date_asc") {
+        return new Date(a.created_at) - new Date(b.created_at);
+      } else if (sortBy === "score_desc") {
+        return (pObjB.fraud_score || 0) - (pObjA.fraud_score || 0);
+      } else if (sortBy === "score_asc") {
+        return (pObjA.fraud_score || 0) - (pObjB.fraud_score || 0);
+      }
+      return 0;
+    });
+
     return (
-      <div className="cleanup_audit_table_wrap" style={{ height: "100%", maxHeight: "none", overflowY: "auto" }}>
-          <table className="cleanup_audit_table" cellSpacing="0" cellPadding="0" style={{ width: "100%", height: reportsData.length === 0 ? "100%" : "auto", tableLayout: "fixed" }}>
+      <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+        <div style={{ padding: "12px 20px", display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap", borderBottom: "1px solid var(--panel-border, #eee)" }}>
+          <input 
+            type="text" 
+            placeholder="Search reports..." 
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="settings_textinput"
+            style={{ minWidth: "220px", padding: "6px 12px", height: "32px", margin: 0 }}
+          />
+          <select 
+            value={filterStatus}
+            onChange={(e) => setFilterStatus(e.target.value)}
+            className="settings_textinput"
+            style={{ width: "auto", padding: "6px 12px", height: "32px", margin: 0 }}
+          >
+            <option value="all">All Statuses</option>
+            <option value="success">Success / Completed</option>
+            <option value="error">Error / Failed</option>
+            <option value="resolved">Resolved</option>
+          </select>
+          {(activeReportsTab === "xvigilance" || activeReportsTab === "evidence") && (
+            <select 
+              value={filterBand}
+              onChange={(e) => setFilterBand(e.target.value)}
+              className="settings_textinput"
+              style={{ width: "auto", padding: "6px 12px", height: "32px", margin: 0 }}
+            >
+              <option value="all">All Score Bands</option>
+              <option value="critical">Critical (80+)</option>
+              <option value="high">High (50-79)</option>
+              <option value="medium">Medium (20-49)</option>
+              <option value="low">Low (0-19)</option>
+            </select>
+          )}
+          <select 
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+            className="settings_textinput"
+            style={{ width: "auto", padding: "6px 12px", height: "32px", margin: 0, marginLeft: "auto" }}
+          >
+            <option value="date_desc">Newest First</option>
+            <option value="date_asc">Oldest First</option>
+            {(activeReportsTab === "xvigilance" || activeReportsTab === "evidence") && (
+              <>
+                <option value="score_desc">Highest Fraud Score</option>
+                <option value="score_asc">Lowest Fraud Score</option>
+              </>
+            )}
+          </select>
+        </div>
+        <div className="cleanup_audit_table_wrap" style={{ flex: 1, minHeight: 0, overflowY: "auto", maxHeight: "none" }}>
+          <table className="cleanup_audit_table" cellSpacing="0" cellPadding="0" style={{ width: "100%", height: processedData.length === 0 ? "100%" : "auto", tableLayout: "fixed" }}>
           <colgroup>
-            <col style={{ width: "25%" }} />
-            <col style={{ width: "30%" }} />
-            <col style={{ width: "20%" }} />
-            <col style={{ width: "25%" }} />
+            { (activeReportsTab === "xvigilance" || activeReportsTab === "evidence") ? (
+              <>
+                <col style={{ width: "15%" }} />
+                <col style={{ width: "15%" }} />
+                <col style={{ width: "15%" }} />
+                <col style={{ width: "10%" }} />
+                <col style={{ width: "10%" }} />
+                <col style={{ width: "15%" }} />
+                <col style={{ width: "10%" }} />
+                <col style={{ width: "10%" }} />
+              </>
+            ) : (
+              <>
+                <col style={{ width: "25%" }} />
+                <col style={{ width: "30%" }} />
+                <col style={{ width: "20%" }} />
+                <col style={{ width: "25%" }} />
+              </>
+            )}
           </colgroup>
           <thead>
             <tr>
               <th>Type</th>
               <th>Source</th>
+              { (activeReportsTab === "xvigilance" || activeReportsTab === "evidence") && (
+                <>
+                  <th>Anomaly Type</th>
+                  <th>Fraud Score</th>
+                  <th>Score Band</th>
+                  <th>Reason</th>
+                </>
+              )}
               <th>Status</th>
               <th>Date</th>
             </tr>
           </thead>
           <tbody>
-            {reportsData.length === 0 ? (
+            {processedData.length === 0 ? (
               <tr>
-                <td colSpan="4" style={{ textAlign: "center", padding: "40px 20px", color: "inherit", opacity: 0.6, borderBottom: "none", verticalAlign: "middle" }}>
+                <td colSpan={(activeReportsTab === "xvigilance" || activeReportsTab === "evidence") ? 8 : 4} style={{ textAlign: "center", padding: "40px 20px", color: "inherit", opacity: 0.6, borderBottom: "none", verticalAlign: "middle" }}>
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ width: "40px", height: "40px", marginBottom: "10px", opacity: 0.5 }}>
                     <circle cx="11" cy="11" r="8"></circle>
                     <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
@@ -13688,7 +13820,7 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
                 </td>
               </tr>
             ) : (
-              reportsData.map(report => {
+              processedData.map(report => {
                 const s = (report.status || "").toLowerCase();
                 let statusStyle = { background: "rgba(241, 196, 15, 0.15)", color: "#f39c12", border: "1px solid rgba(241, 196, 15, 0.4)" };
                 if (s === "completed" || s === "success" || s === "new") statusStyle = { background: "rgba(46, 204, 113, 0.15)", color: "#27ae60", border: "1px solid rgba(46, 204, 113, 0.4)" };
@@ -13696,6 +13828,19 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
                 else if (s === "resolved") statusStyle = { background: "rgba(149, 165, 166, 0.15)", color: "#7f8c8d", border: "1px solid rgba(149, 165, 166, 0.4)" };
                 
                 const isArchived = (new Date() - new Date(report.created_at)) > 180 * 24 * 60 * 60 * 1000;
+
+                let pObj = {};
+                try {
+                  pObj = typeof report.payload === "string" ? JSON.parse(report.payload) : (report.payload || {});
+                } catch(e) {}
+
+                const scoreBand = pObj.score_band || "";
+                const sbLower = scoreBand.toLowerCase();
+                let sbStyle = { background: "transparent", color: "inherit", border: "1px solid transparent" };
+                if (sbLower === "low") sbStyle = { background: "rgba(46, 204, 113, 0.15)", color: "#27ae60", border: "1px solid rgba(46, 204, 113, 0.4)" };
+                else if (sbLower === "medium") sbStyle = { background: "rgba(241, 196, 15, 0.15)", color: "#f39c12", border: "1px solid rgba(241, 196, 15, 0.4)" };
+                else if (sbLower === "high") sbStyle = { background: "rgba(230, 126, 34, 0.15)", color: "#d35400", border: "1px solid rgba(230, 126, 34, 0.4)" };
+                else if (sbLower === "critical") sbStyle = { background: "rgba(231, 76, 60, 0.15)", color: "#c0392b", border: "1px solid rgba(231, 76, 60, 0.4)" };
 
                 return (
                   <tr 
@@ -13710,25 +13855,50 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
                       filter: isArchived ? "grayscale(80%)" : "none"
                     }}
                   >
-                    <td>
+                    <td style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ width: "12px", height: "12px", opacity: 0.5 }}>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ width: "12px", height: "12px", opacity: 0.5, flexShrink: 0 }}>
                           <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path>
                           <line x1="7" y1="7" x2="7.01" y2="7"></line>
                         </svg>
-                        <b style={{ fontWeight: "600", fontSize: "12px" }}>{report.report_type}</b>
+                        <b style={{ fontWeight: "600", fontSize: "12px", overflow: "hidden", textOverflow: "ellipsis" }}>{report.report_type}</b>
                       </div>
                     </td>
-                    <td>
+                    <td style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ width: "12px", height: "12px", opacity: 0.5 }}>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ width: "12px", height: "12px", opacity: 0.5, flexShrink: 0 }}>
                           <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
                           <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path>
                           <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
                         </svg>
-                        <span style={{ fontWeight: "500", fontSize: "12px", opacity: 0.9 }}>{report.source_system}</span>
+                        <span style={{ fontWeight: "500", fontSize: "12px", opacity: 0.9, overflow: "hidden", textOverflow: "ellipsis" }}>{report.source_system}</span>
                       </div>
                     </td>
+                    { (activeReportsTab === "xvigilance" || activeReportsTab === "evidence") && (
+                      <>
+                        <td style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{pObj.anomaly_type || "-"}</td>
+                        <td>{pObj.fraud_score !== undefined ? pObj.fraud_score : "-"}</td>
+                        <td>
+                          {scoreBand ? (
+                            <span style={{ 
+                              background: sbStyle.background, 
+                              color: sbStyle.color, 
+                              border: sbStyle.border,
+                              padding: "3px 8px", 
+                              borderRadius: "12px", 
+                              fontSize: "10px", 
+                              fontWeight: "700",
+                              textTransform: "uppercase",
+                              letterSpacing: "0.5px",
+                              display: "inline-block"
+                            }}>
+                              {scoreBand}
+                            </span>
+                          ) : "-"}
+                        </td>
+                        <td style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={pObj.reason || ""}>{pObj.reason || "-"}</td>
+                      </>
+                    )}
                     <td>
                       <span style={{ 
                         background: statusStyle.background, 
@@ -13758,7 +13928,9 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
           </tbody>
         </table>
       </div>
+      </div>
     );
+
   };
 
   return (

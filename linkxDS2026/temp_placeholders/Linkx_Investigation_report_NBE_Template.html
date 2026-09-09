@@ -23,17 +23,16 @@
     body {
       min-height: 100vh;
       width: 100%;
-      background:
-        radial-gradient(circle at 12% 0%, rgba(181,139,90,.18), transparent 32%),
-        radial-gradient(circle at 92% 8%, rgba(14,29,35,.12), transparent 28%),
-        linear-gradient(135deg, #f1e9df 0%, #fbf8f3 48%, #e9e0d5 100%);
+      background: var(--paper);
       color: var(--ink);
       font-family: "Segoe UI", Roboto, Arial, sans-serif;
       overflow-y: auto;
       user-select: none;
+      margin: 0;
+      padding: 0;
     }
     html[data-theme="dark"] body {
-      background: radial-gradient(circle at 15% 0%, #30444a, #0a1418 70%);
+      background: var(--paper);
       color: #f3eee7;
     }
     html[data-theme="dark"] {
@@ -47,30 +46,15 @@
       --shadow: 0 18px 48px rgba(0,0,0,.3);
     }
     .report_container {
-      width: min(1120px, 94vw);
-      margin: 28px auto;
+      width: 100%;
+      margin: 0;
       padding: 0 34px 32px;
       position: relative;
       overflow: hidden;
-      background: var(--paper);
-      border: 1px solid var(--line);
-      border-radius: 4px;
-      box-shadow: var(--shadow);
-    }
-    .report_container::before {
-      content: "";
-      position: absolute;
-      inset: 0 0 auto;
-      height: 8px;
-      background: linear-gradient(90deg, var(--ink) 0 68%, var(--sand) 68% 100%);
-    }
-    .report_container::after {
-      content: "";
-      position: absolute;
-      inset: 18px;
-      border: 1px solid rgba(153,136,117,.22);
-      pointer-events: none;
-      z-index: 0;
+      background: transparent;
+      border: none;
+      border-radius: 0;
+      box-shadow: none;
     }
     .report_container > * { position: relative; z-index: 1; }
     .report_watermark {
@@ -96,7 +80,11 @@
     }
     .report_header_brand { display: flex; align-items: center; gap: 16px; }
     .report_logo {
-      width: 76px; height: 50px; object-fit: contain;
+      height: 50px !important;
+      width: 50px !important;
+      object-fit: contain;
+      display: block;
+      flex-shrink: 0;
       border-radius: 0; border: 0; background: transparent; padding: 0;
     }
     .report_subtitle {

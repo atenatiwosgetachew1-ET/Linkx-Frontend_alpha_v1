@@ -7176,7 +7176,6 @@ function waitForFrames(frameCount = 2) {
 async function renderReportCanvasFromTemplate(report) {
   const html2canvasRef = await ensureHtml2Canvas();
   const iframe = document.createElement("iframe");
-  iframe.src = "../temp_placeholders/graph_reports.html?t=" + Date.now() + "&parent_origin=" + encodeURIComponent(window.location.origin || "null");
   iframe.style.position = "fixed";
   iframe.style.left = "-12000px";
   iframe.style.top = "0";
@@ -7185,7 +7184,7 @@ async function renderReportCanvasFromTemplate(report) {
   iframe.style.border = "0";
   iframe.style.opacity = "0";
   iframe.style.pointerEvents = "none";
-  document.body.appendChild(iframe);
+  iframe.setAttribute("sandbox", "allow-scripts allow-same-origin");
 
   try {
     await new Promise((resolve, reject) => {
@@ -7194,6 +7193,8 @@ async function renderReportCanvasFromTemplate(report) {
         clearTimeout(timeout);
         resolve(true);
       };
+      iframe.src = "../temp_placeholders/graph_reports.html?t=" + Date.now() + "&parent_origin=" + encodeURIComponent(window.location.origin || "null");
+      document.body.appendChild(iframe);
     });
 
     if (!iframe.contentWindow || !iframe.contentDocument) {
@@ -7263,7 +7264,7 @@ async function downloadGraphReport(report) {
   try {
     const templateCanvas = await renderReportCanvasFromTemplate(report);
     if (templateCanvas?.width > 0 && templateCanvas?.height > 0) {
-      const marginPdf = 22;
+      const marginPdf = 0;
       const maxWidth = pageWidth - (marginPdf * 2);
       const maxHeight = pageHeight - (marginPdf * 2);
       const ratio = Math.min(maxWidth / templateCanvas.width, maxHeight / templateCanvas.height);
@@ -7281,6 +7282,7 @@ async function downloadGraphReport(report) {
     }
   } catch (err) {
     console.warn("HTML template PDF rendering failed. Falling back to manual PDF layout.", err);
+    alert("Warning: Falling back to old report format because template rendering failed: " + err.message);
   }
 
   const margin = 34;
