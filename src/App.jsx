@@ -3750,6 +3750,131 @@ function IntegrationContractPanel() {
   return <div className="settings_admin_panel"><fieldset><legend>Integration Contract</legend><p className="settings_hint">Backend service account API details are documented for sibling-service developers.</p><a className="settings_doc_link" href={integrationDocHref} target="_blank" rel="noreferrer">Open integration_contract.md</a></fieldset><fieldset><legend>Frontend Contract Notes</legend><div className="profile_grid"><span>Auth token</span><b>Stored separately as linkx_auth_token</b><span>Linkx session</span><b>Stored separately as session</b><span>Socket auth</span><b>io(API_URL, auth token)</b><span>Forbidden handling</span><b>Central apiFetch shows 403 notices</b></div></fieldset></div>;
 }
 
+function SmartVigilancePanel({ apiFetch }) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  const fetchHealth = useCallback(async () => {
+    try {
+      const response = await apiFetch("/api/v1/reports/xvigilance/health?limit=50");
+      if (response && response.success) {
+        setData(response);
+        setError(null);
+      } else {
+        throw new Error("Failed to load xVigilance health data");
+      }
+    } catch (err) {
+      setError(err?.message || "Failed to load xVigilance health data");
+    } finally {
+      setLoading(false);
+    }
+  }, [apiFetch]);
+
+  useEffect(() => {
+    fetchHealth();
+    const interval = setInterval(fetchHealth, 10000);
+    return () => clearInterval(interval);
+  }, [fetchHealth]);
+
+  if (loading && !data) return <div className="settings_admin_panel"><p>Loading xVigilance health...</p></div>;
+  if (error) return (
+    <div className="settings_admin_panel">
+      <p className="settings_error">{error}</p>
+      <div className="settings_action_row" style={{ marginTop: "15px" }}>
+        <button type="button" onClick={() => { setLoading(true); setError(null); fetchHealth(); }}>Retry Request</button>
+      </div>
+    </div>
+  );
+  if (!data || !data.checkpoint) return (
+    <div className="settings_admin_panel">
+      <p>No data available.</p>
+      <div className="settings_action_row" style={{ marginTop: "15px" }}>
+        <button type="button" onClick={() => { setLoading(true); setError(null); fetchHealth(); }}>Refresh</button>
+      </div>
+    </div>
+  );
+
+  const { checkpoint, recent_runs } = data;
+  const feedName = checkpoint.feed_name || "Unknown Feed";
+  const lastWindowEnd = checkpoint.last_window_end || "N/A";
+  const totalAnalyzed = (checkpoint.total_records_analyzed || 0).toLocaleString();
+  const status = checkpoint.status || "inactive";
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "20px", padding: "20px", height: "100%", overflowY: "auto" }}>
+      <fieldset className="settings_admin_panel">
+        <legend>Progress Tracker</legend>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <h4 style={{ margin: "0 0 5px 0" }}>Feed Name: {feedName}</h4>
+            <p style={{ margin: 0, opacity: 0.8 }}>Last Window End: {lastWindowEnd}</p>
+          </div>
+          <div>
+            <span style={{ 
+              padding: "5px 10px", 
+              borderRadius: "15px", 
+              background: status === "active" ? "#2ecc71" : "#e74c3c",
+              color: "#fff",
+              fontWeight: "bold",
+              textTransform: "uppercase",
+              fontSize: "12px"
+            }}>{status}</span>
+          </div>
+        </div>
+      </fieldset>
+
+      <fieldset className="settings_admin_panel">
+        <legend>Total Digested Counter</legend>
+        <div style={{ fontSize: "24px", fontWeight: "bold" }}>
+          {totalAnalyzed} <span style={{ fontSize: "14px", fontWeight: "normal", opacity: 0.8 }}>records analyzed</span>
+        </div>
+      </fieldset>
+
+      <fieldset className="settings_admin_panel" style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
+        <legend>Audit Log</legend>
+        <div className="cleanup_audit_table_wrap" style={{ flex: 1, minHeight: 0, overflowY: "auto", maxHeight: "none" }}>
+          <table className="cleanup_audit_table" cellSpacing="0" cellPadding="0" style={{ width: "100%", tableLayout: "fixed" }}>
+            <thead style={{ position: "sticky", top: 0, background: "var(--window-bg, #f8f9fa)", zIndex: 1 }}>
+              <tr>
+                <th style={{ padding: "8px", textAlign: "left", borderBottom: "1px solid var(--panel-border, #ddd)" }}>Run ID</th>
+                <th style={{ padding: "8px", textAlign: "left", borderBottom: "1px solid var(--panel-border, #ddd)", whiteSpace: "nowrap", minWidth: "300px" }}>Window</th>
+                <th style={{ padding: "8px", textAlign: "right", borderBottom: "1px solid var(--panel-border, #ddd)" }}>Duration (ms)</th>
+                <th style={{ padding: "8px", textAlign: "right", borderBottom: "1px solid var(--panel-border, #ddd)" }}>Records</th>
+                <th style={{ padding: "8px", textAlign: "center", borderBottom: "1px solid var(--panel-border, #ddd)" }}>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {Array.isArray(recent_runs) && recent_runs.length > 0 ? recent_runs.map((run) => {
+                const sLower = String(run.status || "").toLowerCase();
+                const isSuccess = sLower === "success" || sLower === "succeeded";
+                return (
+                <tr key={run.run_id} style={{ backgroundColor: !isSuccess ? "rgba(231, 76, 60, 0.1)" : "transparent" }}>
+                  <td style={{ padding: "8px", borderBottom: "1px solid var(--panel-border, #eee)" }}>{run.run_id}</td>
+                  <td style={{ padding: "8px", borderBottom: "1px solid var(--panel-border, #eee)", fontSize: "12px", whiteSpace: "nowrap" }}>
+                    {run.window_start} - {run.window_end}
+                  </td>
+                  <td style={{ padding: "8px", borderBottom: "1px solid var(--panel-border, #eee)", textAlign: "right" }}>{run.duration_ms}</td>
+                  <td style={{ padding: "8px", borderBottom: "1px solid var(--panel-border, #eee)", textAlign: "right" }}>{run.records_count}</td>
+                  <td style={{ padding: "8px", borderBottom: "1px solid var(--panel-border, #eee)", textAlign: "center" }}>
+                    <span style={{ 
+                      color: !isSuccess ? "#e74c3c" : "#27ae60",
+                      fontWeight: "bold",
+                      fontSize: "12px"
+                    }}>{run.status}</span>
+                  </td>
+                </tr>
+                );
+              }) : (
+                <tr><td colSpan="5" style={{ padding: "20px", textAlign: "center" }}>No runs found.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </fieldset>
+    </div>
+  );
+}
 function Settings({ isSettingsOpen, toggleAction, actor, roles = [], permissions = [], canAccess, apiFetch, sessionId, onNotice, onLogout, areBackgroundAnimationsEnabled = true, onBackgroundAnimationsChange }) {
   const [activeSettingsTab, setActiveSettingsTab] = useState("profile");
   const [rememberLayout, setRememberLayout] = useState(true);
@@ -3759,6 +3884,7 @@ function Settings({ isSettingsOpen, toggleAction, actor, roles = [], permissions
   const tabs = [
     { id: "profile", label: "Profile" },
     { id: "preferences", label: "Preferences" },
+    { id: "smart_vigilance", label: "Smart Vigilance" },
     { id: "users", label: "Users", permission: "users:manage" },
     { id: "service_accounts", label: "Service Accounts", permission: "users:manage" },
     { id: "integration", label: "Integration" },
@@ -3813,6 +3939,9 @@ function Settings({ isSettingsOpen, toggleAction, actor, roles = [], permissions
             </div>
             <div className="configurations_options_panel" style={{ display: activeSettingsTab === "integration" ? "block" : "none" }}>
               <IntegrationContractPanel />
+            </div>
+            <div className="configurations_options_panel" style={{ display: activeSettingsTab === "smart_vigilance" ? "flex" : "none", flexDirection: "column", height: "100%", overflow: "hidden", padding: 0 }}>
+              {activeSettingsTab === "smart_vigilance" && <SmartVigilancePanel apiFetch={apiFetch} />}
             </div>
           </form>
         </div>
