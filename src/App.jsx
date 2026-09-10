@@ -804,7 +804,7 @@ function HomeMenuOverlay({ toggleAction, canAccess = () => true, areBackgroundAn
             <button
               type="button"
               key={item.label}
-              className="dark_home_menu_overlay__quick_action"
+              className={`dark_home_menu_overlay__quick_action ${item.action === "toggle_menu_new_source_window" ? "to_restore_source_window" : ""}`}
               onClick={() => !item.disabled && toggleAction(item.action)}
               disabled={item.disabled}
             >
@@ -854,7 +854,7 @@ function ToggleMenu({ onToggle, isToggleMenuOpen, toggleAction, isMaximized, win
               <ul>
                 <div className="toogle_side_list_menu_container">  
                   {canAccess(PERMISSIONS.SOURCE_CREATE) && (
-                  <li onClick={() => toggleAction("toggle_menu_new_source_window")} style={{ display: "flex", alignItems: "center", gap: "10px" }}>    
+                  <li onClick={() => toggleAction("toggle_menu_new_source_window")} className="to_restore_source_window" style={{ display: "flex", alignItems: "center", gap: "10px" }}>    
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ width: "16px", height: "16px" }}><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>
                     <span>Source window</span>
                   </li>
@@ -1097,6 +1097,7 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
             <button type="button" className={activeConfigTab === "connections" ? "active" : ""} onClick={() => setActiveConfigTab("connections")}>Connections</button>
             <button type="button" className={activeConfigTab === "tools" ? "active" : ""} onClick={() => setActiveConfigTab("tools")}>Tools</button>
             <button type="button" className={activeConfigTab === "rules" ? "active" : ""} onClick={() => setActiveConfigTab("rules")}>Rules</button>
+            <button type="button" className={activeConfigTab === "score_lineage" ? "active" : ""} onClick={() => setActiveConfigTab("score_lineage")}>Score Lineage</button>
             <button type="button" className={activeConfigTab === "activity" ? "active" : ""} onClick={() => setActiveConfigTab("activity")}>Activity Log</button>
           </div>
 
@@ -1110,6 +1111,10 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
             }}
           >
             <ActivityAuditPanel apiFetch={apiFetch} canAccess={canAccess} isActive={activeConfigTab === "activity"} />
+
+            <div className="configurations_options_panel" style={{ display: activeConfigTab === "score_lineage" ? "block" : "none" }}>
+              <ScoreLineagePanel apiFetch={apiFetch} />
+            </div>
 
             {/* ───────── Left Panel ───────── */}
             <div className="configurations_options_panel" style={{ display: activeConfigTab === "connections" || activeConfigTab === "system" ? "block" : "none" }}>
@@ -3750,7 +3755,7 @@ function IntegrationContractPanel() {
   return <div className="settings_admin_panel"><fieldset><legend>Integration Contract</legend><p className="settings_hint">Backend service account API details are documented for sibling-service developers.</p><a className="settings_doc_link" href={integrationDocHref} target="_blank" rel="noreferrer">Open integration_contract.md</a></fieldset><fieldset><legend>Frontend Contract Notes</legend><div className="profile_grid"><span>Auth token</span><b>Stored separately as linkx_auth_token</b><span>Linkx session</span><b>Stored separately as session</b><span>Socket auth</span><b>io(API_URL, auth token)</b><span>Forbidden handling</span><b>Central apiFetch shows 403 notices</b></div></fieldset></div>;
 }
 
-function SmartVigilancePanel({ apiFetch }) {
+function SmartVigilancePanel({ apiFetch, toggleAction }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -3795,6 +3800,100 @@ function SmartVigilancePanel({ apiFetch }) {
     </div>
   );
 
+  
+  const downloadSummary = async () => {
+    if (!data) return;
+    try {
+      const { jsPDF } = await import("jspdf");
+      const { default: autoTable } = await import("jspdf-autotable");
+      const doc = new jsPDF();
+      const { checkpoint, recent_runs } = data;
+      
+      // Header
+      doc.setFillColor(49, 73, 97); // #314961 system accent
+      doc.rect(0, 0, 210, 40, 'F');
+      
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(22);
+      doc.setFont("helvetica", "bold");
+      doc.text("xVigilance Health Summary", 14, 25);
+      
+      // Meta data
+      doc.setTextColor(50, 50, 50);
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "normal");
+      
+      let y = 55;
+      doc.text(`Feed Name: ${checkpoint.feed_name || 'N/A'}`, 14, y);
+      doc.text(`Last Window End: ${checkpoint.last_window_end || 'N/A'}`, 110, y);
+      y += 8;
+      doc.text(`Total Records Analyzed: ${checkpoint.total_records_analyzed || 0}`, 14, y);
+      doc.text(`Status: ${(checkpoint.status || 'inactive').toUpperCase()}`, 110, y);
+      y += 15;
+      
+      const runs = recent_runs || [];
+      const successfulRuns = runs.filter(r => {
+        const s = String(r.status || "").toLowerCase();
+        return s === "success" || s === "succeeded";
+      });
+      const failedRuns = runs.filter(r => {
+        const s = String(r.status || "").toLowerCase();
+        return s !== "success" && s !== "succeeded";
+      });
+      
+      // Successful runs table
+      doc.setFontSize(14);
+      doc.setFont("helvetica", "bold");
+      doc.text("Successful Executions", 14, y);
+      y += 5;
+      
+      const headColor = [49, 73, 97]; // #314961
+      
+      autoTable(doc, {
+        startY: y,
+        head: [['Run ID', 'Window', 'Duration (ms)', 'Records', 'Status']],
+        body: successfulRuns.map(r => [r.run_id, `${r.window_start} - ${r.window_end}`, r.duration_ms, r.records_count, r.status]),
+        theme: 'striped',
+        headStyles: { fillColor: headColor, textColor: 255, fontSize: 10 },
+        bodyStyles: { fontSize: 9 },
+        alternateRowStyles: { fillColor: [240, 245, 250] }, // #f0f5fa
+        margin: { left: 14, right: 14 },
+      });
+      
+      y = doc.lastAutoTable.finalY + 15;
+      
+      // Failed runs table
+      if (failedRuns.length > 0) {
+        if (y > 250) {
+          doc.addPage();
+          y = 20;
+        }
+        
+        doc.setFontSize(14);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(200, 50, 50);
+        doc.text("Failed / Incomplete Executions", 14, y);
+        y += 5;
+        
+        autoTable(doc, {
+          startY: y,
+          head: [['Run ID', 'Window', 'Duration (ms)', 'Records', 'Status']],
+          body: failedRuns.map(r => [r.run_id, `${r.window_start} - ${r.window_end}`, r.duration_ms, r.records_count, r.status]),
+          theme: 'striped',
+          headStyles: { fillColor: [200, 50, 50], textColor: 255, fontSize: 10 },
+          bodyStyles: { fontSize: 9 },
+          alternateRowStyles: { fillColor: [255, 240, 240] },
+          margin: { left: 14, right: 14 },
+        });
+      }
+      
+      doc.save(`xvigilance_summary_${new Date().toISOString().replace(/[:.]/g, '-')}.pdf`);
+    } catch (err) {
+      console.error("Failed to generate PDF:", err);
+      alert("Failed to generate PDF. Please try again.");
+    }
+  };
+
   const { checkpoint, recent_runs } = data;
   const feedName = checkpoint.feed_name || "Unknown Feed";
   const lastWindowEnd = checkpoint.last_window_end || "N/A";
@@ -3826,8 +3925,35 @@ function SmartVigilancePanel({ apiFetch }) {
 
       <fieldset className="settings_admin_panel">
         <legend>Total Digested Counter</legend>
-        <div style={{ fontSize: "24px", fontWeight: "bold" }}>
-          {totalAnalyzed} <span style={{ fontSize: "14px", fontWeight: "normal", opacity: 0.8 }}>records analyzed</span>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ fontSize: "24px", fontWeight: "bold" }}>
+            {totalAnalyzed} <span style={{ fontSize: "14px", fontWeight: "normal", opacity: 0.8 }}>records analyzed</span>
+          </div>
+          <div style={{ display: "flex", gap: "10px" }}>
+            <button 
+              type="button" 
+              className="smart_vigilance_findings_btn"
+              onClick={downloadSummary}
+              style={{ opacity: 0.9 }}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: "14px", height: "14px", marginRight: "6px", verticalAlign: "middle" }}>
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="7 10 12 15 17 10"></polyline>
+                <line x1="12" y1="15" x2="12" y2="3"></line>
+              </svg>
+              Download summary
+            </button>
+            <button 
+              type="button" 
+              className="smart_vigilance_findings_btn"
+              onClick={() => {
+                window.dispatchEvent(new CustomEvent("open-reports-tab", { detail: "xvigilance" }));
+                if (typeof toggleAction === "function") toggleAction("toggle_menu_new_report_window");
+              }}
+            >
+              Show Findings
+            </button>
+          </div>
         </div>
       </fieldset>
 
@@ -3949,7 +4075,7 @@ function Settings({ isSettingsOpen, toggleAction, actor, roles = [], permissions
               <IntegrationContractPanel />
             </div>
             <div className="configurations_options_panel" style={{ display: activeSettingsTab === "smart_vigilance" ? "flex" : "none", flexDirection: "column", height: "100%", overflow: "hidden", padding: 0 }}>
-              {activeSettingsTab === "smart_vigilance" && <SmartVigilancePanel apiFetch={apiFetch} />}
+              {activeSettingsTab === "smart_vigilance" && <SmartVigilancePanel apiFetch={apiFetch} toggleAction={toggleAction} />}
             </div>
           </form>
         </div>
@@ -13759,6 +13885,18 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
     }
   };
 
+
+  useEffect(() => {
+    const handleOpenTab = (e) => {
+      if (e.detail && e.detail !== activeReportsTab) {
+        setActiveReportsTab(e.detail);
+        setOffset(0);
+        setSelectedReport(null);
+      }
+    };
+    window.addEventListener("open-reports-tab", handleOpenTab);
+    return () => window.removeEventListener("open-reports-tab", handleOpenTab);
+  }, [activeReportsTab]);
   const handleTabClick = (tabId) => {
     if (activeReportsTab !== tabId) {
       setActiveReportsTab(tabId);
@@ -14290,6 +14428,47 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
                     Created
                   </span>
                   <b>{new Date(selectedReport.created_at).toLocaleString()}</b>
+                  
+                  {(() => {
+                    let pObj = {};
+                    try {
+                      pObj = typeof selectedReport.payload === "string" ? JSON.parse(selectedReport.payload) : (selectedReport.payload || {});
+                    } catch(e) {}
+                    const scoreEvidence = pObj.score_evidence;
+                    if (!scoreEvidence) return null;
+                    return (
+                      <>
+                        <span>
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                          </svg>
+                          Config Version
+                        </span>
+                        <b>{scoreEvidence.config_version}</b>
+                        <span>
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M12 20v-6M6 20V10M18 20V4"/>
+                          </svg>
+                          Base Score
+                        </span>
+                        <b>{scoreEvidence.base_score_applied}</b>
+                        <span>
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                            <circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>
+                          </svg>
+                          Node Bonus
+                        </span>
+                        <b>{scoreEvidence.node_count_bonus}</b>
+                        <span>
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                            <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                          </svg>
+                          Financial Bonus
+                        </span>
+                        <b>{scoreEvidence.financial_bonus}</b>
+                      </>
+                    );
+                  })()}
                 </div>
                 
                 {/* Payload Section */}
@@ -14411,3 +14590,128 @@ function Root() {
 }
 
 export default Root;
+
+function ScoreLineagePanel({ apiFetch }) {
+  const [baseScores, setBaseScores] = React.useState({
+    HIGH_RISK_LINK: 50,
+    CIRCULAR_FLOW: 30,
+    SMURFING: 20,
+    SHARED_IDENTIFIER: 20,
+    HUB_AND_SPOKE: 10,
+    RAPID_FAN_OUT: 10,
+    ABNORMAL_BALANCE_CHANGE: 10
+  });
+
+  const [nodeThresholds, setNodeThresholds] = React.useState([
+    { min_nodes: 10000, add_points: 30 },
+    { min_nodes: 5000, add_points: 20 },
+    { min_nodes: 1000, add_points: 10 },
+    { min_nodes: 100, add_points: 5 }
+  ]);
+
+  const [moneyThresholds, setMoneyThresholds] = React.useState([
+    { min_amount: 10000000, add_points: 40 },
+    { min_amount: 5000000, add_points: 30 },
+    { min_amount: 1000000, add_points: 20 },
+    { min_amount: 500000, add_points: 10 }
+  ]);
+
+  const [isSaving, setIsSaving] = React.useState(false);
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      const payload = {
+        base_scores: baseScores,
+        node_thresholds: nodeThresholds,
+        money_thresholds: moneyThresholds
+      };
+      
+      const res = await apiFetch("/api/v1/config/risk_scoring", {
+        method: "POST",
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) throw new Error("Failed to save configuration");
+      alert("Score Lineage configuration saved successfully as a new version! (Append-only)");
+    } catch (e) {
+      console.error(e);
+      alert("Error saving configuration.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
+      <fieldset>
+        <legend>Base Scores by Typology</legend>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}>
+          {Object.entries(baseScores).map(([key, val]) => (
+            <div key={key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "5px" }}>
+              <label style={{ flex: 1, fontSize: "12px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={key}>{key}</label>
+              <input 
+                type="range" 
+                min="0" max="100" 
+                value={val} 
+                onChange={e => setBaseScores(prev => ({...prev, [key]: Number(e.target.value)}))} 
+                style={{ flex: 1, marginRight: "10px" }}
+              />
+              <span style={{ width: "30px", textAlign: "right", fontWeight: "bold" }}>{val}</span>
+            </div>
+          ))}
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Node Count Multipliers</legend>
+        {nodeThresholds.map((t, idx) => (
+          <div key={idx} style={{ display: "flex", gap: "10px", marginBottom: "10px", alignItems: "center" }}>
+            <label style={{width: "80px"}}>Min Nodes:</label>
+            <input type="number" className="input_text" style={{ flex: 1 }} value={t.min_nodes} onChange={e => {
+              const newT = [...nodeThresholds];
+              newT[idx].min_nodes = Number(e.target.value);
+              setNodeThresholds(newT);
+            }} />
+            <label style={{width: "80px"}}>Add Points:</label>
+            <input type="number" className="input_text" style={{ width: "80px" }} value={t.add_points} onChange={e => {
+              const newT = [...nodeThresholds];
+              newT[idx].add_points = Number(e.target.value);
+              setNodeThresholds(newT);
+            }} />
+            <button type="button" className="close_action_btn" onClick={() => setNodeThresholds(nodeThresholds.filter((_, i) => i !== idx))}>x</button>
+          </div>
+        ))}
+        <button type="button" className="action_btns" onClick={() => setNodeThresholds([...nodeThresholds, { min_nodes: 0, add_points: 0 }])}>+ Add Threshold</button>
+      </fieldset>
+
+      <fieldset>
+        <legend>Financial Value Multipliers</legend>
+        {moneyThresholds.map((t, idx) => (
+          <div key={idx} style={{ display: "flex", gap: "10px", marginBottom: "10px", alignItems: "center" }}>
+            <label style={{width: "80px"}}>Min Amount:</label>
+            <input type="number" className="input_text" style={{ flex: 1 }} value={t.min_amount} onChange={e => {
+              const newT = [...moneyThresholds];
+              newT[idx].min_amount = Number(e.target.value);
+              setMoneyThresholds(newT);
+            }} />
+            <label style={{width: "80px"}}>Add Points:</label>
+            <input type="number" className="input_text" style={{ width: "80px" }} value={t.add_points} onChange={e => {
+              const newT = [...moneyThresholds];
+              newT[idx].add_points = Number(e.target.value);
+              setMoneyThresholds(newT);
+            }} />
+            <button type="button" className="close_action_btn" onClick={() => setMoneyThresholds(moneyThresholds.filter((_, i) => i !== idx))}>x</button>
+          </div>
+        ))}
+        <button type="button" className="action_btns" style={{ position: "relative", zIndex: 10 }} onClick={() => setMoneyThresholds([...moneyThresholds, { min_amount: 0, add_points: 0 }])}>+ Add Threshold</button>
+      </fieldset>
+
+      <div style={{ textAlign: "right", marginTop: "10px", paddingBottom: "80px" }}>
+        <button type="button" className="smart_vigilance_findings_btn" style={{ padding: "8px 16px", fontWeight: "bold", opacity: isSaving ? 0.7 : 1, position: "relative", zIndex: 10 }} onClick={handleSave} disabled={isSaving}>
+          {isSaving ? "Saving..." : "Save New Version"}
+        </button>
+      </div>
+    </div>
+  );
+}
+

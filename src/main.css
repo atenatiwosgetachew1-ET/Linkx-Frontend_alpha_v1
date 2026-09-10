@@ -6613,6 +6613,14 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   border-color: #355168 !important;
   color: #dce7f0 !important;
 }
+[data-theme="dark"] #configurations_container .smart_vigilance_findings_btn:hover {
+  background-color: #2b4961 !important;
+  border-color: #3d5e7a !important;
+}
+[data-theme="dark"] #configurations_container .smart_vigilance_findings_btn:active {
+  background-color: #1a2c3a !important;
+}
+
 [data-theme="dark"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset {
   background-color: #101a24 !important;
   border-color: #253848 !important;
@@ -7608,6 +7616,15 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   color: #fffaf6;
   box-shadow: 0 8px 18px rgba(174, 121, 79, 0.24);
 }
+[data-theme="light"] #configurations_container .smart_vigilance_findings_btn:hover {
+  background: linear-gradient(90deg, #c09756, #966729) !important;
+  box-shadow: 0 10px 20px rgba(174, 121, 79, 0.35) !important;
+}
+[data-theme="light"] #configurations_container .smart_vigilance_findings_btn:active {
+  background: linear-gradient(90deg, #99743c, #704b1e) !important;
+  box-shadow: 0 4px 10px rgba(174, 121, 79, 0.15) !important;
+}
+
 [data-theme="light"] #configurations_container .configurations_options_container .configurations_options .configurations_tab_form {
   padding-top: 1.3rem;
   scrollbar-color: rgba(174, 121, 79, 0.34) rgba(255, 255, 255, 0.12);
@@ -8889,4 +8906,71 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 @keyframes slideOutPanel {
   from { width: 340px; min-width: 340px; opacity: 1; white-space: nowrap; }
   to { width: 0px; min-width: 0px; opacity: 0; white-space: nowrap; }
+}
+
+/* Smart Vigilance Findings Button matching the active tab gradient */
+#configurations_container .smart_vigilance_findings_btn {
+  background-color: #314961;
+  border: 1px solid #314961;
+  color: #FFF;
+  padding: 6px 14px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+#configurations_container .smart_vigilance_findings_btn:hover {
+  background-color: #3b5a77;
+  border-color: #3b5a77;
+  opacity: 0.9;
+}
+#configurations_container .smart_vigilance_findings_btn:active {
+  background-color: #273b4e;
+  border-color: #273b4e;
+  transform: translateY(1px);
+}
+
+[data-theme="dark"] #configurations_container .smart_vigilance_findings_btn {
+  background-color: #223a4e !important;
+  border-color: #355168 !important;
+  color: #dce7f0 !important;
+}
+[data-theme="light"] #configurations_container .smart_vigilance_findings_btn {
+  background: linear-gradient(90deg, #ac854d, #825825);
+  border-color: rgba(145, 97, 60, 0.95);
+  color: #fffaf6;
+  box-shadow: 0 8px 18px rgba(174, 121, 79, 0.24);
+}
+
+/* Close/Delete action button */
+#configurations_container .close_action_btn {
+  background-color: #bb0000;
+  color: #FFF;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+  padding: 4px 8px;
+}
+#configurations_container .close_action_btn:hover {
+  background-color: #dd0000;
+}
+[data-theme="dark"] #configurations_container .close_action_btn {
+  background-color: #5f252c !important;
+  color: #e7d6d8 !important;
+}
+[data-theme="dark"] #configurations_container .close_action_btn:hover {
+  background-color: #793038 !important;
+}
+[data-theme="light"] #configurations_container .close_action_btn {
+  background: rgba(145, 74, 74, 0.88);
+  color: #fff7f5;
+}
+[data-theme="light"] #configurations_container .close_action_btn:hover {
+  background: rgba(170, 67, 67, 0.94);
+}
+
+/* Hidden components per requirements */
+.to_restore_source_window {
+  display: none !important;
 }
