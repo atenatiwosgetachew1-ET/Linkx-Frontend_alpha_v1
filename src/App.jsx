@@ -13867,14 +13867,29 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
     if (isReportsOpen) {
       loadReports();
     }
-  }, [isReportsOpen, activeReportsTab, offset]);
+  }, [isReportsOpen, activeReportsTab, offset, filterStatus, filterBand]);
 
   const loadReports = async () => {
     try {
       setLoading(true);
       setError(null);
       const tabConf = tabs.find(t => t.id === activeReportsTab);
-      const url = `${tabConf.endpoint}?limit=${limit}&offset=${offset}`;
+      let url = `${tabConf.endpoint}?limit=${limit}&offset=${offset}`;
+      
+      if (filterStatus !== "all") {
+        url += `&status=${encodeURIComponent(filterStatus)}`;
+      }
+      if (filterBand !== "all") {
+        if (filterBand === "fatal") {
+          url += `&min_fraud_score=90`;
+        } else {
+          url += `&score_band=${encodeURIComponent(filterBand)}`;
+        }
+      }
+      if (searchQuery) {
+        url += `&q=${encodeURIComponent(searchQuery)}`;
+      }
+
       const data = await apiFetch(url, { suppressForbiddenHandler: true });
       setReportsData(data.data || []);
       setTotalCount(data.count || 0);
@@ -13969,6 +13984,17 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
       processedData = processedData.filter(r => {
         let pObj = {};
         try { pObj = typeof r.payload === "string" ? JSON.parse(r.payload) : (r.payload || {}); } catch(e) {}
+        
+        if (filterBand === "fatal") {
+          let score = 0;
+          if (pObj.fraud_score !== undefined) score = parseFloat(pObj.fraud_score);
+          else if (pObj.fraudScore !== undefined) score = parseFloat(pObj.fraudScore);
+          else if (pObj.score !== undefined) score = parseFloat(pObj.score);
+          
+          const sb = (pObj.score_band || pObj.scoreBand || "").toLowerCase();
+          return score >= 90 || sb === "fatal";
+        }
+        
         const sb = (pObj.score_band || "").toLowerCase();
         return sb === filterBand;
       });
@@ -14004,7 +14030,7 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
           />
           <select 
             value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
+            onChange={(e) => { setFilterStatus(e.target.value); setOffset(0); }}
             className="settings_textinput"
             style={{ width: "auto", padding: "6px 12px", height: "32px", margin: 0 }}
           >
@@ -14016,12 +14042,13 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
           {(activeReportsTab === "xvigilance" || activeReportsTab === "evidence") && (
             <select 
               value={filterBand}
-              onChange={(e) => setFilterBand(e.target.value)}
+              onChange={(e) => { setFilterBand(e.target.value); setOffset(0); }}
               className="settings_textinput"
               style={{ width: "auto", padding: "6px 12px", height: "32px", margin: 0 }}
             >
               <option value="all">All Score Bands</option>
-              <option value="critical">Critical (80+)</option>
+              <option value="fatal">Fatal (90+)</option>
+              <option value="critical">Critical (80-89)</option>
               <option value="high">High (50-79)</option>
               <option value="medium">Medium (20-49)</option>
               <option value="low">Low (0-19)</option>
@@ -14116,6 +14143,7 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
                 else if (sbLower === "medium") sbStyle = { background: "rgba(241, 196, 15, 0.15)", color: "#f39c12", border: "1px solid rgba(241, 196, 15, 0.4)" };
                 else if (sbLower === "high") sbStyle = { background: "rgba(230, 126, 34, 0.15)", color: "#d35400", border: "1px solid rgba(230, 126, 34, 0.4)" };
                 else if (sbLower === "critical") sbStyle = { background: "rgba(231, 76, 60, 0.15)", color: "#c0392b", border: "1px solid rgba(231, 76, 60, 0.4)" };
+                else if (sbLower === "fatal") sbStyle = { background: "rgba(142, 68, 173, 0.15)", color: "#8e44ad", border: "1px solid rgba(142, 68, 173, 0.4)" };
 
                 return (
                   <tr 
