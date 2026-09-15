@@ -149,13 +149,14 @@ const buildSessionPolicyPatchBody = (sessionId, idleSettings) => ({
   },
 });
 
-function useIdleTimeout({ enabled, warningMs, lockMs, timeoutMs, isLocked = false, resetKey = 0, onWarn, onLock, onTimeout }) {
+function useIdleTimeout({ enabled, warningMs, lockMs, timeoutMs, isLocked = false, resetKey = 0, onWarn, onLock, onTimeout, onActivity }) {
   const warningTimerRef = useRef(null);
   const lockTimerRef = useRef(null);
   const timeoutTimerRef = useRef(null);
   const onWarnRef = useRef(onWarn);
   const onLockRef = useRef(onLock);
   const onTimeoutRef = useRef(onTimeout);
+  const onActivityRef = useRef(onActivity);
   const isLockedRef = useRef(isLocked);
 
   useEffect(() => {
@@ -173,6 +174,10 @@ function useIdleTimeout({ enabled, warningMs, lockMs, timeoutMs, isLocked = fals
   useEffect(() => {
     isLockedRef.current = isLocked;
   }, [isLocked]);
+
+  useEffect(() => {
+    onActivityRef.current = onActivity;
+  }, [onActivity]);
 
   const clearIdleTimers = useCallback(() => {
     if (warningTimerRef.current) {
@@ -220,10 +225,14 @@ function useIdleTimeout({ enabled, warningMs, lockMs, timeoutMs, isLocked = fals
     const handleActivity = () => {
       if (isLockedRef.current) return;
       resetIdleTimers();
+      onActivityRef.current?.();
     };
     const handleVisibilityChange = () => {
       if (isLockedRef.current) return;
-      if (document.visibilityState === "visible") resetIdleTimers();
+      if (document.visibilityState === "visible") {
+        resetIdleTimers();
+        onActivityRef.current?.();
+      }
     };
 
     activityEvents.forEach((eventName) => {
@@ -13162,6 +13171,17 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
     });
   }, [pushNotification]);
 
+  const lastHeartbeatRef = useRef(Date.now());
+  const handleActivityHeartbeat = useCallback(() => {
+    if (!token) return;
+    const now = Date.now();
+    // Ping backend every 5 minutes (300000ms) if active
+    if (now - lastHeartbeatRef.current > 300000) {
+      lastHeartbeatRef.current = now;
+      apiFetch("/auth/verify", { method: "POST" }).catch(() => {});
+    }
+  }, [apiFetch, token]);
+
   useIdleTimeout({
     enabled: Boolean(token) && idleSettings.enabled && idlePolicyMeta.loaded,
     warningMs: idleSettings.warningMs,
@@ -13169,6 +13189,7 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
     timeoutMs: idleSettings.timeoutMs,
     isLocked: isWorkspaceLocked,
     resetKey: idleResetSeq,
+    onActivity: handleActivityHeartbeat,
     onWarn: () => {
       const minutesUntilLock = Math.max(1, Math.ceil((idleSettings.lockMs - idleSettings.warningMs) / 60000));
       pushNotification({
