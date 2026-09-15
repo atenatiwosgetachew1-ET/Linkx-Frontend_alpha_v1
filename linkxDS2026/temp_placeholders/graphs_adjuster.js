@@ -4401,7 +4401,13 @@ function clearEdgeBundlingLite() {
   const restoreUpdates = [];
   state.originalByEdgeId.forEach((original, edgeId) => {
     if (edgesData.get(edgeId)) {
-      restoreUpdates.push({ id: edgeId, ...original });
+      restoreUpdates.push({ 
+        id: edgeId, 
+        label: original.label ?? null,
+        width: original.width ?? 1,
+        color: original.color ?? null,
+        hidden: original.hidden ?? false
+      });
     }
   });
   if (restoreUpdates.length > 0) edgesData.update(restoreUpdates);
