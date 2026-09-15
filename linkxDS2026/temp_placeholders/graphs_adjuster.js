@@ -4616,7 +4616,14 @@ function runAlertScan(notify = true) {
            let color = a.severity === "high" ? "#e74c3c" : "#f39c12";
            let title = a.type === "high_degree" ? "High Degree" : (a.type === "heavy_edge" ? "Heavy Edge" : "Alert");
            
-           return `<div style="border-left: 3px solid ${color}; padding-left: 8px; background: rgba(0,0,0,0.02); padding-top: 4px; padding-bottom: 4px; border-radius: 0 4px 4px 0; cursor: pointer;" onclick="if(window.network && '${a.nodeId}') { window.network.focus('${a.nodeId}', {scale: 1.2, animation: true}); window.network.selectNodes(['${a.nodeId}']); }">
+           let clickAction = '';
+           if (a.nodeId) {
+               clickAction = `if(window.network) { window.network.focus('${a.nodeId}', {scale: 1.2, animation: true}); window.network.selectNodes(['${a.nodeId}']); }`;
+           } else if (a.edgeId) {
+               clickAction = `if(window.network) { window.network.selectEdges(['${a.edgeId}']); const edge = window.FULL_GRAPH.edges.get('${a.edgeId}'); if(edge) { window.network.focus(edge.from, {scale: 1.2, animation: true}); } }`;
+           }
+           
+           return `<div style="border-left: 3px solid ${color}; padding-left: 8px; background: rgba(0,0,0,0.02); padding-top: 4px; padding-bottom: 4px; border-radius: 0 4px 4px 0; cursor: pointer;" onclick="${clickAction}">
                <strong style="color: ${color}; display: block; margin-bottom: 2px;">${title}</strong>
                <span>${a.message}</span>
            </div>`;
