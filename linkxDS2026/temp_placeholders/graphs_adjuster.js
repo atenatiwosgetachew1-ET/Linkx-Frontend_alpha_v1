@@ -2849,20 +2849,100 @@ function rebuildAdjacencyFromFullGraph() {
   invalidateGraphEdgeIndexes();
 }
 
+/**
+ * resolveEdgeSemantic(edge) — Core Edge Semantic Styling Engine
+ *
+ * Reads backend-provided metadata properties and returns vis-network
+ * visual overrides so investigators can distinguish edge types at a glance.
+ *
+ * Rules:
+ *   financial_flow=true  + directed_display=true  → Solid arrow         (CIRCULAR_FLOW — real money movement)
+ *   financial_flow=false + directed_display=true  → Dotted arrow        (SMURFING, FUND_FLOW, ABNORMAL_BALANCE — time order)
+ *   financial_flow=false + directed_display=false → Dashed line, no tip (HUB_AND_SPOKE, SHARED_IDENTIFIER — grouping)
+ *   edge_semantic="NODE_FLAG"                     → Fine-dotted, amber  (DORMANT_TO_ACTIVE — node property flag)
+ *   Missing properties (old data)                 → null (no overrides, backward compatible)
+ */
+function resolveEdgeSemantic(edge) {
+  if (!edge) return null;
+
+  const semantic = edge.edge_semantic;
+  const financialFlow = edge.financial_flow;
+  const directedDisplay = edge.directed_display;
+
+  // Backward compatibility: if none of the new properties exist, return null (no overrides)
+  if (semantic === undefined && financialFlow === undefined && directedDisplay === undefined) {
+    return null;
+  }
+
+  // NODE_FLAG — self-loop / node property badge
+  if (semantic === "NODE_FLAG") {
+    return {
+      arrows: "",
+      dashes: [2, 3],
+      width: 0.5,
+      color: "#f39c12", // warning amber
+      _semanticType: "node_flag",
+      _semanticTooltip: "Node flag — property of this transaction"
+    };
+  }
+
+  // OBSERVED_FLOW — real money movement (solid arrow)
+  if (financialFlow === true && directedDisplay === true) {
+    return {
+      arrows: "to",
+      dashes: false,
+      width: 1.2,
+      _semanticType: "observed_flow",
+      _semanticTooltip: "Observed financial transfer"
+    };
+  }
+
+  // TEMPORAL_SEQUENCE — time order, not money (dotted arrow)
+  if (financialFlow === false && directedDisplay === true) {
+    return {
+      arrows: "to",
+      dashes: [5, 5],
+      width: 0.85,
+      _semanticType: "temporal_sequence",
+      _semanticTooltip: "Time-ordered sequence — arrow shows order, not money flow"
+    };
+  }
+
+  // GROUPING — shared property, no direction (dashed line, no arrowhead)
+  if (financialFlow === false && directedDisplay === false) {
+    return {
+      arrows: "",
+      dashes: [8, 4],
+      width: 0.7,
+      _semanticType: "grouping",
+      _semanticTooltip: "Analytical grouping — shared property (not a transfer)"
+    };
+  }
+
+  // Fallback for unexpected combinations — no overrides
+  return null;
+}
+
 function createGraphEdge(from, to, patch = {}) {
   if (from == null || to == null || from === to) return null;
   queueGraphHistoryCapture();
+  
+  const semOverrides = resolveEdgeSemantic(patch) || {};
+  
   const edge = {
     ...patch,
     id: patch.id ?? createUniqueEdgeId("edge"),
     from: normalizeGraphId(from),
     to: normalizeGraphId(to),
     label: patch.label ?? "",
-    width: patch.width ?? 1,
-    arrows: patch.arrows ?? "to",
-    dashes: patch.dashes ?? false,
-    color: patch.color ?? undefined
+    width: semOverrides.width ?? patch.width ?? 1,
+    arrows: semOverrides.arrows ?? patch.arrows ?? "to",
+    dashes: semOverrides.dashes ?? patch.dashes ?? false,
+    color: semOverrides.color ?? patch.color ?? undefined
   };
+  
+  Object.assign(edge, semOverrides); // Apply hidden semantic props like _semanticType
+
   const stored = upsertFullGraphEdge(edge);
   if (!stored) return null;
 
@@ -4525,8 +4605,28 @@ function runAlertScan(notify = true) {
   publishGraphAlerts(alerts);
   if (notify) {
     renderVisibleGraphBatch();
-    if (alerts.length === 0) alert("Alert scan complete. No alerts triggered.");
-    else alert(`Alert scan complete. ${alerts.length} alert(s) found.`);
+    
+    const overlay = document.getElementById("alerts-overlay");
+    const container = document.getElementById("alerts-list-container");
+    if (overlay && container) {
+      if (alerts.length === 0) {
+        container.innerHTML = `<div style="opacity: 0.7; font-style: italic;">No alerts triggered.</div>`;
+      } else {
+        container.innerHTML = alerts.map(a => {
+           let color = a.severity === "high" ? "#e74c3c" : "#f39c12";
+           let title = a.type === "high_degree" ? "High Degree" : (a.type === "heavy_edge" ? "Heavy Edge" : "Alert");
+           
+           return `<div style="border-left: 3px solid ${color}; padding-left: 8px; background: rgba(0,0,0,0.02); padding-top: 4px; padding-bottom: 4px; border-radius: 0 4px 4px 0; cursor: pointer;" onclick="if(window.network && '${a.nodeId}') { window.network.focus('${a.nodeId}', {scale: 1.2, animation: true}); window.network.selectNodes(['${a.nodeId}']); }">
+               <strong style="color: ${color}; display: block; margin-bottom: 2px;">${title}</strong>
+               <span>${a.message}</span>
+           </div>`;
+        }).join("");
+      }
+      overlay.style.display = "flex";
+    } else {
+      if (alerts.length === 0) alert("Alert scan complete. No alerts triggered.");
+      else alert(`Alert scan complete. ${alerts.length} alert(s) found.`);
+    }
   }
   return alerts;
 }
@@ -7851,6 +7951,11 @@ function mergeGraphChunkUpdate({ id = null, nodes = [], edges = [], progress = n
       width: edge.weight ?? edge.width ?? 1,
       title: edge.title || undefined,
     };
+    // Apply semantic edge styling (Phase 2.2)
+    const semOverrides = resolveEdgeSemantic(edge);
+    if (semOverrides) {
+      Object.assign(normalized, semOverrides);
+    }
     const previous = FULL_GRAPH.edges.get(normalized.id);
     if (previous && JSON.stringify(previous) === JSON.stringify(normalized)) return;
     upsertFullGraphEdge(normalized);
@@ -8151,7 +8256,19 @@ function generateEdgeTitleSafely(edge) {
     const weightValue = toFiniteNumber(weightCandidate);
     const normalizedWeight = weightValue == null ? 1 : weightValue;
 
-    return `From: ${fromLabel}\nTo: ${toLabel}\nWeight: ${normalizedWeight}`;
+    let tooltip = `From: ${fromLabel}\nTo: ${toLabel}\nWeight: ${normalizedWeight}`;
+    
+    if (merged._semanticTooltip) {
+      tooltip += `\n\n${merged._semanticTooltip}`;
+    }
+    if (merged.reason) {
+      tooltip += `\nReason: ${merged.reason}`;
+    }
+    if (merged.hub_account) {
+      tooltip += `\nHub Account: ${merged.hub_account}`;
+    }
+
+    return tooltip;
 }
 
 // Batch update all edge titles

@@ -13946,7 +13946,9 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
       doc.setFont("helvetica", "normal");
       
       let y = 55;
-      doc.text(`Total Records: ${dataToDownload.length}`, 14, y);
+      const startRecord = totalCount > 0 ? offset + 1 : 0;
+      const endRecord = Math.min(offset + limit, totalCount);
+      doc.text(`Showing Records: ${startRecord} to ${endRecord} of ${totalCount}`, 14, y);
       doc.text(`Generated At: ${new Date().toLocaleString()}`, 200, y);
       y += 15;
       
@@ -14096,7 +14098,7 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
       
       const summaryBody = Object.entries(entityStats)
         .sort((a, b) => b[1].count - a[1].count) // Sort by frequency descending
-        .map(([entity, stats]) => [entity, stats.count, stats.topRefId]);
+        .map(([entity, stats], index) => [index + 1, entity, stats.count, stats.topRefId]);
 
       if (summaryBody.length > 0) {
         let finalY = doc.lastAutoTable.finalY || y;
@@ -14119,7 +14121,7 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
         
         autoTable(doc, {
           startY: finalY,
-          head: [['Leading Entity (Account / ID)', 'Frequency (Appearances)', 'Most Flagged Ref ID']],
+          head: [['No.', 'Leading Entity (Account / ID)', 'Frequency (Appearances)', 'Most Flagged Ref ID']],
           body: summaryBody,
           theme: 'striped',
           headStyles: { fillColor: headColor, textColor: 255, fontSize: 9 },
@@ -14127,9 +14129,10 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
           alternateRowStyles: { fillColor: [240, 245, 250] }, // #f0f5fa
           margin: { left: 14, right: 14 },
           columnStyles: {
-            0: { cellWidth: 105 },
-            1: { cellWidth: 50 },
-            2: { cellWidth: 114 }
+            0: { cellWidth: 15 },
+            1: { cellWidth: 90 },
+            2: { cellWidth: 50 },
+            3: { cellWidth: 114 }
           }
         });
       }

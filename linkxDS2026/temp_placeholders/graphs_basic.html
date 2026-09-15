@@ -1188,6 +1188,71 @@
 										<div class="vis-tooltip" style="left: 0px; top: 0px; visibility: hidden;"></div>
 									</div>
 								</div>
+								
+								<!-- Edge Semantic Legend -->
+								<div id="semantic-legend" style="
+									position: absolute;
+									bottom: 20px;
+									left: 20px;
+									background: var(--bg-primary, rgba(255, 255, 255, 0.9));
+									border: 1px solid var(--border-color, rgba(0,0,0,0.1));
+									padding: 12px;
+									border-radius: 8px;
+									font-family: sans-serif;
+									font-size: 11px;
+									color: var(--text-primary, #333);
+									box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+									pointer-events: none;
+									z-index: 1000;
+									display: flex;
+									flex-direction: column;
+									gap: 8px;
+								">
+									<div style="font-weight: bold; margin-bottom: 4px; font-size: 12px;">Relationship Types</div>
+									<div style="display: flex; align-items: center; gap: 8px;">
+										<svg width="40" height="10"><path d="M0,5 L34,5" stroke="currentColor" stroke-width="1.5"/><polygon points="34,2 40,5 34,8" fill="currentColor"/></svg>
+										<span>Observed financial transfer</span>
+									</div>
+									<div style="display: flex; align-items: center; gap: 8px; opacity: 0.85;">
+										<svg width="40" height="10"><path d="M0,5 L34,5" stroke="currentColor" stroke-width="1.5" stroke-dasharray="4,4"/><polygon points="34,2 40,5 34,8" fill="currentColor"/></svg>
+										<span>Time-ordered sequence (not a transfer)</span>
+									</div>
+									<div style="display: flex; align-items: center; gap: 8px; opacity: 0.7;">
+										<svg width="40" height="10"><path d="M0,5 L40,5" stroke="currentColor" stroke-width="1.5" stroke-dasharray="6,3"/></svg>
+										<span>Analytical grouping (shared property)</span>
+									</div>
+									<div style="display: flex; align-items: center; gap: 8px;">
+										<svg width="40" height="10"><path d="M0,5 L40,5" stroke="#f39c12" stroke-width="1.5" stroke-dasharray="2,2"/></svg>
+										<span style="color: #f39c12;">Node flag (property of transaction)</span>
+									</div>
+								</div>
+								<!-- Alerts Overlay -->
+								<div id="alerts-overlay" style="
+									position: absolute;
+									top: 20px;
+									right: 20px;
+									background: var(--bg-primary, rgba(255, 255, 255, 0.95));
+									border: 1px solid var(--border-color, rgba(0,0,0,0.1));
+									padding: 12px;
+									border-radius: 8px;
+									font-family: sans-serif;
+									font-size: 12px;
+									color: var(--text-primary, #333);
+									box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+									z-index: 1000;
+									display: none;
+									flex-direction: column;
+									max-width: 300px;
+									max-height: 80%;
+									overflow-y: auto;
+								">
+									<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; border-bottom: 1px solid var(--border-color, #eee); padding-bottom: 6px;">
+										<span style="font-weight: bold; font-size: 13px;">Graph Alerts</span>
+										<button onclick="document.getElementById('alerts-overlay').style.display='none'" style="background: none; border: none; cursor: pointer; color: var(--text-muted, #777); font-size: 16px;">&times;</button>
+									</div>
+									<div id="alerts-list-container" style="display: flex; flex-direction: column; gap: 6px;">
+									</div>
+								</div>
 
 							  <script type="text/javascript">
 								var nodesData = new vis.DataSet();
@@ -1550,6 +1615,13 @@ smooth: {
 											width: edge.weight ?? 1, // Default
 											title: edge.title || undefined // Only set title if it exists
 										};
+										// Apply semantic edge styling (Phase 2.1)
+										if (typeof resolveEdgeSemantic === "function") {
+											const semOverrides = resolveEdgeSemantic(edge);
+											if (semOverrides) {
+												Object.assign(weightedEdge, semOverrides);
+											}
+										}
 										
 										FULL_GRAPH.edges.set(id, weightedEdge);
 										edgeMap.set(id, weightedEdge);
@@ -1849,6 +1921,7 @@ smooth: {
 							    network.on("oncontext", function (params) {
 								    params.event.preventDefault(); // Block browser menu
 								    const nodeId = network.getNodeAt(params.pointer.DOM);
+								    const edgeId = !nodeId ? network.getEdgeAt(params.pointer.DOM) : null;
 								    let selectedNodes = network.getSelectedNodes();
 								    const contextMenu = document.getElementById('customContextMenu');
 								    let menuHTML = "";
@@ -1866,7 +1939,18 @@ smooth: {
 								        edges = network.getConnectedEdges(nodeId);
 								    }
 
-								    if (!nodeId) {
+								    if (edgeId && !nodeId) {
+								        const edgeData = window.FULL_GRAPH.edges.get(edgeId) || {};
+								        menuHTML += `<div style="padding: 8px 12px; border-bottom: 1px solid var(--border-color, #eee); margin-bottom: 4px; font-size: 11px; opacity: 0.9; cursor: default;">`;
+								        menuHTML += `<strong style="font-size: 12px; display: block; margin-bottom: 4px;">Edge Information</strong>`;
+								        menuHTML += `Semantic: <strong>${edgeData.edge_semantic || "N/A"}</strong><br>`;
+								        menuHTML += `Financial Flow: <strong>${edgeData.financial_flow ? "Yes" : "No"}</strong><br>`;
+								        menuHTML += `Directed Display: <strong>${edgeData.directed_display ? "Yes" : "No"}</strong>`;
+								        if (edgeData.reason) {
+								            menuHTML += `<br>Reason: <span style="opacity: 0.8">${edgeData.reason}</span>`;
+								        }
+								        menuHTML += `</div>`;
+								    } else if (!nodeId) {
 								        if (localClipboard.length > 0) {
 								        	menuHTML += `<div class="menu_item" data-action="paste">Paste</div>`;
 								        }
