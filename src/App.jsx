@@ -7138,11 +7138,24 @@ const fileInputRef = useRef(null);
   const graphStatusRef = useRef({});
   const [graphLinkSource, setGraphLinkSource] = useState(null);   
   const [activeGraph, setActiveGraph] = useState(''); 
-  const iframeRefs = useRef({}); //to communicate across the iframe boundary  
+  const iframeRefs = useRef({});
+  const iframeLoadedStatusRef = useRef({}); //to communicate across the iframe boundary  
   const [iframeSettings, setIframeSettings] = useState({}); // object instead of array
   const [iframeSearch, setIframeSearch] = useState({}); // object instead of array
   const [iframePerformanceMood, setIframePerformanceMood] = useState({});
-  const [isCtrlHeld, setIsCtrlHeld] = useState(false);  
+  const [isCtrlHeld, setIsCtrlHeld] = useState(false);
+
+  useEffect(() => {
+    const handleIframeLoad = (e) => {
+      const wId = String(e.detail?.wId);
+      if (wId) {
+        iframeLoadedStatusRef.current[wId] = true;
+      }
+    };
+    window.addEventListener("linkx_iframe_load_event", handleIframeLoad);
+    return () => window.removeEventListener("linkx_iframe_load_event", handleIframeLoad);
+  }, []);
+  
   const [userName, setUserName] = useState(null);
   const [notifications, setNotifications] = useState([]);
   const [confirmations, setConfirmations] = useState([]);
@@ -9486,35 +9499,52 @@ const fileInputRef = useRef(null);
     });
   }
   const sendGraphMessageToIframe = (iframe, msgAction, msgPayload) => {
-    if (!iframe?.current) {
-      console.warn("Iframe not found!");
+    const windowId = String(msgPayload?.id || "");
+    
+    const send = (resolvedIframe) => {
+      const targetIframe = resolvedIframe || iframe;
+      if (!targetIframe?.current) {
+        console.warn("Iframe not found when trying to send!", windowId, msgAction);
+        return;
+      }
+      postMessageToIframe(targetIframe, { action: msgAction, payload: msgPayload });
+    };
+
+    // Fast path: if the iframe ref is directly available and already on graphs_basic, send now.
+    // This handles ALL settings changes, search, physics, etc. on an already-rendered graph.
+    if (iframe?.current) {
+      const iframeSrc = iframe.current.src || "";
+      if (iframeSrc.includes("graphs_basic")) {
+        send(iframe);
+        return;
+      }
+    }
+
+    // For new graph windows: check if the iframe has finished loading via our tracking ref
+    const isLoaded = windowId && iframeLoadedStatusRef.current[windowId];
+    if (isLoaded) {
+      const resolvedIframe = iframe?.current ? iframe : (windowId && iframeRefs.current[windowId] ? iframeRefs.current[windowId] : null);
+      send(resolvedIframe);
       return;
     }
 
-    const send = () => {
-      postMessageToIframe(iframe, { action: msgAction, payload: msgPayload });
-    };
-
-    const iframeSrc = iframe.current.src || "";
-    const windowId = msgPayload?.id;
-    
-    // If it's already on the graphs_basic page, send immediately
-    if (iframeSrc.includes("graphs_basic")) {
-      send();
-    } else {
-      // Otherwise, wait for the global ready event
+    // Last resort: wait for the iframe to finish loading
+    if (windowId) {
       const handleIframeReady = (e) => {
-        if (iframe.current && e.detail.source === iframe.current.contentWindow) {
-          send();
-          window.removeEventListener("linkx_iframe_ready", handleIframeReady);
+        if (e.type === "linkx_iframe_load_event" && String(e.detail.wId) === windowId) {
+          const resolvedIframe = iframe?.current ? iframe : (iframeRefs.current[windowId] || null);
+          send(resolvedIframe);
+          window.removeEventListener("linkx_iframe_load_event", handleIframeReady);
         }
       };
-      window.addEventListener("linkx_iframe_ready", handleIframeReady);
+      window.addEventListener("linkx_iframe_load_event", handleIframeReady);
       
-      // Cleanup after 30s
       setTimeout(() => {
-        window.removeEventListener("linkx_iframe_ready", handleIframeReady);
+        window.removeEventListener("linkx_iframe_load_event", handleIframeReady);
       }, 30000);
+    } else {
+      // No windowId and no loaded iframe — nothing we can do
+      console.warn("sendGraphMessageToIframe: no windowId and iframe not ready, dropping message:", msgAction);
     }
   };
   const requestEvidenceGraph = (windowId, payload, options = {}) => {
@@ -10154,6 +10184,30 @@ const fileInputRef = useRef(null);
     }
     if (menuId === "get_graph" && !requirePermission(PERMISSIONS.GRAPH_READ, "graph data")) return;
 
+    // When evidence graph data is already fetched (initialData), bypass debounce entirely
+    // and handle state update + data delivery in sequence (not nested in setWindows updater)
+    if (menuId === "get_graph" && action === "evidence" && options.initialData) {
+      setWindows(prev =>
+        prev.map(w =>
+          w.id !== id
+            ? w
+            : {
+                ...w,
+                activeGraph: "graphs_basic",
+                selectedContent: "graph_content",
+                loadscreenState: false,
+                loadscreenText: null,
+              }
+        )
+      );
+      // Defer requestEvidenceGraph to run AFTER React processes the setWindows above,
+      // so the iframe src is updated to graphs_basic.html before we try to send data
+      setTimeout(() => {
+        requestEvidenceGraph(id, payload, { requestOrigin: "manual", ...options });
+      }, 0);
+      return;
+    }
+
     // Debounce wrapper for actions that need delay
     runScopedDebounce(graphActionDebounceRef, `${id}_${menuId}`, () => {
       setWindows(prev =>
@@ -10165,12 +10219,12 @@ const fileInputRef = useRef(null);
 
           // ------------------ Graph generation ------------------
           if (menuId === "get_graph" && action === "relationship") {
-            requestRelationshipGraph(id, payload, { requestOrigin: "manual" });
+            setTimeout(() => requestRelationshipGraph(id, payload, { requestOrigin: "manual" }), 0);
             updates.loadscreenState = true;
             updates.loadscreenText = "Fetching graph...";
           }
           if (menuId === "get_graph" && action === "evidence") {
-            requestEvidenceGraph(id, payload, { requestOrigin: "manual", ...options });
+            setTimeout(() => requestEvidenceGraph(id, payload, { requestOrigin: "manual", ...options }), 0);
             if (!options.initialData) {
               updates.loadscreenState = true;
               updates.loadscreenText = "Fetching evidence graph...";
@@ -13850,15 +13904,13 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
         const newGraphId = handleOpenWindows("graph", "");
         if (newGraphId) {
           toggleAction("toggle_menu_new_report_window");
-          setTimeout(() => {
-            graphAction(newGraphId, "get_graph", "evidence", { fetchType: "evidence", traceId: traceId }, { initialData: data });
-          }, 150);
+          graphAction(newGraphId, "get_graph", "evidence", { fetchType: "evidence", traceId: traceId }, { initialData: data });
         }
       } else {
         onNotice({ title: "Error", message: "Graph manager not available.", level: "error" });
       }
     } catch (e) {
-      pushNotification({ id: notificationId, title: "Error", message: e.message || "Failed to fetch graph data.", level: "error" });
+      onNotice({ id: notificationId, title: "Error", message: e.message || "Failed to fetch graph data.", level: "error" });
 
     }
   };
@@ -13869,7 +13921,228 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
     }
   }, [isReportsOpen, activeReportsTab, offset, filterStatus, filterBand]);
 
-  const loadReports = async () => {
+
+  const downloadReportsList = async (dataToDownload) => {
+    if (!dataToDownload || dataToDownload.length === 0) return;
+    try {
+      const { jsPDF } = await import("jspdf");
+      const { default: autoTable } = await import("jspdf-autotable");
+      const doc = new jsPDF("landscape");
+      
+      // Header (landscape A4 width is ~297mm)
+      doc.setFillColor(49, 73, 97); // #314961 system accent
+      doc.rect(0, 0, 297, 40, 'F');
+      
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(22);
+      doc.setFont("helvetica", "bold");
+      const tabTitle = tabs.find(t => t.id === activeReportsTab)?.label || "Reports";
+      const headerTitle = tabTitle === "System reports" ? "CTMS Linkx-xVigilance Findings" : `${tabTitle} List`;
+      doc.text(headerTitle, 14, 25);
+      
+      // Meta data
+      doc.setTextColor(50, 50, 50);
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "normal");
+      
+      let y = 55;
+      doc.text(`Total Records: ${dataToDownload.length}`, 14, y);
+      doc.text(`Generated At: ${new Date().toLocaleString()}`, 200, y);
+      y += 15;
+      
+      const headColor = [49, 73, 97]; // #314961
+
+      let head = [];
+      let body = [];
+      let columnStyles = {};
+
+      if (activeReportsTab === "xvigilance" || activeReportsTab === "evidence") {
+        head = [['No.', 'Leading Entity', 'Report ID', 'Ref ID', 'Type', 'Fraud Score', 'Status', 'Date']];
+        
+        columnStyles = {
+          0: { cellWidth: 15 },
+          1: { cellWidth: 40 },
+          2: { cellWidth: 35 },
+          3: { cellWidth: 40 },
+          4: { cellWidth: 40 },
+          5: { cellWidth: 25 },
+          6: { cellWidth: 25 },
+          7: { cellWidth: 40 }
+        };
+
+        body = dataToDownload.map((r, index) => {
+          let pObj = {};
+          try { pObj = typeof r.payload === "string" ? JSON.parse(r.payload) : (r.payload || {}); } catch(e) {}
+          
+          let score = pObj.fraud_score ?? pObj.fraudScore ?? pObj.score ?? "-";
+          if (score !== "-" && !isNaN(score)) score = Number(score).toFixed(1);
+          
+          let leadingEntity = "-";
+          if (Array.isArray(pObj.top_5_accounts) && pObj.top_5_accounts.length > 0) {
+              leadingEntity = pObj.top_5_accounts[0];
+          } else if (pObj.entity_id) {
+              leadingEntity = pObj.entity_id;
+          } else if (Array.isArray(pObj.edges) && pObj.edges.length > 0) {
+              let degreeCount = {};
+              pObj.edges.forEach(e => {
+                 const f = String(e.from || "");
+                 const t = String(e.to || "");
+                 if (f) degreeCount[f] = (degreeCount[f] || 0) + 1;
+                 if (t) degreeCount[t] = (degreeCount[t] || 0) + 1;
+              });
+              if (Object.keys(degreeCount).length > 0) {
+                  const topNodeId = Object.keys(degreeCount).reduce((a, b) => degreeCount[a] > degreeCount[b] ? a : b);
+                  const topNode = Array.isArray(pObj.nodes) ? pObj.nodes.find(n => String(n.id) === topNodeId) : null;
+                  leadingEntity = topNode ? (topNode.account_number || topNode.label || topNode.id || topNodeId) : topNodeId;
+              }
+          }
+          
+          return [
+            index + 1,
+            leadingEntity,
+            r.id || "-",
+            r.external_reference_id || "-",
+            r.report_type || "-",
+            score,
+            (r.status || "").toUpperCase(),
+            new Date(r.created_at).toLocaleString()
+          ];
+        });
+      } else {
+        head = [['No.', 'Leading Entity', 'Report ID', 'Ref ID', 'Type', 'Source', 'Status', 'Date']];
+        
+        columnStyles = {
+          0: { cellWidth: 15 },
+          1: { cellWidth: 40 },
+          2: { cellWidth: 35 },
+          3: { cellWidth: 40 },
+          4: { cellWidth: 40 },
+          5: { cellWidth: 30 },
+          6: { cellWidth: 25 },
+          7: { cellWidth: 40 }
+        };
+
+        body = dataToDownload.map((r, index) => {
+          let pObj = {};
+          try { pObj = typeof r.payload === "string" ? JSON.parse(r.payload) : (r.payload || {}); } catch(e) {}
+          
+          let leadingEntity = "-";
+          if (Array.isArray(pObj.top_5_accounts) && pObj.top_5_accounts.length > 0) {
+              leadingEntity = pObj.top_5_accounts[0];
+          } else if (pObj.entity_id) {
+              leadingEntity = pObj.entity_id;
+          } else if (Array.isArray(pObj.edges) && pObj.edges.length > 0) {
+              let degreeCount = {};
+              pObj.edges.forEach(e => {
+                 const f = String(e.from || "");
+                 const t = String(e.to || "");
+                 if (f) degreeCount[f] = (degreeCount[f] || 0) + 1;
+                 if (t) degreeCount[t] = (degreeCount[t] || 0) + 1;
+              });
+              if (Object.keys(degreeCount).length > 0) {
+                  const topNodeId = Object.keys(degreeCount).reduce((a, b) => degreeCount[a] > degreeCount[b] ? a : b);
+                  const topNode = Array.isArray(pObj.nodes) ? pObj.nodes.find(n => String(n.id) === topNodeId) : null;
+                  leadingEntity = topNode ? (topNode.account_number || topNode.label || topNode.id || topNodeId) : topNodeId;
+              }
+          }
+
+          return [
+            index + 1,
+            leadingEntity,
+            r.id || "-",
+            r.external_reference_id || "-",
+            r.report_type || "-",
+            r.source_system || "-",
+            (r.status || "").toUpperCase(),
+            new Date(r.created_at).toLocaleString()
+          ];
+        });
+      }
+      
+      autoTable(doc, {
+        startY: y,
+        head: head,
+        body: body,
+        theme: 'striped',
+        headStyles: { fillColor: headColor, textColor: 255, fontSize: 9 },
+        bodyStyles: { fontSize: 8 },
+        alternateRowStyles: { fillColor: [240, 245, 250] }, // #f0f5fa
+        margin: { left: 14, right: 14 },
+        columnStyles: columnStyles,
+        styles: { overflow: 'linebreak', cellWidth: 'wrap' }
+      });
+      
+      // Calculate Leading Entities Summary
+      const entityStats = {};
+      body.forEach(row => {
+        const entity = row[1]; // Leading Entity is at index 1
+        const refId = row[3]; // Ref ID is at index 3
+        const scoreStr = row[5]; // Fraud Score is at index 5 (for xvigilance/evidence)
+        let score = 0;
+        if (scoreStr !== "-" && !isNaN(scoreStr)) score = parseFloat(scoreStr);
+        
+        if (entity && entity !== "-") {
+          if (!entityStats[entity]) {
+            entityStats[entity] = { count: 0, highestScore: -1, topRefId: "-" };
+          }
+          entityStats[entity].count += 1;
+          
+          if (score > entityStats[entity].highestScore) {
+            entityStats[entity].highestScore = score;
+            entityStats[entity].topRefId = refId;
+          }
+        }
+      });
+      
+      const summaryBody = Object.entries(entityStats)
+        .sort((a, b) => b[1].count - a[1].count) // Sort by frequency descending
+        .map(([entity, stats]) => [entity, stats.count, stats.topRefId]);
+
+      if (summaryBody.length > 0) {
+        let finalY = doc.lastAutoTable.finalY || y;
+        
+        // Add some space
+        finalY += 15;
+        
+        // Check if we need a new page for the title
+        if (finalY > doc.internal.pageSize.getHeight() - 40) {
+           doc.addPage();
+           finalY = 20;
+        }
+        
+        doc.setFontSize(14);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(49, 73, 97);
+        doc.text("Leading Entities Influence Summary", 14, finalY);
+        
+        finalY += 6;
+        
+        autoTable(doc, {
+          startY: finalY,
+          head: [['Leading Entity (Account / ID)', 'Frequency (Appearances)', 'Most Flagged Ref ID']],
+          body: summaryBody,
+          theme: 'striped',
+          headStyles: { fillColor: headColor, textColor: 255, fontSize: 9 },
+          bodyStyles: { fontSize: 8 },
+          alternateRowStyles: { fillColor: [240, 245, 250] }, // #f0f5fa
+          margin: { left: 14, right: 14 },
+          columnStyles: {
+            0: { cellWidth: 105 },
+            1: { cellWidth: 50 },
+            2: { cellWidth: 114 }
+          }
+        });
+      }
+
+      
+      doc.save(`linkx_${activeReportsTab}_list.pdf`);
+      onNotice({ title: "Success", message: "Reports list downloaded successfully.", level: "success" });
+    } catch (err) {
+      onNotice({ title: "Error", message: "Failed to generate PDF.", level: "error" });
+      console.error(err);
+    }
+  };
+const loadReports = async () => {
     try {
       setLoading(true);
       setError(null);
@@ -13936,26 +14209,7 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
 
 
 
-  const renderContent = () => {
-    if (error && error.status === 403) {
-      return (
-        <div style={{ padding: "40px", textAlign: "center", color: "#e74c3c" }}>
-          <h2>Access Denied</h2>
-          <p>You do not have permission to view this report data.</p>
-        </div>
-      );
-    }
-    
-    if (error) {
-      return <div style={{ padding: "20px", color: "#e74c3c" }}>Error: {error.message}</div>;
-    }
-
-    if (loading && reportsData.length === 0) {
-      return <div style={{ padding: "20px" }}>Loading reports...</div>;
-    }
-
-
-    let processedData = [...reportsData];
+let processedData = [...reportsData];
 
     if (searchQuery.trim() !== "") {
       const q = searchQuery.toLowerCase();
@@ -13963,6 +14217,8 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
         let pObj = {};
         try { pObj = typeof r.payload === "string" ? JSON.parse(r.payload) : (r.payload || {}); } catch(e) {}
         return (
+          String(r.id || "").toLowerCase().includes(q) ||
+          String(r.external_reference_id || "").toLowerCase().includes(q) ||
           (r.report_type || "").toLowerCase().includes(q) ||
           (r.source_system || "").toLowerCase().includes(q) ||
           (pObj.anomaly_type || "").toLowerCase().includes(q) ||
@@ -14016,6 +14272,27 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
       }
       return 0;
     });
+
+  const renderContent = () => {
+    if (error && error.status === 403) {
+      return (
+        <div style={{ padding: "40px", textAlign: "center", color: "#e74c3c" }}>
+          <h2>Access Denied</h2>
+          <p>You do not have permission to view this report data.</p>
+        </div>
+      );
+    }
+    
+    if (error) {
+      return <div style={{ padding: "20px", color: "#e74c3c" }}>Error: {error.message}</div>;
+    }
+
+    if (loading && reportsData.length === 0) {
+      return <div style={{ padding: "20px" }}>Loading reports...</div>;
+    }
+
+
+    
 
     return (
       <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
@@ -14271,6 +14548,16 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
                   </svg>
                   Refresh
                 </button>
+
+                <button type="button" onClick={() => downloadReportsList(processedData)} disabled={loading || processedData.length === 0} style={{ display: "flex", alignItems: "center", gap: "6px" }} title="Download list">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: "14px", height: "14px" }}>
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="7 10 12 15 17 10"></polyline>
+                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                  </svg>
+                  Download list
+                </button>
+
                 <button type="button" onClick={handlePrev} disabled={offset === 0 || loading}>Previous</button>
                 <button type="button" onClick={handleNext} disabled={offset + limit >= totalCount || loading}>Next</button>
               </div>

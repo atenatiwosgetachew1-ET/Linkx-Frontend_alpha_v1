@@ -6901,6 +6901,7 @@ function normalizeReportIdentity(identity) {
 
 function buildGraphReportData(payload) {
   const sourceWindowId = payload?.id || null;
+  const reportInfo = payload?.reportInfo || {};
   const visibleNodes = nodesData.get();
   const visibleEdges = edgesData.get();
   const selectedNodeIds = network?.getSelectedNodes?.() || [];
@@ -6963,7 +6964,8 @@ function buildGraphReportData(payload) {
     densityPercent: density,
     relationshipTypes: Array.from(relationshipCounter.entries()).map(([type, count]) => ({ type, count })),
     nodeIdentityDistribution: Array.from(nodeIdentityCounter.entries()).map(([identity, count]) => ({ identity, count })),
-    topNodesByDegree
+    topNodesByDegree,
+    reportInfo
   };
 }
 
@@ -7449,6 +7451,71 @@ async function downloadGraphReport(report) {
       imageHeight = 18;
     }
     y += imageHeight + 16;
+  }
+
+
+  // Evidence Info Section
+  if (report.reportInfo && Object.keys(report.reportInfo).length > 0) {
+    const info = report.reportInfo;
+    drawSectionTitle("Evidence Information");
+    
+    let band = info.score_band ?? "-";
+    if (info.fraud_score >= 90) band = "Fatal";
+    
+    const evRows = [
+      ["Fraud Score", info.fraud_score ?? info.score ?? "-"],
+      ["Score Band", band],
+      ["Status", info.status ?? "-"],
+      ["Typology", info.typology ?? "-"]
+    ];
+    
+    const summaryGap = 10;
+    const evCardWidth = (contentWidth - summaryGap) / 2;
+    const evCardHeight = 26;
+    const evRowsPerColumn = Math.ceil(evRows.length / 2);
+    const evSectionHeight = (evRowsPerColumn * (evCardHeight + 6)) + 4;
+    ensureSpace(evSectionHeight);
+
+    for (let i = 0; i < evRows.length; i += 1) {
+      const [key, value] = evRows[i];
+      const col = i % 2;
+      const row = Math.floor(i / 2);
+      const cardX = margin + (col * (evCardWidth + summaryGap));
+      const cardY = y + (row * (evCardHeight + 6));
+
+      doc.setFillColor(248, 250, 252);
+      doc.roundedRect(cardX, cardY, evCardWidth, evCardHeight, 4, 4, "F");
+      doc.setDrawColor(223, 229, 237);
+      doc.setLineWidth(0.6);
+      doc.roundedRect(cardX, cardY, evCardWidth, evCardHeight, 4, 4, "S");
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7.7);
+      doc.setTextColor(112, 118, 126);
+      doc.text(String(key).toUpperCase(), cardX + 8, cardY + 10);
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9.1);
+      doc.setTextColor(44, 49, 54);
+      doc.text(String(value), cardX + 8, cardY + 20);
+    }
+    y += evSectionHeight + 3;
+    
+    const evidence = info.score_evidence;
+    if (evidence && typeof evidence === 'object') {
+       const evListItems = [];
+       if (evidence.base_score_applied) evListItems.push({ label: "Base Score", value: evidence.base_score_applied });
+       if (evidence.node_count_bonus) evListItems.push({ label: "Node Count Bonus", value: evidence.node_count_bonus });
+       if (evidence.financial_bonus) evListItems.push({ label: "Financial Bonus", value: evidence.financial_bonus });
+       if (evidence.config_version) evListItems.push({ label: "Config Version", value: evidence.config_version });
+       
+       drawList(
+         evListItems,
+         item => `${item.label}: ${item.value}`,
+         "No detailed evidence metrics available."
+       );
+       y += 4;
+    }
   }
 
   drawSectionTitle("Investigation Snapshot");
