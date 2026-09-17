@@ -8970,7 +8970,4 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   background: rgba(170, 67, 67, 0.94);
 }
 
-/* Hidden components per requirements */
-.to_restore_source_window {
-  display: none !important;
-}
+

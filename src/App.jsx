@@ -989,6 +989,7 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
       preserveEmpty: true,
     }
   );
+  const columnMappingEntries = normalizeColumnMappingEntries(parsedConfig?.column_mapping, { preserveEmpty: true });
   const largeSearchBackend = normalizeLargeSearchBackend(parsedConfig?.large_search_backend);
   const elasticScrollLimit = normalizeElasticScrollLimit(parsedConfig?.elastic_scroll_limit);
   const idleTimeoutMinutes = Math.max(1, Math.round((idleSettings?.timeoutMs || DEFAULT_IDLE_TIMEOUT_MS) / 60000));
@@ -1079,6 +1080,36 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
 
   const handleClassifiedEntityRemove = (index) => {
     updateClassifiedEntities(classifiedEntityEntries.filter((_, entryIndex) => entryIndex !== index));
+  };
+
+  const updateColumnMapping = (nextEntries) => {
+    actions("change", {
+      name: "column_mapping",
+      value: normalizeColumnMappingEntries(nextEntries, { preserveEmpty: true }),
+    });
+  };
+
+  const handleColumnMappingAdd = () => {
+    updateColumnMapping([
+      ...columnMappingEntries,
+      { key: "", value: "" },
+    ]);
+  };
+
+  const handleColumnMappingChange = (index, field, value) => {
+    const nextEntries = columnMappingEntries.map((entry, entryIndex) => (
+      entryIndex === index
+        ? {
+            ...entry,
+            [field]: sanitizeText(value, { maxLength: 160 }),
+          }
+        : entry
+    ));
+    updateColumnMapping(nextEntries);
+  };
+
+  const handleColumnMappingRemove = (index) => {
+    updateColumnMapping(columnMappingEntries.filter((_, entryIndex) => entryIndex !== index));
   };
 
   return (
@@ -1329,6 +1360,33 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
                   </div>
                 </div>
 
+                <label>Search columns fuzzy (Separate with comma)</label>
+                <textarea
+                  name="search_columns_fuzzy"
+                  className="input_textarea"
+                  placeholder="Search columns fuzzy (Separated with comma)"
+                  value={Array.isArray(parsedConfig?.search_columns_fuzzy) ? parsedConfig.search_columns_fuzzy.join(", ") : ""}
+                  onChange={(e) => actions("change", { name: e.target.name, value: e.target.value })}
+                />
+
+                <label>Search columns strict (Separate with comma)</label>
+                <textarea
+                  name="search_columns_strict"
+                  className="input_textarea"
+                  placeholder="Search columns strict (Separated with comma)"
+                  value={Array.isArray(parsedConfig?.search_columns_strict) ? parsedConfig.search_columns_strict.join(", ") : ""}
+                  onChange={(e) => actions("change", { name: e.target.name, value: e.target.value })}
+                />
+
+                <label>Fetch columns (Separate with comma)</label>
+                <textarea
+                  name="fetch_columns"
+                  className="input_textarea"
+                  placeholder="Fetch columns (Separated with comma)"
+                  value={Array.isArray(parsedConfig?.fetch_columns) ? parsedConfig.fetch_columns.join(", ") : ""}
+                  onChange={(e) => actions("change", { name: e.target.name, value: e.target.value })}
+                />
+
                 <label>Large search retrieval</label>
                 <select
                   name="large_search_backend"
@@ -1563,6 +1621,67 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
                 <label>
                   Get latest sample <a href="/linkxDS2026/temp_rules/Linkx_Rules_Template.zip" download> Template</a>
                 </label>
+              </fieldset>
+
+              <fieldset style={{ display: activeConfigTab === "rules" ? "block" : "none" }}>
+                <legend>Column Mapping</legend>
+                <table className="config_classified_entities_table">
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th>Database Column</th>
+                      <th>Data Model Column</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {columnMappingEntries.length === 0 ? (
+                      <tr>
+                        <td colSpan={4} className="config_trusted_list_empty">No column mapping entries yet.</td>
+                      </tr>
+                    ) : columnMappingEntries.map((entry, index) => (
+                      <tr key={"column-mapping-" + index}>
+                        <td className="config_trusted_list_index">{index + 1}</td>
+                        <td>
+                          <input
+                            type="text"
+                            className="subinput config_trusted_list_input"
+                            value={entry.key || ""}
+                            onChange={(e) => handleColumnMappingChange(index, "key", e.target.value)}
+                            placeholder="e.g. CREATEDDATE"
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="text"
+                            className="subinput config_trusted_list_input"
+                            value={entry.value || ""}
+                            onChange={(e) => handleColumnMappingChange(index, "value", e.target.value)}
+                            placeholder="e.g. TRANSACTIONDATE"
+                          />
+                        </td>
+                        <td className="config_trusted_list_actions">
+                          <button
+                            type="button"
+                            className="critical_btns config_trusted_list_remove"
+                            onClick={() => handleColumnMappingRemove(index)}
+                          >
+                            Remove
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div style={{ marginTop: "10px", textAlign: "right" }}>
+                  <button
+                    type="button"
+                    className="critical_btns config_trusted_list_add"
+                    onClick={handleColumnMappingAdd}
+                  >
+                    Add Row
+                  </button>
+                </div>
               </fieldset>
 
               <fieldset style={{ display: activeConfigTab === "rules" ? "block" : "none" }}>
@@ -2825,13 +2944,23 @@ const splitClassifiedEntityEntries = (entries) => {
   }, { trusted_entities: [], risk_entities: [] });
 };
 
+const normalizeColumnMappingEntries = (value, options = {}) => {
+  const preserveEmpty = options?.preserveEmpty === true;
+  if (Array.isArray(value)) {
+    return value.map(v => ({ key: String(v.key || ""), value: String(v.value || "") })).filter(item => preserveEmpty || item.key !== "" || item.value !== "");
+  }
+  if (!value || typeof value !== "object") return preserveEmpty ? [{key: "", value: ""}] : [];
+  const entries = Object.entries(value).map(([key, val]) => ({ key: String(key || ""), value: String(val || "") }));
+  return entries.filter(item => preserveEmpty || item.key !== "" || item.value !== "");
+};
+
 const normalizeLargeSearchBackend = (value) => (
   LARGE_SEARCH_BACKENDS.has(String(value || "")) ? String(value) : DEFAULT_LARGE_SEARCH_BACKEND
 );
 
 const normalizeConfigurationFieldValue = (name, value) => {
-  if (name === "storage_tables" || name === "active_tool_tables") {
-    return Array.isArray(value) ? value : String(value || "").split(",").map((item) => item.trim()).filter(Boolean);
+  if (name === "storage_tables" || name === "active_tool_tables" || name === "search_columns_fuzzy" || name === "search_columns_strict" || name === "fetch_columns") {
+    return Array.isArray(value) ? value : String(value || "").split(",").map((item) => item.trimStart());
   }
   if (name === "trusted_list") {
     return normalizeTrustedListEntries(value, { preserveEmpty: true });
@@ -2841,6 +2970,9 @@ const normalizeConfigurationFieldValue = (name, value) => {
   }
   if (name === "classified_entities") {
     return normalizeClassifiedEntityEntries(null, null, { value, preserveEmpty: true });
+  }
+  if (name === "column_mapping") {
+    return normalizeColumnMappingEntries(value, { preserveEmpty: true });
   }
   if (name === "large_search_backend") {
     return normalizeLargeSearchBackend(value);
@@ -3135,6 +3267,15 @@ const buildConfigurationSavePayload = (configuration) => {
   delete rest.classified_entities;
   delete rest.classifiedEntities;
 
+  if (rest.column_mapping) {
+    const mappingEntries = normalizeColumnMappingEntries(rest.column_mapping, { preserveEmpty: false });
+    const mappingObj = {};
+    mappingEntries.forEach(entry => {
+      if (entry.key) mappingObj[entry.key] = entry.value;
+    });
+    rest.column_mapping = mappingObj;
+  }
+
   const kafkaAddressState = mergeConfigAddressOptions({
     list: rest.kafka_addresses,
     activeValue: rest.active_kafka_adress,
@@ -3161,6 +3302,13 @@ const buildConfigurationSavePayload = (configuration) => {
   rest.storage_addresses = storageAddressState.list;
   rest.active_storage_address = storageAddressState.active;
   rest.storage_custom_address = "";
+
+  const arrayFields = ["storage_tables", "active_tool_tables", "search_columns_fuzzy", "search_columns_strict", "fetch_columns"];
+  arrayFields.forEach(field => {
+    if (Array.isArray(rest[field])) {
+      rest[field] = rest[field].map(s => s.trim()).filter(Boolean);
+    }
+  });
 
   return {
     ...rest,
@@ -3836,7 +3984,7 @@ function SmartVigilancePanel({ apiFetch, toggleAction }) {
       doc.text(`Feed Name: ${checkpoint.feed_name || 'N/A'}`, 14, y);
       doc.text(`Last Window End: ${checkpoint.last_window_end || 'N/A'}`, 110, y);
       y += 8;
-      doc.text(`Total Records Analyzed: ${checkpoint.total_records_analyzed || 0}`, 14, y);
+      doc.text(`Total Records Analyzed: ${checkpoint.total_graph_analyzed || 0}`, 14, y);
       doc.text(`Status: ${(checkpoint.status || 'inactive').toUpperCase()}`, 110, y);
       y += 15;
       
@@ -3906,7 +4054,7 @@ function SmartVigilancePanel({ apiFetch, toggleAction }) {
   const { checkpoint, recent_runs } = data;
   const feedName = checkpoint.feed_name || "Unknown Feed";
   const lastWindowEnd = checkpoint.last_window_end || "N/A";
-  const totalAnalyzed = (checkpoint.total_records_analyzed || 0).toLocaleString();
+  const totalAnalyzed = (checkpoint.total_graph_analyzed || 0).toLocaleString();
   const status = checkpoint.status || "inactive";
 
   return (
@@ -13307,7 +13455,9 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
             } else {
               alert("Configuration saved!");
             }
+          setTimeout(() => {
             fetchConfigurationForSession(resolvedSessionId).then((res) => { if (res.ok) setConfigurations(res.configuration); }).finally(() => setloadscreenState(false));
+          }, 1500);
           } 
           else {
             alert(getConfigurationErrorMessage(data))
@@ -13343,7 +13493,7 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
       .then((data) => {
         if (isSuccessResponse(data)) {
           alert("Rule removed!");
-          fetchConfigurationForSession(resolvedSessionId).then((res) => { if (res.ok) setConfigurations(res.configuration); }).finally(() => setloadscreenState(false));
+          setTimeout(() => { fetchConfigurationForSession(resolvedSessionId).then((res) => { if (res.ok) setConfigurations(res.configuration); }).finally(() => setloadscreenState(false)); }, 1500);
         } else {
           alert(getConfigurationErrorMessage(data, "Could not remove the selected rule. Try again."));
           setloadscreenState(false);
@@ -13378,7 +13528,7 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
       .then((data) => {
         if (isSuccessResponse(data)) {
           alert("Configuration uploaded!");
-          fetchConfigurationForSession(resolvedSessionId).then((res) => { if (res.ok) setConfigurations(res.configuration); }).finally(() => setloadscreenState(false));
+          setTimeout(() => { fetchConfigurationForSession(resolvedSessionId).then((res) => { if (res.ok) setConfigurations(res.configuration); }).finally(() => setloadscreenState(false)); }, 1500);
         } else {
           alert(getGraphFetchErrorMessage(data));
           setloadscreenState(false);
