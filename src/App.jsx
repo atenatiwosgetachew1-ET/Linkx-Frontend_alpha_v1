@@ -10577,7 +10577,6 @@ const fileInputRef = useRef(null);
           if (debounceRef.current) clearTimeout(debounceRef.current);
           debounceRef.current = setTimeout(() => {
             const newLoadscreenText="Uploading Dataset "
-            setloadscreenState(true)
             setWindows(prev =>
               prev.map(w =>
                 w.id === id ? { ...w,loadscreenState: true,loadscreenText:newLoadscreenText} : w
