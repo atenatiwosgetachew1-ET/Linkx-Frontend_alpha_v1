@@ -1061,7 +1061,7 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
     if (!isAdmin) return;
     updateClassifiedEntities([
       ...classifiedEntityEntries,
-      { key: "", value: "", category: "Trusted", pass_through: false },
+      { name: "", key: "", value: "", category: "Trusted", pass_through: false },
     ]);
   };
 
@@ -1630,7 +1630,7 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
 
               <fieldset style={{ display: activeConfigTab === "rules" ? "block" : "none" }}>
                 <legend>Column Mapping</legend>
-                <table className="config_classified_entities_table">
+                <table className="config_trusted_list_table">
                   <thead>
                     <tr>
                       <th>#</th>
@@ -1695,6 +1695,7 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
                   <thead>
                     <tr>
                       <th>#</th>
+                      <th>Entity Name</th>
                       <th>Key</th>
                       <th>Value</th>
                       <th>Category</th>
@@ -1705,11 +1706,20 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
                   <tbody>
                     {classifiedEntityEntries.length === 0 ? (
                       <tr>
-                        <td colSpan={isAdmin ? 6 : 5} className="config_trusted_list_empty">No classified-entity entries yet.</td>
+                        <td colSpan={isAdmin ? 7 : 6} className="config_trusted_list_empty">No classified-entity entries yet.</td>
                       </tr>
                     ) : classifiedEntityEntries.map((entry, index) => (
                       <tr key={"classified-entity-" + index}>
                         <td className="config_trusted_list_index">{index + 1}</td>
+                        <td>
+                          <input
+                            type="text"
+                            className="subinput config_trusted_list_input"
+                            value={entry.name || ""}
+                            onChange={(e) => handleClassifiedEntityChange(index, "name", e.target.value)}
+                            disabled={!isAdmin}
+                          />
+                        </td>
                         <td>
                           <input
                             type="text"
@@ -1733,16 +1743,11 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
                             type="text"
                             list="category-options"
                             className="subinput config_classified_entities_select"
+                            style={{ textAlign: "center" }}
                             value={entry.category || "Trusted"}
                             onChange={(e) => handleClassifiedEntityChange(index, "category", e.target.value)}
                             disabled={!isAdmin}
                           />
-                          <datalist id="category-options">
-                            <option value="Trusted" />
-                            <option value="Risk" />
-                            <option value="PEP" />
-                            <option value="Sanction" />
-                          </datalist>
                         </td>
                         <td style={{ textAlign: "center" }}>
                           <label style={{ display: "flex", alignItems: "center", justifyContent: "flex-start", gap: "8px", height: "100%", cursor: isAdmin ? "pointer" : "default", margin: 0 }}>
@@ -1779,6 +1784,12 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
                     ))}
                   </tbody>
                 </table>
+                <datalist id="category-options">
+                  <option value="Trusted" />
+                  <option value="Risk" />
+                  <option value="PEP" />
+                  <option value="Sanction" />
+                </datalist>
 
                 {isAdmin && (
                   <button type="button" className="action_btns config_trusted_list_add" onClick={handleClassifiedEntityAdd}>
@@ -2918,7 +2929,7 @@ const normalizeTrustedListEntries = (value, options = {}) => {
       };
     }
     if (!item || typeof item !== "object") {
-      return { key: "", value: "", category: item.category, pass_through: item.pass_through };
+      return { key: "", value: "", category: item?.category, pass_through: item?.pass_through, name: item?.name || "" };
     }
 
     if (Object.prototype.hasOwnProperty.call(item, "key") || Object.prototype.hasOwnProperty.call(item, "value") || Object.prototype.hasOwnProperty.call(item, "name") || Object.prototype.hasOwnProperty.call(item, "data")) {
@@ -2927,12 +2938,13 @@ const normalizeTrustedListEntries = (value, options = {}) => {
         value: sanitizeText(item.value ?? item.data ?? "", { maxLength: 500 }),
         category: item.category,
         pass_through: item.pass_through,
+        name: item.name || "",
       };
     }
 
-    const validEntry = Object.entries(item).find(([k, entryValue]) => k !== "category" && k !== "pass_through" && ["string", "number", "boolean"].includes(typeof entryValue));
+    const validEntry = Object.entries(item).find(([k, entryValue]) => k !== "category" && k !== "pass_through" && k !== "name" && ["string", "number", "boolean"].includes(typeof entryValue));
     if (!validEntry) {
-      return { key: "", value: "", category: item.category, pass_through: item.pass_through };
+      return { key: "", value: "", category: item.category, pass_through: item.pass_through, name: item.name || "" };
     }
 
     return {
@@ -2940,6 +2952,7 @@ const normalizeTrustedListEntries = (value, options = {}) => {
       value: sanitizeText(validEntry[1] ?? "", { maxLength: 500 }),
       category: item.category,
       pass_through: item.pass_through,
+      name: item.name || "",
     };
   }).filter((item) => preserveEmpty || item.key !== "" || item.value !== "");
 };
@@ -2967,6 +2980,7 @@ const normalizeClassifiedEntityEntries = (trustedValue, riskValue, options = {})
       value: sanitizeText(item?.value ?? item?.data ?? "", { maxLength: 500 }),
       category: item?.category ? String(item.category) : "Trusted",
       pass_through: item?.pass_through === true || String(item?.pass_through) === "true",
+      name: item?.name ? String(item.name) : "",
     })).filter((item) => preserveEmpty || item.key !== "" || item.value !== "");
   }
 
@@ -2974,11 +2988,13 @@ const normalizeClassifiedEntityEntries = (trustedValue, riskValue, options = {})
     ...item,
     category: item.category || "Trusted",
     pass_through: item.pass_through === true || String(item.pass_through) === "true",
+    name: item.name || "",
   }));
   const riskEntries = normalizeTrustedListEntries(riskValue, { preserveEmpty: true }).map((item) => ({
     ...item,
     category: item.category || "Risk",
     pass_through: item.pass_through === true || String(item.pass_through) === "true",
+    name: item.name || "",
   }));
 
   return [...trustedEntries, ...riskEntries].filter((item) => preserveEmpty || item.key !== "" || item.value !== "");
@@ -2989,11 +3005,19 @@ const splitClassifiedEntityEntries = (entries) => {
   return normalized.reduce((acc, item) => {
     const targetKey = item.category === "Risk" ? "risk_entities" : "trusted_entities";
     if (item.key) {
-      const out = { [item.key]: item.value };
+      const out = { 
+        key: item.key, 
+        value: item.value 
+      };
       if (item.category && item.category !== "Trusted" && item.category !== "Risk") {
         out.category = item.category;
+      } else {
+        out.category = item.category || "Trusted";
       }
       out.pass_through = item.pass_through === true;
+      if (item.name) {
+        out.name = item.name;
+      }
       acc[targetKey].push(out);
     }
     return acc;
@@ -13374,15 +13398,12 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
     });
   }, [pushNotification]);
 
-  const lastHeartbeatRef = useRef(Date.now());
-  const handleActivityHeartbeat = useCallback(() => {
+  useEffect(() => {
     if (!token) return;
-    const now = Date.now();
-    // Ping backend every 5 minutes (300000ms) if active
-    if (now - lastHeartbeatRef.current > 300000) {
-      lastHeartbeatRef.current = now;
+    const interval = setInterval(() => {
       apiFetch("/auth/verify", { method: "POST" }).catch(() => {});
-    }
+    }, 60000);
+    return () => clearInterval(interval);
   }, [apiFetch, token]);
 
   useIdleTimeout({
@@ -13392,7 +13413,6 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
     timeoutMs: idleSettings.timeoutMs,
     isLocked: isWorkspaceLocked,
     resetKey: idleResetSeq,
-    onActivity: handleActivityHeartbeat,
     onWarn: () => {
       const minutesUntilLock = Math.max(1, Math.ceil((idleSettings.lockMs - idleSettings.warningMs) / 60000));
       pushNotification({

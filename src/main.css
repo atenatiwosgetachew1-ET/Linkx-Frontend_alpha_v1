@@ -696,9 +696,9 @@ body{
   margin: auto;
   left: 0;
   right: 0;
-  width: 65vw;
+  width: 75vw;
   height: 96vh;
-  max-height: 86vh;
+  max-height: 90vh;
   background-color: #fcfefd;
   border-radius: 4px;
   box-shadow: 0 12px 30px rgba(8, 21, 35, 0.35);
@@ -956,11 +956,14 @@ body{
   table-layout: fixed;
 }
 #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .config_trusted_list_table th{
-  text-align: left;
+  text-align: center;
   color: #20405c;
   font-size: calc(0.38vh + 0.44vw);
   font-weight: 600;
   padding: 0.2vh 0.35vw 0.45vh 0;
+}
+#configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .config_trusted_list_table td{
+  text-align: center;
 }
 #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .config_trusted_list_table th:nth-child(1),
 #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .config_trusted_list_table td:nth-child(1){
@@ -977,11 +980,12 @@ body{
 #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .config_trusted_list_table th:nth-child(4),
 #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .config_trusted_list_table td:nth-child(4){
   width: 22%;
-  padding-right: 0;
+  text-align: center;
 }
 #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .config_trusted_list_input{
   width: 100%;
   margin-right: 0;
+  text-align: center;
 }
 #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .config_trusted_list_index{
   font-weight: 600;
@@ -996,9 +1000,7 @@ body{
   text-align: right;
 }
 #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .config_trusted_list_remove{
-  width: 100%;
   min-width: 84px;
-  margin-right: 0;
 }
 #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .config_trusted_list_add{
   width: auto;
@@ -1009,31 +1011,39 @@ body{
   margin-top: 0.3vh;
   table-layout: fixed;
 }
+#configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .config_classified_entities_table th,
+#configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .config_classified_entities_table td {
+  text-align: center;
+}
 #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .config_classified_entities_table th:nth-child(1),
 #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .config_classified_entities_table td:nth-child(1){
-  width: 5%;
+  width: 4%;
 }
 #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .config_classified_entities_table th:nth-child(2),
 #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .config_classified_entities_table td:nth-child(2){
-  width: 30%;
+  width: 18%;
 }
 #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .config_classified_entities_table th:nth-child(3),
 #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .config_classified_entities_table td:nth-child(3){
-  width: 30%;
+  width: 18%;
 }
 #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .config_classified_entities_table th:nth-child(4),
 #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .config_classified_entities_table td:nth-child(4){
-  width: 15%;
+  width: 20%;
 }
 #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .config_classified_entities_table th:nth-child(5),
 #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .config_classified_entities_table td:nth-child(5){
-  width: 10%;
-  text-align: center;
+  width: 14%;
 }
 #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .config_classified_entities_table th:nth-child(6),
 #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .config_classified_entities_table td:nth-child(6){
   width: 10%;
-  padding-right: 0;
+  text-align: center;
+}
+#configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .config_classified_entities_table th:nth-child(7),
+#configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .config_classified_entities_table td:nth-child(7){
+  width: 16%;
+  text-align: center;
 }
 #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .config_classified_entities_select{
   width: 100%;
