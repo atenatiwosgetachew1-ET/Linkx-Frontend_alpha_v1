@@ -1678,15 +1678,13 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
                     ))}
                   </tbody>
                 </table>
-                <div style={{ marginTop: "10px", textAlign: "right" }}>
-                  <button
-                    type="button"
-                    className="critical_btns config_trusted_list_add"
-                    onClick={handleColumnMappingAdd}
-                  >
-                    Add Row
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  className="action_btns config_trusted_list_add"
+                  onClick={handleColumnMappingAdd}
+                >
+                  Add row
+                </button>
               </fieldset>
 
               <fieldset style={{ display: activeConfigTab === "rules" ? "block" : "none" }}>
@@ -14822,7 +14820,7 @@ let processedData = [...reportsData];
 
   return (
     <div id="configurations_container" style={{ display: isReportsOpen ? "block" : "none" }}>
-      <div className="configurations_options_container settings_options_container" style={{ display: "flex", flexDirection: "row", width: "90%", maxWidth: "1200px" }}>
+      <div className="configurations_options_container settings_options_container" style={{ display: "flex", flexDirection: "row" }}>
         
         <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
           <div className="configurations_options_container_bar">

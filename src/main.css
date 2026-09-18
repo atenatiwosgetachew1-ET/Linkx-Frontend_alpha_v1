@@ -823,7 +823,7 @@ body{
 }
 #configurations_container .configurations_options_container .configurations_options .configurations_options_panel{
   position: relative;
-  height: 95%;
+  height: auto;
   width: 100%;
   min-width: 0;
 }
@@ -6883,9 +6883,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 	margin: 0;
 }
 
-.settings_options_container {
-	max-height: 92vh;
-}
+
 .settings_admin_panel {
 	display: grid;
 	gap: 14px;
