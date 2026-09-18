@@ -1011,23 +1011,28 @@ body{
 }
 #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .config_classified_entities_table th:nth-child(1),
 #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .config_classified_entities_table td:nth-child(1){
-  width: 7%;
+  width: 5%;
 }
 #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .config_classified_entities_table th:nth-child(2),
 #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .config_classified_entities_table td:nth-child(2){
-  width: 24%;
+  width: 30%;
 }
 #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .config_classified_entities_table th:nth-child(3),
 #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .config_classified_entities_table td:nth-child(3){
-  width: 31%;
+  width: 30%;
 }
 #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .config_classified_entities_table th:nth-child(4),
 #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .config_classified_entities_table td:nth-child(4){
-  width: 18%;
+  width: 15%;
 }
 #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .config_classified_entities_table th:nth-child(5),
 #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .config_classified_entities_table td:nth-child(5){
-  width: 20%;
+  width: 10%;
+  text-align: center;
+}
+#configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .config_classified_entities_table th:nth-child(6),
+#configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .config_classified_entities_table td:nth-child(6){
+  width: 10%;
   padding-right: 0;
 }
 #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .config_classified_entities_select{

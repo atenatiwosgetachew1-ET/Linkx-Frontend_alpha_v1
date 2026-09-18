@@ -964,7 +964,7 @@ function Taskbar({ windows, isTaskBarOpen, activeWindowId, focusWindow, toggleAc
     </div>
   );
 }
-function Configurations({sessionId,actions,loadscreenState,setloadscreenState,toggleAction,configurations,isConfigurationsOpen,apiFetch,canAccess,idleSettings,idlePolicyMeta,onIdleSettingsChange}) {
+function Configurations({sessionId,actions,loadscreenState,setloadscreenState,toggleAction,configurations,isConfigurationsOpen,apiFetch,canAccess,idleSettings,idlePolicyMeta,onIdleSettingsChange,isAdmin}) {
   const [remote, setRemote] = useState(false);
   const [automation, setAutomation] = useState(false);
   const [parsedConfig, setParsedConfig] = useState(null);
@@ -1058,20 +1058,24 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
   };
 
   const handleClassifiedEntityAdd = () => {
+    if (!isAdmin) return;
     updateClassifiedEntities([
       ...classifiedEntityEntries,
-      { key: "", value: "", category: "Trusted" },
+      { key: "", value: "", category: "Trusted", pass_through: false },
     ]);
   };
 
   const handleClassifiedEntityChange = (index, field, value) => {
+    if (!isAdmin) return;
     const nextEntries = classifiedEntityEntries.map((entry, entryIndex) => (
       entryIndex === index
         ? {
             ...entry,
             [field]: field === "category"
-              ? (["Risk", "PEP", "Sanction"].includes(String(value)) ? String(value) : "Trusted")
-              : sanitizeText(value, { maxLength: field === "key" ? 160 : 500 }),
+              ? String(value)
+              : field === "pass_through"
+                ? Boolean(value)
+                : sanitizeText(value, { maxLength: field === "key" ? 160 : 500 }),
           }
         : entry
     ));
@@ -1079,6 +1083,7 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
   };
 
   const handleClassifiedEntityRemove = (index) => {
+    if (!isAdmin) return;
     updateClassifiedEntities(classifiedEntityEntries.filter((_, entryIndex) => entryIndex !== index));
   };
 
@@ -1693,13 +1698,14 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
                       <th>Key</th>
                       <th>Value</th>
                       <th>Category</th>
-                      <th></th>
+                      <th>Pass Through</th>
+                      {isAdmin && <th></th>}
                     </tr>
                   </thead>
                   <tbody>
                     {classifiedEntityEntries.length === 0 ? (
                       <tr>
-                        <td colSpan={5} className="config_trusted_list_empty">No classified-entity entries yet.</td>
+                        <td colSpan={isAdmin ? 6 : 5} className="config_trusted_list_empty">No classified-entity entries yet.</td>
                       </tr>
                     ) : classifiedEntityEntries.map((entry, index) => (
                       <tr key={"classified-entity-" + index}>
@@ -1710,6 +1716,7 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
                             className="subinput config_trusted_list_input"
                             value={entry.key || ""}
                             onChange={(e) => handleClassifiedEntityChange(index, "key", e.target.value)}
+                            disabled={!isAdmin}
                           />
                         </td>
                         <td>
@@ -1718,37 +1725,66 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
                             className="subinput config_trusted_list_input"
                             value={entry.value || ""}
                             onChange={(e) => handleClassifiedEntityChange(index, "value", e.target.value)}
+                            disabled={!isAdmin}
                           />
                         </td>
                         <td>
-                          <select
-                            className="config_classified_entities_select"
+                          <input
+                            type="text"
+                            list="category-options"
+                            className="subinput config_classified_entities_select"
                             value={entry.category || "Trusted"}
                             onChange={(e) => handleClassifiedEntityChange(index, "category", e.target.value)}
-                          >
-                            <option value="Trusted">Trusted</option>
-                            <option value="Risk">Risk</option>
-                            <option value="PEP">PEP</option>
-                            <option value="Sanction">Sanction</option>
-                          </select>
+                            disabled={!isAdmin}
+                          />
+                          <datalist id="category-options">
+                            <option value="Trusted" />
+                            <option value="Risk" />
+                            <option value="PEP" />
+                            <option value="Sanction" />
+                          </datalist>
                         </td>
-                        <td className="config_trusted_list_actions">
-                          <button
-                            type="button"
-                            className="critical_btns config_trusted_list_remove"
-                            onClick={() => handleClassifiedEntityRemove(index)}
-                          >
-                            Remove
-                          </button>
+                        <td style={{ textAlign: "center" }}>
+                          <label style={{ display: "flex", alignItems: "center", justifyContent: "flex-start", gap: "8px", height: "100%", cursor: isAdmin ? "pointer" : "default", margin: 0 }}>
+                            <input
+                              type="checkbox"
+                              className="input_checkbox"
+                              style={{ margin: 0, cursor: isAdmin ? "pointer" : "default" }}
+                              checked={entry.pass_through === true}
+                              onChange={(e) => handleClassifiedEntityChange(index, "pass_through", e.target.checked)}
+                              disabled={!isAdmin}
+                            />
+                            <span style={{ 
+                              color: entry.pass_through === true ? "#4caf50" : "#f44336",
+                              fontWeight: "bold",
+                              fontSize: "0.85em",
+                              marginTop: "1px"
+                            }}>
+                              {entry.pass_through === true ? "Passing" : "Restricted"}
+                            </span>
+                          </label>
                         </td>
+                        {isAdmin && (
+                          <td className="config_trusted_list_actions">
+                            <button
+                              type="button"
+                              className="critical_btns config_trusted_list_remove"
+                              onClick={() => handleClassifiedEntityRemove(index)}
+                            >
+                              Remove
+                            </button>
+                          </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>
                 </table>
 
-                <button type="button" className="action_btns config_trusted_list_add" onClick={handleClassifiedEntityAdd}>
-                  Add row
-                </button>
+                {isAdmin && (
+                  <button type="button" className="action_btns config_trusted_list_add" onClick={handleClassifiedEntityAdd}>
+                    Add row
+                  </button>
+                )}
               </fieldset>
 
 
@@ -1845,12 +1881,20 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
           </form>
           <div className="configurations_actions_bar" style={{ display: activeConfigTab === "activity" ? "none" : "flex" }}>
             <button className="action_btns" type="button" onClick={() => actions("load_default")} title="Reset">⟳ Reset</button>
-            <a
+            <button
               className="action_btns"
-              href={`/linkxDS2026/temp_config/${sessionId}_temp_config.JSON`}
-              download
+              type="button"
+              onClick={() => {
+                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(parsedConfig || {}, null, 2));
+                const downloadAnchorNode = document.createElement('a');
+                downloadAnchorNode.setAttribute("href", dataStr);
+                downloadAnchorNode.setAttribute("download", `${sessionId}_temp_config.JSON`);
+                document.body.appendChild(downloadAnchorNode); // required for firefox
+                downloadAnchorNode.click();
+                downloadAnchorNode.remove();
+              }}
               title="Download"
-            >⭳ Export</a>
+            >⭳ Export</button>
             <button
               className="action_btns"
               type="button"
@@ -2874,24 +2918,28 @@ const normalizeTrustedListEntries = (value, options = {}) => {
       };
     }
     if (!item || typeof item !== "object") {
-      return { key: "", value: "" };
+      return { key: "", value: "", category: item.category, pass_through: item.pass_through };
     }
 
     if (Object.prototype.hasOwnProperty.call(item, "key") || Object.prototype.hasOwnProperty.call(item, "value") || Object.prototype.hasOwnProperty.call(item, "name") || Object.prototype.hasOwnProperty.call(item, "data")) {
       return {
         key: sanitizeText(item.key ?? item.name ?? "", { maxLength: 160 }),
         value: sanitizeText(item.value ?? item.data ?? "", { maxLength: 500 }),
+        category: item.category,
+        pass_through: item.pass_through,
       };
     }
 
-    const firstScalarEntry = Object.entries(item).find(([, entryValue]) => ["string", "number", "boolean"].includes(typeof entryValue));
-    if (!firstScalarEntry) {
-      return { key: "", value: "" };
+    const validEntry = Object.entries(item).find(([k, entryValue]) => k !== "category" && k !== "pass_through" && ["string", "number", "boolean"].includes(typeof entryValue));
+    if (!validEntry) {
+      return { key: "", value: "", category: item.category, pass_through: item.pass_through };
     }
 
     return {
-      key: sanitizeText(firstScalarEntry[0] ?? "", { maxLength: 160 }),
-      value: sanitizeText(firstScalarEntry[1] ?? "", { maxLength: 500 }),
+      key: sanitizeText(validEntry[0] ?? "", { maxLength: 160 }),
+      value: sanitizeText(validEntry[1] ?? "", { maxLength: 500 }),
+      category: item.category,
+      pass_through: item.pass_through,
     };
   }).filter((item) => preserveEmpty || item.key !== "" || item.value !== "");
 };
@@ -2917,17 +2965,20 @@ const normalizeClassifiedEntityEntries = (trustedValue, riskValue, options = {})
     return sourceEntries.map((item) => ({
       key: sanitizeText(item?.key ?? item?.name ?? "", { maxLength: 160 }),
       value: sanitizeText(item?.value ?? item?.data ?? "", { maxLength: 500 }),
-      category: ["Risk", "PEP", "Sanction"].includes(String(item?.category)) ? String(item.category) : "Trusted",
+      category: item?.category ? String(item.category) : "Trusted",
+      pass_through: item?.pass_through === true || String(item?.pass_through) === "true",
     })).filter((item) => preserveEmpty || item.key !== "" || item.value !== "");
   }
 
   const trustedEntries = normalizeTrustedListEntries(trustedValue, { preserveEmpty: true }).map((item) => ({
     ...item,
-    category: "Trusted",
+    category: item.category || "Trusted",
+    pass_through: item.pass_through === true || String(item.pass_through) === "true",
   }));
   const riskEntries = normalizeTrustedListEntries(riskValue, { preserveEmpty: true }).map((item) => ({
     ...item,
-    category: "Risk",
+    category: item.category || "Risk",
+    pass_through: item.pass_through === true || String(item.pass_through) === "true",
   }));
 
   return [...trustedEntries, ...riskEntries].filter((item) => preserveEmpty || item.key !== "" || item.value !== "");
@@ -2938,7 +2989,12 @@ const splitClassifiedEntityEntries = (entries) => {
   return normalized.reduce((acc, item) => {
     const targetKey = item.category === "Risk" ? "risk_entities" : "trusted_entities";
     if (item.key) {
-      acc[targetKey].push({ [item.key]: item.value });
+      const out = { [item.key]: item.value };
+      if (item.category && item.category !== "Trusted" && item.category !== "Risk") {
+        out.category = item.category;
+      }
+      out.pass_through = item.pass_through === true;
+      acc[targetKey].push(out);
     }
     return acc;
   }, { trusted_entities: [], risk_entities: [] });
@@ -13511,34 +13567,55 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
         alert("Select a configuration file first.");
         return;
       }
-      const formData = new FormData();
       if (!resolvedSessionId) {
         alert("Session is still initializing. Please try again in a moment.");
         return;
       }
-      formData.append("id", "upload");
-      formData.append("session_id", resolvedSessionId);
-      formData.append("import_config_file", importFile);
       setloadscreenState(true);
-      apiFetch("/configuration", {
-        method: "POST",
-        body: formData,
-      })
-      .then((data) => {
-        if (isSuccessResponse(data)) {
-          alert("Configuration uploaded!");
-          setTimeout(() => { fetchConfigurationForSession(resolvedSessionId).then((res) => { if (res.ok) setConfigurations(res.configuration); }).finally(() => setloadscreenState(false)); }, 1500);
-        } else {
-          alert(getGraphFetchErrorMessage(data));
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const content = e.target.result;
+          const parsed = JSON.parse(content);
+          
+          const saveBody = {
+            id: "save",
+            session_id: resolvedSessionId,
+            configuration: buildConfigurationSavePayload({ value: JSON.stringify(parsed) }),
+          };
+          
+          apiFetch("/configuration", {
+            method: "POST",
+            body: saveBody,
+          })
+          .then((data) => {
+            if (isSuccessResponse(data)) {
+              alert("Configuration uploaded!");
+              setTimeout(() => { fetchConfigurationForSession(resolvedSessionId).then((res) => { if (res.ok) setConfigurations(res.configuration); }).finally(() => setloadscreenState(false)); }, 1500);
+            } else {
+              alert(getConfigurationErrorMessage(data));
+              setloadscreenState(false);
+            }
+            if (importInput) importInput.value = "";
+          })
+          .catch((err) => {
+            console.error("ConfigUploadErr", err);
+            alert(getConfigurationErrorMessage(err, "Could not upload configuration. Try again."));
+            setloadscreenState(false);
+            if (importInput) importInput.value = "";
+          });
+        } catch (err) {
+          alert("Invalid configuration file format. Could not parse JSON.");
           setloadscreenState(false);
+          if (importInput) importInput.value = "";
         }
-        if (importInput) importInput.value = "";
-      })
-      .catch((err) => {
-        console.error("ConfigUploadErr", err);
-        alert(getConfigurationErrorMessage(err, "Could not upload configuration. Try again."));
+      };
+      reader.onerror = () => {
+        alert("Failed to read the configuration file.");
         setloadscreenState(false);
-      });
+        if (importInput) importInput.value = "";
+      };
+      reader.readAsText(importFile);
     }
     else if (id === "load_default"){
       const session = resolveConfigurationSessionId();
@@ -13676,7 +13753,7 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
             </div>
           )}
         <Taskbar windows={windows} isTaskBarOpen={isTaskBarOpen} activeWindowId={activeWindowId} focusWindow={handleFocusWindow} toggleAction={handleToggleMenu} isCtrlHeld={isCtrlHeld}/>
-        <Configurations sessionId={sessionId} actions={handleConfigurationActions} loadscreenState={loadscreenState} setloadscreenState={setloadscreenState} toggleAction={handleToggleMenu} configurations={configurations} isConfigurationsOpen={isConfigurationsOpen} apiFetch={apiFetch} canAccess={canAccess} idleSettings={idleSettings} idlePolicyMeta={idlePolicyMeta} onIdleSettingsChange={updateIdleSettings}/>
+        <Configurations sessionId={sessionId} actions={handleConfigurationActions} loadscreenState={loadscreenState} setloadscreenState={setloadscreenState} toggleAction={handleToggleMenu} configurations={configurations} isConfigurationsOpen={isConfigurationsOpen} apiFetch={apiFetch} canAccess={canAccess} idleSettings={idleSettings} idlePolicyMeta={idlePolicyMeta} onIdleSettingsChange={updateIdleSettings} isAdmin={hasRole("admin")}/>
         <Settings isSettingsOpen={isSettingsOpen} toggleAction={handleToggleMenu} actor={actor || user} roles={roles} permissions={permissions} canAccess={canAccess} apiFetch={apiFetch} sessionId={sessionId} onNotice={pushNotification} onLogout={() => performLogout("user_logout")} areBackgroundAnimationsEnabled={areBackgroundAnimationsEnabled} onBackgroundAnimationsChange={setBackgroundAnimationsEnabled} />
         <Reports isReportsOpen={isReportsOpen} toggleAction={handleToggleMenu} handleOpenWindows={handleOpenWindows} graphAction={handleGraphActions} actor={actor || user} roles={roles} permissions={permissions} canAccess={canAccess} apiFetch={apiFetch} sessionId={sessionId} onNotice={pushNotification} removeNotification={removeNotification} onLogout={() => performLogout("user_logout")} areBackgroundAnimationsEnabled={areBackgroundAnimationsEnabled} onBackgroundAnimationsChange={setBackgroundAnimationsEnabled} />
         <Main userName={userName} setSessionId={setSessionId} API_URL={API_URL} debounceRef={debounceRef} setConfigurations={setConfigurations} configurations={configurations} windows={windows} setWindows={setWindows} openWindows={handleOpenWindows} themeMode={themeMode} areBackgroundAnimationsEnabled={areBackgroundAnimationsEnabled} />
@@ -13959,6 +14036,8 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterBand, setFilterBand] = useState("all");
+  const [filterFromDate, setFilterFromDate] = useState("");
+  const [filterToDate, setFilterToDate] = useState("");
   const [sortBy, setSortBy] = useState("date_desc");
 
   const [reportsData, setReportsData] = useState([]);
@@ -14089,7 +14168,7 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
     if (isReportsOpen) {
       loadReports();
     }
-  }, [isReportsOpen, activeReportsTab, offset, filterStatus, filterBand]);
+  }, [isReportsOpen, activeReportsTab, offset, filterStatus, filterBand, filterFromDate, filterToDate]);
 
 
   const downloadReportsList = async (dataToDownload) => {
@@ -14335,6 +14414,12 @@ const loadReports = async () => {
       if (searchQuery) {
         url += `&q=${encodeURIComponent(searchQuery)}`;
       }
+      if (filterFromDate) {
+        url += `&start_date=${encodeURIComponent(filterFromDate)}`;
+      }
+      if (filterToDate) {
+        url += `&end_date=${encodeURIComponent(filterToDate)}`;
+      }
 
       const data = await apiFetch(url, { suppressForbiddenHandler: true });
       setReportsData(data.data || []);
@@ -14428,6 +14513,14 @@ let processedData = [...reportsData];
         return sb === filterBand;
       });
     }
+    if (filterFromDate) {
+      const fromD = new Date(filterFromDate);
+      processedData = processedData.filter(r => new Date(r.created_at) >= fromD);
+    }
+    if (filterToDate) {
+      const toD = new Date(filterToDate);
+      processedData = processedData.filter(r => new Date(r.created_at) <= toD);
+    }
 
     processedData.sort((a, b) => {
       let pObjA = {}, pObjB = {};
@@ -14503,6 +14596,27 @@ let processedData = [...reportsData];
               <option value="medium">Medium (20-49)</option>
               <option value="low">Low (0-19)</option>
             </select>
+          )}
+          {(activeReportsTab === "xvigilance" || activeReportsTab === "evidence") && (
+            <>
+              <input
+                type="datetime-local"
+                value={filterFromDate}
+                onChange={(e) => { setFilterFromDate(e.target.value); setOffset(0); }}
+                className="settings_textinput"
+                title="Filter from date/time"
+                style={{ width: "auto", padding: "4px 8px", height: "32px", margin: 0, fontSize: "12px" }}
+              />
+              <span style={{ fontSize: "12px", color: "var(--text-color)", opacity: 0.7 }}>to</span>
+              <input
+                type="datetime-local"
+                value={filterToDate}
+                onChange={(e) => { setFilterToDate(e.target.value); setOffset(0); }}
+                className="settings_textinput"
+                title="Filter to date/time"
+                style={{ width: "auto", padding: "4px 8px", height: "32px", margin: 0, fontSize: "12px" }}
+              />
+            </>
           )}
           <select 
             value={sortBy}
@@ -14710,7 +14824,9 @@ let processedData = [...reportsData];
             </form>
             <div className="cleanup_audit_actions">
               <span className="sublabel" style={{ fontWeight: "500", opacity: 0.8 }}>
-                Showing {reportsData.length > 0 ? offset + 1 : 0} to {Math.min(offset + limit, totalCount)} of {totalCount}
+                {processedData.length !== reportsData.length
+                  ? `Showing ${processedData.length > 0 ? offset + 1 : 0} to ${offset + processedData.length} of ${totalCount} (Filtered)`
+                  : `Showing ${reportsData.length > 0 ? offset + 1 : 0} to ${Math.min(offset + limit, totalCount)} of ${totalCount}`}
               </span>
               <div style={{ display: "flex", gap: "12px" }}>
                 <button type="button" onClick={() => loadReports()} disabled={loading} style={{ display: "flex", alignItems: "center", gap: "6px" }} title="Refresh reports">

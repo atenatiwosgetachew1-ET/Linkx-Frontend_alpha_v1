@@ -1600,6 +1600,9 @@ smooth: {
 									}
 
 									// Second pass: process edges in batches
+									const directionlessAnomaliesSet = new Set(['HUB_AND_SPOKE', 'SHARED_IDENTIFIER']);
+									const directedAnomaliesSet = new Set(['SMURFING', 'FUND_FLOW', 'RAPID_WITHDRAWAL']);
+									const financialFlowAnomaliesSet = new Set(['CIRCULAR_FLOW']);
 									const edgeMap = new Map();
 									for (const rawEdge of graphData.edges) {
 										const edge = normalizeIncomingEdgeForTheme(rawEdge);
@@ -1616,6 +1619,17 @@ smooth: {
 											title: edge.title || undefined // Only set title if it exists
 										};
 										// Apply semantic edge styling (Phase 2.1)
+										if (directionlessAnomaliesSet.has(edge.label)) {
+											weightedEdge.dashes = true;
+											weightedEdge.arrows = { to: { enabled: false } };
+										} else if (directedAnomaliesSet.has(edge.label)) {
+											weightedEdge.dashes = true;
+										} else if (financialFlowAnomaliesSet.has(edge.label)) {
+											weightedEdge.dashes = false;
+											weightedEdge.width = 1.2;
+											weightedEdge.arrows = "to";
+										}
+
 										if (typeof resolveEdgeSemantic === "function") {
 											const semOverrides = resolveEdgeSemantic(edge);
 											if (semOverrides) {
