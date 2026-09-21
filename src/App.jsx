@@ -1142,7 +1142,7 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
             <button type="button" className={activeConfigTab === "connections" ? "active" : ""} onClick={() => setActiveConfigTab("connections")}>Connections</button>
             <button type="button" className={activeConfigTab === "tools" ? "active" : ""} onClick={() => setActiveConfigTab("tools")}>Tools</button>
             <button type="button" className={activeConfigTab === "rules" ? "active" : ""} onClick={() => setActiveConfigTab("rules")}>Rules</button>
-            <button type="button" className={activeConfigTab === "score_lineage" ? "active" : ""} onClick={() => setActiveConfigTab("score_lineage")}>Score Lineage</button>
+            <button type="button" className={activeConfigTab === "score_lineage" ? "active" : ""} onClick={() => setActiveConfigTab("score_lineage")}>Detection Sensitivity</button>
             <button type="button" className={activeConfigTab === "activity" ? "active" : ""} onClick={() => setActiveConfigTab("activity")}>Activity Log</button>
           </div>
 
@@ -1158,6 +1158,7 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
             <ActivityAuditPanel apiFetch={apiFetch} canAccess={canAccess} isActive={activeConfigTab === "activity"} />
 
             <div className="configurations_options_panel" style={{ display: activeConfigTab === "score_lineage" ? "block" : "none" }}>
+              <RuleThresholdsPanel apiFetch={apiFetch} canManageUsers={canAccess("users:manage")} />
               <ScoreLineagePanel apiFetch={apiFetch} />
             </div>
 
@@ -3990,10 +3991,60 @@ function IntegrationContractPanel() {
   return <div className="settings_admin_panel"><fieldset><legend>Integration Contract</legend><p className="settings_hint">Backend service account API details are documented for sibling-service developers.</p><a className="settings_doc_link" href={integrationDocHref} target="_blank" rel="noreferrer">Open integration_contract.md</a></fieldset><fieldset><legend>Frontend Contract Notes</legend><div className="profile_grid"><span>Auth token</span><b>Stored separately as linkx_auth_token</b><span>Linkx session</span><b>Stored separately as session</b><span>Socket auth</span><b>io(API_URL, auth token)</b><span>Forbidden handling</span><b>Central apiFetch shows 403 notices</b></div></fieldset></div>;
 }
 
-function SmartVigilancePanel({ apiFetch, toggleAction }) {
+function SmartVigilancePanel({ apiFetch, toggleAction, onNotice, canAccess }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [checkingRunId, setCheckingRunId] = useState(null);
+  const [showRewindModal, setShowRewindModal] = useState(false);
+  const [rewindDate, setRewindDate] = useState("");
+  const [rewinding, setRewinding] = useState(false);
+  const [errorModal, setErrorModal] = useState(null);
+  const [togglingPause, setTogglingPause] = useState(false);
+
+  const handleTogglePause = async (is_paused) => {
+    setTogglingPause(true);
+    try {
+      await apiFetch("/api/v1/reports/xvigilance/state", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ is_paused: is_paused })
+      });
+      fetchHealth();
+      if (onNotice) onNotice({ title: "Engine State Updated", message: is_paused ? "Engine paused successfully." : "Engine resumed successfully.", level: "success" });
+    } catch (err) {
+      alert("Failed to toggle engine state: " + err.message);
+    } finally {
+      setTogglingPause(false);
+    }
+  };
+
+  const handleRewind = async (e) => {
+    e.preventDefault();
+    if (!rewindDate) return;
+    setRewinding(true);
+    try {
+      const targetDate = new Date(rewindDate);
+      const res = await apiFetch("/api/v1/reports/xvigilance/rewind", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ target_date: targetDate.toISOString() })
+      });
+      if (onNotice) {
+        onNotice({ title: "Clock Rewound", message: "Successfully rewound xVigilance engine.", level: "success" });
+      } else {
+        alert("Successfully rewound xVigilance engine.");
+      }
+      setShowRewindModal(false);
+      setRewindDate("");
+      fetchHealth();
+    } catch (err) {
+      console.error(err);
+      alert("Failed to rewind: " + (err.message || "Unknown error"));
+    } finally {
+      setRewinding(false);
+    }
+  };
 
   const fetchHealth = useCallback(async () => {
     try {
@@ -4136,7 +4187,65 @@ function SmartVigilancePanel({ apiFetch, toggleAction }) {
   const status = checkpoint.status || "inactive";
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "20px", padding: "20px", height: "100%", overflowY: "auto" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "20px", padding: "20px", height: "100%", overflowY: "auto", position: "relative" }}>
+      
+      {errorModal && (
+        <div style={{
+          position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: "rgba(255, 255, 255, 0.7)", zIndex: 110,
+          display: "flex", alignItems: "center", justifyContent: "center"
+        }}>
+          <div style={{
+            background: "rgba(255, 255, 255, 1)", color: "#333", padding: "20px", borderRadius: "8px", 
+            width: "600px", maxWidth: "90%", boxShadow: "0 4px 12px rgba(0,0,0,0.5)", marginTop: "-15vh",
+            maxHeight: "80vh", display: "flex", flexDirection: "column"
+          }}>
+            <h3 style={{ marginTop: 0, color: "#e74c3c" }}>Engine Error Trace</h3>
+            <pre style={{ background: "#f8f9fa", padding: "10px", borderRadius: "4px", overflow: "auto", flex: 1, fontSize: "12px", border: "1px solid #ddd" }}>
+              {errorModal}
+            </pre>
+            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "15px" }}>
+              <button type="button" onClick={() => setErrorModal(null)} className="settings_textinput" style={{ cursor: "pointer", padding: "8px 16px", margin: 0, minWidth: "90px" }}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showRewindModal && (
+        <div style={{
+          position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: "rgba(255, 255, 255, 0.7)", zIndex: 100,
+          display: "flex", alignItems: "center", justifyContent: "center"
+        }}>
+          <div style={{
+            background: "rgba(255, 255, 255, 1)", color: "#333", padding: "20px", borderRadius: "8px", 
+            width: "400px", maxWidth: "90%", boxShadow: "0 4px 12px rgba(0,0,0,0.5)", marginTop: "-15vh"
+          }}>
+            <h3 style={{ marginTop: 0, color: "#e74c3c" }}>Re-Analyze History (Rewind)</h3>
+            <div style={{ background: "rgba(231, 76, 60, 0.1)", border: "1px solid #e74c3c", padding: "10px", borderRadius: "4px", marginBottom: "15px", fontSize: "13px", color: "#333" }}>
+              <strong>Warning:</strong> Rewinding the clock will clear the audit log after the selected date and force the engine to re-process all transactions. This may cause high CPU usage.
+            </div>
+            <div style={{ display: "block" }}>
+              <label style={{ display: "block", marginBottom: "5px", fontSize: "14px" }}>Select Date & Time</label>
+              <input 
+                type="datetime-local" 
+                required 
+                value={rewindDate} 
+                onChange={e => setRewindDate(e.target.value)} 
+                className="settings_textinput" 
+                style={{ width: "100%", marginBottom: "15px", boxSizing: "border-box" }}
+              />
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+                <button type="button" onClick={() => setShowRewindModal(false)} className="settings_textinput" style={{ height: "32px", minWidth: "90px", padding: "0 16px", margin: 0, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>Cancel</button>
+                <button type="button" onClick={handleRewind} disabled={rewinding} className="smart_vigilance_findings_btn" style={{ height: "32px", minWidth: "140px", padding: "0 16px", margin: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  {rewinding ? "Rewinding..." : "Confirm Rewind"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <fieldset className="settings_admin_panel">
         <legend>Progress Tracker</legend>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -4144,16 +4253,40 @@ function SmartVigilancePanel({ apiFetch, toggleAction }) {
             <h4 style={{ margin: "0 0 5px 0" }}>Feed Name: {feedName}</h4>
             <p style={{ margin: 0, opacity: 0.8 }}>Last Window End: {lastWindowEnd}</p>
           </div>
-          <div>
+          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
             <span style={{ 
               padding: "5px 10px", 
               borderRadius: "15px", 
-              background: status === "active" ? "#2ecc71" : "#e74c3c",
+              background: checkpoint.is_paused ? "#95a5a6" : (status === "active" ? "#2ecc71" : "#e74c3c"),
               color: "#fff",
               fontWeight: "bold",
               textTransform: "uppercase",
               fontSize: "12px"
-            }}>{status}</span>
+            }}>{checkpoint.is_paused ? "paused" : status}</span>
+            {canAccess && canAccess("users:manage") && (
+              <div 
+                onClick={() => { if (!togglingPause) handleTogglePause(!checkpoint.is_paused); }}
+                title={checkpoint.is_paused ? "Resume Engine" : "Pause Engine"}
+                style={{
+                  display: "flex", alignItems: "center", justifyContent: "space-between",
+                  width: "44px", height: "22px", borderRadius: "11px", 
+                  cursor: togglingPause ? "wait" : "pointer",
+                  background: checkpoint.is_paused ? "#ccc" : "linear-gradient(90deg, #ac854d, #825825)",
+                  padding: "3px", boxSizing: "border-box", transition: "all 0.3s ease",
+                  boxShadow: "inset 0 1px 3px rgba(0,0,0,0.3)", position: "relative",
+                  opacity: togglingPause ? 0.6 : 1,
+                  marginLeft: "8px"
+                }}
+              >
+                <span style={{ position: "absolute", left: "6px", fontSize: "9px", fontWeight: "bold", color: "#fff", opacity: checkpoint.is_paused ? 0 : 1, transition: "opacity 0.2s" }}>ON</span>
+                <span style={{ position: "absolute", right: "4px", fontSize: "9px", fontWeight: "bold", color: "#666", opacity: checkpoint.is_paused ? 1 : 0, transition: "opacity 0.2s" }}>OFF</span>
+                <div style={{
+                  width: "16px", height: "16px", borderRadius: "50%", background: "#fff",
+                  boxShadow: "0 2px 4px rgba(0,0,0,0.3)", transform: checkpoint.is_paused ? "translateX(0)" : "translateX(22px)",
+                  transition: "transform 0.3s cubic-bezier(0.4, 0.0, 0.2, 1)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1
+                }} />
+              </div>
+            )}
           </div>
         </div>
       </fieldset>
@@ -4165,6 +4298,16 @@ function SmartVigilancePanel({ apiFetch, toggleAction }) {
             {totalAnalyzed} <span style={{ fontSize: "14px", fontWeight: "normal", opacity: 0.8 }}>records analyzed</span>
           </div>
           <div style={{ display: "flex", gap: "10px" }}>
+            {canAccess && canAccess("users:manage") && (
+              <button 
+                type="button" 
+                className="smart_vigilance_findings_btn"
+                style={{ opacity: 0.9, backgroundColor: "#e74c3c" }}
+                onClick={() => setShowRewindModal(true)}
+              >
+                Re-Analyze History
+              </button>
+            )}
             <button 
               type="button" 
               className="smart_vigilance_findings_btn"
@@ -4198,8 +4341,9 @@ function SmartVigilancePanel({ apiFetch, toggleAction }) {
           <table className="cleanup_audit_table" cellSpacing="0" cellPadding="0" style={{ width: "100%", tableLayout: "fixed" }}>
             <colgroup>
               <col style={{ width: "15%" }} />
-              <col style={{ width: "50%" }} />
+              <col style={{ width: "40%" }} />
               <col style={{ width: "15%" }} />
+              <col style={{ width: "10%" }} />
               <col style={{ width: "10%" }} />
               <col style={{ width: "10%" }} />
             </colgroup>
@@ -4210,14 +4354,94 @@ function SmartVigilancePanel({ apiFetch, toggleAction }) {
                 <th>Duration (ms)</th>
                 <th>Records</th>
                 <th>Status</th>
+                <th>Action</th>
               </tr>
             </thead>
             <tbody>
-              {Array.isArray(recent_runs) && recent_runs.length > 0 ? recent_runs.map((run) => {
+              {Array.isArray(recent_runs) && recent_runs.length > 0 ? [...recent_runs].sort((a, b) => {
+                const aRun = String(a.status || "").toLowerCase().includes("run") ? 1 : 0;
+                const bRun = String(b.status || "").toLowerCase().includes("run") ? 1 : 0;
+                return bRun - aRun;
+              }).map((run) => {
                 const sLower = String(run.status || "").toLowerCase();
                 const isSuccess = sLower === "success" || sLower === "succeeded";
                 return (
-                <tr key={run.run_id} style={{ backgroundColor: !isSuccess ? "rgba(231, 76, 60, 0.1)" : "transparent" }}>
+                <tr 
+                  key={run.run_id} 
+                  style={{ 
+                    backgroundColor: !isSuccess ? "rgba(231, 76, 60, 0.1)" : "transparent",
+                    cursor: checkingRunId === run.run_id ? "wait" : "pointer",
+                    transition: "background-color 0.2s, opacity 0.2s",
+                    opacity: checkingRunId && checkingRunId !== run.run_id ? 0.6 : 1
+                  }}
+                  onClick={async (e) => {
+                    if (checkingRunId) return;
+                    e.preventDefault();
+
+                    // Short-circuit: if the run explicitly processed 0 records, there are definitely no findings.
+                    if (Number(run.records_count) === 0) {
+                      if (onNotice) {
+                        onNotice({ id: Date.now(), title: "No Records", message: "This audit run processed 0 records, so there are no findings to display.", level: "warning" });
+                      } else {
+                        alert("This audit run processed 0 records, so there are no findings to display.");
+                      }
+                      return;
+                    }
+
+                    setCheckingRunId(run.run_id);
+                    
+                    try {
+                      const parseSafe = (dStr) => {
+                        let s = String(dStr).replace(' ', 'T');
+                        if (!s.endsWith('Z') && s.indexOf('T') !== -1 && s.length <= 19) s += 'Z';
+                        return new Date(s).getTime();
+                      };
+                      const startTs = parseSafe(run.window_start);
+                      const endTs = parseSafe(run.window_end);
+                      
+                      const formatForQuery = (ts) => {
+                        if (!ts || isNaN(ts)) return "";
+                        const d = new Date(ts);
+                        return new Date(d.getTime() - (d.getTimezoneOffset() * 60000)).toISOString().slice(0, 16);
+                      };
+                      
+                      const qStart = encodeURIComponent(formatForQuery(startTs - 300000));
+                      const qEnd = encodeURIComponent(formatForQuery(endTs + 300000));
+                      
+                      const checkUrl = `/api/v1/reports/xvigilance?limit=1&start_date=${qStart}&end_date=${qEnd}`;
+                      const res = await apiFetch(checkUrl, { suppressForbiddenHandler: true });
+                      
+                      if (!res || res.count === undefined || res.count === 0) {
+                        if (onNotice) {
+                          onNotice({ id: Date.now(), title: "No Reports Found", message: "No flagged reports are available for this specific audit window.", level: "warning" });
+                        } else {
+                          alert("No flagged reports are available for this specific audit window.");
+                        }
+                        setCheckingRunId(null);
+                        return;
+                      }
+                      
+                      window.dispatchEvent(new CustomEvent("open-reports-tab", { 
+                        detail: { tab: "xvigilance", window_start: run.window_start, window_end: run.window_end } 
+                      }));
+                      if (typeof toggleAction === "function") toggleAction("toggle_menu_new_report_window");
+                      
+                    } catch (err) {
+                      console.error("Failed to check for reports:", err);
+                      // Fallback if API completely fails (e.g. network disconnect)
+                      if (onNotice) {
+                        onNotice({ id: Date.now(), title: "Check Failed", message: "Failed to verify reports, opening tab anyway...", level: "warning" });
+                      }
+                      window.dispatchEvent(new CustomEvent("open-reports-tab", { 
+                        detail: { tab: "xvigilance", window_start: run.window_start, window_end: run.window_end } 
+                      }));
+                      if (typeof toggleAction === "function") toggleAction("toggle_menu_new_report_window");
+                    }
+                    setCheckingRunId(null);
+                  }}
+                  title="View findings for this run"
+                  className="audit_log_row_hover"
+                >
                   <td>{run.run_id}</td>
                   <td style={{ fontSize: "12px" }}>
                     {run.window_start} - {run.window_end}
@@ -4230,6 +4454,17 @@ function SmartVigilancePanel({ apiFetch, toggleAction }) {
                       fontWeight: "bold",
                       fontSize: "12px"
                     }}>{run.status}</span>
+                  </td>
+                  <td>
+                    {!isSuccess && run.error_message && (
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setErrorModal(run.error_message); }}
+                        style={{ padding: "4px 8px", fontSize: "11px", backgroundColor: "#e74c3c", color: "#fff", border: "none", borderRadius: "4px", cursor: "pointer" }}
+                      >
+                        View Error
+                      </button>
+                    )}
                   </td>
                 </tr>
                 );
@@ -4253,7 +4488,7 @@ function Settings({ isSettingsOpen, toggleAction, actor, roles = [], permissions
   const tabs = [
     { id: "profile", label: "Profile" },
     { id: "preferences", label: "Preferences" },
-    { id: "smart_vigilance", label: "Smart Vigilance" },
+    { id: "smart_vigilance", label: "Linkx Vigilance" },
     { id: "users", label: "Users", permission: "users:manage" },
     { id: "service_accounts", label: "Service Accounts", permission: "users:manage" },
     { id: "integration", label: "Integration" },
@@ -4310,7 +4545,7 @@ function Settings({ isSettingsOpen, toggleAction, actor, roles = [], permissions
               <IntegrationContractPanel />
             </div>
             <div className="configurations_options_panel" style={{ display: activeSettingsTab === "smart_vigilance" ? "flex" : "none", flexDirection: "column", height: "100%", overflow: "hidden", padding: 0 }}>
-              {activeSettingsTab === "smart_vigilance" && <SmartVigilancePanel apiFetch={apiFetch} toggleAction={toggleAction} />}
+              {activeSettingsTab === "smart_vigilance" && <SmartVigilancePanel apiFetch={apiFetch} toggleAction={toggleAction} onNotice={onNotice} canAccess={canAccess} />}
             </div>
           </form>
         </div>
@@ -8359,6 +8594,7 @@ const fileInputRef = useRef(null);
     const activeToken = token || localStorage.getItem("linkx_auth_token") || "";
     const socket = io(API_URL, {
       auth: activeToken ? { token: activeToken } : {},
+      transports: ["websocket"] // Force WebSocket upgrade to prevent HTTP long-polling spam
     });
     socketRef.current = socket;
 
@@ -14075,6 +14311,7 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [selectedReport, setSelectedReport] = useState(null);
+  const [highlightWindow, setHighlightWindow] = useState(null);
   const [hiddenRendererState, setHiddenRendererState] = useState(null);
   const hiddenIframeRef = useRef(null);
 
@@ -14463,10 +14700,48 @@ const loadReports = async () => {
 
   useEffect(() => {
     const handleOpenTab = (e) => {
-      if (e.detail && e.detail !== activeReportsTab) {
-        setActiveReportsTab(e.detail);
+      let targetTab = e.detail;
+      let wStart = null;
+      let wEnd = null;
+
+      if (e.detail && typeof e.detail === "object") {
+        targetTab = e.detail.tab;
+        wStart = e.detail.window_start;
+        wEnd = e.detail.window_end;
+      }
+
+      if (targetTab && targetTab !== activeReportsTab) {
+        setActiveReportsTab(targetTab);
         setOffset(0);
         setSelectedReport(null);
+      }
+
+      if (wStart && wEnd) {
+        const parseSafe = (dStr) => {
+          let s = String(dStr).replace(' ', 'T');
+          if (!s.endsWith('Z') && s.indexOf('T') !== -1 && s.length <= 19) {
+            s += 'Z';
+          }
+          return new Date(s).getTime();
+        };
+        const startTs = parseSafe(wStart);
+        const endTs = parseSafe(wEnd);
+        console.log("Received audit window:", wStart, "->", wEnd, "| Parsed:", startTs, "->", endTs);
+        
+        // Convert timestamp to YYYY-MM-DDThh:mm for the local date filters
+        const formatForInput = (ts) => {
+          if (!ts || isNaN(ts)) return "";
+          const d = new Date(ts);
+          return new Date(d.getTime() - (d.getTimezoneOffset() * 60000)).toISOString().slice(0, 16);
+        };
+        
+        setFilterFromDate(formatForInput(startTs - 300000));
+        setFilterToDate(formatForInput(endTs + 300000));
+        
+        setHighlightWindow({ start: startTs - 300000, end: endTs + 300000 });
+      } else {
+        console.log("No audit window provided. Clearing highlight.", wStart, wEnd);
+        setHighlightWindow(null);
       }
     };
     window.addEventListener("open-reports-tab", handleOpenTab);
@@ -14477,6 +14752,7 @@ const loadReports = async () => {
       setActiveReportsTab(tabId);
       setOffset(0);
       setSelectedReport(null);
+      setHighlightWindow(null); // Clear highlights when manually navigating away
     }
   };
 
@@ -14596,13 +14872,13 @@ let processedData = [...reportsData];
             type="text" 
             placeholder="Search reports..." 
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => { setSearchQuery(e.target.value); setHighlightWindow(null); }}
             className="settings_textinput"
             style={{ minWidth: "220px", padding: "6px 12px", height: "32px", margin: 0 }}
           />
           <select 
             value={filterStatus}
-            onChange={(e) => { setFilterStatus(e.target.value); setOffset(0); }}
+            onChange={(e) => { setFilterStatus(e.target.value); setOffset(0); setHighlightWindow(null); }}
             className="settings_textinput"
             style={{ width: "auto", padding: "6px 12px", height: "32px", margin: 0 }}
           >
@@ -14614,7 +14890,7 @@ let processedData = [...reportsData];
           {(activeReportsTab === "xvigilance" || activeReportsTab === "evidence") && (
             <select 
               value={filterBand}
-              onChange={(e) => { setFilterBand(e.target.value); setOffset(0); }}
+              onChange={(e) => { setFilterBand(e.target.value); setOffset(0); setHighlightWindow(null); }}
               className="settings_textinput"
               style={{ width: "auto", padding: "6px 12px", height: "32px", margin: 0 }}
             >
@@ -14631,7 +14907,7 @@ let processedData = [...reportsData];
               <input
                 type="datetime-local"
                 value={filterFromDate}
-                onChange={(e) => { setFilterFromDate(e.target.value); setOffset(0); }}
+                onChange={(e) => { setFilterFromDate(e.target.value); setOffset(0); setHighlightWindow(null); }}
                 className="settings_textinput"
                 title="Filter from date/time"
                 style={{ width: "auto", padding: "4px 8px", height: "32px", margin: 0, fontSize: "12px" }}
@@ -14640,7 +14916,7 @@ let processedData = [...reportsData];
               <input
                 type="datetime-local"
                 value={filterToDate}
-                onChange={(e) => { setFilterToDate(e.target.value); setOffset(0); }}
+                onChange={(e) => { setFilterToDate(e.target.value); setOffset(0); setHighlightWindow(null); }}
                 className="settings_textinput"
                 title="Filter to date/time"
                 style={{ width: "auto", padding: "4px 8px", height: "32px", margin: 0, fontSize: "12px" }}
@@ -14658,6 +14934,7 @@ let processedData = [...reportsData];
               setFilterFromDate("");
               setFilterToDate("");
               setSortBy("date_desc");
+              setHighlightWindow(null);
               setOffset(0);
             }}
             style={{ width: "32px", height: "32px", minWidth: "32px", padding: 0, display: "flex", alignItems: "center", justifyContent: "center", margin: 0, cursor: "pointer", opacity: 0.8 }}
@@ -14758,17 +15035,37 @@ let processedData = [...reportsData];
                 else if (sbLower === "critical") sbStyle = { background: "rgba(231, 76, 60, 0.15)", color: "#c0392b", border: "1px solid rgba(231, 76, 60, 0.4)" };
                 else if (sbLower === "fatal") sbStyle = { background: "rgba(142, 68, 173, 0.15)", color: "#8e44ad", border: "1px solid rgba(142, 68, 173, 0.4)" };
 
+                let isHighlighted = false;
+                if (highlightWindow && activeReportsTab === "xvigilance") {
+                  const ts = new Date(report.created_at).getTime();
+                  if (ts >= highlightWindow.start && ts <= highlightWindow.end) {
+                    isHighlighted = true;
+                  }
+                }
+
+                let rowClass = selectedReport?.id === report.id ? "active_row" : "";
+                if (isHighlighted && !rowClass) rowClass = "highlighted_multi_row"; // Optional CSS class if needed
+
+                let rowBg = "";
+                let rowBorder = "";
+                if (isHighlighted && selectedReport?.id !== report.id) {
+                  rowBg = "rgba(52, 152, 219, 0.08)";
+                  rowBorder = "3px solid #3498db";
+                }
+
                 return (
                   <tr 
                     key={report.id} 
                     onClick={() => setSelectedReport(report)}
-                    className={selectedReport?.id === report.id ? "active_row" : ""}
-                    title={isArchived ? "Archived (Older than 180 days)" : ""}
+                    className={rowClass}
+                    title={isArchived ? "Archived (Older than 180 days)" : (isHighlighted ? "Flagged from Audit Log selection" : "")}
                     style={{ 
                       cursor: "pointer", 
-                      transition: "background 0.2s",
+                      transition: "background 0.2s, border-left 0.2s",
                       opacity: isArchived ? 0.5 : 1,
-                      filter: isArchived ? "grayscale(80%)" : "none"
+                      filter: isArchived ? "grayscale(80%)" : "none",
+                      backgroundColor: rowBg || undefined,
+                      borderLeft: rowBorder || undefined
                     }}
                   >
                     <td style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -15271,6 +15568,23 @@ function ScoreLineagePanel({ apiFetch }) {
 
   const [isSaving, setIsSaving] = React.useState(false);
 
+  React.useEffect(() => {
+    const fetchLineage = async () => {
+      try {
+        const res = await apiFetch("/config/score-lineage", { suppressForbiddenHandler: true });
+        if (res && res.results && res.results.config) {
+          const cfg = res.results.config;
+          if (cfg.base_scores) setBaseScores(cfg.base_scores);
+          if (cfg.node_thresholds) setNodeThresholds(cfg.node_thresholds);
+          if (cfg.money_thresholds) setMoneyThresholds(cfg.money_thresholds);
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    };
+    fetchLineage();
+  }, []);
+
   const handleSave = async () => {
     setIsSaving(true);
     try {
@@ -15280,11 +15594,12 @@ function ScoreLineagePanel({ apiFetch }) {
         money_thresholds: moneyThresholds
       };
       
-      const res = await apiFetch("/api/v1/config/risk_scoring", {
+      const res = await apiFetch("/config/score-lineage", {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
       });
-      if (!res.ok) throw new Error("Failed to save configuration");
+      if (!res.ok && !res.results) throw new Error("Failed to save configuration");
       alert("Score Lineage configuration saved successfully as a new version! (Append-only)");
     } catch (e) {
       console.error(e);
@@ -15334,7 +15649,7 @@ function ScoreLineagePanel({ apiFetch }) {
             <button type="button" className="close_action_btn" onClick={() => setNodeThresholds(nodeThresholds.filter((_, i) => i !== idx))}>x</button>
           </div>
         ))}
-        <button type="button" className="action_btns" onClick={() => setNodeThresholds([...nodeThresholds, { min_nodes: 0, add_points: 0 }])}>+ Add Threshold</button>
+        <button type="button" className="action_btns" style={{ position: "relative", zIndex: 10 }} onClick={() => setNodeThresholds([...nodeThresholds, { min_nodes: 0, add_points: 0 }])}>+ Add Threshold</button>
       </fieldset>
 
       <fieldset>
@@ -15364,6 +15679,184 @@ function ScoreLineagePanel({ apiFetch }) {
           {isSaving ? "Saving..." : "Save New Version"}
         </button>
       </div>
+    </div>
+  );
+}
+
+
+
+function RuleThresholdsPanel({ apiFetch, canManageUsers }) {
+  const [config, setConfig] = React.useState({
+    smurfing_single_tx_threshold: 250000,
+    smurfing_min_tx_count: 5,
+    smurfing_cumulative_threshold: 1000000,
+    reporting_threshold: 1500000,
+    circular_flow_check_amounts: true,
+    late_night_start: 2200,
+    late_night_end: 500,
+    hub_spoke_min_counterparties: 10,
+    activity_spike_multiplier: 3.0,
+    activity_spike_min_daily_count: 5,
+    rapid_withdrawal_amount_tolerance: 0.1
+  });
+  const [history, setHistory] = React.useState([]);
+  const [isSaving, setIsSaving] = React.useState(false);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    fetchData();
+  }, []);
+
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const res = await apiFetch("/rule-thresholds", { suppressForbiddenHandler: true });
+      if (res && res.results && res.results.config) {
+        setConfig(prev => ({...prev, ...res.results.config}));
+      }
+      if (canManageUsers) {
+        const histRes = await apiFetch("/rule-thresholds/history?limit=50", { suppressForbiddenHandler: true });
+        if (histRes && histRes.results) {
+          setHistory(histRes.results);
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSave = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    if (!canManageUsers) return;
+    setIsSaving(true);
+    try {
+      const res = await apiFetch("/rule-thresholds", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(config)
+      });
+      alert("Rule Thresholds saved successfully!");
+      fetchData();
+    } catch (e) {
+      console.error(e);
+      alert("Failed to save rule thresholds.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setConfig(prev => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : Number(value)
+    }));
+  };
+
+  if (loading) return <div style={{marginTop: "20px"}}>Loading rule thresholds...</div>;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "15px", marginTop: "20px" }}>
+      <fieldset>
+        <legend>Rule Thresholds</legend>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}>
+          
+          <div className="configurations_input">
+            <label>Smurfing Single TX Threshold (Min 1,000 | Max 10M)</label>
+            <input type="number" name="smurfing_single_tx_threshold" min="1000" max="10000000" required value={config.smurfing_single_tx_threshold} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+          </div>
+
+          <div className="configurations_input">
+            <label>Smurfing Min TX Count (Min 2 | Max 100)</label>
+            <input type="number" name="smurfing_min_tx_count" min="2" max="100" required value={config.smurfing_min_tx_count} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+          </div>
+
+          <div className="configurations_input">
+            <label>Smurfing Cumulative Threshold (Min 5,000 | Max 50M)</label>
+            <input type="number" name="smurfing_cumulative_threshold" min="5000" max="50000000" required value={config.smurfing_cumulative_threshold} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+          </div>
+
+          <div className="configurations_input">
+            <label>Reporting Threshold (Min 1,000 | Max 10M)</label>
+            <input type="number" name="reporting_threshold" min="1000" max="10000000" required value={config.reporting_threshold} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+          </div>
+
+          <div className="configurations_input">
+            <label>Late Night Start (HHmm) (Min 1800 | Max 2359)</label>
+            <input type="number" name="late_night_start" min="1800" max="2359" required value={config.late_night_start} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+          </div>
+
+          <div className="configurations_input">
+            <label>Late Night End (HHmm) (Min 0 | Max 800)</label>
+            <input type="number" name="late_night_end" min="0" max="800" required value={config.late_night_end} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+          </div>
+
+          <div className="configurations_input">
+            <label>Hub &amp; Spoke Min Counterparties (Min 2 | Max 50)</label>
+            <input type="number" name="hub_spoke_min_counterparties" min="2" max="50" required value={config.hub_spoke_min_counterparties} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+          </div>
+
+          <div className="configurations_input">
+            <label>Activity Spike Multiplier (Min 1.5 | Max 20)</label>
+            <input type="number" step="0.1" name="activity_spike_multiplier" min="1.5" max="20" required value={config.activity_spike_multiplier} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+          </div>
+
+          <div className="configurations_input">
+            <label>Activity Spike Min Daily Count (Min 3 | Max 1000)</label>
+            <input type="number" name="activity_spike_min_daily_count" min="3" max="1000" required value={config.activity_spike_min_daily_count} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+          </div>
+
+          <div className="configurations_input">
+            <label>Rapid Withdrawal Amount Tolerance (Min 0.01 | Max 0.5)</label>
+            <input type="number" step="0.01" name="rapid_withdrawal_amount_tolerance" min="0.01" max="0.5" required value={config.rapid_withdrawal_amount_tolerance} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+          </div>
+
+          <div className="configurations_input" style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <input type="checkbox" name="circular_flow_check_amounts" id="chk_circular" checked={config.circular_flow_check_amounts} onChange={handleChange} style={{ width: "16px", height: "16px", margin: 0 }} />
+            <label htmlFor="chk_circular" style={{ margin: 0, padding: 0 }}>Circular Flow Check Amounts</label>
+          </div>
+
+          {canManageUsers && (
+            <div style={{ gridColumn: "1 / -1", display: "flex", justifyContent: "flex-end", marginTop: "10px" }}>
+              <button type="button" onClick={handleSave} disabled={isSaving} className="action_btns config_trusted_list_add">
+                {isSaving ? "Saving..." : "Save New Version"}
+              </button>
+            </div>
+          )}
+        </div>
+      </fieldset>
+
+      {canManageUsers && history.length > 0 && (
+        <fieldset>
+          <legend>Audit Trail / History</legend>
+          <div style={{ maxHeight: "200px", overflowY: "auto" }}>
+            <table className="config_classified_entities_table">
+              <thead>
+                <tr>
+                  <th>Version</th>
+                  <th>Updated By</th>
+                  <th>Date</th>
+                  <th>Config Snippet</th>
+                </tr>
+              </thead>
+              <tbody>
+                {history.map((h, i) => (
+                  <tr key={h.version_id || i}>
+                    <td>v{h.version_id}</td>
+                    <td>{h.updated_by}</td>
+                    <td>{new Date(h.created_at).toLocaleString()}</td>
+                    <td style={{ fontSize: "11px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "200px" }} title={JSON.stringify(h.config)}>
+                      {JSON.stringify(h.config)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </fieldset>
+      )}
     </div>
   );
 }
