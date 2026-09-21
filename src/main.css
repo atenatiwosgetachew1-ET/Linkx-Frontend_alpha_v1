@@ -6967,6 +6967,16 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 	padding: 8px 9px;
 	margin-top: 5px;
 }
+button.settings_textinput {
+	transition: background-color 0.2s, transform 0.1s, opacity 0.2s;
+}
+button.settings_textinput:hover {
+	background: rgba(230, 240, 245, 0.92);
+}
+button.settings_textinput:active {
+	background: rgba(215, 225, 235, 0.92);
+	transform: scale(0.95);
+}
 .settings_inline_check {
 	display: flex !important;
 	align-items: center;
@@ -7067,6 +7077,12 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 	background: rgba(10, 28, 37, 0.86);
 	border-color: rgba(151, 180, 190, 0.26);
 	color: #e3eef2;
+}
+[data-theme="dark"] button.settings_textinput:hover {
+	background: rgba(20, 45, 60, 0.86);
+}
+[data-theme="dark"] button.settings_textinput:active {
+	background: rgba(15, 35, 48, 0.86);
 }
 [data-theme="dark"] .settings_action_row button,
 [data-theme="dark"] .service_account_actions button,
@@ -7763,7 +7779,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 }
 [data-theme="light"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .action_btns:hover,
 [data-theme="light"] #configurations_container .configurations_options_container .configurations_options .configurations_actions_bar .action_btns:hover {
-  background: linear-gradient(180deg, #bf8b61, #ae794f);
+  background: linear-gradient(90deg, #ab844c, #825825);
   border-color: rgba(174, 121, 79, 0.84);
 }
 [data-theme="light"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .action_btns:active,

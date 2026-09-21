@@ -13399,10 +13399,21 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
   useEffect(() => {
     if (!token) return;
     const interval = setInterval(() => {
-      apiFetch("/auth/verify", { method: "POST" }).catch(() => {});
-    }, 60000);
+      const lastPing = parseInt(localStorage.getItem("linkx_last_heartbeat") || "0", 10);
+      const now = Date.now();
+      
+      // If another tab has successfully pinged the backend within the last 2.5 minutes, we skip our ping
+      // This strictly caps backend keep-alive pressure to 1 request per ~3 minutes globally across all tabs
+      if (now - lastPing < 150000) return;
+      
+      localStorage.setItem("linkx_last_heartbeat", now.toString());
+      verifyToken().catch(() => {
+        // If it fails, remove the lock so another tab can try
+        localStorage.removeItem("linkx_last_heartbeat");
+      });
+    }, 60000); // Wake up every 60s to check if we are the chosen tab to perform the 3-minute ping
     return () => clearInterval(interval);
-  }, [apiFetch, token]);
+  }, [verifyToken, token]);
 
   useIdleTimeout({
     enabled: Boolean(token) && idleSettings.enabled && idlePolicyMeta.loaded,
@@ -14636,6 +14647,26 @@ let processedData = [...reportsData];
               />
             </>
           )}
+          <button
+            type="button"
+            className="settings_textinput"
+            title="Reset Filters"
+            onClick={() => {
+              setSearchQuery("");
+              setFilterStatus("all");
+              setFilterBand("all");
+              setFilterFromDate("");
+              setFilterToDate("");
+              setSortBy("date_desc");
+              setOffset(0);
+            }}
+            style={{ width: "32px", height: "32px", minWidth: "32px", padding: 0, display: "flex", alignItems: "center", justifyContent: "center", margin: 0, cursor: "pointer", opacity: 0.8 }}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: "16px", height: "16px" }}>
+              <polyline points="1 4 1 10 7 10"></polyline>
+              <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
+            </svg>
+          </button>
           <select 
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value)}

@@ -138,6 +138,17 @@ export function AuthProvider({ apiUrl, children }) {
     setSsoError("");
   }, []);
 
+  useEffect(() => {
+    const handleStorageChange = (e) => {
+      if (e.key === AUTH_TOKEN_KEY) {
+        setToken(e.newValue || "");
+        if (!e.newValue) setUser(null); // Simple fallback logout if token is cleared from another tab
+      }
+    };
+    window.addEventListener("storage", handleStorageChange);
+    return () => window.removeEventListener("storage", handleStorageChange);
+  }, []);
+
   const fetchAutoLogin = useCallback(async () => {
     try {
       const data = await authRequest(apiUrl, "/auth/auto-login", { method: "GET" });
