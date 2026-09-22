@@ -4422,7 +4422,7 @@ function SmartVigilancePanel({ apiFetch, toggleAction, onNotice, canAccess }) {
                       }
                       
                       window.dispatchEvent(new CustomEvent("open-reports-tab", { 
-                        detail: { tab: "xvigilance", window_start: run.window_start, window_end: run.window_end } 
+                        detail: { tab: "xvigilance", window_start: run.window_start, window_end: run.window_end, run_id: run.run_id } 
                       }));
                       if (typeof toggleAction === "function") toggleAction("toggle_menu_new_report_window");
                       
@@ -4433,7 +4433,7 @@ function SmartVigilancePanel({ apiFetch, toggleAction, onNotice, canAccess }) {
                         onNotice({ id: Date.now(), title: "Check Failed", message: "Failed to verify reports, opening tab anyway...", level: "warning" });
                       }
                       window.dispatchEvent(new CustomEvent("open-reports-tab", { 
-                        detail: { tab: "xvigilance", window_start: run.window_start, window_end: run.window_end } 
+                        detail: { tab: "xvigilance", window_start: run.window_start, window_end: run.window_end, run_id: run.run_id } 
                       }));
                       if (typeof toggleAction === "function") toggleAction("toggle_menu_new_report_window");
                     }
@@ -14738,7 +14738,7 @@ const loadReports = async () => {
         setFilterFromDate(formatForInput(startTs - 300000));
         setFilterToDate(formatForInput(endTs + 300000));
         
-        setHighlightWindow({ start: startTs - 300000, end: endTs + 300000 });
+        setHighlightWindow({ start: startTs - 300000, end: endTs + 300000, run_id: runId });
       } else {
         console.log("No audit window provided. Clearing highlight.", wStart, wEnd);
         setHighlightWindow(null);
@@ -15036,9 +15036,12 @@ let processedData = [...reportsData];
                 else if (sbLower === "fatal") sbStyle = { background: "rgba(142, 68, 173, 0.15)", color: "#8e44ad", border: "1px solid rgba(142, 68, 173, 0.4)" };
 
                 let isHighlighted = false;
-                if (highlightWindow && activeReportsTab === "xvigilance") {
-                  const ts = new Date(report.created_at).getTime();
-                  if (ts >= highlightWindow.start && ts <= highlightWindow.end) {
+                if (highlightWindow && highlightWindow.run_id && activeReportsTab === "xvigilance") {
+                  let rObj = {};
+                  try { rObj = typeof report.payload === "string" ? JSON.parse(report.payload) : (report.payload || {}); } catch(e) {}
+                  
+                  // Mathematically perfect exact correlation!
+                  if (String(rObj.run_id) === String(highlightWindow.run_id)) {
                     isHighlighted = true;
                   }
                 }
