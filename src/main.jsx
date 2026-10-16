@@ -2,6 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.jsx'
+import theme from './themes/index.js'
 
 const shouldKeepClientLogs = () => {
   if (!import.meta.env.PROD) return true;
@@ -35,6 +36,8 @@ installProductionConsoleGuard();
 
 if (typeof window !== 'undefined') {
   document.documentElement.setAttribute('data-theme', 'light');
+  document.documentElement.setAttribute('data-brand', theme.id);
+  document.title = theme.name + (theme.tagline ? ' | ' + theme.tagline : '');
 }
 
 /**

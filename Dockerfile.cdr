@@ -1,0 +1,18 @@
+FROM node:20-alpine AS build
+
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm ci
+
+COPY . .
+RUN VITE_THEME=cdr npm run build
+
+FROM nginx:1.27-alpine AS runtime
+
+COPY deploy/nginx/cdr-host-https.conf /etc/nginx/conf.d/default.conf
+COPY --from=build /app/linkxCDR2026 /usr/share/nginx/html/linkxCDR2026
+
+EXPOSE 80 443
+
+CMD ["nginx", "-g", "daemon off;"]

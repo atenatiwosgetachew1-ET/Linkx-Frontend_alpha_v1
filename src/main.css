@@ -42,6 +42,20 @@
   --status-error-bg: rgba(210, 55, 79, 0.15);
   --status-default-text: #1c2c3a;
   --status-default-bg: rgba(160, 177, 194, 0.12);
+  /* ── Brand-level tokens (overridden by [data-brand]) ── */
+  --chrome-bg: #314961;
+  --chrome-bg-dark: #142e47;
+  --chrome-bg-alt: #2e465d;
+  --sidebar-bg: #19212e;
+  --logo-gradient: linear-gradient(90deg, #ae794f, #7f4f23);
+  --logo-circle-bg: #925e35;
+  --login-shell-bg: #041327;
+  --login-overlay: linear-gradient(#050b11, #081019cc, #0a1622);
+  --workspace-light-plane: linear-gradient(90deg, rgb(248 248 250), #fcfcfb 22%, transparent 78%, rgba(174, 121, 79, .08)), linear-gradient(180deg, #ffffffc7, #f6eee499);
+  --workspace-light-bg: linear-gradient(135deg, rgba(255, 255, 255, 0.94), rgba(247, 241, 232, 0.86)),
+    radial-gradient(circle at 18% 16%, rgba(174, 121, 79, 0.18), transparent 30%),
+    radial-gradient(circle at 82% 76%, rgba(212, 176, 114, 0.20), transparent 34%),
+    var(--workspace-scene-bg);
 }
 
 [data-theme="dark"] {
@@ -88,6 +102,356 @@
   --status-default-text: #b9c8d4;
   --status-default-bg: rgba(53, 72, 88, 0.38);
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   CDR Brand — sky-blue + dark-navy palette
+   Activated by:  document.documentElement.setAttribute('data-brand', 'cdr')
+   ═══════════════════════════════════════════════════════════════ */
+[data-brand="cdr"] {
+  --accent: #1b6ca8;
+  --accent-strong: #155d94;
+  --primary-action-bg: #1b6ca8;
+  --primary-action-bg-hover: #2080c0;
+  --primary-action-bg-active: #155994;
+  --primary-action-text: #ffffff;
+  --primary-action-border: rgba(27, 108, 168, 0.52);
+  --workspace-scene-overlay: linear-gradient(135deg, rgba(255, 255, 255, 0.92), rgba(222, 238, 250, 0.74), rgba(27, 108, 168, 0.12));
+  --on-scene-text: #122a3e;
+  --on-scene-text-muted: rgba(18, 42, 62, 0.74);
+  --on-scene-text-subtle: rgba(27, 60, 90, 0.66);
+  --scene-divider: rgba(27, 108, 168, 0.24);
+  --scene-control-hover-bg: rgba(27, 108, 168, 0.10);
+  --scene-drag-bg: radial-gradient(rgba(27, 108, 168, 0.14), rgba(27, 108, 168, 0.05));
+  --scene-drag-border: rgba(27, 108, 168, 0.40);
+  --chrome-bg: #1b6ca8;
+  --chrome-bg-dark: #0f3b5e;
+  --chrome-bg-alt: #1a609a;
+  --sidebar-bg: #0d2137;
+  --logo-gradient: linear-gradient(90deg, #4aafe6, #1b6ca8);
+  --logo-circle-bg: #2891cc;
+  --login-shell-bg: #06182c;
+  --login-overlay: linear-gradient(#060e18, #0a1a30cc, #0c2240);
+  --workspace-light-plane: linear-gradient(90deg, rgb(240 248 255), #f0f7fd 22%, transparent 78%, rgba(27, 108, 168, .06)), linear-gradient(180deg, #ffffffc7, #e8f2fb99);
+  --workspace-light-bg: linear-gradient(135deg, rgba(255, 255, 255, 0.94), rgba(232, 244, 253, 0.86)),
+    radial-gradient(circle at 18% 16%, rgba(27, 108, 168, 0.14), transparent 30%),
+    radial-gradient(circle at 82% 76%, rgba(74, 175, 230, 0.16), transparent 34%),
+    var(--workspace-scene-bg);
+  --brand-badge-gradient: linear-gradient(90deg, #4aafe6, #1b6ca8);
+  --brand-badge-stop-1: #4aafe6;
+  --brand-badge-stop-2: #1b6ca8;
+}
+
+[data-brand="cdr"][data-theme="dark"] {
+  --accent: #4aafe6;
+  --accent-strong: #6dc4f0;
+  --primary-action-bg: #d7eef4;
+  --primary-action-bg-hover: #e8f8fc;
+  --primary-action-bg-active: #c6e2ea;
+  --primary-action-text: #0a1c2e;
+  --primary-action-border: rgba(205, 232, 241, 0.85);
+  --workspace-scene-overlay: linear-gradient(#060e18, #0a1a30cc, #0c2240);
+  --chrome-bg: #1b6ca8;
+  --chrome-bg-dark: #0f3b5e;
+  --chrome-bg-alt: #1a609a;
+  --sidebar-bg: #0d2137;
+  --logo-gradient: linear-gradient(90deg, #4aafe6, #1b6ca8);
+  --logo-circle-bg: #2891cc;
+  --login-shell-bg: #06182c;
+  --login-overlay: linear-gradient(#060e18, #0a1a30cc, #0c2240);
+  --brand-badge-gradient: linear-gradient(90deg, #4aafe6, #1b6ca8);
+  --brand-badge-stop-1: #4aafe6;
+  --brand-badge-stop-2: #1b6ca8;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   CDR Theme Component & Button Overrides (Sky-Blue & Navy)
+   Replaces all golden/amber gradients, borders, and icon fills.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* 1. Main Action Buttons in Content Containers & Forms */
+[data-brand="cdr"] .window .content_container .upload_source_option button,
+[data-brand="cdr"] .window .content_container .batch_connection_form_container form fieldset button,
+[data-brand="cdr"] .window .content_container .batch_connection_form_container form button,
+[data-brand="cdr"] .window .content_container .batch_connection_form_pager_container button,
+[data-brand="cdr"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_menu .batch_files_dataframe_filter_menu_add_btn button,
+[data-brand="cdr"][data-theme="light"] .window .content_container .upload_source_option button,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container form fieldset button,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container form button,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_pager_container button,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_menu .batch_files_dataframe_filter_menu_add_btn button {
+  background-image: linear-gradient(180deg, #2b84c4, #1b6ca8) !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(27, 108, 168, 0.78) !important;
+  outline: none !important;
+  border-radius: 3px;
+  box-shadow: 0 8px 18px rgba(27, 108, 168, 0.22) !important;
+}
+
+[data-brand="cdr"] .window .content_container .upload_source_option button:hover,
+[data-brand="cdr"] .window .content_container .batch_connection_form_container form fieldset button:hover,
+[data-brand="cdr"] .window .content_container .batch_connection_form_container form button:hover,
+[data-brand="cdr"] .window .content_container .batch_connection_form_pager_container button:hover,
+[data-brand="cdr"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_menu .batch_files_dataframe_filter_menu_add_btn button:hover,
+[data-brand="cdr"][data-theme="light"] .window .content_container .upload_source_option button:hover,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container form fieldset button:hover,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container form button:hover,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_pager_container button:hover,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_menu .batch_files_dataframe_filter_menu_add_btn button:hover {
+  background-image: linear-gradient(180deg, #3895d8, #2077b8) !important;
+  border-color: rgba(21, 93, 148, 0.96) !important;
+}
+
+[data-brand="cdr"] .window .content_container .upload_source_option button:active,
+[data-brand="cdr"] .window .content_container .batch_connection_form_container form fieldset button:active,
+[data-brand="cdr"] .window .content_container .batch_connection_form_container form button:active,
+[data-brand="cdr"] .window .content_container .batch_connection_form_pager_container button:active,
+[data-brand="cdr"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_menu .batch_files_dataframe_filter_menu_add_btn button:active,
+[data-brand="cdr"][data-theme="light"] .window .content_container .upload_source_option button:active,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container form fieldset button:active,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container form button:active,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_pager_container button:active,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_menu .batch_files_dataframe_filter_menu_add_btn button:active {
+  background-image: linear-gradient(180deg, #175e92, #134e7c) !important;
+}
+
+/* 2. Window Sidebar Form Button */
+[data-brand="cdr"] .window .side_bar .side_bar_btn_options ul .window_side_bar_menu_list_I form button,
+[data-brand="cdr"][data-theme="light"] .window .side_bar .side_bar_btn_options ul .window_side_bar_menu_list_I form button {
+  background: linear-gradient(180deg, #2b84c4, #1b6ca8) !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(27, 108, 168, 0.78) !important;
+}
+
+[data-brand="cdr"] .window .side_bar .side_bar_btn_options ul .window_side_bar_menu_list_I form button:hover,
+[data-brand="cdr"][data-theme="light"] .window .side_bar .side_bar_btn_options ul .window_side_bar_menu_list_I form button:hover {
+  background: linear-gradient(180deg, #3895d8, #2077b8) !important;
+  color: #ffffff !important;
+}
+
+/* 3. Search & Secondary Form Buttons */
+[data-brand="cdr"] .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_form .batch_files_search_container button,
+[data-brand="cdr"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_and_actions_container .batch_files_dataframe_filter_inputs .filters_partition button,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_form .batch_files_search_container button,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_and_actions_container .batch_files_dataframe_filter_inputs .filters_partition button {
+  background: #e5f1fa !important;
+  border-color: rgba(162, 203, 233, 0.9) !important;
+  color: #103859 !important;
+}
+
+/* 4. Radio & Checkbox Inputs */
+[data-brand="cdr"] input[type="radio"],
+[data-brand="cdr"] input[type="checkbox"],
+[data-brand="cdr"] .radioinput,
+[data-brand="cdr"] .input_checkbox,
+[data-brand="cdr"] .window .content_container .batch_connection_form_container form fieldset .box_inputs_container .radioinput,
+[data-brand="cdr"] .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_form .batch_files_search_options_container input,
+[data-brand="cdr"][data-theme="light"] input[type="radio"],
+[data-brand="cdr"][data-theme="light"] input[type="checkbox"],
+[data-brand="cdr"][data-theme="light"] .radioinput,
+[data-brand="cdr"][data-theme="light"] .input_checkbox,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container form fieldset .box_inputs_container .radioinput,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_form .batch_files_search_options_container input {
+  accent-color: #1b6ca8 !important;
+}
+
+/* 5. Live & Upload Source Cards & Icon Fills */
+[data-brand="cdr"] .window .content_container .live_source_option .live_source_option_icon use,
+[data-brand="cdr"] .window .content_container .live_source_option_passive .live_source_option_icon use,
+[data-brand="cdr"] .window .content_container .upload_source_option .upload_source_option_icon use,
+[data-brand="cdr"][data-theme="light"] .window .content_container .live_source_option .live_source_option_icon use,
+[data-brand="cdr"][data-theme="light"] .window .content_container .live_source_option_passive .live_source_option_icon use,
+[data-brand="cdr"][data-theme="light"] .window .content_container .upload_source_option .upload_source_option_icon use {
+  fill: #1b6ca8 !important;
+}
+
+[data-brand="cdr"] .window .content_container .live_source_option:hover .live_source_option_icon use,
+[data-brand="cdr"][data-theme="light"] .window .content_container .live_source_option:hover .live_source_option_icon use {
+  fill: #0f3b5e !important;
+}
+
+[data-brand="cdr"] .window .content_container .live_source_option,
+[data-brand="cdr"][data-theme="light"] .window .content_container .live_source_option {
+  border: 1px solid rgba(175, 208, 233, 0.9) !important;
+  border-radius: 4px;
+  box-shadow: 0 12px 24px rgba(27, 108, 168, 0.08) !important;
+}
+
+[data-brand="cdr"] .window .content_container .live_source_option:hover,
+[data-brand="cdr"][data-theme="light"] .window .content_container .live_source_option:hover {
+  border-color: rgba(27, 108, 168, 0.72) !important;
+  background: linear-gradient(180deg, #ffffff, rgba(235, 246, 255, 0.96)) !important;
+  box-shadow: 0 16px 28px rgba(27, 108, 168, 0.16) !important;
+}
+
+[data-brand="cdr"] .window .content_container .upload_source_option,
+[data-brand="cdr"][data-theme="light"] .window .content_container .upload_source_option {
+  border: 1px dashed rgba(27, 108, 168, 0.6) !important;
+  background: linear-gradient(180deg, #ffffff, rgba(240, 248, 255, 0.96)) !important;
+}
+
+[data-brand="cdr"] .window .content_container .upload_source_option:hover,
+[data-brand="cdr"][data-theme="light"] .window .content_container .upload_source_option:hover {
+  border-color: rgba(27, 108, 168, 0.92) !important;
+  background: linear-gradient(180deg, #ffffff, rgba(230, 243, 255, 0.98)) !important;
+}
+
+[data-brand="cdr"] .window .content_container .live_source_option .live_source_option_icon,
+[data-brand="cdr"] .window .content_container .live_source_option_passive .live_source_option_icon,
+[data-brand="cdr"] .window .content_container .upload_source_option .upload_source_option_icon,
+[data-brand="cdr"][data-theme="light"] .window .content_container .live_source_option .live_source_option_icon,
+[data-brand="cdr"][data-theme="light"] .window .content_container .live_source_option_passive .live_source_option_icon,
+[data-brand="cdr"][data-theme="light"] .window .content_container .upload_source_option .upload_source_option_icon {
+  background: linear-gradient(180deg, #ffffff, rgba(230, 243, 255, 0.95)) !important;
+  box-shadow: inset 0 0 0 1px rgba(175, 208, 233, 0.92) !important;
+}
+
+/* 6. Window Sidebar Icons */
+[data-brand="cdr"] .window .side_bar .side_bar_menu i,
+[data-brand="cdr"] .window .side_bar .side_bar_menu svg,
+[data-brand="cdr"] .window .side_bar .side_bar_menu .side_bar_icon,
+[data-brand="cdr"] .window .side_bar .side_bar_menu .side_bar_icon_active,
+[data-brand="cdr"][data-theme="light"] .window .side_bar .side_bar_menu i,
+[data-brand="cdr"][data-theme="light"] .window .side_bar .side_bar_menu svg,
+[data-brand="cdr"][data-theme="light"] .window .side_bar .side_bar_menu .side_bar_icon,
+[data-brand="cdr"][data-theme="light"] .window .side_bar .side_bar_menu .side_bar_icon_active {
+  fill: #1b6ca8 !important;
+  color: #1b6ca8 !important;
+}
+
+[data-brand="cdr"] .window .side_bar .side_bar_btn_options ul li:hover,
+[data-brand="cdr"] .window .side_bar .side_bar_btn_options ul li .window_side_bar_menu_list_II li:hover,
+[data-brand="cdr"][data-theme="light"] .window .side_bar .side_bar_btn_options ul li:hover,
+[data-brand="cdr"][data-theme="light"] .window .side_bar .side_bar_btn_options ul li .window_side_bar_menu_list_II li:hover {
+  background: rgba(224, 240, 253, 0.82) !important;
+  color: #0f3b5e !important;
+}
+
+/* 7. Window Tabs & Toggle Dots */
+[data-brand="cdr"] .window_parent_tabs .window_parent_bar .window_parent_bar_toggle_menu .toggle_menu_btn span i a,
+[data-brand="cdr"][data-theme="light"] .window_parent_tabs .window_parent_bar .window_parent_bar_toggle_menu .toggle_menu_btn span i a {
+  background: #1b6ca8 !important;
+}
+
+[data-brand="cdr"] .window_parent_tabs .window_parent_tabs_container .tab_title .tab_title_close_btn:hover,
+[data-brand="cdr"][data-theme="light"] .window_parent_tabs .window_parent_tabs_container .tab_title .tab_title_close_btn:hover {
+  background: #1b6ca8 !important;
+}
+
+[data-brand="cdr"] .window_parent_tabs .window_parent_tabs_container .tab_title.active,
+[data-brand="cdr"][data-theme="light"] .window_parent_tabs .window_parent_tabs_container .tab_title.active {
+  color: #0f3b5e !important;
+  border-bottom-color: #bee0f7 !important;
+}
+
+/* 8. Configurations Container Tabs & Action Buttons */
+[data-brand="cdr"] #configurations_container .configurations_options_container .configurations_options .configurations_tabs button.active,
+[data-brand="cdr"][data-theme="light"] #configurations_container .configurations_options_container .configurations_options .configurations_tabs button.active {
+  background: linear-gradient(90deg, #4aafe6, #1b6ca8) !important;
+  border-color: rgba(27, 108, 168, 0.95) !important;
+  color: #ffffff !important;
+  box-shadow: 0 8px 18px rgba(27, 108, 168, 0.28) !important;
+}
+
+[data-brand="cdr"] #configurations_container .configurations_options_container .configurations_options .configurations_tabs button:hover,
+[data-brand="cdr"][data-theme="light"] #configurations_container .configurations_options_container .configurations_options .configurations_tabs button:hover {
+  background: rgba(230, 243, 255, 0.98) !important;
+  border-color: rgba(27, 108, 168, 0.58) !important;
+  color: #0f3b5e !important;
+}
+
+[data-brand="cdr"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .action_btns,
+[data-brand="cdr"] #configurations_container .configurations_options_container .configurations_options .configurations_actions_bar .action_btns,
+[data-brand="cdr"][data-theme="light"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .action_btns,
+[data-brand="cdr"][data-theme="light"] #configurations_container .configurations_options_container .configurations_options .configurations_actions_bar .action_btns {
+  background: linear-gradient(90deg, #4aafe6, #1b6ca8) !important;
+  border-color: rgba(27, 108, 168, 0.74) !important;
+  color: #ffffff !important;
+  box-shadow: 0 8px 18px rgba(27, 108, 168, 0.22) !important;
+}
+
+[data-brand="cdr"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .action_btns:hover,
+[data-brand="cdr"] #configurations_container .configurations_options_container .configurations_options .configurations_actions_bar .action_btns:hover,
+[data-brand="cdr"][data-theme="light"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .action_btns:hover,
+[data-brand="cdr"][data-theme="light"] #configurations_container .configurations_options_container .configurations_options .configurations_actions_bar .action_btns:hover {
+  background: linear-gradient(90deg, #5bbef2, #237cb8) !important;
+  border-color: rgba(27, 108, 168, 0.92) !important;
+}
+
+[data-brand="cdr"] #configurations_container .smart_vigilance_findings_btn,
+[data-brand="cdr"][data-theme="light"] #configurations_container .smart_vigilance_findings_btn {
+  background: linear-gradient(90deg, #4aafe6, #1b6ca8) !important;
+  border-color: rgba(27, 108, 168, 0.95) !important;
+  color: #ffffff !important;
+  box-shadow: 0 8px 18px rgba(27, 108, 168, 0.28) !important;
+}
+
+[data-brand="cdr"] #configurations_container .smart_vigilance_findings_btn:hover,
+[data-brand="cdr"][data-theme="light"] #configurations_container .smart_vigilance_findings_btn:hover {
+  background: linear-gradient(90deg, #5bbef2, #237cb8) !important;
+  box-shadow: 0 10px 20px rgba(27, 108, 168, 0.35) !important;
+}
+
+/* 9. Home Menu Overlay Upload Card & Quick Action Icons */
+[data-brand="cdr"] .dark_home_menu_overlay__upload_icon,
+[data-brand="cdr"][data-theme="light"] .dark_home_menu_overlay__upload_icon {
+  color: #1b6ca8 !important;
+  filter: drop-shadow(0 14px 24px rgba(27, 108, 168, 0.22)) !important;
+}
+
+[data-brand="cdr"] .dark_home_menu_overlay__upload_button,
+[data-brand="cdr"][data-theme="light"] .dark_home_menu_overlay__upload_button {
+  background-image: linear-gradient(250deg, #0f3b5e 0%, #1b6ca8 100%) !important;
+  border-color: rgba(27, 108, 168, 0.72) !important;
+}
+
+[data-brand="cdr"] .dark_home_menu_overlay__upload_button:hover:not(:disabled),
+[data-brand="cdr"][data-theme="light"] .dark_home_menu_overlay__upload_button:hover:not(:disabled) {
+  background-image: linear-gradient(250deg, #154c78 0%, #2982c5 100%) !important;
+  box-shadow: 0 10px 24px rgba(27, 108, 168, 0.25) !important;
+}
+
+[data-brand="cdr"] .dark_home_menu_overlay__quick_icon,
+[data-brand="cdr"][data-theme="light"] .dark_home_menu_overlay__quick_icon {
+  color: #1b6ca8 !important;
+}
+
+[data-brand="cdr"] .dark_home_menu_overlay__quick_action:hover,
+[data-brand="cdr"][data-theme="light"] .dark_home_menu_overlay__quick_action:hover {
+  background: rgba(27, 108, 168, 0.08) !important;
+  border-color: rgba(27, 108, 168, 0.35) !important;
+}
+
+/* 10. Report Tab Buttons */
+[data-brand="cdr"] .report_tab_btn.active,
+[data-brand="cdr"][data-theme="light"] .report_tab_btn.active {
+  background: linear-gradient(90deg, #4aafe6, #1b6ca8) !important;
+  border-color: rgba(27, 108, 168, 0.95) !important;
+  color: #ffffff !important;
+  box-shadow: 0 8px 18px rgba(27, 108, 168, 0.24) !important;
+}
+
+[data-brand="cdr"] .report_tab_btn:hover,
+[data-brand="cdr"][data-theme="light"] .report_tab_btn:hover {
+  background-color: rgba(230, 243, 255, 0.98) !important;
+  border-color: rgba(27, 108, 168, 0.58) !important;
+  color: #0f3b5e !important;
+}
+
+/* 11. Cleanup Audit Action Buttons */
+[data-brand="cdr"] .cleanup_audit_actions button,
+[data-brand="cdr"][data-theme="light"] .cleanup_audit_actions button {
+  background: linear-gradient(90deg, #4aafe6, #1b6ca8) !important;
+  border-color: rgba(27, 108, 168, 0.64) !important;
+  color: #ffffff !important;
+  box-shadow: 0 8px 18px rgba(27, 108, 168, 0.18) !important;
+}
+
+[data-brand="cdr"] .cleanup_audit_actions button:hover:not(:disabled),
+[data-brand="cdr"][data-theme="light"] .cleanup_audit_actions button:hover:not(:disabled) {
+  background: linear-gradient(180deg, #3895d8, #2077b8) !important;
+  border-color: rgba(27, 108, 168, 0.84) !important;
+}
+
 
 ::-webkit-scrollbar {
   width: 0.8vw;
@@ -204,18 +568,14 @@ body{
 	background-color: var(--workspace-scene-bg);
 }
 #main.linkx_workspace_scene--light {
-	background:
-		linear-gradient(135deg, rgba(255, 255, 255, 0.94), rgba(247, 241, 232, 0.86)),
-		radial-gradient(circle at 18% 16%, rgba(174, 121, 79, 0.18), transparent 30%),
-		radial-gradient(circle at 82% 76%, rgba(212, 176, 114, 0.20), transparent 34%),
-		var(--workspace-scene-bg);
+	background: var(--workspace-light-bg);
 }
 .linkx_workspace_scene_light_plane {
 	position: absolute;
 	inset: 0;
 	z-index: 0;
 	pointer-events: none;
-	background:linear-gradient(90deg, rgb(248 248 250), #fcfcfb 22%, transparent 78%, rgba(174, 121, 79, .08)), linear-gradient(180deg, #ffffffc7, #f6eee499);
+	background: var(--workspace-light-plane);
 }
 .linkx_workspace_scene_video {
 	display: block;
@@ -417,7 +777,7 @@ body{
   float: left;
   width: 3vw;
   height: 100%;
-  background-color: #19212e;
+  background-color: var(--sidebar-bg);
   backdrop-filter: blur(20px);
   box-shadow: 0 0 8px rgba(0, 0, 0, 0.5);
   z-index: 200;
@@ -436,7 +796,7 @@ body{
   position: relative;
   width: 9vw;
   height: 2.25vw;
-  background-image: linear-gradient(90deg, #ae794f, #7f4f23);
+  background-image: var(--logo-gradient);
   margin: auto;
   left: 1.5vw;
   right: 0;
@@ -453,7 +813,7 @@ body{
   float: left;
   width: 2.25vw;
   height: 2.25vw;
-  background-color: #925e35;
+  background-color: var(--logo-circle-bg);
   text-align: center;
   font-size: 2.7vw;
   left: -0.9vw;
@@ -468,7 +828,7 @@ body{
   box-shadow:
     inset 0 0 8px rgba(120, 170, 220, 0.5),
     0 0 16px rgba(80, 130, 180, 0.45);
-    background-color: #314961;
+    background-color: var(--chrome-bg);
 }
 #toggle_menu #toggle_main_list .animated_logo span:active {
   opacity: 0.6;
@@ -497,7 +857,7 @@ body{
   width: 50%;
   height: 0;
   padding-bottom: 50%;
-  background-color: #142e47;
+  background-color: var(--chrome-bg-dark);
   border-radius: 50%;
 }
 
@@ -642,7 +1002,7 @@ body{
   background-position: center;
   border-radius: 0.3vh;
   box-shadow: 0 0 20px rgba(20,46,71,0.5);
-  border: 0.1vh solid #314961;
+  border: 0.1vh solid var(--chrome-bg);
   text-align: left;
   align-items: center;
   justify-content: center;
@@ -656,7 +1016,7 @@ body{
   font-size: calc(0.4vh + 0.4vw);
   margin: auto;
   text-align: left;
-  color: #314961;  
+  color: var(--chrome-bg);  
 }
 #windows_taskbar_container .windows_taskbar_lists span b{
   position: absolute;
@@ -667,7 +1027,7 @@ body{
   text-align: center;
   overflow: hidden;  
   right: 0;
-  color: #314961;  
+  color: var(--chrome-bg);  
   opacity: 0.6;
 }
 #windows_taskbar_container .windows_taskbar_lists span:hover{
@@ -706,7 +1066,7 @@ body{
   overflow: hidden;
   text-align: left;
   font-size: calc(0.4vh + 0.5vw);
-  color: #142e47;
+  color: var(--chrome-bg-dark);
   user-select: none;
 }
 #configurations_container .configurations_options_container *{
@@ -719,7 +1079,7 @@ body{
   min-height: 40px;
   padding: 0.5vh 0.8vw;
   width: 100%;
-  background-image: linear-gradient(90deg,#314961,#2e465d);
+  background-image: linear-gradient(90deg, var(--chrome-bg), var(--chrome-bg-alt));
   border-bottom: 1px solid #ecf4f6;
   color: #FFF;
   z-index: 2;
@@ -798,8 +1158,8 @@ body{
   border-color: #8fb5d1;
 }
 #configurations_container .configurations_options_container .configurations_options .configurations_tabs button.active{
-  background-color: #314961;
-  border-color: #314961;
+  background-color: var(--chrome-bg);
+  border-color: var(--chrome-bg);
   color: #FFF;
 }
 #configurations_container .configurations_options_container .configurations_options .configurations_tabs button:focus,
@@ -873,7 +1233,7 @@ body{
   margin: 0.2vh 0.35vw 0.6vh 0;
   border-radius: 3px;
   font-size: calc(0.4vh + 0.5vw);
-  color: #142e47;
+  color: var(--chrome-bg-dark);
   padding: 0.2vh 0.45vw;
 }
 #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset select:focus{
@@ -906,7 +1266,7 @@ body{
   margin: 0.25vh 0 0;
   border-radius: 3px;
   font-size: calc(0.4vh + 0.5vw);
-  color: #142e47;
+  color: var(--chrome-bg-dark);
   padding: 0.2vh 0.45vw;
   min-height: 0;
 }
@@ -922,7 +1282,7 @@ body{
   margin: 0.2vh 0.35vw 0.6vh 0;
   border-radius: 3px;
   font-size: calc(0.4vh + 0.5vw);
-  color: #142e47;
+  color: var(--chrome-bg-dark);
   padding: 0.2vh 0.45vw;
   min-height: 0;
 }
@@ -938,7 +1298,7 @@ body{
   height: 8vh;
   margin: 0.2vh 0 0.7vh;
   background-color: #f8fcff;
-  color: #142e47;
+  color: var(--chrome-bg-dark);
   font-family: inherit;
   font-size: calc(0.4vh + 0.5vw);
   border: 1px solid #c2d8eb;
@@ -1279,8 +1639,8 @@ body{
 }
 #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .action_btns:hover,
 #configurations_container .configurations_options_container .configurations_options .configurations_actions_bar .action_btns:hover{
-  background-color: #314961;
-  border-color: #314961;
+  background-color: var(--chrome-bg);
+  border-color: var(--chrome-bg);
   text-decoration: none;
 }
 #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .action_btns:active,
@@ -1350,7 +1710,7 @@ body{
   color: #FFF;
 }
 #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset input[type="file"]::-webkit-file-upload-button:hover{
-  background-color: #314961;
+  background-color: var(--chrome-bg);
 }
 #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset input[type="file"]::-webkit-file-upload-button:active{
   background-color: #22384f;
@@ -1366,7 +1726,7 @@ body{
   text-decoration: underline;
 }
 #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset a:active{
-  color: #142e47;
+  color: var(--chrome-bg-dark);
 }
 @media (max-width: 1100px){
   #configurations_container .configurations_options_container .configurations_options{
@@ -1553,12 +1913,12 @@ body{
   overflow: hidden;
   user-select: none;
   text-align: left;
-  color: #142e47;
+  color: var(--chrome-bg-dark);
   transition: all 0.3s ease;
 }
 
 #toggle_menu #toggle_side_list .toggle_side_list_container .toogle_side_list_items ul .toogle_side_list_menu_container li:hover {
-  background-image: linear-gradient(90deg,#314961,#2e465d);
+  background-image: linear-gradient(90deg, var(--chrome-bg), var(--chrome-bg-alt));
   color: #FFF;
 }
 
@@ -1614,12 +1974,12 @@ body{
   overflow: hidden;
   user-select: none;
   text-align: left;
-  color: #142e47;
+  color: var(--chrome-bg-dark);
   transition: all 0.3s ease;
 }
 
 #toggle_menu #toggle_side_list .toggle_side_list_container .toogle_side_list_items ul .toogle_side_list_options_container li:hover {
-  background-image: linear-gradient(90deg,#314961,#2e465d);
+  background-image: linear-gradient(90deg, var(--chrome-bg), var(--chrome-bg-alt));
   color: #FFF;
 }
 
@@ -1935,10 +2295,10 @@ body{
 }
 .window.focused .window_bar{
  	opacity: 1;
-  background-image: linear-gradient(90deg,#314961,#2e465d);
+  background-image: linear-gradient(90deg, var(--chrome-bg), var(--chrome-bg-alt));
 }
 .window.focused .side_bar{
-  background-image: linear-gradient(#142e47,#142e47);
+  background-image: linear-gradient(var(--chrome-bg-dark), var(--chrome-bg-dark));
 }
 .window.focused .window_bar .window_bar_btns_container span {
   background-color: #344c66;
@@ -1960,7 +2320,7 @@ body{
   color: #FFF;
 }
 .window.focused .window_bar .window_bar_btns_container span:active {
-  background-color: #142e47;
+  background-color: var(--chrome-bg-dark);
 }
 .window.focused .side_bar .side_bar_menu {
   display: block;
@@ -2025,7 +2385,7 @@ body{
   fill: #FFF;
 }
 .window.focused .side_bar .side_bar_menu .sbicon:active {
-  background-color: #142e47;
+  background-color: var(--chrome-bg-dark);
 }
 
 /* === Sidebar Dropdown === */
@@ -2216,7 +2576,7 @@ body{
   height: 4.3vh;
   padding: 0.5vh 1vw;
   border-bottom: 1px solid #ecf4f6;
-  background-color: #142e47;
+  background-color: var(--chrome-bg-dark);
   background-image: linear-gradient(90deg,#ecf4f6,#ecf4f6);
   z-index: 99;
   border-radius: 3px 0 0 0;
@@ -2499,7 +2859,7 @@ body{
 	top:6.5vh;
 	left: 0.1vw;
 	border: none;
-	color: #142e47;
+	color: var(--chrome-bg-dark);
 	border: 0.1vw solid #ecf4f6;
 }
 .window .content_container:empty:before{
@@ -2557,7 +2917,7 @@ body{
 
 }
 .window .content_container .live_source_option:hover .live_source_option_icon use{
-	fill: #142e47;
+	fill: var(--chrome-bg-dark);
 }
 .window .content_container .live_source_option:active{
 	filter: opacity(50%);
@@ -2571,7 +2931,7 @@ body{
 	background-color: #FFF;
 }
 .window .content_container .live_source_option .live_source_option_icon use{
-	fill: #142e47;
+	fill: var(--chrome-bg-dark);
 }
 .window .content_container .live_source_option .live_source_option_details{
 
@@ -2580,7 +2940,7 @@ body{
 	position: relative;
 	font-size: 1.7vh;
 	font-weight: bold;
-	color: #142e47;
+	color: var(--chrome-bg-dark);
 	width: 70%;
 	text-align: left;
 	float: left;
@@ -2615,7 +2975,7 @@ body{
 	opacity: 1;
 }
 .window .content_container .live_source_option_passive .live_source_option_icon use{
-	fill: #142e47;
+	fill: var(--chrome-bg-dark);
 }
 .window .content_container .live_source_option_passive .live_source_option_icon{
 	position: relative;
@@ -2632,7 +2992,7 @@ body{
 	position: relative;
 	font-size: 1.7vh;
 	font-weight: bold;
-	color: #142e47;
+	color: var(--chrome-bg-dark);
 	width: 70%;
 	text-align: left;
 	float: left;
@@ -2748,7 +3108,7 @@ body{
 	background-color: #FFF;
 }
 .window .content_container .upload_source_option .upload_source_option_icon use{
-	fill: #142e47;
+	fill: var(--chrome-bg-dark);
 }
 .window .content_container .upload_source_option .upload_source_option_details{
 	position: relative;
@@ -3146,7 +3506,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 	padding: 0 0.5vw;
 	margin: 0 0;
 	line-height: 3vh;
-	color: #142e47;
+	color: var(--chrome-bg-dark);
 }
 .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_form .batch_files_search_options_containerI label:not(:last-child){
 	border-left: 0.05vw solid #ddd;
@@ -3246,7 +3606,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 }
 .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_result_container ul .batch_files_search_results_load_more:hover{
   background-image: linear-gradient(rgba(252, 254, 253, 1),rgba(252, 254, 253, 1));
-  color: #142e47;
+  color: var(--chrome-bg-dark);
 }
 .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_result_container ul .batch_files_search_results_load_more:active{
   background-image: linear-gradient(rgba(0, 0, 0, 0.1),rgba(0, 0, 0, 0.1));
@@ -3947,7 +4307,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 	height: 100%;
 }
 .window .content_container .iframe_graph .iframe_options_layer i:hover{
-	fill: #142e47;
+	fill: var(--chrome-bg-dark);
 }
 .window .content_container .iframe_graph .iframe_options_layer i:active{
 	opacity: 0.3;
@@ -4004,7 +4364,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 	display: flex;
 	width: 100%;
 	overflow: visible;
-	color: #142e47;
+	color: var(--chrome-bg-dark);
 	padding: 1% 0% 0% 0%;
 	height: 4vh;
 	text-align: center;
@@ -4016,7 +4376,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 }
 .window .properties_container .reference_container .top_panel .ppt_tabs_container input[type="radio"]:checked + label {
 	background-color: #FFF;
-	color: #142e47;
+	color: var(--chrome-bg-dark);
 	border-bottom: 1px solid #FFF;	
 	border-left: none;
 }
@@ -4754,8 +5114,8 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 	right: 0;
 	bottom: 0;
 	width: 20%;
-	background-color: #142e47;
-	border: 1px solid #314961;
+	background-color: var(--chrome-bg-dark);
+	border: 1px solid var(--chrome-bg);
 	height: 1.2vh;
 	border-radius: 3px;
 	cursor: default;
@@ -4766,9 +5126,9 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   font-size: calc(0.4vh + 0.5vw);
 }
 .window .properties_container .reference_container .panel_separator span:hover{
-	background-color: #314961;
+	background-color: var(--chrome-bg);
   color: #FFF;
-	border: 1px solid #314961;
+	border: 1px solid var(--chrome-bg);
 }
 .window .properties_container .reference_container .panel_separator span:active{
 	background-color: #EEE;
@@ -4910,7 +5270,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   flex-direction: row;  
   height: 4vh;
   padding: 0vh 1vw;
-  background-image:linear-gradient(90deg,#142e47,#314961,#142e47);
+  background-image:linear-gradient(90deg,var(--chrome-bg-dark),var(--chrome-bg),var(--chrome-bg-dark));
   border-bottom: none;
   color: #EEE;
   font-size: 1.5vh;
@@ -4945,7 +5305,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   float: left;
   width: 3.5vh;
   height: 3.5vh;
-  background-color: #142e47;
+  background-color: var(--chrome-bg-dark);
   text-align: center;
   font-size: 2.7vw;
   left: -0.6vw;
@@ -4960,7 +5320,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   box-shadow:
     inset 0 0 8px rgba(120, 170, 220, 0.5),
     0 0 16px rgba(80, 130, 180, 0.45);
-    background-color: #314961;
+    background-color: var(--chrome-bg);
 }
 .window_parent_tabs .window_parent_bar .window_parent_bar_toggle_menu .toggle_menu_btn span:active {
   opacity: 0.6;
@@ -4989,7 +5349,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   width: 50%;
   height: 0;
   padding-bottom: 50%;
-  background-color: #142e47;
+  background-color: var(--chrome-bg-dark);
   border-radius: 50%;
 }
 
@@ -5037,7 +5397,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   min-width: 5vw;
   height: 3.5vh;
   background-image: linear-gradient(25deg,#ecf4f6,#ecf4f6);
-  color: #142e47;
+  color: var(--chrome-bg-dark);
   padding: 0 1vw;
   border-bottom: 0.1vh solid #EEE;
   border-right: 0.1vh solid #EEE;
@@ -5053,7 +5413,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   right: 0.5vw;
   top: 28%;
   border: 0;
-  background-color: #142e47;
+  background-color: var(--chrome-bg-dark);
   outline: 0.1vh solid #dfeff5;
   font-size: calc(0.4vh + 0.4vw);  
   width: 0.9vw;
@@ -5260,7 +5620,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 .linkx_notice {
   pointer-events: auto;
   border: 0.1vh solid rgba(152, 179, 186, 0.55);
-  border-left: 0.35vw solid #314961;
+  border-left: 0.35vw solid var(--chrome-bg);
   border-radius: 0.35vh;
   background: rgba(252, 254, 253, 0.92);
   backdrop-filter: blur(2px);
@@ -5277,7 +5637,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   border-left-color: #b91c1c;
 }
 .linkx_notice.linkx_notice_info {
-  border-left-color: #314961;
+  border-left-color: var(--chrome-bg);
 }
 .linkx_notice_head {
   display: flex;
@@ -6707,7 +7067,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 	display: grid;
 	grid-template-rows: minmax(0, 1fr) auto;
 	padding: 20px 24px 14px;
-	background-color: #041327;
+	background-color: var(--login-shell-bg);
 	color: #eef7f9;
 }
 .linkx_login_content {
@@ -6739,7 +7099,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 .linkx_login_overlay {
 	position: absolute;
 	inset: 0;
-	background: linear-gradient(#050b11, #081019cc, #0a1622);
+	background: var(--login-overlay);
 	z-index: 1;
 	pointer-events: none;
 }
@@ -6913,7 +7273,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 	margin-right: 6px;
 }
 .profile_grid b {
-	color: #142e47;
+	color: var(--chrome-bg-dark);
 	font-size: 12px;
 	font-weight: 550;
 	word-break: break-word;
@@ -7015,7 +7375,7 @@ button.settings_textinput:active {
 }
 .service_account_card_header b {
 	display: block;
-	color: #142e47;
+	color: var(--chrome-bg-dark);
 }
 .service_account_card_header span {
 	display: inline-block;
@@ -8397,7 +8757,7 @@ button.settings_textinput:active {
   overflow: visible !important;
 }
 .window_parent_tabs .window_parent_bar .window_parent_bar_toggle_menu .toggle_menu_btn span {
-  background: #142e47 !important;
+  background: var(--chrome-bg-dark) !important;
   border: 1px solid rgba(221, 242, 250, 0.6) !important;
   box-shadow: 0 2px 10px rgba(7, 19, 30, 0.25) !important;
   opacity: 1 !important;
@@ -8406,7 +8766,7 @@ button.settings_textinput:active {
   background: #eef7fa !important;
 }
 .window_parent_tabs .window_parent_bar .window_parent_bar_toggle_menu .toggle_menu_btn span i a {
-  background: #142e47 !important;
+  background: var(--chrome-bg-dark) !important;
 }
 .window_parent_tabs .window_parent_bar .window_parent_bar_toggle_menu .toggle_menu_btn label {
   display: inline-block !important;
@@ -8753,7 +9113,7 @@ button.settings_textinput:active {
 }
 
 [data-theme="light"] .window_parent_tabs .window_parent_bar .window_parent_bar_toggle_menu .toggle_menu_btn span {
-  background-color: #925e35 !important;
+  background-color: var(--logo-circle-bg) !important;
   width: 2.25vw !important;
   height: 2.25vw !important;
   border-radius: 50% !important;
@@ -8765,7 +9125,7 @@ button.settings_textinput:active {
 }
 
 [data-theme="light"] .window_parent_tabs .window_parent_bar .window_parent_bar_toggle_menu .toggle_menu_btn span:hover {
-  background-color: #314961 !important;
+  background-color: var(--chrome-bg) !important;
   box-shadow: inset 0 0 8px rgba(120, 170, 220, 0.5), 0 0 16px rgba(80, 130, 180, 0.45) !important;
 }
 
@@ -8781,14 +9141,14 @@ button.settings_textinput:active {
   width: 50% !important;
   height: 0 !important;
   padding-bottom: 50% !important;
-  background-color: #142e47 !important;
+  background-color: var(--chrome-bg-dark) !important;
   border-radius: 50% !important;
 }
 [data-theme="dark"] .reports_table_row:hover { background-color: rgba(255, 255, 255, 0.05); }[data-theme="light"] .reports_table_row:hover { background-color: rgba(0, 0, 0, 0.04); }.reports_table_row { transition: background-color 0.15s ease; }
 [data-theme="dark"] .reports_table_row:hover { background-color: rgba(255, 255, 255, 0.05); }
 [data-theme="light"] .reports_table_row:hover { background-color: rgba(0, 0, 0, 0.04); }
 .reports_table_row { transition: background-color 0.15s ease; }
-/* Report Tab Buttons */.report_tab_btn {  display: inline-flex;  align-items: center;  justify-content: center;  min-width: 110px;  height: 3.2vh;  min-height: 32px;  padding: 0 0.8vw;  border: 1px solid #a9c3d8;  border-radius: 4px;  background-color: #e8f2f8;  color: #1f3f5c;  font-size: calc(0.42vh + 0.5vw);  font-weight: 600;  cursor: pointer;  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;}.report_tab_btn:hover {  background-color: #d6e9f5;  border-color: #8fb5d1;}.report_tab_btn.active {  background-color: #314961;  border-color: #314961;  color: #FFF;}[data-theme="dark"] .report_tab_btn {  background-color: #142432 !important;  color: #b9c8d4 !important;  border-color: #2a3d4d !important;}[data-theme="dark"] .report_tab_btn:hover {  background-color: #1b3041 !important;  border-color: #334c60 !important;}[data-theme="dark"] .report_tab_btn.active {  background-color: #223a4e !important;  border-color: #355168 !important;  color: #dce7f0 !important;}[data-theme="light"] .report_tab_btn {  border: 1px solid rgba(195, 167, 138, 0.72) !important;  background: rgba(255, 251, 247, 0.96) !important;  color: #735239 !important;  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);}[data-theme="light"] .report_tab_btn:hover {  background: rgba(248, 238, 227, 0.98) !important;  border-color: rgba(174, 121, 79, 0.58) !important;  color: #63432b !important;}[data-theme="light"] .report_tab_btn.active {  background: linear-gradient(90deg, #ac854d, #825825) !important;  border-color: rgba(145, 97, 60, 0.95) !important;  color: #fffaf6 !important;  box-shadow: 0 8px 18px rgba(174, 121, 79, 0.24);}
+/* Report Tab Buttons */.report_tab_btn {  display: inline-flex;  align-items: center;  justify-content: center;  min-width: 110px;  height: 3.2vh;  min-height: 32px;  padding: 0 0.8vw;  border: 1px solid #a9c3d8;  border-radius: 4px;  background-color: #e8f2f8;  color: #1f3f5c;  font-size: calc(0.42vh + 0.5vw);  font-weight: 600;  cursor: pointer;  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;}.report_tab_btn:hover {  background-color: #d6e9f5;  border-color: #8fb5d1;}.report_tab_btn.active {  background-color: var(--chrome-bg);  border-color: var(--chrome-bg);  color: #FFF;}[data-theme="dark"] .report_tab_btn {  background-color: #142432 !important;  color: #b9c8d4 !important;  border-color: #2a3d4d !important;}[data-theme="dark"] .report_tab_btn:hover {  background-color: #1b3041 !important;  border-color: #334c60 !important;}[data-theme="dark"] .report_tab_btn.active {  background-color: #223a4e !important;  border-color: #355168 !important;  color: #dce7f0 !important;}[data-theme="light"] .report_tab_btn {  border: 1px solid rgba(195, 167, 138, 0.72) !important;  background: rgba(255, 251, 247, 0.96) !important;  color: #735239 !important;  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);}[data-theme="light"] .report_tab_btn:hover {  background: rgba(248, 238, 227, 0.98) !important;  border-color: rgba(174, 121, 79, 0.58) !important;  color: #63432b !important;}[data-theme="light"] .report_tab_btn.active {  background: linear-gradient(90deg, #ac854d, #825825) !important;  border-color: rgba(145, 97, 60, 0.95) !important;  color: #fffaf6 !important;  box-shadow: 0 8px 18px rgba(174, 121, 79, 0.24);}
 
 
 /* JSON Syntax Highlighting */
@@ -8890,8 +9250,8 @@ button.settings_textinput:active {
   float: none;
 }
 .cleanup_audit_actions button:hover:not(:disabled) {
-  background-color: #314961;
-  border-color: #314961;
+  background-color: var(--chrome-bg);
+  border-color: var(--chrome-bg);
 }
 .cleanup_audit_actions button:disabled {
   opacity: 0.4;
@@ -8939,8 +9299,8 @@ button.settings_textinput:active {
 
 /* Smart Vigilance Findings Button matching the active tab gradient */
 #configurations_container .smart_vigilance_findings_btn {
-  background-color: #314961;
-  border: 1px solid #314961;
+  background-color: var(--chrome-bg);
+  border: 1px solid var(--chrome-bg);
   color: #FFF;
   padding: 6px 14px;
   border-radius: 4px;
@@ -8999,4 +9359,1275 @@ button.settings_textinput:active {
   background: rgba(170, 67, 67, 0.94);
 }
 
+/* ==========================================================================
+   CDR Brand Overrides: Inactive & Active Tabs, Report Buttons, Action Buttons
+   ========================================================================== */
 
+/* Top Window Tabs (Inactive, Hover, Active) */
+[data-brand="cdr"] .window_parent_tabs .window_parent_tabs_container .tab_title,
+[data-brand="cdr"][data-theme="light"] .window_parent_tabs .window_parent_tabs_container .tab_title {
+  background: #1e354d !important;
+  background-color: #1e354d !important;
+  color: #c8ddf0 !important;
+  border: 1px solid rgba(74, 175, 230, 0.28) !important;
+  border-bottom: 0 !important;
+  box-shadow: none !important;
+}
+
+[data-brand="cdr"] .window_parent_tabs .window_parent_tabs_container .tab_title:hover,
+[data-brand="cdr"][data-theme="light"] .window_parent_tabs .window_parent_tabs_container .tab_title:hover {
+  background: #274564 !important;
+  background-color: #274564 !important;
+  color: #ffffff !important;
+}
+
+[data-brand="cdr"] .window_parent_tabs .window_parent_tabs_container .tab_title.active,
+[data-brand="cdr"][data-theme="light"] .window_parent_tabs .window_parent_tabs_container .tab_title.active {
+  background: #ffffff !important;
+  background-color: #ffffff !important;
+  color: #0f3b5e !important;
+  border-bottom: 0 !important;
+  border-bottom-color: #ffffff !important;
+  font-weight: 600 !important;
+}
+
+[data-brand="cdr"][data-theme="dark"] .window_parent_tabs .window_parent_tabs_container .tab_title {
+  background-color: #122334 !important;
+  color: #9cbacf !important;
+  border: 1px solid rgba(74, 175, 230, 0.2) !important;
+}
+
+[data-brand="cdr"][data-theme="dark"] .window_parent_tabs .window_parent_tabs_container .tab_title:hover {
+  background-color: #1b334a !important;
+  color: #e0eef8 !important;
+}
+
+[data-brand="cdr"][data-theme="dark"] .window_parent_tabs .window_parent_tabs_container .tab_title.active {
+  background-color: #071322 !important;
+  color: #4aafe6 !important;
+}
+
+/* Configurations Tabs (Inactive, Hover, Active) */
+[data-brand="cdr"] #configurations_container .configurations_options_container .configurations_options .configurations_tabs button,
+[data-brand="cdr"][data-theme="light"] #configurations_container .configurations_options_container .configurations_options .configurations_tabs button {
+  background: rgba(240, 246, 252, 0.96) !important;
+  background-color: rgba(240, 246, 252, 0.96) !important;
+  border: 1px solid rgba(169, 195, 216, 0.8) !important;
+  color: #1a4267 !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8) !important;
+}
+
+[data-brand="cdr"] #configurations_container .configurations_options_container .configurations_options .configurations_tabs button:hover,
+[data-brand="cdr"][data-theme="light"] #configurations_container .configurations_options_container .configurations_options .configurations_tabs button:hover {
+  background: rgba(225, 239, 252, 0.98) !important;
+  background-color: rgba(225, 239, 252, 0.98) !important;
+  border-color: rgba(27, 108, 168, 0.58) !important;
+  color: #0f3b5e !important;
+}
+
+[data-brand="cdr"] #configurations_container .configurations_options_container .configurations_options .configurations_tabs button.active,
+[data-brand="cdr"][data-theme="light"] #configurations_container .configurations_options_container .configurations_options .configurations_tabs button.active {
+  background: linear-gradient(90deg, #1b6ca8, #4aafe6) !important;
+  border-color: #1b6ca8 !important;
+  color: #ffffff !important;
+  box-shadow: 0 8px 18px rgba(27, 108, 168, 0.28) !important;
+}
+
+/* Report Tab Buttons (Inactive, Hover, Active) */
+[data-brand="cdr"] .report_tab_btn,
+[data-brand="cdr"][data-theme="light"] .report_tab_btn {
+  background: rgba(240, 246, 252, 0.96) !important;
+  background-color: rgba(240, 246, 252, 0.96) !important;
+  border: 1px solid rgba(169, 195, 216, 0.8) !important;
+  color: #1a4267 !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8) !important;
+}
+
+[data-brand="cdr"] .report_tab_btn:hover,
+[data-brand="cdr"][data-theme="light"] .report_tab_btn:hover {
+  background: rgba(225, 239, 252, 0.98) !important;
+  background-color: rgba(225, 239, 252, 0.98) !important;
+  border-color: rgba(27, 108, 168, 0.58) !important;
+  color: #0f3b5e !important;
+}
+
+[data-brand="cdr"] .report_tab_btn.active,
+[data-brand="cdr"][data-theme="light"] .report_tab_btn.active {
+  background: linear-gradient(90deg, #1b6ca8, #4aafe6) !important;
+  border-color: #1b6ca8 !important;
+  color: #ffffff !important;
+  box-shadow: 0 8px 18px rgba(27, 108, 168, 0.28) !important;
+}
+
+/* Cleanup Audit Actions & Smart Vigilance Buttons */
+[data-brand="cdr"][data-theme="light"] .cleanup_audit_actions button,
+[data-brand="cdr"] .cleanup_audit_actions button {
+  border-color: rgba(27, 108, 168, 0.64) !important;
+  background: linear-gradient(90deg, #1b6ca8, #4aafe6) !important;
+  color: #ffffff !important;
+  box-shadow: 0 8px 18px rgba(27, 108, 168, 0.18) !important;
+}
+
+[data-brand="cdr"][data-theme="light"] .cleanup_audit_actions button:hover:not(:disabled),
+[data-brand="cdr"] .cleanup_audit_actions button:hover:not(:disabled) {
+  background: linear-gradient(180deg, #4aafe6, #1b6ca8) !important;
+  border-color: rgba(27, 108, 168, 0.84) !important;
+}
+
+[data-brand="cdr"][data-theme="light"] #configurations_container .smart_vigilance_findings_btn,
+[data-brand="cdr"] #configurations_container .smart_vigilance_findings_btn {
+  background: linear-gradient(90deg, #1b6ca8, #4aafe6) !important;
+  border-color: rgba(27, 108, 168, 0.95) !important;
+  color: #ffffff !important;
+  box-shadow: 0 8px 18px rgba(27, 108, 168, 0.24) !important;
+}
+/* ==========================================================================
+   CDR 2026 THEME OVERRIDES: Source Window, Sidebar, Properties & Toggle Panels
+   ========================================================================== */
+
+/* 1. Toggle Side List: Options Container & Toggle Buttons */
+[data-brand="cdr"] #toggle_menu #toggle_side_list .toggle_side_list_container .toogle_side_list_items ul .toogle_side_list_options_container,
+[data-brand="cdr"][data-theme="light"] #toggle_menu #toggle_side_list .toggle_side_list_container .toogle_side_list_items ul .toogle_side_list_options_container {
+  background-image: none !important;
+  background-color: #e4edf5 !important;
+  border-top: 1px solid rgba(74, 175, 230, 0.28) !important;
+}
+
+[data-brand="cdr"] #toggle_menu #toggle_side_list .toggle_side_list_container .toogle_side_list_items ul .toogle_side_list_options_container li,
+[data-brand="cdr"][data-theme="light"] #toggle_menu #toggle_side_list .toggle_side_list_container .toogle_side_list_items ul .toogle_side_list_options_container li {
+  color: #1a4267 !important;
+}
+
+[data-brand="cdr"] #toggle_menu #toggle_side_list .toggle_side_list_container .toogle_side_list_items ul .toogle_side_list_options_container li:hover,
+[data-brand="cdr"][data-theme="light"] #toggle_menu #toggle_side_list .toggle_side_list_container .toogle_side_list_items ul .toogle_side_list_options_container li:hover {
+  background-image: linear-gradient(90deg, #1b6ca8, #4aafe6) !important;
+  color: #ffffff !important;
+}
+
+[data-brand="cdr"] #toggle_menu #toggle_side_list .toggle_side_list_container .toogle_side_list_items ul .toogle_side_list_options_container li .toggle_btn_conatiner,
+[data-brand="cdr"][data-theme="light"] #toggle_menu #toggle_side_list .toggle_side_list_container .toogle_side_list_items ul .toogle_side_list_options_container li .toggle_btn_conatiner {
+  background-image: none !important;
+  background-color: #d8e6f3 !important;
+  border: 1px solid rgba(74, 175, 230, 0.35) !important;
+}
+
+[data-brand="cdr"] #toggle_menu #toggle_side_list .toggle_side_list_container .toogle_side_list_items ul .toogle_side_list_options_container li .toggle_btn_conatiner span,
+[data-brand="cdr"][data-theme="light"] #toggle_menu #toggle_side_list .toggle_side_list_container .toogle_side_list_items ul .toogle_side_list_options_container li .toggle_btn_conatiner span {
+  color: #1a4267 !important;
+}
+
+[data-brand="cdr"] #toggle_menu #toggle_side_list .toggle_side_list_container .toogle_side_list_items ul .toogle_side_list_options_container li .toggle_btn_conatiner span.active,
+[data-brand="cdr"][data-theme="light"] #toggle_menu #toggle_side_list .toggle_side_list_container .toogle_side_list_items ul .toogle_side_list_options_container li .toggle_btn_conatiner span.active {
+  background-image: linear-gradient(#1b6ca8, #0f4b75) !important;
+  color: #ffffff !important;
+  box-shadow: 0 0 4px rgba(27, 108, 168, 0.4) !important;
+}
+
+[data-brand="cdr"] #toggle_menu #toggle_side_list .toggle_side_list_container .toogle_side_list_items ul .toogle_side_list_options_container li .toggle_btn_conatiner span.active:hover,
+[data-brand="cdr"][data-theme="light"] #toggle_menu #toggle_side_list .toggle_side_list_container .toogle_side_list_items ul .toogle_side_list_options_container li .toggle_btn_conatiner span.active:hover {
+  background-image: linear-gradient(#4aafe6, #1b6ca8) !important;
+}
+
+/* 2. Window Sidebar, Options Menu (`side_bar_btn_options show`), and Submenus */
+[data-brand="cdr"] .window .side_bar,
+[data-brand="cdr"] .window.focused .side_bar,
+[data-brand="cdr"] .window.tab_mode .side_bar,
+[data-brand="cdr"][data-theme="light"] .window .side_bar,
+[data-brand="cdr"][data-theme="light"] .window.focused .side_bar,
+[data-brand="cdr"][data-theme="light"] .window.tab_mode .side_bar {
+  background: linear-gradient(180deg, #131e2a, #131e2a) !important;
+  background-color: #131e2a !important;
+  background-image: linear-gradient(180deg, #131e2a, #131e2a) !important;
+  border-right: 1px solid rgba(74, 175, 230, 0.2) !important;
+}
+
+[data-brand="cdr"] .window .side_bar .side_bar_btn_options,
+[data-brand="cdr"] .window .side_bar .side_bar_btn_options.show,
+[data-brand="cdr"] .window .side_bar .side_bar_btn_options ul,
+[data-brand="cdr"] .window .side_bar .side_bar_btn_options ul .window_side_bar_menu_list_I,
+[data-brand="cdr"] .window .side_bar .side_bar_btn_options ul .window_side_bar_menu_list_I form,
+[data-brand="cdr"][data-theme="light"] .window .side_bar .side_bar_btn_options,
+[data-brand="cdr"][data-theme="light"] .window .side_bar .side_bar_btn_options.show,
+[data-brand="cdr"][data-theme="light"] .window .side_bar .side_bar_btn_options ul,
+[data-brand="cdr"][data-theme="light"] .window .side_bar .side_bar_btn_options ul .window_side_bar_menu_list_I,
+[data-brand="cdr"][data-theme="light"] .window .side_bar .side_bar_btn_options ul .window_side_bar_menu_list_I form {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(240, 247, 254, 0.96)) !important;
+  border-color: rgba(74, 175, 230, 0.38) !important;
+  box-shadow: 0 8px 22px rgba(15, 59, 94, 0.14) !important;
+}
+
+[data-brand="cdr"] .window .side_bar .side_bar_btn_options ul li,
+[data-brand="cdr"] .window .side_bar .side_bar_btn_options ul li .window_side_bar_menu_list_II li,
+[data-brand="cdr"][data-theme="light"] .window .side_bar .side_bar_btn_options ul li,
+[data-brand="cdr"][data-theme="light"] .window .side_bar .side_bar_btn_options ul li .window_side_bar_menu_list_II li {
+  background: rgba(246, 251, 255, 0.94) !important;
+  color: #1a4267 !important;
+  border: 1px solid rgba(180, 215, 240, 0.8) !important;
+}
+
+[data-brand="cdr"] .window .side_bar .side_bar_btn_options ul li:hover,
+[data-brand="cdr"] .window .side_bar .side_bar_btn_options ul li .window_side_bar_menu_list_II li:hover,
+[data-brand="cdr"][data-theme="light"] .window .side_bar .side_bar_btn_options ul li:hover,
+[data-brand="cdr"][data-theme="light"] .window .side_bar .side_bar_btn_options ul li .window_side_bar_menu_list_II li:hover {
+  background: rgba(218, 236, 252, 0.95) !important;
+  color: #0f3b5e !important;
+}
+
+[data-brand="cdr"] .window .side_bar .side_bar_btn_options ul li .window_side_bar_menu_list_II,
+[data-brand="cdr"][data-theme="light"] .window .side_bar .side_bar_btn_options ul li .window_side_bar_menu_list_II {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(240, 247, 254, 0.96)) !important;
+  border: 1px solid rgba(74, 175, 230, 0.35) !important;
+  box-shadow: 0 8px 18px rgba(15, 59, 94, 0.12) !important;
+}
+
+[data-brand="cdr"] .window .side_bar .side_bar_btn_options ul .window_side_bar_menu_list_I form input[type="text"],
+[data-brand="cdr"][data-theme="light"] .window .side_bar .side_bar_btn_options ul .window_side_bar_menu_list_I form input[type="text"] {
+  background: #ffffff !important;
+  color: #0f3b5e !important;
+  border: 1px solid rgba(74, 175, 230, 0.4) !important;
+}
+
+[data-brand="cdr"] .window .side_bar .side_bar_btn_options ul .window_side_bar_menu_list_I form input[type="text"]:disabled,
+[data-brand="cdr"][data-theme="light"] .window .side_bar .side_bar_btn_options ul .window_side_bar_menu_list_I form input[type="text"]:disabled {
+  background: #eaf1f7 !important;
+  color: #7695ae !important;
+}
+
+/* 3. Window Footer */
+[data-brand="cdr"] .window .window_footer,
+[data-brand="cdr"] .window .window_footer .window_footer,
+[data-brand="cdr"][data-theme="light"] .window .window_footer,
+[data-brand="cdr"][data-theme="light"] .window .window_footer .window_footer {
+  background: linear-gradient(180deg, #ffffff, #edf5fd) !important;
+  border-top: 1px solid rgba(74, 175, 230, 0.3) !important;
+  border-bottom: 1px solid rgba(74, 175, 230, 0.3) !important;
+  color: #1a4267 !important;
+  box-shadow: 0 -6px 16px rgba(15, 59, 94, 0.06) !important;
+}
+
+/* 4. Window Bar & Header */
+[data-brand="cdr"] .window .window_bar,
+[data-brand="cdr"] .window.focused .window_bar,
+[data-brand="cdr"] .window.dragging .window_bar,
+[data-brand="cdr"] .window.tab_mode .window_bar,
+[data-brand="cdr"][data-theme="light"] .window .window_bar,
+[data-brand="cdr"][data-theme="light"] .window.focused .window_bar,
+[data-brand="cdr"][data-theme="light"] .window.dragging .window_bar,
+[data-brand="cdr"][data-theme="light"] .window.tab_mode .window_bar {
+  background: linear-gradient(180deg, #ffffff, #edf5fd) !important;
+  background-color: #ffffff !important;
+  border-bottom: 1px solid rgba(74, 175, 230, 0.3) !important;
+  box-shadow: 0 8px 18px rgba(15, 59, 94, 0.08) !important;
+  color: #0f3b5e !important;
+}
+
+[data-brand="cdr"] .window .window_bar .window_bar_title_container,
+[data-brand="cdr"] .window.focused .window_bar .window_bar_title_container,
+[data-brand="cdr"][data-theme="light"] .window .window_bar .window_bar_title_container,
+[data-brand="cdr"][data-theme="light"] .window.focused .window_bar .window_bar_title_container {
+  color: #0f3b5e !important;
+}
+
+[data-brand="cdr"] .window .window_bar .window_bar_title_container input,
+[data-brand="cdr"][data-theme="light"] .window .window_bar .window_bar_title_container input {
+  background: #ffffff !important;
+  color: #0f3b5e !important;
+  border: 1px solid rgba(74, 175, 230, 0.35) !important;
+}
+
+[data-brand="cdr"] .window .window_bar .window_bar_title_container input:focus,
+[data-brand="cdr"][data-theme="light"] .window .window_bar .window_bar_title_container input:focus {
+  outline: 1px solid rgba(27, 108, 168, 0.6) !important;
+  background: #ffffff !important;
+}
+
+[data-brand="cdr"] .window .window_bar .window_bar_btns_container span,
+[data-brand="cdr"] .window.focused .window_bar .window_bar_btns_container span,
+[data-brand="cdr"][data-theme="light"] .window .window_bar .window_bar_btns_container span,
+[data-brand="cdr"][data-theme="light"] .window.focused .window_bar .window_bar_btns_container span {
+  background: #edf5fd !important;
+  color: #1a4267 !important;
+  border: 1px solid rgba(74, 175, 230, 0.35) !important;
+}
+
+[data-brand="cdr"] .window .window_bar .window_bar_btns_container span:hover,
+[data-brand="cdr"] .window.focused .window_bar .window_bar_btns_container span:hover,
+[data-brand="cdr"][data-theme="light"] .window .window_bar .window_bar_btns_container span:hover,
+[data-brand="cdr"][data-theme="light"] .window.focused .window_bar .window_bar_btns_container span:hover {
+  background: #d8ecfc !important;
+  color: #0f3b5e !important;
+}
+
+[data-brand="cdr"] .window .window_bar .window_bar_btns_container span:active,
+[data-brand="cdr"] .window.focused .window_bar .window_bar_btns_container span:active,
+[data-brand="cdr"][data-theme="light"] .window .window_bar .window_bar_btns_container span:active,
+[data-brand="cdr"][data-theme="light"] .window.focused .window_bar .window_bar_btns_container span:active {
+  background: #c3e2f9 !important;
+}
+
+/* 5. Window Content Container & Empty State Divider */
+[data-brand="cdr"] .window .content_container,
+[data-brand="cdr"] .window.tab_mode .content_container,
+[data-brand="cdr"] .window .content_container .placeholder,
+[data-brand="cdr"][data-theme="light"] .window .content_container,
+[data-brand="cdr"][data-theme="light"] .window.tab_mode .content_container,
+[data-brand="cdr"][data-theme="light"] .window .content_container .placeholder {
+  background: #ffffff !important;
+  color: #0f3b5e !important;
+}
+
+[data-brand="cdr"] .window .content_container:empty:before,
+[data-brand="cdr"][data-theme="light"] .window .content_container:empty:before {
+  color: #2b567a !important;
+  border-right: 1px solid rgba(74, 175, 230, 0.28) !important;
+}
+
+/* 6. Properties Container (Sidebar Panel next to Content) */
+[data-brand="cdr"] .window .properties_container,
+[data-brand="cdr"][data-theme="light"] .window .properties_container {
+  background: #f4f8fb !important;
+  background-color: #f4f8fb !important;
+  background-image: none !important;
+  color: #0f3b5e !important;
+  border-left: 1px solid rgba(74, 175, 230, 0.22) !important;
+}
+
+[data-brand="cdr"] .window .properties_container .placeholder,
+[data-brand="cdr"][data-theme="light"] .window .properties_container .placeholder,
+[data-brand="cdr"] .window .properties_container .reference_container,
+[data-brand="cdr"][data-theme="light"] .window .properties_container .reference_container {
+  background-color: #edf4fa !important;
+}
+
+[data-brand="cdr"] .window .properties_container .reference_container .top_panel,
+[data-brand="cdr"][data-theme="light"] .window .properties_container .reference_container .top_panel {
+  background-color: #ffffff !important;
+  border-bottom: 1px solid rgba(74, 175, 230, 0.25) !important;
+}
+
+[data-brand="cdr"] .window .properties_container .reference_container .top_panel .ppt_tabs_container,
+[data-brand="cdr"][data-theme="light"] .window .properties_container .reference_container .top_panel .ppt_tabs_container {
+  background-image: linear-gradient(#e4edf5, #e4edf5) !important;
+  color: #1a4267 !important;
+  border-bottom: 1px solid rgba(74, 175, 230, 0.2) !important;
+}
+
+[data-brand="cdr"] .window .properties_container .reference_container .top_panel .ppt_tabs_container .ppt_tabs,
+[data-brand="cdr"][data-theme="light"] .window .properties_container .reference_container .top_panel .ppt_tabs_container .ppt_tabs {
+  background-color: #edf4fa !important;
+  border-right: 0.1vh solid rgba(74, 175, 230, 0.25) !important;
+  border-bottom: 0.1vh solid rgba(74, 175, 230, 0.25) !important;
+  color: #1a4267 !important;
+}
+
+[data-brand="cdr"] .window .properties_container .reference_container .top_panel .ppt_tabs_container .ppt_tabs:hover,
+[data-brand="cdr"][data-theme="light"] .window .properties_container .reference_container .top_panel .ppt_tabs_container .ppt_tabs:hover {
+  background-color: #dceaf6 !important;
+  color: #0f3b5e !important;
+}
+
+[data-brand="cdr"] .window .properties_container .reference_container .top_panel .ppt_tabs_container input[type="radio"]:checked + label,
+[data-brand="cdr"] .window .properties_container .reference_container .top_panel .ppt_tabs_container .ppt_tabs:active,
+[data-brand="cdr"][data-theme="light"] .window .properties_container .reference_container .top_panel .ppt_tabs_container input[type="radio"]:checked + label,
+[data-brand="cdr"][data-theme="light"] .window .properties_container .reference_container .top_panel .ppt_tabs_container .ppt_tabs:active {
+  background-color: #ffffff !important;
+  color: #0f3b5e !important;
+  border-bottom: 1px solid #ffffff !important;
+  font-weight: 600 !important;
+}
+
+[data-brand="cdr"] .window .properties_container .reference_container .top_panel .ppt_tabs_container .ppt_tabs i svg,
+[data-brand="cdr"] .window .properties_container .reference_container .top_panel .ppt_tabs_container .ppt_tabs i use,
+[data-brand="cdr"][data-theme="light"] .window .properties_container .reference_container .top_panel .ppt_tabs_container .ppt_tabs i svg,
+[data-brand="cdr"][data-theme="light"] .window .properties_container .reference_container .top_panel .ppt_tabs_container .ppt_tabs i use {
+  fill: #1b6ca8 !important;
+  stroke: #1b6ca8 !important;
+}
+
+[data-brand="cdr"] .window .properties_container .reference_container .panel_separator,
+[data-brand="cdr"][data-theme="light"] .window .properties_container .reference_container .panel_separator {
+  background-color: rgba(74, 175, 230, 0.25) !important;
+}
+
+[data-brand="cdr"] .window .properties_container .reference_container .panel_separator span,
+[data-brand="cdr"][data-theme="light"] .window .properties_container .reference_container .panel_separator span {
+  background-color: #e4edf5 !important;
+  border: 1px solid rgba(74, 175, 230, 0.35) !important;
+  color: #1a4267 !important;
+}
+
+[data-brand="cdr"] .window .properties_container .reference_container .panel_separator span:hover,
+[data-brand="cdr"][data-theme="light"] .window .properties_container .reference_container .panel_separator span:hover {
+  background-color: #d2e4f3 !important;
+  border-color: rgba(27, 108, 168, 0.5) !important;
+}
+
+[data-brand="cdr"] .window .properties_container .reference_container .bottom_panel .bottom_panel_title,
+[data-brand="cdr"][data-theme="light"] .window .properties_container .reference_container .bottom_panel .bottom_panel_title {
+  background-image: none !important;
+  background-color: #e4edf5 !important;
+  color: #0f3b5e !important;
+  border-bottom: 1px solid rgba(74, 175, 230, 0.25) !important;
+}
+
+[data-brand="cdr"] .window .properties_container .reference_container .bottom_panel ul li,
+[data-brand="cdr"][data-theme="light"] .window .properties_container .reference_container .bottom_panel ul li {
+  background-color: #ffffff !important;
+  color: #1a4267 !important;
+  border-bottom: 1px solid rgba(74, 175, 230, 0.15) !important;
+}
+
+[data-brand="cdr"] .window .properties_container .reference_container .bottom_panel ul li:hover,
+[data-brand="cdr"][data-theme="light"] .window .properties_container .reference_container .bottom_panel ul li:hover {
+  background-color: #e0f0fd !important;
+  color: #0f3b5e !important;
+}
+
+[data-brand="cdr"] .window .properties_container .reference_container .bottom_panel ul li:has(input[type="radio"]:checked),
+[data-brand="cdr"][data-theme="light"] .window .properties_container .reference_container .bottom_panel ul li:has(input[type="radio"]:checked) {
+  background-color: #d6ecfb !important;
+  color: #0f3b5e !important;
+}
+
+[data-brand="cdr"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container,
+[data-brand="cdr"][data-theme="light"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container {
+  color: #0f3b5e !important;
+}
+
+[data-brand="cdr"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_filters_container .filter_form .filter_form_search_container input,
+[data-brand="cdr"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_settings_container .settings_form .input_text,
+[data-brand="cdr"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_settings_container .settings_form .select_option,
+[data-brand="cdr"][data-theme="light"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_filters_container .filter_form .filter_form_search_container input,
+[data-brand="cdr"][data-theme="light"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_settings_container .settings_form .input_text,
+[data-brand="cdr"][data-theme="light"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_settings_container .settings_form .select_option {
+  background: #ffffff !important;
+  border-color: rgba(74, 175, 230, 0.4) !important;
+  color: #0f3b5e !important;
+}
+
+[data-brand="cdr"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_filters_container .filter_form .filter_form_search_container button,
+[data-brand="cdr"][data-theme="light"] .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_filters_container .filter_form .filter_form_search_container button {
+  background: linear-gradient(180deg, #4aafe6, #1b6ca8) !important;
+  color: #ffffff !important;
+  border: 1px solid #1b6ca8 !important;
+}
+
+/* 7. Source Window: Headings, Live Source Options, Upload Source Option & Details */
+[data-brand="cdr"] .window .content_container .source_window_section_heading,
+[data-brand="cdr"] .window .content_container .upload_source_options_header,
+[data-brand="cdr"][data-theme="light"] .window .content_container .source_window_section_heading,
+[data-brand="cdr"][data-theme="light"] .window .content_container .upload_source_options_header {
+  border-bottom: 1px solid rgba(74, 175, 230, 0.28) !important;
+  color: #0f3b5e !important;
+}
+
+[data-brand="cdr"] .window .content_container .live_source_option,
+[data-brand="cdr"] .window .content_container .live_source_option_passive,
+[data-brand="cdr"][data-theme="light"] .window .content_container .live_source_option,
+[data-brand="cdr"][data-theme="light"] .window .content_container .live_source_option_passive {
+  background: linear-gradient(180deg, #ffffff, #f0f7fd) !important;
+  border: 1px solid rgba(74, 175, 230, 0.35) !important;
+  box-shadow: 0 12px 24px rgba(27, 108, 168, 0.08) !important;
+}
+
+[data-brand="cdr"] .window .content_container .live_source_option:hover,
+[data-brand="cdr"][data-theme="light"] .window .content_container .live_source_option:hover {
+  border-color: rgba(27, 108, 168, 0.72) !important;
+  background: linear-gradient(180deg, #ffffff, #e1f0fc) !important;
+  box-shadow: 0 16px 28px rgba(27, 108, 168, 0.16) !important;
+}
+
+[data-brand="cdr"] .window .content_container .live_source_option_passive,
+[data-brand="cdr"][data-theme="light"] .window .content_container .live_source_option_passive {
+  border-color: rgba(74, 175, 230, 0.45) !important;
+  box-shadow: inset 0 0 0 1px rgba(74, 175, 230, 0.15) !important;
+}
+
+[data-brand="cdr"] .window .content_container .live_source_option .live_source_option_icon,
+[data-brand="cdr"] .window .content_container .live_source_option_passive .live_source_option_icon,
+[data-brand="cdr"] .window .content_container .upload_source_option .upload_source_option_icon,
+[data-brand="cdr"][data-theme="light"] .window .content_container .live_source_option .live_source_option_icon,
+[data-brand="cdr"][data-theme="light"] .window .content_container .live_source_option_passive .live_source_option_icon,
+[data-brand="cdr"][data-theme="light"] .window .content_container .upload_source_option .upload_source_option_icon {
+  background: linear-gradient(180deg, #ffffff, #e3f2fd) !important;
+  box-shadow: inset 0 0 0 1px rgba(74, 175, 230, 0.4) !important;
+}
+
+[data-brand="cdr"] .window .content_container .live_source_option .live_source_option_icon use,
+[data-brand="cdr"] .window .content_container .live_source_option_passive .live_source_option_icon use,
+[data-brand="cdr"] .window .content_container .upload_source_option .upload_source_option_icon use,
+[data-brand="cdr"][data-theme="light"] .window .content_container .live_source_option .live_source_option_icon use,
+[data-brand="cdr"][data-theme="light"] .window .content_container .live_source_option_passive .live_source_option_icon use,
+[data-brand="cdr"][data-theme="light"] .window .content_container .upload_source_option .upload_source_option_icon use {
+  fill: #1b6ca8 !important;
+}
+
+[data-brand="cdr"] .window .content_container .live_source_option:hover .live_source_option_icon use,
+[data-brand="cdr"][data-theme="light"] .window .content_container .live_source_option:hover .live_source_option_icon use {
+  fill: #0f3b5e !important;
+}
+
+[data-brand="cdr"] .window .content_container .live_source_option .live_source_option_details label,
+[data-brand="cdr"] .window .content_container .live_source_option_passive .live_source_option_details label,
+[data-brand="cdr"] .window .content_container .upload_source_option .upload_source_option_details label,
+[data-brand="cdr"][data-theme="light"] .window .content_container .live_source_option .live_source_option_details label,
+[data-brand="cdr"][data-theme="light"] .window .content_container .live_source_option_passive .live_source_option_details label,
+[data-brand="cdr"][data-theme="light"] .window .content_container .upload_source_option .upload_source_option_details label {
+  color: #0f3b5e !important;
+}
+
+[data-brand="cdr"] .window .content_container .live_source_option .live_source_option_details p,
+[data-brand="cdr"] .window .content_container .live_source_option_passive .live_source_option_details p,
+[data-brand="cdr"] .window .content_container .upload_source_option .upload_source_option_details p,
+[data-brand="cdr"][data-theme="light"] .window .content_container .live_source_option .live_source_option_details p,
+[data-brand="cdr"][data-theme="light"] .window .content_container .live_source_option_passive .live_source_option_details p,
+[data-brand="cdr"][data-theme="light"] .window .content_container .upload_source_option .upload_source_option_details p {
+  color: #2b567a !important;
+}
+
+[data-brand="cdr"] .window .content_container .upload_source_option,
+[data-brand="cdr"][data-theme="light"] .window .content_container .upload_source_option {
+  background: linear-gradient(180deg, #ffffff, #f0f7fd) !important;
+  border: 1px dashed rgba(27, 108, 168, 0.5) !important;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.8) !important;
+}
+
+[data-brand="cdr"] .window .content_container .upload_source_option:hover,
+[data-brand="cdr"][data-theme="light"] .window .content_container .upload_source_option:hover {
+  border-color: #1b6ca8 !important;
+  background: linear-gradient(180deg, #ffffff, #e1f0fc) !important;
+}
+
+/* 8. Source Window: Batch Connection Forms, Search Dropdowns & Dataframe Tables */
+[data-brand="cdr"] .window .content_container .batch_connection_form_container,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container {
+  color: #1a4267 !important;
+}
+
+[data-brand="cdr"] .window .content_container .batch_connection_form_container .form_response_container,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container .form_response_container {
+  border: 1px solid rgba(74, 175, 230, 0.35) !important;
+  box-shadow: 0 10px 20px rgba(15, 59, 94, 0.08) !important;
+}
+
+[data-brand="cdr"] .window .content_container .batch_connection_form_container form:first-child,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container form:first-child {
+  border-right-color: rgba(74, 175, 230, 0.28) !important;
+}
+
+[data-brand="cdr"] .window .content_container .batch_connection_form_container form fieldset,
+[data-brand="cdr"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_form_fieldset,
+[data-brand="cdr"] .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container form fieldset,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_form_fieldset,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset {
+  background: linear-gradient(180deg, #ffffff, #f5f9fd) !important;
+  border-color: rgba(74, 175, 230, 0.35) !important;
+}
+
+[data-brand="cdr"] .window .content_container .batch_connection_form_container form fieldset legend,
+[data-brand="cdr"] .window .content_container .batch_files_dataframe_form .batch_files_dataframe_form_fieldset legend,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container form fieldset legend,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_files_dataframe_form .batch_files_dataframe_form_fieldset legend {
+  color: #0f3b5e !important;
+}
+
+[data-brand="cdr"] .window .content_container .batch_connection_form_container form fieldset .box_inputs_container label,
+[data-brand="cdr"] .window .content_container .batch_connection_form_container form fieldset .tool_form_response,
+[data-brand="cdr"] .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_form label,
+[data-brand="cdr"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_menu .batch_files_dataframe_filter_menu_rows,
+[data-brand="cdr"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_and_actions_container .batch_files_dataframe_filter_inputs .filters_label,
+[data-brand="cdr"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_and_actions_container .batch_files_dataframe_action_inputs .actions_partition label,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container form fieldset .box_inputs_container label,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container form fieldset .tool_form_response,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_form label,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_menu .batch_files_dataframe_filter_menu_rows,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_and_actions_container .batch_files_dataframe_filter_inputs .filters_label,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_and_actions_container .batch_files_dataframe_action_inputs .actions_partition label {
+  color: #1a4267 !important;
+}
+
+[data-brand="cdr"] .window .content_container .batch_connection_form_container form fieldset .textinput,
+[data-brand="cdr"] .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_form .batch_files_search_container .batch_files_search_text_input,
+[data-brand="cdr"] .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_form .batch_files_search_container .batch_files_search_date_input,
+[data-brand="cdr"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_and_actions_container .batch_files_dataframe_filter_inputs .filters_partition input,
+[data-brand="cdr"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_and_actions_container .batch_files_dataframe_filter_inputs .filters_partition select,
+[data-brand="cdr"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_and_actions_container .batch_files_dataframe_action_inputs .actions_partition input,
+[data-brand="cdr"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_and_actions_container .batch_files_dataframe_action_inputs .actions_partition select,
+[data-brand="cdr"] .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_form .batch_files_search_options_containerI .col_select_option,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container form fieldset .textinput,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_form .batch_files_search_container .batch_files_search_text_input,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_form .batch_files_search_container .batch_files_search_date_input,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_and_actions_container .batch_files_dataframe_filter_inputs .filters_partition input,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_and_actions_container .batch_files_dataframe_filter_inputs .filters_partition select,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_and_actions_container .batch_files_dataframe_action_inputs .actions_partition input,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_and_actions_container .batch_files_dataframe_action_inputs .actions_partition select,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_form .batch_files_search_options_containerI .col_select_option {
+  background: #ffffff !important;
+  color: #0f3b5e !important;
+  border-color: rgba(74, 175, 230, 0.4) !important;
+}
+
+[data-brand="cdr"] .window .content_container .batch_connection_form_container form fieldset .textinput::placeholder,
+[data-brand="cdr"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_and_actions_container .batch_files_dataframe_filter_inputs .filters_query_partition textarea::placeholder,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container form fieldset .textinput::placeholder,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_and_actions_container .batch_files_dataframe_filter_inputs .filters_query_partition textarea::placeholder {
+  color: #6892b1 !important;
+}
+
+[data-brand="cdr"] .window .content_container .batch_connection_form_container form fieldset .textinput:focus,
+[data-brand="cdr"] .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_form .batch_files_search_container .batch_files_search_text_input:focus,
+[data-brand="cdr"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_and_actions_container .batch_files_dataframe_filter_inputs .filters_partition input:focus,
+[data-brand="cdr"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_and_actions_container .batch_files_dataframe_action_inputs .actions_partition input:focus,
+[data-brand="cdr"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_and_actions_container .batch_files_dataframe_action_inputs .actions_partition select:focus,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container form fieldset .textinput:focus,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_form .batch_files_search_container .batch_files_search_text_input:focus,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_and_actions_container .batch_files_dataframe_filter_inputs .filters_partition input:focus,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_and_actions_container .batch_files_dataframe_action_inputs .actions_partition input:focus,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_and_actions_container .batch_files_dataframe_action_inputs .actions_partition select:focus {
+  box-shadow: 0 0 0 3px rgba(74, 175, 230, 0.22) !important;
+}
+
+[data-brand="cdr"] .window .content_container .batch_connection_form_container form fieldset .textinput:disabled,
+[data-brand="cdr"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_and_actions_container .batch_files_dataframe_action_inputs .actions_partition input:disabled,
+[data-brand="cdr"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_and_actions_container .batch_files_dataframe_action_inputs .actions_partition select:disabled,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container form fieldset .textinput:disabled,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_and_actions_container .batch_files_dataframe_action_inputs .actions_partition input:disabled,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_and_actions_container .batch_files_dataframe_action_inputs .actions_partition select:disabled {
+  background: #edf4fa !important;
+  color: #7695ae !important;
+}
+
+[data-brand="cdr"] .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_result_container,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_result_container {
+  background: #ffffff !important;
+  border-color: rgba(74, 175, 230, 0.35) !important;
+  border-top-color: rgba(74, 175, 230, 0.5) !important;
+  box-shadow: 0 18px 28px rgba(15, 59, 94, 0.16) !important;
+}
+
+[data-brand="cdr"] .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_result_container ul,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_result_container ul {
+  background: #edf5fd !important;
+  color: #1a4267 !important;
+}
+
+[data-brand="cdr"] .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_result_container ul li,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_result_container ul li {
+  background: #ffffff !important;
+  border-color: rgba(180, 215, 240, 0.8) !important;
+  color: #0f3b5e !important;
+}
+
+[data-brand="cdr"] .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_result_container ul li:hover,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_result_container ul li:hover {
+  background: #daecfc !important;
+  color: #0f3b5e !important;
+}
+
+[data-brand="cdr"] .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_result_container ul .batch_files_search_results_load_more,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_result_container ul .batch_files_search_results_load_more {
+  background-image: none !important;
+  background-color: #e4edf5 !important;
+  color: #0f3b5e !important;
+  border-top-color: rgba(74, 175, 230, 0.35) !important;
+}
+
+[data-brand="cdr"] .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_result_container ul .batch_files_search_results_load_more:hover,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_result_container ul .batch_files_search_results_load_more:hover {
+  background-image: none !important;
+  background-color: #d2e4f3 !important;
+  color: #0a243a !important;
+}
+
+[data-brand="cdr"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_menu,
+[data-brand="cdr"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_and_actions_container,
+[data-brand="cdr"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_and_actions_container .batch_files_dataframe_action_inputs,
+[data-brand="cdr"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_and_actions_container .batch_files_dataframe_filter_inputs .filters_partition,
+[data-brand="cdr"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_and_actions_container .batch_files_dataframe_filter_inputs .filters_query_partition,
+[data-brand="cdr"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_form_fieldset .batch_files_dataframe_filter_log_textarea,
+[data-brand="cdr"] .window .content_container .batch_connection_form_container form .batch_files_table_form_fieldset table,
+[data-brand="cdr"] .window .content_container .batch_connection_form_container form .batch_files_table_form_fieldset table tbody tr,
+[data-brand="cdr"] .window .content_container .batch_connection_form_container form .batch_files_table_form_fieldset table tbody tr td,
+[data-brand="cdr"] .window .content_container .batch_connection_form_container form .batch_files_table_form_fieldset table tfoot,
+[data-brand="cdr"] .window .content_container .batch_connection_form_container form .batch_files_table_form_fieldset table tfoot tr td,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_menu,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_and_actions_container,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_and_actions_container .batch_files_dataframe_action_inputs,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_and_actions_container .batch_files_dataframe_filter_inputs .filters_partition,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_and_actions_container .batch_files_dataframe_filter_inputs .filters_query_partition,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_form_fieldset .batch_files_dataframe_filter_log_textarea,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container form .batch_files_table_form_fieldset table,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container form .batch_files_table_form_fieldset table tbody tr,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container form .batch_files_table_form_fieldset table tbody tr td,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container form .batch_files_table_form_fieldset table tfoot,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container form .batch_files_table_form_fieldset table tfoot tr td {
+  background-color: #ffffff !important;
+  border-color: rgba(74, 175, 230, 0.28) !important;
+  color: #1a4267 !important;
+}
+
+[data-brand="cdr"] .window .content_container .batch_connection_form_container form .batch_files_table_form_fieldset table thead,
+[data-brand="cdr"] .window .content_container .batch_connection_form_container form .batch_files_table_form_fieldset table thead tr th,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container form .batch_files_table_form_fieldset table thead,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container form .batch_files_table_form_fieldset table thead tr th {
+  background-color: #e4edf5 !important;
+  border-color: rgba(74, 175, 230, 0.3) !important;
+  color: #0f3b5e !important;
+}
+
+[data-brand="cdr"] .window .content_container .batch_connection_form_container form .batch_files_table_form_fieldset table tbody tr:hover,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container form .batch_files_table_form_fieldset table tbody tr:hover {
+  background-color: #eef6fd !important;
+}
+
+[data-brand="cdr"] .window .content_container .batch_connection_form_container form .batch_files_table_form_fieldset table tbody tr td,
+[data-brand="cdr"] .window .content_container .batch_connection_form_container form .batch_files_table_form_fieldset table tfoot tr td,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container form .batch_files_table_form_fieldset table tbody tr td,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container form .batch_files_table_form_fieldset table tfoot tr td {
+  border-bottom-color: rgba(74, 175, 230, 0.2) !important;
+}
+
+
+/* ==========================================================================
+   CDR 2026 THEME OVERRIDES: Tables, Disabled Buttons, Inputs & Modal Elements
+   ========================================================================== */
+
+/* ── 1. TABLES: Configurations, Reports, Source & Modals ── */
+[data-brand="cdr"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset table,
+[data-brand="cdr"][data-theme="light"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset table,
+[data-brand="cdr"] #configurations_container .config_trusted_list_table,
+[data-brand="cdr"][data-theme="light"] #configurations_container .config_trusted_list_table,
+[data-brand="cdr"] #configurations_container .config_classified_entities_table,
+[data-brand="cdr"][data-theme="light"] #configurations_container .config_classified_entities_table,
+[data-brand="cdr"] #configurations_container .cleanup_audit_table,
+[data-brand="cdr"][data-theme="light"] #configurations_container .cleanup_audit_table {
+  border-collapse: separate;
+  border-spacing: 0;
+  color: #1a4267 !important;
+}
+
+[data-brand="cdr"] #configurations_container .config_trusted_list_table th,
+[data-brand="cdr"] #configurations_container .config_classified_entities_table th,
+[data-brand="cdr"] #configurations_container .cleanup_audit_table th,
+[data-brand="cdr"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset table th,
+[data-brand="cdr"][data-theme="light"] #configurations_container .config_trusted_list_table th,
+[data-brand="cdr"][data-theme="light"] #configurations_container .config_classified_entities_table th,
+[data-brand="cdr"][data-theme="light"] #configurations_container .cleanup_audit_table th,
+[data-brand="cdr"][data-theme="light"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset table th {
+  background: #e4edf5 !important;
+  background-color: #e4edf5 !important;
+  color: #0f3b5e !important;
+  border-bottom: 1px solid rgba(74, 175, 230, 0.35) !important;
+  border-color: rgba(74, 175, 230, 0.3) !important;
+}
+
+[data-brand="cdr"] #configurations_container .config_trusted_list_table td,
+[data-brand="cdr"] #configurations_container .config_classified_entities_table td,
+[data-brand="cdr"] #configurations_container .cleanup_audit_table td,
+[data-brand="cdr"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset table td,
+[data-brand="cdr"][data-theme="light"] #configurations_container .config_trusted_list_table td,
+[data-brand="cdr"][data-theme="light"] #configurations_container .config_classified_entities_table td,
+[data-brand="cdr"][data-theme="light"] #configurations_container .cleanup_audit_table td,
+[data-brand="cdr"][data-theme="light"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset table td {
+  color: #1a4267 !important;
+  border-bottom-color: rgba(74, 175, 230, 0.18) !important;
+}
+
+[data-brand="cdr"] #configurations_container .config_trusted_list_table tbody tr:nth-child(even),
+[data-brand="cdr"] #configurations_container .config_classified_entities_table tbody tr:nth-child(even),
+[data-brand="cdr"] #configurations_container .cleanup_audit_table tbody tr:nth-child(even),
+[data-brand="cdr"][data-theme="light"] #configurations_container .config_trusted_list_table tbody tr:nth-child(even),
+[data-brand="cdr"][data-theme="light"] #configurations_container .config_classified_entities_table tbody tr:nth-child(even),
+[data-brand="cdr"][data-theme="light"] #configurations_container .cleanup_audit_table tbody tr:nth-child(even) {
+  background: rgba(238, 246, 253, 0.65) !important;
+  background-color: rgba(238, 246, 253, 0.65) !important;
+}
+
+[data-brand="cdr"] #configurations_container .cleanup_audit_table tbody tr:hover,
+[data-brand="cdr"] #configurations_container .cleanup_audit_table tbody tr:hover td,
+[data-brand="cdr"] #configurations_container .config_trusted_list_table tbody tr:hover,
+[data-brand="cdr"] #configurations_container .config_trusted_list_table tbody tr:hover td,
+[data-brand="cdr"] #configurations_container .config_classified_entities_table tbody tr:hover,
+[data-brand="cdr"] #configurations_container .config_classified_entities_table tbody tr:hover td,
+[data-brand="cdr"][data-theme="light"] #configurations_container .cleanup_audit_table tbody tr:hover,
+[data-brand="cdr"][data-theme="light"] #configurations_container .cleanup_audit_table tbody tr:hover td,
+[data-brand="cdr"][data-theme="light"] #configurations_container .config_trusted_list_table tbody tr:hover,
+[data-brand="cdr"][data-theme="light"] #configurations_container .config_trusted_list_table tbody tr:hover td,
+[data-brand="cdr"][data-theme="light"] #configurations_container .config_classified_entities_table tbody tr:hover,
+[data-brand="cdr"][data-theme="light"] #configurations_container .config_classified_entities_table tbody tr:hover td {
+  background-color: rgba(27, 108, 168, 0.08) !important;
+}
+
+[data-brand="cdr"] #configurations_container .cleanup_audit_table_wrap,
+[data-brand="cdr"][data-theme="light"] #configurations_container .cleanup_audit_table_wrap {
+  border: 1px solid rgba(74, 175, 230, 0.35) !important;
+  border-radius: 4px;
+  background: #ffffff !important;
+}
+
+[data-brand="cdr"] #configurations_container .cleanup_preview_result span,
+[data-brand="cdr"][data-theme="light"] #configurations_container .cleanup_preview_result span {
+  background: #f0f7fd !important;
+  border: 1px solid rgba(74, 175, 230, 0.35) !important;
+  color: #0f3b5e !important;
+  border-radius: 3px;
+}
+
+[data-brand="cdr"] #configurations_container .config_trusted_list_empty,
+[data-brand="cdr"] #configurations_container .idle_timeout_hint,
+[data-brand="cdr"] #configurations_container .cleanup_audit_actions span,
+[data-brand="cdr"][data-theme="light"] #configurations_container .config_trusted_list_empty,
+[data-brand="cdr"][data-theme="light"] #configurations_container .idle_timeout_hint,
+[data-brand="cdr"][data-theme="light"] #configurations_container .cleanup_audit_actions span {
+  color: #5a7b97 !important;
+}
+
+/* Reports Window Tables & Table Wrapper */
+[data-brand="cdr"] .window .content_container .cleanup_audit_table,
+[data-brand="cdr"][data-theme="light"] .window .content_container .cleanup_audit_table,
+[data-brand="cdr"] .cleanup_audit_table,
+[data-brand="cdr"][data-theme="light"] .cleanup_audit_table {
+  color: #1a4267 !important;
+}
+
+[data-brand="cdr"] .window .content_container .cleanup_audit_table th,
+[data-brand="cdr"][data-theme="light"] .window .content_container .cleanup_audit_table th,
+[data-brand="cdr"] .cleanup_audit_table th,
+[data-brand="cdr"][data-theme="light"] .cleanup_audit_table th {
+  background: #e4edf5 !important;
+  background-color: #e4edf5 !important;
+  color: #0f3b5e !important;
+  border-bottom: 2px solid rgba(74, 175, 230, 0.35) !important;
+}
+
+[data-brand="cdr"] .window .content_container .cleanup_audit_table td,
+[data-brand="cdr"][data-theme="light"] .window .content_container .cleanup_audit_table td,
+[data-brand="cdr"] .cleanup_audit_table td,
+[data-brand="cdr"][data-theme="light"] .cleanup_audit_table td {
+  color: #1a4267 !important;
+  border-bottom: 1px solid rgba(74, 175, 230, 0.18) !important;
+}
+
+[data-brand="cdr"] .window .content_container .cleanup_audit_table tbody tr:nth-child(even),
+[data-brand="cdr"][data-theme="light"] .window .content_container .cleanup_audit_table tbody tr:nth-child(even),
+[data-brand="cdr"] .cleanup_audit_table tbody tr:nth-child(even),
+[data-brand="cdr"][data-theme="light"] .cleanup_audit_table tbody tr:nth-child(even) {
+  background-color: rgba(238, 246, 253, 0.65) !important;
+}
+
+[data-brand="cdr"] .cleanup_audit_table tbody tr:hover td,
+[data-brand="cdr"][data-theme="light"] .cleanup_audit_table tbody tr:hover td,
+[data-brand="cdr"] .reports_table_row:hover,
+[data-brand="cdr"][data-theme="light"] .reports_table_row:hover {
+  background-color: rgba(27, 108, 168, 0.08) !important;
+}
+
+[data-brand="cdr"] .cleanup_audit_table tbody tr.active_row td,
+[data-brand="cdr"][data-theme="light"] .cleanup_audit_table tbody tr.active_row td {
+  background-color: rgba(27, 108, 168, 0.12) !important;
+}
+
+[data-brand="cdr"] .cleanup_audit_table tbody tr.active_row td:first-child,
+[data-brand="cdr"][data-theme="light"] .cleanup_audit_table tbody tr.active_row td:first-child {
+  border-left: 3px solid #1b6ca8 !important;
+}
+
+[data-brand="cdr"] .window .content_container .cleanup_audit_table_wrap,
+[data-brand="cdr"][data-theme="light"] .window .content_container .cleanup_audit_table_wrap,
+[data-brand="cdr"] .cleanup_audit_table_wrap,
+[data-brand="cdr"][data-theme="light"] .cleanup_audit_table_wrap {
+  border: 1px solid rgba(74, 175, 230, 0.35) !important;
+  background: #ffffff !important;
+}
+
+[data-brand="cdr"] .cleanup_audit_actions,
+[data-brand="cdr"][data-theme="light"] .cleanup_audit_actions {
+  border-top: 1px solid rgba(74, 175, 230, 0.35) !important;
+}
+
+[data-brand="cdr"] .cleanup_audit_actions span,
+[data-brand="cdr"][data-theme="light"] .cleanup_audit_actions span {
+  color: #1a4267 !important;
+}
+
+/* Source Window Dataframe Table Left & Right Containers */
+[data-brand="cdr"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_form_fieldset .batch_files_dataframe_infos .dataframe_infos_left_container table,
+[data-brand="cdr"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_form_fieldset .batch_files_dataframe_infos .dataframe_infos_right_container table,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_form_fieldset .batch_files_dataframe_infos .dataframe_infos_left_container table,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_form_fieldset .batch_files_dataframe_infos .dataframe_infos_right_container table {
+  color: #1a4267 !important;
+}
+
+[data-brand="cdr"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_form_fieldset .batch_files_dataframe_infos .dataframe_infos_left_container,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_form_fieldset .batch_files_dataframe_infos .dataframe_infos_left_container {
+  border-color: rgba(74, 175, 230, 0.3) !important;
+}
+
+/* Generic Window Tables */
+[data-brand="cdr"] .window table,
+[data-brand="cdr"][data-theme="light"] .window table {
+  color: #1a4267 !important;
+}
+
+[data-brand="cdr"] .window table th,
+[data-brand="cdr"][data-theme="light"] .window table th {
+  background: #e4edf5 !important;
+  background-color: #e4edf5 !important;
+  color: #0f3b5e !important;
+  border-bottom: 1px solid rgba(74, 175, 230, 0.35) !important;
+}
+
+[data-brand="cdr"] .window table td,
+[data-brand="cdr"][data-theme="light"] .window table td {
+  color: #1a4267 !important;
+  border-bottom: 1px solid rgba(74, 175, 230, 0.18) !important;
+}
+
+
+/* ── 2. DISABLED BUTTONS ── */
+[data-brand="cdr"] button:disabled,
+[data-brand="cdr"][data-theme="light"] button:disabled,
+[data-brand="cdr"] .window button:disabled,
+[data-brand="cdr"][data-theme="light"] .window button:disabled,
+[data-brand="cdr"] .window .content_container button:disabled,
+[data-brand="cdr"][data-theme="light"] .window .content_container button:disabled,
+[data-brand="cdr"] .window .content_container .upload_source_option button:disabled,
+[data-brand="cdr"][data-theme="light"] .window .content_container .upload_source_option button:disabled,
+[data-brand="cdr"] .window .content_container .batch_connection_form_container form fieldset button:disabled,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container form fieldset button:disabled,
+[data-brand="cdr"] .window .content_container .batch_connection_form_container form button:disabled,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container form button:disabled,
+[data-brand="cdr"] .window .content_container .batch_connection_form_pager_container button:disabled,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_pager_container button:disabled,
+[data-brand="cdr"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_menu .batch_files_dataframe_filter_menu_add_btn button:disabled,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_menu .batch_files_dataframe_filter_menu_add_btn button:disabled,
+[data-brand="cdr"] .cleanup_audit_actions button:disabled,
+[data-brand="cdr"][data-theme="light"] .cleanup_audit_actions button:disabled,
+[data-brand="cdr"] #configurations_container .cleanup_audit_actions button:disabled,
+[data-brand="cdr"][data-theme="light"] #configurations_container .cleanup_audit_actions button:disabled,
+[data-brand="cdr"] #configurations_container .action_btns:disabled,
+[data-brand="cdr"][data-theme="light"] #configurations_container .action_btns:disabled,
+[data-brand="cdr"] #configurations_container .critical_btns:disabled,
+[data-brand="cdr"][data-theme="light"] #configurations_container .critical_btns:disabled,
+[data-brand="cdr"] #configurations_container .smart_vigilance_findings_btn:disabled,
+[data-brand="cdr"][data-theme="light"] #configurations_container .smart_vigilance_findings_btn:disabled,
+[data-brand="cdr"] .report_tab_btn:disabled,
+[data-brand="cdr"][data-theme="light"] .report_tab_btn:disabled,
+[data-brand="cdr"] .window .side_bar .side_bar_btn_options ul .window_side_bar_menu_list_I form button:disabled,
+[data-brand="cdr"][data-theme="light"] .window .side_bar .side_bar_btn_options ul .window_side_bar_menu_list_I form button:disabled {
+  background-image: none !important;
+  background-color: #e4edf5 !important;
+  background: #e4edf5 !important;
+  color: #7291aa !important;
+  border-color: #b8d2e8 !important;
+  outline-color: #b8d2e8 !important;
+  box-shadow: none !important;
+  opacity: 0.7 !important;
+  cursor: not-allowed !important;
+  filter: none !important;
+}
+
+[data-brand="cdr"] button:disabled:hover,
+[data-brand="cdr"][data-theme="light"] button:disabled:hover,
+[data-brand="cdr"] button:disabled:active,
+[data-brand="cdr"][data-theme="light"] button:disabled:active {
+  background-image: none !important;
+  background-color: #e4edf5 !important;
+  background: #e4edf5 !important;
+  color: #7291aa !important;
+  border-color: #b8d2e8 !important;
+  box-shadow: none !important;
+}
+
+
+/* ── 3. INPUT FIELDS, SELECTS & TEXTAREAS ── */
+[data-brand="cdr"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset select,
+[data-brand="cdr"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset input,
+[data-brand="cdr"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .subinput,
+[data-brand="cdr"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset textarea,
+[data-brand="cdr"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .input_file,
+[data-brand="cdr"][data-theme="light"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset select,
+[data-brand="cdr"][data-theme="light"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset input,
+[data-brand="cdr"][data-theme="light"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .subinput,
+[data-brand="cdr"][data-theme="light"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset textarea,
+[data-brand="cdr"][data-theme="light"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .input_file,
+[data-brand="cdr"] .settings_textinput,
+[data-brand="cdr"][data-theme="light"] .settings_textinput,
+[data-brand="cdr"] .window .content_container input[type="text"],
+[data-brand="cdr"] .window .content_container input[type="number"],
+[data-brand="cdr"] .window .content_container input[type="password"],
+[data-brand="cdr"] .window .content_container input[type="datetime-local"],
+[data-brand="cdr"] .window .content_container select,
+[data-brand="cdr"] .window .content_container textarea,
+[data-brand="cdr"][data-theme="light"] .window .content_container input[type="text"],
+[data-brand="cdr"][data-theme="light"] .window .content_container input[type="number"],
+[data-brand="cdr"][data-theme="light"] .window .content_container input[type="password"],
+[data-brand="cdr"][data-theme="light"] .window .content_container input[type="datetime-local"],
+[data-brand="cdr"][data-theme="light"] .window .content_container select,
+[data-brand="cdr"][data-theme="light"] .window .content_container textarea {
+  background: #ffffff !important;
+  background-color: #ffffff !important;
+  color: #102a43 !important;
+  border: 1px solid rgba(74, 175, 230, 0.45) !important;
+  border-radius: 3px;
+  box-shadow: inset 0 1px 2px rgba(15, 59, 94, 0.05) !important;
+}
+
+/* Hover */
+[data-brand="cdr"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset select:hover,
+[data-brand="cdr"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset input:hover,
+[data-brand="cdr"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .subinput:hover,
+[data-brand="cdr"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset textarea:hover,
+[data-brand="cdr"][data-theme="light"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset select:hover,
+[data-brand="cdr"][data-theme="light"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset input:hover,
+[data-brand="cdr"][data-theme="light"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .subinput:hover,
+[data-brand="cdr"][data-theme="light"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset textarea:hover,
+[data-brand="cdr"] .settings_textinput:hover,
+[data-brand="cdr"][data-theme="light"] .settings_textinput:hover,
+[data-brand="cdr"] .window .content_container input:hover,
+[data-brand="cdr"][data-theme="light"] .window .content_container input:hover,
+[data-brand="cdr"] .window .content_container select:hover,
+[data-brand="cdr"][data-theme="light"] .window .content_container select:hover,
+[data-brand="cdr"] .window .content_container textarea:hover,
+[data-brand="cdr"][data-theme="light"] .window .content_container textarea:hover {
+  border-color: #1b6ca8 !important;
+}
+
+/* Focus */
+[data-brand="cdr"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset select:focus,
+[data-brand="cdr"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset input:focus,
+[data-brand="cdr"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .subinput:focus,
+[data-brand="cdr"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset textarea:focus,
+[data-brand="cdr"][data-theme="light"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset select:focus,
+[data-brand="cdr"][data-theme="light"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset input:focus,
+[data-brand="cdr"][data-theme="light"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .subinput:focus,
+[data-brand="cdr"][data-theme="light"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset textarea:focus,
+[data-brand="cdr"] .settings_textinput:focus,
+[data-brand="cdr"][data-theme="light"] .settings_textinput:focus,
+[data-brand="cdr"] .window .content_container input:focus,
+[data-brand="cdr"][data-theme="light"] .window .content_container input:focus,
+[data-brand="cdr"] .window .content_container select:focus,
+[data-brand="cdr"][data-theme="light"] .window .content_container select:focus,
+[data-brand="cdr"] .window .content_container textarea:focus,
+[data-brand="cdr"][data-theme="light"] .window .content_container textarea:focus {
+  outline: 1px solid rgba(27, 108, 168, 0.45) !important;
+  border-color: #1b6ca8 !important;
+  background: #ffffff !important;
+  box-shadow: 0 0 0 3px rgba(27, 108, 168, 0.16) !important;
+}
+
+/* Disabled Inputs */
+[data-brand="cdr"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset select:disabled,
+[data-brand="cdr"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset input:disabled,
+[data-brand="cdr"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .subinput:disabled,
+[data-brand="cdr"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset textarea:disabled,
+[data-brand="cdr"][data-theme="light"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset select:disabled,
+[data-brand="cdr"][data-theme="light"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset input:disabled,
+[data-brand="cdr"][data-theme="light"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .subinput:disabled,
+[data-brand="cdr"][data-theme="light"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset textarea:disabled,
+[data-brand="cdr"] .settings_textinput:disabled,
+[data-brand="cdr"][data-theme="light"] .settings_textinput:disabled,
+[data-brand="cdr"] .window .content_container input:disabled,
+[data-brand="cdr"][data-theme="light"] .window .content_container input:disabled,
+[data-brand="cdr"] .window .content_container select:disabled,
+[data-brand="cdr"][data-theme="light"] .window .content_container select:disabled,
+[data-brand="cdr"] .window .content_container textarea:disabled,
+[data-brand="cdr"][data-theme="light"] .window .content_container textarea:disabled {
+  background: #eaf2fa !important;
+  background-color: #eaf2fa !important;
+  color: #7291aa !important;
+  border-color: rgba(180, 210, 235, 0.7) !important;
+  cursor: not-allowed !important;
+}
+
+/* Placeholder */
+[data-brand="cdr"] input::placeholder,
+[data-brand="cdr"] textarea::placeholder,
+[data-brand="cdr"][data-theme="light"] input::placeholder,
+[data-brand="cdr"][data-theme="light"] textarea::placeholder {
+  color: #7291aa !important;
+}
+
+/* Checkbox & Radio Accents */
+[data-brand="cdr"] input[type="checkbox"],
+[data-brand="cdr"] input[type="radio"],
+[data-brand="cdr"][data-theme="light"] input[type="checkbox"],
+[data-brand="cdr"][data-theme="light"] input[type="radio"],
+[data-brand="cdr"] #configurations_container .input_checkbox,
+[data-brand="cdr"][data-theme="light"] #configurations_container .input_checkbox,
+[data-brand="cdr"] .window .content_container .batch_connection_form_container form fieldset .box_inputs_container .radioinput,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container form fieldset .box_inputs_container .radioinput {
+  accent-color: #1b6ca8 !important;
+}
+
+/* File Upload Button */
+[data-brand="cdr"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset input[type="file"],
+[data-brand="cdr"][data-theme="light"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset input[type="file"] {
+  background: #f0f7fd !important;
+}
+
+[data-brand="cdr"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset input[type="file"]::-webkit-file-upload-button,
+[data-brand="cdr"][data-theme="light"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset input[type="file"]::-webkit-file-upload-button {
+  background: linear-gradient(180deg, #edf5fd, #d8eaf8) !important;
+  border: 1px solid rgba(74, 175, 230, 0.5) !important;
+  color: #0f3b5e !important;
+  border-radius: 3px;
+}
+
+[data-brand="cdr"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset input[type="file"]::-webkit-file-upload-button:hover,
+[data-brand="cdr"][data-theme="light"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset input[type="file"]::-webkit-file-upload-button:hover {
+  background: linear-gradient(180deg, #d8eaf8, #c4def4) !important;
+}
+
+/* Source Window Search Option Container & Buttons */
+[data-brand="cdr"] .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_form .batch_files_search_options_containerI,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_form .batch_files_search_options_containerI {
+  background-image: none !important;
+  background-color: #edf5fd !important;
+  border-image: none !important;
+  border-top-color: rgba(74, 175, 230, 0.35) !important;
+}
+
+[data-brand="cdr"] .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_form .batch_files_search_options_containerI label,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_form .batch_files_search_options_containerI label {
+  color: #1a4267 !important;
+}
+
+[data-brand="cdr"] .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_form .batch_files_search_options_containerI label:not(:last-child),
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_form .batch_files_search_options_containerI label:not(:last-child) {
+  border-color: rgba(74, 175, 230, 0.3) !important;
+}
+
+[data-brand="cdr"] .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_form .batch_files_search_container button,
+[data-brand="cdr"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_and_actions_container .batch_files_dataframe_filter_inputs .filters_partition button,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_form .batch_files_search_container button,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_and_actions_container .batch_files_dataframe_filter_inputs .filters_partition button {
+  background: #e4edf5 !important;
+  border-color: rgba(74, 175, 230, 0.35) !important;
+  color: #0f3b5e !important;
+}
+
+[data-brand="cdr"] .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_form .batch_files_search_options_container input:disabled + label,
+[data-brand="cdr"][data-theme="light"] .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_form .batch_files_search_options_container input:disabled + label {
+  color: #7291aa !important;
+}
+
+
+/* ── 4. CONFIGURATIONS MODAL FIELDSETS, LEGENDS & CHROME ── */
+[data-brand="cdr"] #configurations_container .configurations_options_container,
+[data-brand="cdr"][data-theme="light"] #configurations_container .configurations_options_container {
+  outline: 1px solid rgba(74, 175, 230, 0.35) !important;
+  box-shadow: 0 24px 44px rgba(15, 59, 94, 0.16) !important;
+}
+
+[data-brand="cdr"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset,
+[data-brand="cdr"][data-theme="light"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset {
+  border: 1px solid rgba(74, 175, 230, 0.35) !important;
+}
+
+[data-brand="cdr"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset legend,
+[data-brand="cdr"][data-theme="light"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset legend {
+  background: #0f3b5e !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 12px rgba(15, 59, 94, 0.18) !important;
+}
+
+[data-brand="cdr"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset label,
+[data-brand="cdr"][data-theme="light"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset label {
+  color: #1a4267 !important;
+}
+
+[data-brand="cdr"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset a,
+[data-brand="cdr"][data-theme="light"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset a {
+  color: #1b6ca8 !important;
+  text-decoration-color: rgba(27, 108, 168, 0.48) !important;
+}
+
+[data-brand="cdr"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset a:hover,
+[data-brand="cdr"][data-theme="light"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset a:hover {
+  color: #155994 !important;
+}
+
+[data-brand="cdr"] #configurations_container .configurations_options_container .configurations_options .configurations_tab_form,
+[data-brand="cdr"][data-theme="light"] #configurations_container .configurations_options_container .configurations_options .configurations_tab_form {
+  scrollbar-color: rgba(27, 108, 168, 0.34) rgba(255, 255, 255, 0.12) !important;
+}
+
+[data-brand="cdr"] #configurations_container .configurations_options_container .configurations_options_container_bar,
+[data-brand="cdr"][data-theme="light"] #configurations_container .configurations_options_container .configurations_options_container_bar {
+  border-bottom: 1px solid rgba(74, 175, 230, 0.3) !important;
+}
+
+[data-brand="cdr"] #configurations_container .windows_loadscreen .loadscreen,
+[data-brand="cdr"][data-theme="light"] #configurations_container .windows_loadscreen .loadscreen {
+  background: rgba(240, 247, 254, 0.94) !important;
+  border: 1px solid rgba(74, 175, 230, 0.4) !important;
+  color: #0f3b5e !important;
+}
+
+[data-brand="cdr"] #configurations_container .windows_loadscreen .loadscreen .loadscreen_text,
+[data-brand="cdr"] #configurations_container .windows_loadscreen .loadscreen span,
+[data-brand="cdr"] #configurations_container .windows_loadscreen .loadscreen i,
+[data-brand="cdr"][data-theme="light"] #configurations_container .windows_loadscreen .loadscreen .loadscreen_text,
+[data-brand="cdr"][data-theme="light"] #configurations_container .windows_loadscreen .loadscreen span,
+[data-brand="cdr"][data-theme="light"] #configurations_container .windows_loadscreen .loadscreen i {
+  color: #0f3b5e !important;
+}
+
+[data-brand="cdr"] #configurations_container .configurations_options_container .configurations_options .configurations_actions_bar,
+[data-brand="cdr"][data-theme="light"] #configurations_container .configurations_options_container .configurations_options .configurations_actions_bar {
+  border-top-color: rgba(74, 175, 230, 0.3) !important;
+}
+
+[data-brand="cdr"] #configurations_container .smart_vigilance_findings_btn:hover,
+[data-brand="cdr"][data-theme="light"] #configurations_container .smart_vigilance_findings_btn:hover {
+  background: linear-gradient(90deg, #3aa0db, #175d92) !important;
+  box-shadow: 0 10px 20px rgba(27, 108, 168, 0.35) !important;
+}
+
+[data-brand="cdr"] #configurations_container .smart_vigilance_findings_btn:active,
+[data-brand="cdr"][data-theme="light"] #configurations_container .smart_vigilance_findings_btn:active {
+  background: linear-gradient(90deg, #155994, #0f3f66) !important;
+  box-shadow: 0 4px 10px rgba(27, 108, 168, 0.15) !important;
+}
+
+[data-brand="cdr"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .action_btns:active,
+[data-brand="cdr"] #configurations_container .configurations_options_container .configurations_options .configurations_actions_bar .action_btns:active,
+[data-brand="cdr"][data-theme="light"] #configurations_container .configurations_options_container .configurations_options .configurations_options_panel fieldset .action_btns:active,
+[data-brand="cdr"][data-theme="light"] #configurations_container .configurations_options_container .configurations_options .configurations_actions_bar .action_btns:active {
+  background: linear-gradient(180deg, #155994, #0f4470) !important;
+  border-color: rgba(21, 89, 148, 0.96) !important;
+}
+
+
+/* ── 5. PARENT WINDOW TABS BAR & TOGGLE MENU ── */
+[data-brand="cdr"] .window_parent_tabs .window_parent_tabs_container,
+[data-brand="cdr"][data-theme="light"] .window_parent_tabs .window_parent_tabs_container {
+  background: #edf5fd !important;
+  background-color: #edf5fd !important;
+  border-bottom: 1px solid rgba(74, 175, 230, 0.3) !important;
+  box-shadow: 0 3px 12px rgba(15, 59, 94, 0.08) !important;
+}
+
+[data-brand="cdr"] .window_parent_tabs .window_parent_bar .window_parent_bar_toggle_menu .toggle_menu_btn span,
+[data-brand="cdr"][data-theme="light"] .window_parent_tabs .window_parent_bar .window_parent_bar_toggle_menu .toggle_menu_btn span {
+  background: #e4edf5 !important;
+  border: 1px solid rgba(74, 175, 230, 0.4) !important;
+  box-shadow: 0 2px 10px rgba(15, 59, 94, 0.12) !important;
+}
+
+[data-brand="cdr"] .window_parent_tabs .window_parent_bar .window_parent_bar_toggle_menu .toggle_menu_btn span i,
+[data-brand="cdr"][data-theme="light"] .window_parent_tabs .window_parent_bar .window_parent_bar_toggle_menu .toggle_menu_btn span i {
+  background: #ffffff !important;
+}
+
+[data-brand="cdr"] .window_parent_tabs .window_parent_bar .window_parent_bar_toggle_menu .toggle_menu_btn span i a,
+[data-brand="cdr"][data-theme="light"] .window_parent_tabs .window_parent_bar .window_parent_bar_toggle_menu .toggle_menu_btn span i a {
+  background: #1b6ca8 !important;
+}
+
+[data-brand="cdr"] .window_parent_tabs .window_parent_tabs_container .tab_title .tab_title_close_btn:hover,
+[data-brand="cdr"][data-theme="light"] .window_parent_tabs .window_parent_tabs_container .tab_title .tab_title_close_btn:hover {
+  background: #1b6ca8 !important;
+}

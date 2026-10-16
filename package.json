@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:cdr": "VITE_THEME=cdr vite",
     "build": "rm -f linkxDS2026/assets/index-*.js linkxDS2026/assets/index-*.css && vite build",
+    "build:cdr": "rm -f linkxCDR2026/assets/index-*.js linkxCDR2026/assets/index-*.css && VITE_THEME=cdr vite build",
     "lint": "eslint .",
     "preview": "vite preview"
   },

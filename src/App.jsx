@@ -6,6 +6,7 @@ import './main.css'
 import { createApiClient } from './api/client.js';
 import { AuthProvider, useAuth } from './auth/AuthContext.jsx';
 import LoginPage from './auth/LoginPage.jsx';
+import theme from './themes/index.js';
 import { useBackgroundAnimations } from "./utils/backgroundAnimations.js";
 import {
   compactValidationErrors,
@@ -40,6 +41,21 @@ const LINKX_IFRAME_CHANNEL = "linkx:iframe";
 const LINKX_IFRAME_VERSION = 1;
 const TRUSTED_IFRAME_MESSAGE_TYPES = new Set(["app_notification", "notification", "nodeProperties", "all_property_keys_response", "graph_search_results", "graph_render_stats", "network_components", "entity_selection", "graph_alerts", "pinned_evidence_update", "clipboard_get", "clipboard_set"]);
 const SESSION_POLICY_CACHE_KEY = "linkx_session_policy_cache";
+const AdminLockIcon = () => (
+  <span title="Requires Admin privileges" style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "10px", fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.5px", background: "var(--brand-badge-gradient, linear-gradient(90deg, #ac854d, #825825))", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", marginLeft: "8px", verticalAlign: "middle" }}>
+    <svg viewBox="0 0 24 24" stroke="none" style={{ width: "12px", height: "12px", transform: "translateY(-1px)" }}>
+      <defs>
+        <linearGradient id="brandGradientLock" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stopColor="var(--brand-badge-stop-1, #ac854d)" />
+          <stop offset="100%" stopColor="var(--brand-badge-stop-2, #825825)" />
+        </linearGradient>
+      </defs>
+      <path fill="url(#brandGradientLock)" d="M12 2C9.243 2 7 4.243 7 7v3H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-1V7c0-2.757-2.243-5-5-5zM9 7c0-1.654 1.346-3 3-3s3 1.346 3 3v3H9V7zm7.5 13h-9a.5.5 0 0 1-.5-.5v-7a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 .5.5v7a.5.5 0 0 1-.5.5z"/>
+    </svg>
+    Admin Only
+  </span>
+);
+
 const DEFAULT_IDLE_WARNING_MS = 14 * 60 * 1000;
 const DEFAULT_IDLE_LOCK_MS = 15 * 60 * 1000;
 const DEFAULT_IDLE_TIMEOUT_MS = 60 * 60 * 1000;
@@ -150,88 +166,93 @@ const buildSessionPolicyPatchBody = (sessionId, idleSettings) => ({
 });
 
 function useIdleTimeout({ enabled, warningMs, lockMs, timeoutMs, isLocked = false, resetKey = 0, onWarn, onLock, onTimeout, onActivity }) {
-  const warningTimerRef = useRef(null);
-  const lockTimerRef = useRef(null);
-  const timeoutTimerRef = useRef(null);
+  const lastActivityRef = useRef(Date.now());
+  const warnFiredRef = useRef(false);
+
   const onWarnRef = useRef(onWarn);
   const onLockRef = useRef(onLock);
   const onTimeoutRef = useRef(onTimeout);
   const onActivityRef = useRef(onActivity);
   const isLockedRef = useRef(isLocked);
 
+  useEffect(() => { onWarnRef.current = onWarn; }, [onWarn]);
+  useEffect(() => { onLockRef.current = onLock; }, [onLock]);
+  useEffect(() => { onTimeoutRef.current = onTimeout; }, [onTimeout]);
+  useEffect(() => { isLockedRef.current = isLocked; }, [isLocked]);
+  useEffect(() => { onActivityRef.current = onActivity; }, [onActivity]);
+
+  // Main hardware-clock based ticker
   useEffect(() => {
-    onWarnRef.current = onWarn;
-  }, [onWarn]);
-
-  useEffect(() => {
-    onLockRef.current = onLock;
-  }, [onLock]);
-
-  useEffect(() => {
-    onTimeoutRef.current = onTimeout;
-  }, [onTimeout]);
-
-  useEffect(() => {
-    isLockedRef.current = isLocked;
-  }, [isLocked]);
-
-  useEffect(() => {
-    onActivityRef.current = onActivity;
-  }, [onActivity]);
-
-  const clearIdleTimers = useCallback(() => {
-    if (warningTimerRef.current) {
-      clearTimeout(warningTimerRef.current);
-      warningTimerRef.current = null;
-    }
-    if (lockTimerRef.current) {
-      clearTimeout(lockTimerRef.current);
-      lockTimerRef.current = null;
-    }
-    if (timeoutTimerRef.current) {
-      clearTimeout(timeoutTimerRef.current);
-      timeoutTimerRef.current = null;
-    }
-  }, []);
-
-  const resetIdleTimers = useCallback(() => {
-    clearIdleTimers();
     if (!enabled || !Number.isFinite(timeoutMs) || timeoutMs <= 0) return;
 
-    if (Number.isFinite(warningMs) && warningMs > 0 && warningMs < lockMs) {
-      warningTimerRef.current = setTimeout(() => {
-        onWarnRef.current?.();
-      }, warningMs);
-    }
+    const interval = setInterval(() => {
+      const idleTime = Date.now() - lastActivityRef.current;
 
-    if (Number.isFinite(lockMs) && lockMs > 0 && lockMs <= timeoutMs) {
-      lockTimerRef.current = setTimeout(() => {
+      // 1. Strict Timeout Check — ALWAYS runs, even while locked.
+      //    This ensures the configured logout timer fires on time.
+      if (idleTime >= timeoutMs) {
+        onTimeoutRef.current?.();
+        return;
+      }
+
+      // If workspace is locked, the session is preserved by the heartbeat.
+      // Skip warn/lock checks — only the timeout→logout above matters now.
+      if (isLockedRef.current) return;
+
+      // 2. Lock Screen Check
+      if (Number.isFinite(lockMs) && lockMs > 0 && idleTime >= lockMs) {
         onLockRef.current?.();
-      }, lockMs);
-    }
+        return;
+      }
 
-    timeoutTimerRef.current = setTimeout(() => {
-      onTimeoutRef.current?.();
-    }, timeoutMs);
-  }, [clearIdleTimers, enabled, lockMs, timeoutMs, warningMs]);
+      // 3. Warning Notification Check
+      if (Number.isFinite(warningMs) && warningMs > 0 && warningMs < lockMs && idleTime >= warningMs) {
+        if (!warnFiredRef.current) {
+          warnFiredRef.current = true;
+          onWarnRef.current?.();
+        }
+      }
+    }, 1000); // Check every second against the real hardware clock
 
+    return () => clearInterval(interval);
+  }, [enabled, lockMs, warningMs, timeoutMs, resetKey]);
+
+  // Activity listeners
   useEffect(() => {
-    if (!enabled) {
-      clearIdleTimers();
-      return clearIdleTimers;
-    }
+    if (!enabled) return;
 
     const activityEvents = ["pointerdown", "mousemove", "keydown", "wheel", "scroll", "touchstart"];
     const handleActivity = () => {
       if (isLockedRef.current) return;
-      resetIdleTimers();
+      lastActivityRef.current = Date.now();
+      warnFiredRef.current = false;
       onActivityRef.current?.();
     };
+
+    // When the browser tab wakes up from sleep or deep background suspension
     const handleVisibilityChange = () => {
-      if (isLockedRef.current) return;
       if (document.visibilityState === "visible") {
-        resetIdleTimers();
-        onActivityRef.current?.();
+        const idleTime = Date.now() - lastActivityRef.current;
+
+        // Timeout check ALWAYS runs — even while locked.
+        // If the machine was asleep past the configured logout time, fire immediately.
+        if (Number.isFinite(timeoutMs) && timeoutMs > 0 && idleTime >= timeoutMs) {
+          onTimeoutRef.current?.();
+          return;
+        }
+
+        // If locked, the timeout didn't fire so session is still alive — nothing else to do.
+        if (isLockedRef.current) return;
+        
+        // Before the user can click anything, instantly check if they exceeded the lock limit while asleep
+        if (Number.isFinite(lockMs) && lockMs > 0 && idleTime >= lockMs) {
+          onLockRef.current?.();
+        } else {
+          // If they survived, counting returning as activity to keep session alive
+          lastActivityRef.current = Date.now();
+          warnFiredRef.current = false;
+          onActivityRef.current?.();
+        }
       }
     };
 
@@ -239,16 +260,14 @@ function useIdleTimeout({ enabled, warningMs, lockMs, timeoutMs, isLocked = fals
       window.addEventListener(eventName, handleActivity, { passive: true });
     });
     document.addEventListener("visibilitychange", handleVisibilityChange);
-    resetIdleTimers();
 
     return () => {
       activityEvents.forEach((eventName) => {
         window.removeEventListener(eventName, handleActivity);
       });
       document.removeEventListener("visibilitychange", handleVisibilityChange);
-      clearIdleTimers();
     };
-  }, [clearIdleTimers, enabled, resetIdleTimers, resetKey]);
+  }, [enabled, lockMs, timeoutMs, resetKey]);
 }
 
 const isRealSessionId = (value) => {
@@ -762,7 +781,7 @@ function HomeMenuOverlay({ toggleAction, canAccess = () => true, areBackgroundAn
       className="dark_home_menu_overlay"
       data-animations-enabled={areBackgroundAnimationsEnabled ? "true" : "false"}
       role="dialog"
-      aria-label="Linkx menu"
+      aria-label={`${theme.name} menu`}
     >
       <div className="dark_home_menu_overlay__dock">
         <section
@@ -824,7 +843,7 @@ function HomeMenuOverlay({ toggleAction, canAccess = () => true, areBackgroundAn
         </nav>
       </div>
       <footer className="dark_home_menu_overlay__footer" aria-label="Application footer">
-        <p>© Linkx Web Analyzer. All rights reserved.</p>
+        <p>{theme.copyright}</p>
         <nav aria-label="Footer links">
           {["Privacy Policy", "Terms of Service", "Contact Us", "Help"].map((label) => (
             <button type="button" key={label}>{label}</button>
@@ -849,7 +868,7 @@ function ToggleMenu({ onToggle, isToggleMenuOpen, toggleAction, isMaximized, win
               <a></a>
             </i>
           </span>
-          <label>Linkx | <i>Web Analyzer</i></label>
+          <label>{theme.name} | <i>{theme.tagline}</i></label>
         </div>
         <div className="animated_windows_taskbar" onClick={() => toggleAction("windows_taskbar")}>
           <span>&#10070;</span>
@@ -1159,14 +1178,14 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
 
             <div className="configurations_options_panel" style={{ display: activeConfigTab === "score_lineage" ? "block" : "none" }}>
               <RuleThresholdsPanel apiFetch={apiFetch} canManageUsers={canAccess("users:manage")} />
-              <ScoreLineagePanel apiFetch={apiFetch} />
+              <ScoreLineagePanel apiFetch={apiFetch} canManageUsers={canAccess("users:manage")} />
             </div>
 
             {/* ───────── Left Panel ───────── */}
             <div className="configurations_options_panel" style={{ display: activeConfigTab === "connections" || activeConfigTab === "system" ? "block" : "none" }}>
               {/* Broker Configuration */}
               <fieldset style={{ display: activeConfigTab === "connections" ? "block" : "none" }}>
-                <legend>Broker configuration</legend>
+                <legend>Broker configuration <AdminLockIcon /></legend>
 
                 <label>IP address</label>
                 <select
@@ -1214,7 +1233,7 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
 
               {/* Storage Configuration */}
               <fieldset style={{ display: activeConfigTab === "connections" ? "block" : "none" }}>
-                <legend>Storage configuration</legend>
+                <legend>Storage configuration <AdminLockIcon /></legend>
 
                 <label>IP address</label>
                 <select
@@ -1472,7 +1491,7 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
             <div className="configurations_options_panel" style={{ display: activeConfigTab !== "connections" ? "block" : "none" }}>
               {/* Tool Configuration */}
               <fieldset style={{ display: activeConfigTab === "tools" ? "block" : "none" }}>
-                <legend>Tool configuration</legend>
+                <legend>Tool configuration <AdminLockIcon /></legend>
 
                 <label>Tool</label>
                 <select
@@ -1581,7 +1600,7 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
 
               {/* Analysis Rules */}
               <fieldset style={{ display: activeConfigTab === "rules" ? "block" : "none" }}>
-                <legend>Analysis Rules</legend>
+                <legend>Analysis Rules <AdminLockIcon /></legend>
                 <label>Active rule</label>
                 <select
                   name="active_rule"
@@ -1625,12 +1644,12 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
                 />
 
                 <label>
-                  Get latest sample <a href="/linkxDS2026/temp_rules/Linkx_Rules_Template.zip" download> Template</a>
+                  Get latest sample <a href={`${import.meta.env.BASE_URL}temp_rules/Linkx_Rules_Template.zip`} download> Template</a>
                 </label>
               </fieldset>
 
               <fieldset style={{ display: activeConfigTab === "rules" ? "block" : "none" }}>
-                <legend>Column Mapping</legend>
+                <legend>Column Mapping <AdminLockIcon /></legend>
                 <table className="config_trusted_list_table">
                   <thead>
                     <tr>
@@ -1689,7 +1708,7 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
               </fieldset>
 
               <fieldset style={{ display: activeConfigTab === "rules" ? "block" : "none" }}>
-                <legend>Classified Entities</legend>
+                <legend>Classified Entities <AdminLockIcon /></legend>
                 <table className="config_classified_entities_table">
                   <thead>
                     <tr>
@@ -1799,7 +1818,7 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
 
 
               <fieldset style={{ display: activeConfigTab === "system" ? "block" : "none" }}>
-                <legend>Session timeout policy</legend>
+                <legend>Session timeout policy <AdminLockIcon /></legend>
                 <label className="sublabel">Backend source: {idlePolicyMeta?.source || "session"}</label>
                 <div className="idle_timeout_grid">
                   <label>Warn after
@@ -1856,7 +1875,7 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
 
               {/* Miscellaneous */}
               <fieldset style={{ display: activeConfigTab === "system" ? "block" : "none" }}>
-                <legend>Miscellaneous</legend>
+                <legend>Miscellaneous <AdminLockIcon /></legend>
                 <input
                   type="checkbox"
                   id="Automated_across_service"
@@ -1894,8 +1913,17 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
             <button
               className="action_btns"
               type="button"
-              onClick={() => {
-                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(parsedConfig || {}, null, 2));
+              onClick={async () => {
+                let exportData = { ...(parsedConfig || {}) };
+                try {
+                  const res = await apiFetch("/rule-thresholds", { suppressForbiddenHandler: true });
+                  if (res && res.results && res.results.config) {
+                    exportData.rule_thresholds = res.results.config;
+                  }
+                } catch(e) {
+                  console.warn("Could not fetch rule thresholds for export", e);
+                }
+                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportData, null, 2));
                 const downloadAnchorNode = document.createElement('a');
                 downloadAnchorNode.setAttribute("href", dataStr);
                 downloadAnchorNode.setAttribute("download", `${sessionId}_temp_config.JSON`);
@@ -2846,14 +2874,28 @@ const extractConfigurationPayload = (data) => (
 
 const parseConfigurationValue = (value) => {
   if (!value) return {};
-  if (value.value) {
+  if (typeof value === "string") {
     try {
-      return JSON.parse(String(value.value).replace(/'/g, '"'));
+      const parsed = JSON.parse(value.replace(/'/g, '"'));
+      return parsed && typeof parsed === "object" ? parsed : {};
     } catch (_err) {
       return {};
     }
   }
-  return value && typeof value === "object" ? value : {};
+  if (value.value) {
+    if (typeof value.value === "object") {
+      return value.value;
+    }
+    if (typeof value.value === "string") {
+      try {
+        const parsed = JSON.parse(String(value.value).replace(/'/g, '"'));
+        return parsed && typeof parsed === "object" ? parsed : {};
+      } catch (_err) {
+        return {};
+      }
+    }
+  }
+  return typeof value === "object" ? value : {};
 };
 
 const LARGE_SEARCH_BACKENDS = new Set(["hive", "elastic_scroll"]);
@@ -2891,7 +2933,7 @@ const mergeConfigAddressOptions = ({ list, activeValue, pendingValue }) => {
   const existing = normalizeConfigAddressList(list);
   const active = sanitizeConnectionValue(activeValue, { maxLength: 300 });
   const pending = sanitizeConnectionValue(pendingValue, { maxLength: 300 });
-  const preferred = pending || active;
+  const preferred = pending || active || existing[0] || "";
   const merged = normalizeConfigAddressList([
     ...(preferred ? [preferred] : []),
     ...(active ? [active] : []),
@@ -2900,7 +2942,7 @@ const mergeConfigAddressOptions = ({ list, activeValue, pendingValue }) => {
 
   return {
     list: merged,
-    active: preferred || active,
+    active: preferred,
     pending,
   };
 };
@@ -3110,11 +3152,12 @@ const getConfigValue = (configurations, keys, fallback = "") => {
   for (const key of keyList) {
     const value = config?.[key];
     if (Array.isArray(value)) {
-      if (value.length) return String(value[0] ?? "");
+      const found = value.find((item) => item !== undefined && item !== null && String(item).trim() !== "");
+      if (found !== undefined) return String(found).trim();
       continue;
     }
     if (value !== undefined && value !== null && String(value).trim() !== "") {
-      return String(value);
+      return String(value).trim();
     }
   }
   return fallback;
@@ -3143,9 +3186,34 @@ const getSourceWindowAutofillDefaults = (configurations) => {
     };
   }
 
-  const brokerAddress = getConfigValue(configurations, ["active_kafka_adress", "kafka_custom_address", "active_REST_API"]);
-  const storageAddress = getConfigValue(configurations, ["active_storage_address", "storage_custom_address", "storage_address"]);
-  const brokerTopic = getConfigValue(configurations, ["active_kafka_topic", "kafka_custom_topic"]);
+  const brokerAddress = getConfigValue(configurations, [
+    "active_kafka_adress",
+    "active_kafka_address",
+    "kafka_custom_address",
+    "kafka_addresses",
+    "kafka_bootstrap_servers",
+    "broker_address",
+    "kafka_address",
+    "active_REST_API",
+  ]);
+  const storageAddress = getConfigValue(configurations, [
+    "active_storage_address",
+    "storage_custom_address",
+    "storage_addresses",
+    "storage_address",
+    "storage_hdfs_uri",
+    "active_storage_host",
+    "hadoop_address",
+    "hdfs_address",
+    "active_hdfs_address",
+  ]);
+  const brokerTopic = getConfigValue(configurations, [
+    "active_kafka_topic",
+    "kafka_custom_topic",
+    "kafka_topics",
+    "kafka_risk_scoring_input_topic",
+    "topic",
+  ]);
 
   const toolUrl = getConfigValue(configurations, ["active_tool_url", "active_tool_protocol"]);
   const toolUsername = getConfigValue(configurations, "active_tool_username");
@@ -4271,7 +4339,7 @@ function SmartVigilancePanel({ apiFetch, toggleAction, onNotice, canAccess }) {
                   display: "flex", alignItems: "center", justifyContent: "space-between",
                   width: "44px", height: "22px", borderRadius: "11px", 
                   cursor: togglingPause ? "wait" : "pointer",
-                  background: checkpoint.is_paused ? "#ccc" : "linear-gradient(90deg, #ac854d, #825825)",
+                  background: checkpoint.is_paused ? "#ccc" : "var(--brand-badge-gradient, linear-gradient(90deg, #ac854d, #825825))",
                   padding: "3px", boxSizing: "border-box", transition: "all 0.3s ease",
                   boxShadow: "inset 0 1px 3px rgba(0,0,0,0.3)", position: "relative",
                   opacity: togglingPause ? 0.6 : 1,
@@ -4488,7 +4556,7 @@ function Settings({ isSettingsOpen, toggleAction, actor, roles = [], permissions
   const tabs = [
     { id: "profile", label: "Profile" },
     { id: "preferences", label: "Preferences" },
-    { id: "smart_vigilance", label: "Linkx Vigilance" },
+    { id: "smart_vigilance", label: theme.vigilanceLabel },
     { id: "users", label: "Users", permission: "users:manage" },
     { id: "service_accounts", label: "Service Accounts", permission: "users:manage" },
     { id: "integration", label: "Integration" },
@@ -5198,8 +5266,19 @@ function WindowVerticalSplitPanels({id, type, sourceId, initialTopHeight, minTop
   );
 }
 function IframeEmbed({wId,id,fileName,title,activeGraph,graphAction,iframeRef,BASE_URL,themeMode = "light"}) {
-  const normalizedBaseUrl = String(BASE_URL || import.meta.env.BASE_URL || "").replace(/\/+$/, "");
-  const iframeBasePath = `${normalizedBaseUrl}/linkxDS2026/temp_placeholders`;
+  const rawBase = String(BASE_URL || "").trim().replace(/\/+$/, "");
+  const appBase = String(import.meta.env.BASE_URL || "/");
+  const cleanAppBase = appBase.replace(/^\/+|\/+$/g, "");
+  let iframeBasePath;
+  if (!rawBase) {
+    iframeBasePath = cleanAppBase ? `/${cleanAppBase}/temp_placeholders` : "/temp_placeholders";
+  } else if (cleanAppBase && (rawBase.endsWith(`/${cleanAppBase}`) || rawBase === cleanAppBase)) {
+    iframeBasePath = `${rawBase}/temp_placeholders`;
+  } else if (cleanAppBase) {
+    iframeBasePath = `${rawBase}/${cleanAppBase}/temp_placeholders`;
+  } else {
+    iframeBasePath = `${rawBase}/temp_placeholders`;
+  }
   const iframeVersion = "20260704-sourceplaceholder1";
   const parentOriginParam = encodeURIComponent(getTrustedMessageOrigin());
   const strictSandbox = "allow-scripts allow-downloads allow-modals allow-popups allow-popups-to-escape-sandbox";
@@ -5228,13 +5307,16 @@ function IframeEmbed({wId,id,fileName,title,activeGraph,graphAction,iframeRef,BA
     </span>
   );
 
+  const brandParam = encodeURIComponent(theme?.id || "nbe");
+  const iframeQueryParams = `v=${iframeVersion}&theme=${encodeURIComponent(themeMode)}&brand=${brandParam}&parent_origin=${parentOriginParam}`;
+
   if (id === "source_placeholder"){
     return (
       <div className="iframe_graph">
         <iframe
           ref={iframeRef}
           sandbox={strictSandbox}
-          src={`${iframeBasePath}/source_placeholder.html?v=${iframeVersion}&theme=${encodeURIComponent(themeMode)}&parent_origin=${parentOriginParam}`}
+          src={`${iframeBasePath}/source_placeholder.html?${iframeQueryParams}`}
           width="100%"
           height="98%"
           style={{ border: 'none' }}
@@ -5249,7 +5331,7 @@ function IframeEmbed({wId,id,fileName,title,activeGraph,graphAction,iframeRef,BA
         <iframe
           ref={iframeRef}
           sandbox={strictSandbox}
-          src={`${iframeBasePath}/graph_placeholder.html?v=${iframeVersion}&parent_origin=${parentOriginParam}`}
+          src={`${iframeBasePath}/graph_placeholder.html?${iframeQueryParams}`}
           width="100%"
           height="98%"
           style={{ border: 'none' }}
@@ -5264,7 +5346,7 @@ function IframeEmbed({wId,id,fileName,title,activeGraph,graphAction,iframeRef,BA
         <iframe
           ref={iframeRef}
           sandbox={relaxedSandbox}
-          src={`${iframeBasePath}/charts_basic.html?v=${iframeVersion}&parent_origin=${parentOriginParam}`}
+          src={`${iframeBasePath}/charts_basic.html?${iframeQueryParams}`}
           width="100%"
           height="98%"
           style={{ border: 'none' }}
@@ -5280,7 +5362,7 @@ function IframeEmbed({wId,id,fileName,title,activeGraph,graphAction,iframeRef,BA
         <iframe
           ref={iframeRef}
           sandbox={strictSandbox}
-          src={`${iframeBasePath}/${iframeFile}.html?v=${iframeVersion}&parent_origin=${parentOriginParam}`}
+          src={`${iframeBasePath}/${iframeFile}.html?${iframeQueryParams}`}
           width="100%"
           height="98%"
           style={{ border: "none" }}
@@ -6971,6 +7053,7 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
                   graphAction={graphAction}
                   iframeRef={iframeRef}
                   BASE_URL={BASE_URL}
+                  themeMode={themeMode}
                 />
               </div>
             )}
@@ -7285,6 +7368,7 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
                     graphAction={graphAction}
                     iframeRef={iframeRef}
                     BASE_URL={BASE_URL}
+                    themeMode={themeMode}
                   />
                 </div>
               )}
@@ -7310,10 +7394,10 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
     )
   }
 }
-const workspaceBackgroundVideo = import.meta.env.BASE_URL + "site_videos/background.mp4";
-const fallbackWorkspaceBackgroundVideo = "/site_videos/background.mp4";
-const workspaceBackgroundImage = import.meta.env.BASE_URL + "site_images/Linkx_background_basic.webp";
-const fallbackWorkspaceBackgroundImage = "/site_images/Linkx_background_basic.webp";
+const workspaceBackgroundVideo = import.meta.env.BASE_URL + theme.backgroundVideo;
+const fallbackWorkspaceBackgroundVideo = "/" + theme.backgroundVideo;
+const workspaceBackgroundImage = import.meta.env.BASE_URL + theme.backgroundImage;
+const fallbackWorkspaceBackgroundImage = "/" + theme.backgroundImage;
 
 function Main({userName,setSessionId, API_URL,debounceRef,setConfigurations, configurations,windows, setWindows, openWindows, themeMode, areBackgroundAnimationsEnabled }) {
   const hasRunRef = useRef(false);
@@ -7447,7 +7531,7 @@ function NotificationStack({ items, onDismiss }) {
               </button>
             </div>
             <div className="linkx_notice_body">{item.message}</div>
-            <div className="linkx_notice_meta">{item.source || "Linkx"}</div>
+            <div className="linkx_notice_meta">{item.source || theme.name}</div>
           </div>
         ))}
       </div>
@@ -7975,6 +8059,7 @@ const fileInputRef = useRef(null);
       const attrSrc = frameEl?.getAttribute?.("src");
       try {
         postMessageToIframe(frameEl, { action: "theme_mode", payload: themeMode });
+        postMessageToIframe(frameEl, { action: "theme_brand", payload: theme?.id || "nbe" });
 
       } catch (e) {
         console.error("Applying THEME FAILED:");
@@ -8071,7 +8156,7 @@ const fileInputRef = useRef(null);
     const title = rawTitle && !/^(alert|message|message alert)$/i.test(rawTitle)
       ? rawTitle
       : (level === "error" ? "Error" : level === "warning" ? "Warning" : level === "success" ? "Success" : "Notice");
-    const source = payload.source || "Linkx";
+    const source = payload.source || theme.name;
     const durationMs = Number.isFinite(payload.durationMs) ? Number(payload.durationMs) : 5400;
 
     setNotifications((prev) => [
@@ -8140,7 +8225,7 @@ const fileInputRef = useRef(null);
       pushNotification({
         title: "Request too large",
         message: "The request was too large. Reduce file size or payload size and try again.",
-        source: "Linkx",
+        source: theme.name,
         level: "warning",
         durationMs: 8000,
       });
@@ -8381,7 +8466,7 @@ const fileInputRef = useRef(null);
         });
         if (isSuccessResponse(initData)) {
           const nextSession = extractMainSessionId(initData) || previousSessionId;
-          setConfigurations(extractInitConfiguration(initData));
+          setConfigurations(normalizeLoadedConfiguration(extractInitConfiguration(initData)));
           setSessionId(nextSession);
           sessionIdRef.current = nextSession;
           if (nextSession) {
@@ -8431,7 +8516,7 @@ const fileInputRef = useRef(null);
         pushNotification({
           title: "Confirmed",
           message: "Action confirmed.",
-          source: target.source || "Linkx",
+          source: target.source || theme.name,
           level: "success",
           durationMs: 2600
         });
@@ -8447,7 +8532,7 @@ const fileInputRef = useRef(null);
       const message = sanitizeNotificationMessage(rawMessage) || "Are you sure you want to continue?";
       const rawTitle = String(payload.title || "").trim();
       const title = rawTitle && !/^(alert|message|message alert)$/i.test(rawTitle) ? rawTitle : "Confirm Action";
-      const source = payload.source || "Linkx";
+      const source = payload.source || theme.name;
       const rawLevel = String(payload.level || payload.severity || "warning").toLowerCase();
       const level = ["success", "warning", "error", "info"].includes(rawLevel) ? rawLevel : "warning";
       setConfirmations((prev) => ([
@@ -8508,8 +8593,8 @@ const fileInputRef = useRef(null);
           .then(data => {
             if (isSuccessResponse(data)) {
               const session = extractMainSessionId(data) || oldSession || "";
-              const configs = extractInitConfiguration(data);
-              setConfigurations(configs)
+              const configs = normalizeLoadedConfiguration(extractInitConfiguration(data));
+              setConfigurations(configs);
               setSessionId(session || null);
               sessionIdRef.current = session || null;
               const sourceAutofillPatch = buildSourceWindowAutofillPatch(configs || {});
@@ -8541,7 +8626,7 @@ const fileInputRef = useRef(null);
       pushNotification({
         title: "Notice",
         message: String(message ?? ""),
-        source: "Linkx",
+        source: theme.name,
         level: "warning"
       });
     };
@@ -9456,7 +9541,7 @@ const fileInputRef = useRef(null);
       pushNotification({
         title: "Window limit reached",
         message: "Maximum of " + cap.hard + " " + cap.label + " reached. Close one before opening another.",
-        source: "Linkx",
+        source: theme.name,
         level: "warning",
         durationMs: 7000,
       });
@@ -9467,7 +9552,7 @@ const fileInputRef = useRef(null);
       pushNotification({
         title: "Window count warning",
         message: "You already have " + totalCount + " " + cap.label + " open. Performance may degrade if you open more.",
-        source: "Linkx",
+        source: theme.name,
         level: "warning",
         durationMs: 5000,
       });
@@ -10990,11 +11075,24 @@ const fileInputRef = useRef(null);
         if (menuId === "real_time_input" && action === "update") {
           newContent = "real_time_input";
           newSubContent = "real_time_input_form_pageI";
-          setWindows(prev =>
-            prev.map(w =>
-              w.id === id ? { ...w,loadscreenState: false,loadscreenText:null,selectedContent:newContent,selectedSubContent:newSubContent,windowRealtimeResponseI:windowRealtimeResponseI,formRealtimeToolResponse:formRealtimeToolResponse} : w
-            )
-          );
+          const sourceAutofillDefaults = getSourceWindowAutofillDefaults(configurations);
+          return {
+            ...w,
+            loadscreenState: false,
+            loadscreenText: null,
+            selectedContent: newContent,
+            selectedSubContent: newSubContent,
+            windowRealtimeResponseI: windowRealtimeResponseI,
+            formRealtimeToolResponse: formRealtimeToolResponse,
+            sourceRealtimeAddressType: w.sourceRealtimeAddressType || sourceAutofillDefaults.sourceRealtimeAddressType || "broker",
+            sourceRealtimeAddressText: w.sourceRealtimeAddressText || sourceAutofillDefaults.sourceRealtimeAddressText,
+            sourceRealtimeTopicText: w.sourceRealtimeTopicText || sourceAutofillDefaults.sourceRealtimeTopicText,
+            realtimeToolUrl: w.realtimeToolUrl || sourceAutofillDefaults.realtimeToolUrl,
+            realtimeToolUsername: w.realtimeToolUsername || sourceAutofillDefaults.realtimeToolUsername,
+            realtimeToolPassword: w.realtimeToolPassword || sourceAutofillDefaults.realtimeToolPassword,
+            realtimeToolPasswordRef: w.realtimeToolPasswordRef || sourceAutofillDefaults.realtimeToolPasswordRef,
+            realtimeToolDatabase: w.realtimeToolDatabase || sourceAutofillDefaults.realtimeToolDatabase,
+          };
         }
         if (menuId === "batch_input" && action === "update") {
           newContent = "batch_input";
@@ -11017,7 +11115,7 @@ const fileInputRef = useRef(null);
               dataframeStatus: DATAFRAME_STATUSES.NONE,
               streamStatus: STREAM_STATUSES.IDLE,
               sourceStep: SOURCE_FLOW_STEPS.CONNECT,
-              sourceAddressType: sourceAutofillDefaults.sourceAddressType,
+              sourceAddressType: sourceAutofillDefaults.sourceAddressType || "broker",
               sourceAddressText: sourceAutofillDefaults.sourceAddressText,
               sourceStorageText: sourceAutofillDefaults.sourceStorageText,
               sourceTopicText: sourceAutofillDefaults.sourceTopicText,
@@ -11042,20 +11140,24 @@ const fileInputRef = useRef(null);
           }
 
           //setting page for batch (default)
-          if (windowResponseI === "Dataset uploaded!"){
-            setWindows(prev =>
-              prev.map(w =>
-                w.id === id ? { ...w,loadscreenState: false ,loadscreenText:null,selectedContent:newContent,selectedSubContent:newSubContent,windowResponseI:null,batchFilesCollection:newBatchFilesCollection} : w
-              )
-            );
-          }
-          else{
-            setWindows(prev =>
-              prev.map(w =>
-                w.id === id ? { ...w,loadscreenState: false ,loadscreenText:null,selectedContent:newContent,selectedSubContent:newSubContent,windowResponseI:windowResponseI,batchFilesCollection:newBatchFilesCollection} : w
-              )
-            );
-          }        
+          return {
+            ...w,
+            loadscreenState: false,
+            loadscreenText: null,
+            selectedContent: newContent,
+            selectedSubContent: newSubContent,
+            windowResponseI: windowResponseI === "Dataset uploaded!" ? null : windowResponseI,
+            batchFilesCollection: newBatchFilesCollection,
+            sourceAddressType: w.sourceAddressType || sourceAutofillDefaults.sourceAddressType || "broker",
+            sourceAddressText: w.sourceAddressText || sourceAutofillDefaults.sourceAddressText,
+            sourceStorageText: w.sourceStorageText || sourceAutofillDefaults.sourceStorageText,
+            sourceTopicText: w.sourceTopicText || sourceAutofillDefaults.sourceTopicText,
+            toolUrl: w.toolUrl || sourceAutofillDefaults.toolUrl,
+            toolUsername: w.toolUsername || sourceAutofillDefaults.toolUsername,
+            toolPassword: w.toolPassword || sourceAutofillDefaults.toolPassword,
+            toolPasswordRef: w.toolPasswordRef || sourceAutofillDefaults.toolPasswordRef,
+            toolDatabase: w.toolDatabase || sourceAutofillDefaults.toolDatabase,
+          };
         }
         if (menuId === "batch_input_form_address" && action === "change" && payload) {
           console.log("address_change:",payload);
@@ -12565,7 +12667,7 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
               data,
               "The request was received, but the stream did not initialize. Please check the selected action and try again."
             ),
-            source: "Linkx",
+            source: theme.name,
             level: "error",
           });
 
@@ -12707,7 +12809,7 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
             pushNotification({
               title: "Streaming could not start",
               message: streamErrorMessage,
-              source: "Linkx",
+              source: theme.name,
               level: "error",
             });
 
@@ -12758,7 +12860,7 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
             err,
             "The streaming request failed. Please check the backend response and try again."
           ),
-          source: "Linkx",
+          source: theme.name,
           level: "error",
         });
 
@@ -12981,7 +13083,7 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
               pushNotification({
                 title: "Graph link blocked",
                 message: linkBlockedMessage,
-                source: "Linkx",
+                source: theme.name,
                 level: "warning",
               });
               setGraphLinkState(false);
@@ -13112,7 +13214,7 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
                   pushNotification({
                     title: "Graph link failed",
                     message: "The selected source window could not be linked. Please check the source window id and try again.",
-                    source: "Linkx",
+                    source: theme.name,
                     level: "error",
                   });
                   console.warn("Graph link rejected", { message: data?.message, field: data?.field, hasDetail: Boolean(data?.detail) });
@@ -13141,7 +13243,7 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
                 pushNotification({
                   title: "Graph link failed",
                   message: "The selected source window could not be linked. Please check the source window id and try again.",
-                  source: "Linkx",
+                  source: theme.name,
                   level: "error",
                 });
                 console.warn("Graph link request failed", { message: err?.message, field: err?.data?.field, hasData: Boolean(err?.data) });
@@ -13843,6 +13945,17 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
           const content = e.target.result;
           const parsed = JSON.parse(content);
           
+          if (parsed.rule_thresholds) {
+            apiFetch("/rule-thresholds", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(parsed.rule_thresholds)
+            }).then(() => {
+              window.dispatchEvent(new Event('rule_thresholds_updated'));
+            }).catch(err => console.error("Failed to restore rule thresholds from import", err));
+            delete parsed.rule_thresholds;
+          }
+          
           const saveBody = {
             id: "save",
             session_id: resolvedSessionId,
@@ -14159,7 +14272,7 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
                   <span ref={tabsToggleButtonRef} onClick={handleToggleMenu}>
                     <i><a></a></i>
                   </span>
-                  <label style={{display : isToggleMenuOpen ? 'none':''}}>Linkx | <i>Web Analyzer</i></label>
+                  <label style={{display : isToggleMenuOpen ? 'none':''}}>{theme.name} | <i>{theme.tagline}</i></label>
                 </div>
               </div>
               <div className="window_parent_bar_title_container"></div>
@@ -15544,15 +15657,25 @@ function Root() {
 
 export default Root;
 
-function ScoreLineagePanel({ apiFetch }) {
+function ScoreLineagePanel({ apiFetch, canManageUsers }) {
   const [baseScores, setBaseScores] = React.useState({
+    SANCTIONED_ENTITY_MATCH: 100,
     HIGH_RISK_LINK: 50,
+    PEP_INVOLVED: 50,
+    FRAUD_AGGREGATOR: 50,
     CIRCULAR_FLOW: 30,
+    EFFECTIVE_FLOW: 25,
+    RAPID_WITHDRAWAL: 25,
+    DORMANT_TO_ACTIVE: 25,
     SMURFING: 20,
     SHARED_IDENTIFIER: 20,
+    JUST_BELOW_THRESHOLD: 20,
+    LATE_NIGHT_TX: 15,
+    ACCOUNT_ACTIVITY_SPIKE: 15,
     HUB_AND_SPOKE: 10,
     RAPID_FAN_OUT: 10,
-    ABNORMAL_BALANCE_CHANGE: 10
+    ABNORMAL_BALANCE_CHANGE: 10,
+    FUND_FLOW: 10
   });
 
   const [nodeThresholds, setNodeThresholds] = React.useState([
@@ -15589,12 +15712,13 @@ function ScoreLineagePanel({ apiFetch }) {
   }, []);
 
   const handleSave = async () => {
+    if (!canManageUsers) return;
     setIsSaving(true);
     try {
       const payload = {
-        base_scores: baseScores,
-        node_thresholds: nodeThresholds,
-        money_thresholds: moneyThresholds
+        base_scores: Object.fromEntries(Object.entries(baseScores).map(([k, v]) => [k, Number(v)])),
+        node_thresholds: nodeThresholds.map(t => ({ min_nodes: Number(t.min_nodes), add_points: Number(t.add_points) })),
+        money_thresholds: moneyThresholds.map(t => ({ min_amount: Number(t.min_amount), add_points: Number(t.add_points) }))
       };
       
       const res = await apiFetch("/config/score-lineage", {
@@ -15615,7 +15739,7 @@ function ScoreLineagePanel({ apiFetch }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
       <fieldset>
-        <legend>Base Scores by Typology</legend>
+        <legend>Base Scores by Typology <AdminLockIcon /></legend>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}>
           {Object.entries(baseScores).map(([key, val]) => (
             <div key={key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "5px" }}>
@@ -15624,7 +15748,7 @@ function ScoreLineagePanel({ apiFetch }) {
                 type="range" 
                 min="0" max="100" 
                 value={val} 
-                onChange={e => setBaseScores(prev => ({...prev, [key]: Number(e.target.value)}))} 
+                disabled={!canManageUsers} onChange={e => setBaseScores(prev => ({...prev, [key]: Number(e.target.value)}))} 
                 style={{ flex: 1, marginRight: "10px" }}
               />
               <span style={{ width: "30px", textAlign: "right", fontWeight: "bold" }}>{val}</span>
@@ -15634,51 +15758,51 @@ function ScoreLineagePanel({ apiFetch }) {
       </fieldset>
 
       <fieldset>
-        <legend>Node Count Multipliers</legend>
+        <legend>Node Count Multipliers <AdminLockIcon /></legend>
         {nodeThresholds.map((t, idx) => (
           <div key={idx} style={{ display: "flex", gap: "10px", marginBottom: "10px", alignItems: "center" }}>
             <label style={{width: "80px"}}>Min Nodes:</label>
-            <input type="number" className="input_text" style={{ flex: 1 }} value={t.min_nodes} onChange={e => {
+            <input type="number" className="input_text" style={{ flex: 1 }} value={t.min_nodes} disabled={!canManageUsers} onChange={e => {
               const newT = [...nodeThresholds];
               newT[idx].min_nodes = Number(e.target.value);
               setNodeThresholds(newT);
             }} />
             <label style={{width: "80px"}}>Add Points:</label>
-            <input type="number" className="input_text" style={{ width: "80px" }} value={t.add_points} onChange={e => {
+            <input type="number" className="input_text" style={{ width: "80px" }} value={t.add_points} disabled={!canManageUsers} onChange={e => {
               const newT = [...nodeThresholds];
               newT[idx].add_points = Number(e.target.value);
               setNodeThresholds(newT);
             }} />
-            <button type="button" className="close_action_btn" onClick={() => setNodeThresholds(nodeThresholds.filter((_, i) => i !== idx))}>x</button>
+            {canManageUsers && <button type="button" className="close_action_btn" onClick={() => setNodeThresholds(nodeThresholds.filter((_, i) => i !== idx))}>x</button>}
           </div>
         ))}
-        <button type="button" className="action_btns" style={{ position: "relative", zIndex: 10 }} onClick={() => setNodeThresholds([...nodeThresholds, { min_nodes: 0, add_points: 0 }])}>+ Add Threshold</button>
+        {canManageUsers && <button type="button" className="action_btns" style={{ position: "relative", zIndex: 10 }} onClick={() => setNodeThresholds([...nodeThresholds, { min_nodes: 0, add_points: 0 }])}>+ Add Threshold</button>}
       </fieldset>
 
       <fieldset>
-        <legend>Financial Value Multipliers</legend>
+        <legend>Financial Value Multipliers <AdminLockIcon /></legend>
         {moneyThresholds.map((t, idx) => (
           <div key={idx} style={{ display: "flex", gap: "10px", marginBottom: "10px", alignItems: "center" }}>
             <label style={{width: "80px"}}>Min Amount:</label>
-            <input type="number" className="input_text" style={{ flex: 1 }} value={t.min_amount} onChange={e => {
+            <input type="number" className="input_text" style={{ flex: 1 }} value={t.min_amount} disabled={!canManageUsers} onChange={e => {
               const newT = [...moneyThresholds];
               newT[idx].min_amount = Number(e.target.value);
               setMoneyThresholds(newT);
             }} />
             <label style={{width: "80px"}}>Add Points:</label>
-            <input type="number" className="input_text" style={{ width: "80px" }} value={t.add_points} onChange={e => {
+            <input type="number" className="input_text" style={{ width: "80px" }} value={t.add_points} disabled={!canManageUsers} onChange={e => {
               const newT = [...moneyThresholds];
               newT[idx].add_points = Number(e.target.value);
               setMoneyThresholds(newT);
             }} />
-            <button type="button" className="close_action_btn" onClick={() => setMoneyThresholds(moneyThresholds.filter((_, i) => i !== idx))}>x</button>
+            {canManageUsers && <button type="button" className="close_action_btn" onClick={() => setMoneyThresholds(moneyThresholds.filter((_, i) => i !== idx))}>x</button>}
           </div>
         ))}
-        <button type="button" className="action_btns" style={{ position: "relative", zIndex: 10 }} onClick={() => setMoneyThresholds([...moneyThresholds, { min_amount: 0, add_points: 0 }])}>+ Add Threshold</button>
+        {canManageUsers && <button type="button" className="action_btns" style={{ position: "relative", zIndex: 10 }} onClick={() => setMoneyThresholds([...moneyThresholds, { min_amount: 0, add_points: 0 }])}>+ Add Threshold</button>}
       </fieldset>
 
       <div style={{ textAlign: "right", marginTop: "10px", paddingBottom: "80px" }}>
-        <button type="button" className="smart_vigilance_findings_btn" style={{ padding: "8px 16px", fontWeight: "bold", opacity: isSaving ? 0.7 : 1, position: "relative", zIndex: 10 }} onClick={handleSave} disabled={isSaving}>
+        <button type="button" className="smart_vigilance_findings_btn" style={{ padding: "8px 16px", fontWeight: "bold", opacity: isSaving || !canManageUsers ? 0.7 : 1, position: "relative", zIndex: 10, display: canManageUsers ? "inline-block" : "none" }} onClick={handleSave} disabled={isSaving || !canManageUsers}>
           {isSaving ? "Saving..." : "Save New Version"}
         </button>
       </div>
@@ -15688,26 +15812,46 @@ function ScoreLineagePanel({ apiFetch }) {
 
 
 
+const DEFAULT_THRESHOLDS = {
+  hub_spoke_min_single_amount: 500.0,
+  abnormal_balance_min_tx_amount: 1000.0,
+  just_below_threshold_min_count: 2,
+  just_below_threshold_ratio: 0.90,
+  global_min_anomaly_amount: 100.0,
+  late_night_min_amount: 500.0,
+  circular_flow_min_amount: 200.0,
+  rapid_withdrawal_min_amount: 250.0,
+  hub_spoke_min_amount: 500.0,
+  activity_spike_min_amount: 500.0,
+  abnormal_balance_min_change: 500.0,
+  fund_flow_min_amount: 200.0,
+  circular_flow_amount_tolerance: 0.05,
+  circular_flow_check_amounts: false,
+  rapid_withdrawal_amount_tolerance: 0.1,
+  hub_spoke_min_counterparties: 3,
+  activity_spike_multiplier: 3.0,
+  activity_spike_min_daily_count: 10,
+  fund_flow_hub_threshold: 1000.0,
+  fund_flow_max_downstream: 5,
+  reporting_threshold: 300000.0,
+  smurfing_single_tx_threshold: 300000.0,
+  smurfing_cumulative_threshold: 900000.0,
+  smurfing_min_tx_count: 3,
+  late_night_start: 2300,
+  late_night_end: 400
+};
+
 function RuleThresholdsPanel({ apiFetch, canManageUsers }) {
-  const [config, setConfig] = React.useState({
-    smurfing_single_tx_threshold: 250000,
-    smurfing_min_tx_count: 5,
-    smurfing_cumulative_threshold: 1000000,
-    reporting_threshold: 1500000,
-    circular_flow_check_amounts: true,
-    late_night_start: 2200,
-    late_night_end: 500,
-    hub_spoke_min_counterparties: 10,
-    activity_spike_multiplier: 3.0,
-    activity_spike_min_daily_count: 5,
-    rapid_withdrawal_amount_tolerance: 0.1
-  });
+  const [config, setConfig] = React.useState(DEFAULT_THRESHOLDS);
   const [history, setHistory] = React.useState([]);
   const [isSaving, setIsSaving] = React.useState(false);
   const [loading, setLoading] = React.useState(true);
 
   React.useEffect(() => {
     fetchData();
+    const handleUpdate = () => fetchData();
+    window.addEventListener('rule_thresholds_updated', handleUpdate);
+    return () => window.removeEventListener('rule_thresholds_updated', handleUpdate);
   }, []);
 
   const fetchData = async () => {
@@ -15715,7 +15859,7 @@ function RuleThresholdsPanel({ apiFetch, canManageUsers }) {
     try {
       const res = await apiFetch("/rule-thresholds", { suppressForbiddenHandler: true });
       if (res && res.results && res.results.config) {
-        setConfig(prev => ({...prev, ...res.results.config}));
+        setConfig(prev => ({ ...prev, ...res.results.config }));
       }
       if (canManageUsers) {
         const histRes = await apiFetch("/rule-thresholds/history?limit=50", { suppressForbiddenHandler: true });
@@ -15735,10 +15879,21 @@ function RuleThresholdsPanel({ apiFetch, canManageUsers }) {
     if (!canManageUsers) return;
     setIsSaving(true);
     try {
+      const numericConfig = {};
+      for (const key of Object.keys(DEFAULT_THRESHOLDS)) {
+        if (typeof DEFAULT_THRESHOLDS[key] === "boolean") {
+          // ensure true boolean
+          numericConfig[key] = config[key] === true || config[key] === "true";
+        } else {
+          const num = Number(config[key]);
+          numericConfig[key] = isNaN(num) ? DEFAULT_THRESHOLDS[key] : num;
+        }
+      }
+      
       const res = await apiFetch("/rule-thresholds", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(config)
+        body: JSON.stringify(numericConfig)
       });
       alert("Rule Thresholds saved successfully!");
       fetchData();
@@ -15750,11 +15905,16 @@ function RuleThresholdsPanel({ apiFetch, canManageUsers }) {
     }
   };
 
+  const handleReset = () => {
+    setConfig(DEFAULT_THRESHOLDS);
+    alert("Rule Thresholds reset to defaults (not saved yet).");
+  };
+
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     setConfig(prev => ({
       ...prev,
-      [name]: type === 'checkbox' ? checked : Number(value)
+      [name]: type === 'checkbox' ? checked : (value === '' ? '' : Number(value))
     }));
   };
 
@@ -15763,73 +15923,145 @@ function RuleThresholdsPanel({ apiFetch, canManageUsers }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "15px", marginTop: "20px" }}>
       <fieldset>
-        <legend>Rule Thresholds</legend>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}>
-          
+        <legend>Global Baseline Floor <AdminLockIcon /></legend>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "15px" }}>
           <div className="configurations_input">
-            <label>Smurfing Single TX Threshold (Min 1,000 | Max 10M)</label>
-            <input type="number" name="smurfing_single_tx_threshold" min="1000" max="10000000" required value={config.smurfing_single_tx_threshold} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+            <label title="Universal baseline floor. Transactions below this value will not trigger anomalies unless explicitly overridden by a rule-specific threshold.">
+              Universal Minimum Anomaly Floor (Amount)
+            </label>
+            <input type="number" step="0.1" name="global_min_anomaly_amount" min="0" max="10000000" required value={config.global_min_anomaly_amount} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
           </div>
-
-          <div className="configurations_input">
-            <label>Smurfing Min TX Count (Min 2 | Max 100)</label>
-            <input type="number" name="smurfing_min_tx_count" min="2" max="100" required value={config.smurfing_min_tx_count} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
-          </div>
-
-          <div className="configurations_input">
-            <label>Smurfing Cumulative Threshold (Min 5,000 | Max 50M)</label>
-            <input type="number" name="smurfing_cumulative_threshold" min="5000" max="50000000" required value={config.smurfing_cumulative_threshold} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
-          </div>
-
-          <div className="configurations_input">
-            <label>Reporting Threshold (Min 1,000 | Max 10M)</label>
-            <input type="number" name="reporting_threshold" min="1000" max="10000000" required value={config.reporting_threshold} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
-          </div>
-
-          <div className="configurations_input">
-            <label>Late Night Start (HHmm) (Min 1800 | Max 2359)</label>
-            <input type="number" name="late_night_start" min="1800" max="2359" required value={config.late_night_start} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
-          </div>
-
-          <div className="configurations_input">
-            <label>Late Night End (HHmm) (Min 0 | Max 800)</label>
-            <input type="number" name="late_night_end" min="0" max="800" required value={config.late_night_end} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
-          </div>
-
-          <div className="configurations_input">
-            <label>Hub &amp; Spoke Min Counterparties (Min 2 | Max 50)</label>
-            <input type="number" name="hub_spoke_min_counterparties" min="2" max="50" required value={config.hub_spoke_min_counterparties} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
-          </div>
-
-          <div className="configurations_input">
-            <label>Activity Spike Multiplier (Min 1.5 | Max 20)</label>
-            <input type="number" step="0.1" name="activity_spike_multiplier" min="1.5" max="20" required value={config.activity_spike_multiplier} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
-          </div>
-
-          <div className="configurations_input">
-            <label>Activity Spike Min Daily Count (Min 3 | Max 1000)</label>
-            <input type="number" name="activity_spike_min_daily_count" min="3" max="1000" required value={config.activity_spike_min_daily_count} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
-          </div>
-
-          <div className="configurations_input">
-            <label>Rapid Withdrawal Amount Tolerance (Min 0.01 | Max 0.5)</label>
-            <input type="number" step="0.01" name="rapid_withdrawal_amount_tolerance" min="0.01" max="0.5" required value={config.rapid_withdrawal_amount_tolerance} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
-          </div>
-
-          <div className="configurations_input" style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <input type="checkbox" name="circular_flow_check_amounts" id="chk_circular" checked={config.circular_flow_check_amounts} onChange={handleChange} style={{ width: "16px", height: "16px", margin: 0 }} />
-            <label htmlFor="chk_circular" style={{ margin: 0, padding: 0 }}>Circular Flow Check Amounts</label>
-          </div>
-
-          {canManageUsers && (
-            <div style={{ gridColumn: "1 / -1", display: "flex", justifyContent: "flex-end", marginTop: "10px" }}>
-              <button type="button" onClick={handleSave} disabled={isSaving} className="action_btns config_trusted_list_add">
-                {isSaving ? "Saving..." : "Save New Version"}
-              </button>
-            </div>
-          )}
         </div>
       </fieldset>
+
+      <fieldset>
+        <legend>Per-Rule Amount Floors (False Positive Suppression) <AdminLockIcon /></legend>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}>
+          <div className="configurations_input">
+            <label title="Late night transactions below this amount will not be flagged.">Late Night Min Amount (Amount)</label>
+            <input type="number" step="0.1" name="late_night_min_amount" min="0" max="10000000" required value={config.late_night_min_amount} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+          </div>
+          <div className="configurations_input">
+            <label title="Minimum leg amount required to participate in circular flow detection.">Circular Flow Min Amount (Amount)</label>
+            <input type="number" step="0.1" name="circular_flow_min_amount" min="0" max="10000000" required value={config.circular_flow_min_amount} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+          </div>
+          <div className="configurations_input">
+            <label title="Minimum inbound/outbound transfer value before rapid withdrawal ratio is evaluated.">Rapid Withdrawal Min Amount (Amount)</label>
+            <input type="number" step="0.1" name="rapid_withdrawal_min_amount" min="0" max="10000000" required value={config.rapid_withdrawal_min_amount} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+          </div>
+          <div className="configurations_input">
+            <label title="Minimum total volume distributed across counterparties before an account is flagged as a hub.">Hub &amp; Spoke Min Amount (Amount)</label>
+            <input type="number" step="0.1" name="hub_spoke_min_amount" min="0" max="10000000" required value={config.hub_spoke_min_amount} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+          </div>
+          <div className="configurations_input">
+            <label title="Daily transaction volume must exceed this value for activity spike alerts.">Activity Spike Min Daily Volume (Amount)</label>
+            <input type="number" step="0.1" name="activity_spike_min_amount" min="0" max="10000000" required value={config.activity_spike_min_amount} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+          </div>
+          <div className="configurations_input">
+            <label title="Minimum balance fluctuation required to evaluate abnormal balance behavior.">Abnormal Balance Min Change (Amount)</label>
+            <input type="number" step="0.1" name="abnormal_balance_min_change" min="0" max="10000000" required value={config.abnormal_balance_min_change} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+          </div>
+          <div className="configurations_input">
+            <label title="Only transactions greater than or equal to this amount will be evaluated against the account's historical balance baseline. Prevents small retail purchases from triggering balance shift alerts.">Min Transaction Amount for Balance Check (Amount)</label>
+            <input type="number" step="0.1" name="abnormal_balance_min_tx_amount" min="0" max="10000000" required value={config.abnormal_balance_min_tx_amount} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+          </div>
+          <div className="configurations_input">
+            <label title="Minimum amount to trace multi-hop fund flow pass-throughs.">Fund Flow / Layering Min Amount (Amount)</label>
+            <input type="number" step="0.1" name="fund_flow_min_amount" min="0" max="10000000" required value={config.fund_flow_min_amount} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+          </div>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Structural &amp; Ratio Settings <AdminLockIcon /></legend>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}>
+          <div className="configurations_input">
+            <label>Circular Flow Amount Tolerance (0.01 - 1.0)</label>
+            <input type="number" step="0.01" name="circular_flow_amount_tolerance" min="0.01" max="1.0" required value={config.circular_flow_amount_tolerance} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+          </div>
+          <div className="configurations_input" style={{ display: "flex", alignItems: "center", gap: "10px", marginTop: "20px" }}>
+            <input type="checkbox" name="circular_flow_check_amounts" id="chk_circular" checked={config.circular_flow_check_amounts} disabled={!canManageUsers} onChange={handleChange} style={{ width: "16px", height: "16px", margin: 0 }} />
+            <label htmlFor="chk_circular" style={{ margin: 0, padding: 0 }}>Circular Flow Check Amounts</label>
+          </div>
+          <div className="configurations_input">
+            <label>Rapid Withdrawal Tolerance (0.01 - 0.5)</label>
+            <input type="number" step="0.01" name="rapid_withdrawal_amount_tolerance" min="0.01" max="0.5" required value={config.rapid_withdrawal_amount_tolerance} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+          </div>
+          <div className="configurations_input">
+            <label>Hub &amp; Spoke Min Counterparties (2 - 50)</label>
+            <input type="number" name="hub_spoke_min_counterparties" min="2" max="50" required value={config.hub_spoke_min_counterparties} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+          </div>
+          <div className="configurations_input">
+            <label title="Minimum individual transaction size to be considered a spoke. Filters out airtime and micro-transfers (<50 Birr) from forming fan-in/fan-out clusters.">Min Spoke Transaction Amount (Amount)</label>
+            <input type="number" step="0.1" name="hub_spoke_min_single_amount" min="0" max="10000000" required value={config.hub_spoke_min_single_amount} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+          </div>
+          <div className="configurations_input">
+            <label>Activity Spike Multiplier (1.5 - 20.0)</label>
+            <input type="number" step="0.1" name="activity_spike_multiplier" min="1.5" max="20" required value={config.activity_spike_multiplier} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+          </div>
+          <div className="configurations_input">
+            <label>Activity Spike Min Daily Count (3 - 1000)</label>
+            <input type="number" name="activity_spike_min_daily_count" min="3" max="1000" required value={config.activity_spike_min_daily_count} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+          </div>
+          <div className="configurations_input">
+            <label>Fund Flow Hub Limit</label>
+            <input type="number" name="fund_flow_hub_threshold" min="0" required value={config.fund_flow_hub_threshold} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+          </div>
+          <div className="configurations_input">
+            <label>Fund Flow Max Downstream Hops (1 - 50)</label>
+            <input type="number" name="fund_flow_max_downstream" min="1" max="50" required value={config.fund_flow_max_downstream} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+          </div>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Regulatory Limits &amp; Operating Hours <AdminLockIcon /></legend>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}>
+          <div className="configurations_input">
+            <label title="Minimum number of transactions an account must perform in the near-CTR band before flagging structuring. Set to 2 or 3 to avoid false alerts on isolated single payments.">Min Repeated Structuring Count</label>
+            <input type="number" name="just_below_threshold_min_count" min="1" max="50" required value={config.just_below_threshold_min_count} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+          </div>
+          <div className="configurations_input">
+            <label title="The lower bound percentage of the reporting threshold (e.g. 0.90 = 90% of CTR limit, targeting transfers between 270,000 and 300,000 Birr).">Threshold Proximity Ratio (%)</label>
+            <input type="number" step="0.01" name="just_below_threshold_ratio" min="0.50" max="0.99" required value={config.just_below_threshold_ratio} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+          </div>
+          <div className="configurations_input">
+            <label>Reporting Threshold (CTR) (Amount)</label>
+            <input type="number" name="reporting_threshold" min="0" required value={config.reporting_threshold} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+          </div>
+          <div className="configurations_input">
+            <label>Smurfing Single Tx Threshold (Amount)</label>
+            <input type="number" name="smurfing_single_tx_threshold" min="0" required value={config.smurfing_single_tx_threshold} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+          </div>
+          <div className="configurations_input">
+            <label>Smurfing Cumulative Threshold (Amount)</label>
+            <input type="number" name="smurfing_cumulative_threshold" min="0" required value={config.smurfing_cumulative_threshold} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+          </div>
+          <div className="configurations_input">
+            <label>Smurfing Min Tx Count</label>
+            <input type="number" name="smurfing_min_tx_count" min="2" required value={config.smurfing_min_tx_count} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+          </div>
+          <div className="configurations_input">
+            <label>Late Night Window Start (HHmm)</label>
+            <input type="number" name="late_night_start" min="0" max="2359" required value={config.late_night_start} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+          </div>
+          <div className="configurations_input">
+            <label>Late Night Window End (HHmm)</label>
+            <input type="number" name="late_night_end" min="0" max="2359" required value={config.late_night_end} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+          </div>
+        </div>
+      </fieldset>
+
+      {canManageUsers && (
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "10px" }}>
+          <button type="button" onClick={handleReset} disabled={isSaving} className="smart_vigilance_findings_btn" style={{ padding: "8px 16px", fontWeight: "bold", opacity: isSaving ? 0.7 : 1, position: "relative", zIndex: 10 }}>
+            Reset to Defaults
+          </button>
+          <button type="button" onClick={handleSave} disabled={isSaving} className="smart_vigilance_findings_btn" style={{ padding: "8px 16px", fontWeight: "bold", opacity: isSaving ? 0.7 : 1, position: "relative", zIndex: 10 }}>
+            {isSaving ? "Saving..." : "Save Sensitivity Settings"}
+          </button>
+        </div>
+      )}
 
       {canManageUsers && history.length > 0 && (
         <fieldset>
@@ -15863,4 +16095,3 @@ function RuleThresholdsPanel({ apiFetch, canManageUsers }) {
     </div>
   );
 }
-

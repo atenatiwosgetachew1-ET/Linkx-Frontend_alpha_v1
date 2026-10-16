@@ -1,0 +1,13 @@
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.cdr
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/certs:/etc/nginx/certs:ro
+    extra_hosts:
+      - "linkx_backend:CDR_BACKEND_IP"
+    restart: unless-stopped

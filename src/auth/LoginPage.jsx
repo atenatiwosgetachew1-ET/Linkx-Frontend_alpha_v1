@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useBackgroundAnimations } from "../utils/backgroundAnimations.js";
+import theme from "../themes/index.js";
 import {
   compactValidationErrors,
   sanitizeIdentifier,
@@ -8,11 +9,11 @@ import {
   validateRequiredIdentifier,
 } from "../utils/inputSecurity.js";
 
-const loginBackgroundVideo = import.meta.env.BASE_URL + "site_videos/background.mp4";
-const fallbackLoginBackgroundVideo = "/site_videos/background.mp4";
-const loginBackgroundImage = import.meta.env.BASE_URL + "site_images/Linkx_background_basic.webp";
-const fallbackLoginBackgroundImage = "/site_images/Linkx_background_basic.webp";
-const loginLogo = import.meta.env.BASE_URL + "site_images/Linkx square Icon (256x256).png";
+const loginBackgroundVideo = import.meta.env.BASE_URL + theme.backgroundVideo;
+const fallbackLoginBackgroundVideo = "/" + theme.backgroundVideo;
+const loginBackgroundImage = import.meta.env.BASE_URL + theme.backgroundImage;
+const fallbackLoginBackgroundImage = "/" + theme.backgroundImage;
+const loginLogo = import.meta.env.BASE_URL + theme.logo;
 const genericLoginError = "Unable to sign in at this time. Please try again later.";
 
 export default function LoginPage({ onLogin, onParentProjectLogin, ssoError = "", isSsoAuthenticating = false }) {
@@ -136,10 +137,10 @@ export default function LoginPage({ onLogin, onParentProjectLogin, ssoError = ""
       <section className="linkx_login_panel" aria-label="Login">
         <div className="linkx_login_brand">
           <div className="linkx_login_brand_mark">
-            <img className="linkx_login_brand_logo" src={loginLogo} alt="Linkx logo" />
-            <span>Linkx</span>
+            <img className="linkx_login_brand_logo" src={loginLogo} alt={`${theme.name} logo`} />
+            <span>{theme.name}</span>
           </div>
-          <small>Web Analyzer</small>
+          <small>{theme.tagline}</small>
         </div>
         <form className="linkx_login_form" onSubmit={handleSubmit} noValidate>
           <label>
@@ -183,7 +184,7 @@ export default function LoginPage({ onLogin, onParentProjectLogin, ssoError = ""
       </section>
       </div>
       <footer className="linkx_login_footer" aria-label="Login footer">
-        <p>© 2026 Linkx. All rights reserved. Authorized use only. Unauthorized access is prohibited and may be monitored.</p>
+        <p>{theme.copyright} {theme.footerNotice}</p>
       </footer>
     </main>
   );
