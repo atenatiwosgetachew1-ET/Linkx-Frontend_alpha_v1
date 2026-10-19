@@ -302,16 +302,101 @@ export function buildNodeTooltip(node) {
 }
 
 /**
- * Builds a safe tooltip title for an edge.
+ * Resolves semantic edge styling based on fraud typologies and edge metadata.
+ * Ported from graphs_adjuster.js.
+ * 
+ * @param {Object} edge - Edge definition
+ * @returns {Object|null} Style overrides for arrows, dashes, width, color, or null
+ */
+export function resolveEdgeSemantic(edge) {
+  if (!edge) return null;
+
+  const semantic = edge.edge_semantic;
+  const financialFlow = edge.financial_flow;
+  const directedDisplay = edge.directed_display;
+  const edgeKind = edge.edge_kind;
+
+  // Theme line edge kind
+  if (edgeKind === 'theme_line') {
+    return {
+      arrows: '',
+      dashes: [8, 6],
+      width: 2,
+      color: { color: '#6b7280', inherit: false },
+      smooth: { type: 'curvedCW', roundness: 0.18 },
+      physics: false,
+      _semanticType: 'theme_line',
+      _semanticTooltip: 'Theme line — structural grouping'
+    };
+  }
+
+  // Backward compatibility: if none of the new properties exist, return null (no overrides)
+  if (semantic === undefined && financialFlow === undefined && directedDisplay === undefined) {
+    return null;
+  }
+
+  // NODE_FLAG — self-loop / node property badge
+  if (semantic === 'NODE_FLAG') {
+    return {
+      arrows: '',
+      dashes: [2, 3],
+      width: 0.5,
+      color: '#f39c12', // warning amber
+      _semanticType: 'node_flag',
+      _semanticTooltip: 'Node flag — property of this transaction'
+    };
+  }
+
+  // OBSERVED_FLOW — real money movement (solid arrow)
+  if (financialFlow === true && directedDisplay === true) {
+    return {
+      arrows: 'to',
+      dashes: false,
+      width: 1.2,
+      _semanticType: 'observed_flow',
+      _semanticTooltip: 'Observed financial transfer'
+    };
+  }
+
+  // TEMPORAL_SEQUENCE — time order, not money (dotted arrow)
+  if (financialFlow === false && directedDisplay === true) {
+    return {
+      arrows: 'to',
+      dashes: [5, 5],
+      width: 0.85,
+      _semanticType: 'temporal_sequence',
+      _semanticTooltip: 'Time-ordered sequence — arrow shows order, not money flow'
+    };
+  }
+
+  // GROUPING — shared property, no direction (dashed line, no arrowhead)
+  if (financialFlow === false && directedDisplay === false) {
+    return {
+      arrows: '',
+      dashes: [8, 4],
+      width: 0.7,
+      _semanticType: 'grouping',
+      _semanticTooltip: 'Analytical grouping — shared property (not a transfer)'
+    };
+  }
+
+  // Fallback for unexpected combinations — no overrides
+  return null;
+}
+
+/**
+ * Builds a safe tooltip title for an edge with enriched semantic and context properties.
+ * Ported from graphs_adjuster.js generateEdgeTitleSafely.
+ * 
  * @param {Object} edge - The edge object
- * @param {Function} getNodeFn - Function to retrieve node by ID
+ * @param {Function} [getNodeFn] - Function to retrieve node by ID
  * @returns {string}
  */
 export function buildEdgeTooltip(edge, getNodeFn) {
-  if (!edge) return "";
+  if (!edge) return '';
   
-  const fromNode = getNodeFn(edge.from) || {};
-  const toNode = getNodeFn(edge.to) || {};
+  const fromNode = (typeof getNodeFn === 'function' ? getNodeFn(edge.from) : null) || {};
+  const toNode = (typeof getNodeFn === 'function' ? getNodeFn(edge.to) : null) || {};
 
   const fromLabel = fromNode.label ?? edge.from;
   const toLabel = toNode.label ?? edge.to;
@@ -320,5 +405,18 @@ export function buildEdgeTooltip(edge, getNodeFn) {
   const weightValue = toFiniteNumber(weightCandidate);
   const normalizedWeight = weightValue == null ? 1 : weightValue;
 
-  return `From: ${fromLabel}\nTo: ${toLabel}\nWeight: ${normalizedWeight}`;
+  let tooltip = `From: ${fromLabel}\nTo: ${toLabel}\nWeight: ${normalizedWeight}`;
+
+  if (edge._semanticTooltip) {
+    tooltip += `\n\n${edge._semanticTooltip}`;
+  }
+  if (edge.reason) {
+    tooltip += `\nReason: ${edge.reason}`;
+  }
+  if (edge.hub_account) {
+    tooltip += `\nHub Account: ${edge.hub_account}`;
+  }
+
+  return tooltip;
 }
+

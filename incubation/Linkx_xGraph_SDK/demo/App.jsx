@@ -15,15 +15,15 @@ const SAMPLE_GRAPH_SMALL = {
     { id: 8, label: 'Document #887', shape: 'circularImage', iconPath: 'Document.svg', color: { background: '#3498DB', border: '#2980B9' } },
   ],
   edges: [
-    { id: 'e1', from: 1, to: 3, label: 'works_at', arrows: 'to' },
+    { id: 'e1', from: 1, to: 3, label: 'transfer', financial_flow: true, directed_display: true, reason: 'Direct fund transfer' },
     { id: 'e2', from: 2, to: 3, label: 'works_at', arrows: 'to' },
-    { id: 'e3', from: 1, to: 4, label: 'owns', arrows: 'to' },
+    { id: 'e3', from: 1, to: 4, label: 'owns', financial_flow: false, directed_display: false, hub_account: 'ACCT-4521' },
     { id: 'e4', from: 1, to: 5, label: 'uses', arrows: 'to' },
-    { id: 'e5', from: 2, to: 5, label: 'called', arrows: 'to', dashes: [10, 6] },
+    { id: 'e5', from: 2, to: 5, label: 'called', financial_flow: false, directed_display: true, reason: 'Sequential call recorded at 14:32' },
     { id: 'e6', from: 1, to: 6, label: 'registered_to', arrows: 'to' },
     { id: 'e7', from: 3, to: 7, label: 'located_in', arrows: 'to' },
-    { id: 'e8', from: 1, to: 2, label: 'associated_with', arrows: 'to', width: 2 },
-    { id: 'e9', from: 4, to: 8, label: 'referenced_in', arrows: 'to' },
+    { id: 'e8', from: 1, to: 2, label: 'theme', edge_kind: 'theme_line' },
+    { id: 'e9', from: 4, to: 8, label: 'flagged', edge_semantic: 'NODE_FLAG', _semanticTooltip: 'Flagged transaction with elevated risk score' },
   ],
 };
 

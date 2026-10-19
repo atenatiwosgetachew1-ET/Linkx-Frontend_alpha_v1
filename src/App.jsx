@@ -3890,6 +3890,12 @@ const AVAILABLE_DOMAINS = [
     description: "Community finance and micro-loans (SENDERACCOUNTID, RECEIVERACCOUNTID)",
   },
   {
+    key: "insurance",
+    label: "Insurance",
+    tag: "Claims & Policies",
+    description: "Insurance policies, claims settlements, and premium payouts (POLICY_NO, CLAIM_ID)",
+  },
+  {
     key: "cdr",
     label: "CDR",
     tag: "Telecom Sessions",
@@ -3955,6 +3961,26 @@ const DOMAIN_SCHEMA_TEMPLATES = {
       TRANSFERID: "TRANSACTIONID",
       SENDER_FULL_NAME: "ACCOWNERNAME",
       RECEIVER_FULL_NAME: "BENFULLNAME",
+    },
+  },
+  insurance: {
+    fetch_columns: [
+      "CLAIM_ID",
+      "CLAIM_DATE",
+      "CLAIM_AMOUNT",
+      "POLICY_NO",
+      "CLAIMANT_ID",
+      "INSURED_NAME",
+      "CLAIMANT_NAME",
+    ],
+    column_mapping: {
+      POLICY_NO: "ACCOUNTNO",
+      CLAIMANT_ID: "BENACCOUNTNO",
+      CLAIM_AMOUNT: "AMOUNTINBIRR",
+      CLAIM_DATE: "TRANSACTIONDATE",
+      CLAIM_ID: "TRANSACTIONID",
+      INSURED_NAME: "ACCOWNERNAME",
+      CLAIMANT_NAME: "BENFULLNAME",
     },
   },
   cdr: {
@@ -4811,7 +4837,7 @@ function UserManagementPanel({ apiFetch, canManageUsers, canManageSuperusers, on
             Create User <AdminLockIcon />
           </span>
           <span className="service_create_legend_toggle">
-            {isCreateOpen ? "▲ Collapse" : "▼ Expand"}
+            {isCreateOpen ? "▲" : "▼"}
           </span>
         </legend>
 
@@ -5527,7 +5553,7 @@ function ServiceAccountsPanel({ apiFetch, canManageUsers, onNotice, requestConfi
             Create Service Account <AdminLockIcon />
           </span>
           <span className="service_create_legend_toggle">
-            {isCreateOpen ? "▲ Collapse" : "▼ Expand"}
+            {isCreateOpen ? "▲" : "▼"}
           </span>
         </legend>
 

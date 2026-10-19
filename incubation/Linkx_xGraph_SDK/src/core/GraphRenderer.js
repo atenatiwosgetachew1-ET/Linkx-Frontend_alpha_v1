@@ -23,6 +23,7 @@ import {
   buildNodeLabel,
   buildNodeTooltip,
   buildEdgeTooltip,
+  resolveEdgeSemantic,
   computeEdgeWeights,
   normalizeGraphId,
   toFiniteNumber,
@@ -506,7 +507,15 @@ export class GraphRenderer {
       const base = this._store.getEdge(id);
       if (!base) continue;
 
-      const edge = this._theme.normalizeEdgeForTheme({ ...base });
+      let edge = { ...base };
+
+      // Apply semantic edge styling overrides (investigative typologies)
+      const semOverrides = resolveEdgeSemantic(edge);
+      if (semOverrides) {
+        edge = { ...edge, ...semOverrides };
+      }
+
+      edge = this._theme.normalizeEdgeForTheme(edge);
 
       // Apply computed width
       if (edgeWidths && edgeWidths.has(id)) {
@@ -515,12 +524,7 @@ export class GraphRenderer {
 
       // Tooltip
       if (this._options.showTooltips) {
-        const fromNode = this._store.getNode(edge.from);
-        const toNode = this._store.getNode(edge.to);
-        const fromLabel = fromNode?.label ?? edge.from;
-        const toLabel = toNode?.label ?? edge.to;
-        const weight = toFiniteNumber(edge.weight ?? edge.value ?? edge.width ?? 1) ?? 1;
-        edge.title = `From: ${fromLabel}\nTo: ${toLabel}\nWeight: ${weight}`;
+        edge.title = buildEdgeTooltip(edge, (nodeId) => this._store.getNode(nodeId));
       } else {
         edge.title = undefined;
       }

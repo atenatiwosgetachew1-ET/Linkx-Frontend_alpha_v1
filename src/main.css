@@ -7413,15 +7413,18 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 	gap: 6px;
 }
 .service_create_legend_toggle {
-	font-size: 11px;
-	font-weight: 500;
-	padding: 1px 7px;
+	font-size: 9px;
+	font-weight: 600;
+	width: 18px;
+	height: 18px;
+	padding: 0;
 	border-radius: 3px;
 	background: rgba(255, 255, 255, 0.22);
 	color: inherit;
 	display: inline-flex;
 	align-items: center;
-	gap: 4px;
+	justify-content: center;
+	line-height: 1;
 	transition: background 0.15s ease;
 }
 .service_create_legend:hover .service_create_legend_toggle {

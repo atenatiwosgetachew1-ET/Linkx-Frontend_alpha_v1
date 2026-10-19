@@ -72,6 +72,20 @@ export interface GraphEdge {
     type?: string;
     roundness?: number;
   };
+  /** Semantic edge typology (e.g., 'NODE_FLAG') */
+  edge_semantic?: string;
+  /** True if real monetary/fund transfer */
+  financial_flow?: boolean;
+  /** True to display directional flow arrows */
+  directed_display?: boolean;
+  /** Special edge kind (e.g. 'theme_line') */
+  edge_kind?: string;
+  /** Contextual explanation displayed in edge tooltip */
+  reason?: string;
+  /** Associated hub account displayed in edge tooltip */
+  hub_account?: string;
+  /** Custom semantic description displayed in edge tooltip */
+  _semanticTooltip?: string;
   /** Domain-specific properties */
   [key: string]: unknown;
 }

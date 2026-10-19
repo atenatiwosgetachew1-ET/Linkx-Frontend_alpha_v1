@@ -40,7 +40,15 @@ const myGraphData = {
     }
   ],
   edges: [
-    { id: 'e1', from: 1, to: 2, label: 'works_at' }
+    { 
+      id: 'e1', 
+      from: 1, 
+      to: 2, 
+      label: 'funds_transfer',
+      financial_flow: true,       // Renders bold directional flow arrow
+      directed_display: true,
+      reason: 'Transaction #8990' // Appears in enriched hover tooltip
+    }
   ]
 };
 ```
