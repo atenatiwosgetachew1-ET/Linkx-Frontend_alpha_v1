@@ -17758,6 +17758,12 @@ function ScoreLineagePanel({ apiFetch, canManageUsers }) {
   const [isSaving, setIsSaving] = React.useState(false);
 
   React.useEffect(() => {
+    setBaseScores(defaultTypologies);
+    setNodeThresholds(defaultNodes);
+    setMoneyThresholds(defaultMoney);
+  }, [isCdr]);
+
+  React.useEffect(() => {
     const fetchLineage = async () => {
       try {
         const lineageEndpoint = isCdr ? "/config/score-lineage?domain_id=cdr" : "/config/score-lineage";
@@ -17770,12 +17776,34 @@ function ScoreLineagePanel({ apiFetch, canManageUsers }) {
         }
         if (res && res.results && res.results.config) {
           const cfg = res.results.config;
-          if (cfg.base_scores) setBaseScores(prev => ({ ...prev, ...cfg.base_scores }));
-          if (cfg.node_thresholds) setNodeThresholds(cfg.node_thresholds);
-          if (cfg.duration_thresholds) {
-            setMoneyThresholds(cfg.duration_thresholds.map(t => ({ min_amount: t.min_seconds ?? t.min_amount, add_points: t.add_points })));
-          } else if (cfg.money_thresholds) {
-            setMoneyThresholds(cfg.money_thresholds);
+          const allowedKeys = Object.keys(isCdr ? DEFAULT_CDR_TYPOLOGIES : DEFAULT_BANK_TYPOLOGIES);
+          
+          if (cfg.base_scores) {
+            const filteredScores = {};
+            for (const key of allowedKeys) {
+              if (cfg.base_scores[key] !== undefined) {
+                filteredScores[key] = cfg.base_scores[key];
+              }
+            }
+            if (Object.keys(filteredScores).length > 0) {
+              setBaseScores(prev => ({ ...prev, ...filteredScores }));
+            }
+          }
+          
+          if (isCdr) {
+            if (cfg.domain_id === "cdr" && Array.isArray(cfg.node_thresholds) && cfg.node_thresholds.length > 0) {
+              setNodeThresholds(cfg.node_thresholds);
+            }
+            if (Array.isArray(cfg.duration_thresholds) && cfg.duration_thresholds.length > 0) {
+              setMoneyThresholds(cfg.duration_thresholds.map(t => ({ min_amount: t.min_seconds ?? t.min_amount, add_points: t.add_points })));
+            }
+          } else {
+            if (cfg.domain_id !== "cdr" && Array.isArray(cfg.node_thresholds) && cfg.node_thresholds.length > 0) {
+              setNodeThresholds(cfg.node_thresholds);
+            }
+            if (Array.isArray(cfg.money_thresholds) && cfg.money_thresholds.length > 0) {
+              setMoneyThresholds(cfg.money_thresholds);
+            }
           }
         }
       } catch (e) {
@@ -17789,9 +17817,15 @@ function ScoreLineagePanel({ apiFetch, canManageUsers }) {
     if (!canManageUsers) return;
     setIsSaving(true);
     try {
+      const allowedKeys = Object.keys(isCdr ? DEFAULT_CDR_TYPOLOGIES : DEFAULT_BANK_TYPOLOGIES);
+      const cleanScores = {};
+      for (const k of allowedKeys) {
+        cleanScores[k] = Number(baseScores[k] ?? (isCdr ? DEFAULT_CDR_TYPOLOGIES[k] : DEFAULT_BANK_TYPOLOGIES[k]));
+      }
+
       const payload = {
         domain_id: isCdr ? "cdr" : "bank",
-        base_scores: Object.fromEntries(Object.entries(baseScores).map(([k, v]) => [k, Number(v)])),
+        base_scores: cleanScores,
         node_thresholds: nodeThresholds.map(t => ({ min_nodes: Number(t.min_nodes), add_points: Number(t.add_points) })),
         money_thresholds: moneyThresholds.map(t => ({ min_amount: Number(t.min_amount), add_points: Number(t.add_points) })),
         ...(isCdr ? {
@@ -17840,12 +17874,14 @@ function ScoreLineagePanel({ apiFetch, canManageUsers }) {
     );
   };
 
+  const activeTypologyKeys = Object.keys(isCdr ? DEFAULT_CDR_TYPOLOGIES : DEFAULT_BANK_TYPOLOGIES);
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
       <fieldset>
         <legend>Base Scores by Typology <AdminLockIcon /></legend>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}>
-          {Object.keys(baseScores).map(renderTypologySlider)}
+          {activeTypologyKeys.map(renderTypologySlider)}
         </div>
       </fieldset>
 
@@ -17908,24 +17944,24 @@ function ScoreLineagePanel({ apiFetch, canManageUsers }) {
 }
 
 const DEFAULT_CDR_THRESHOLDS = {
-  // 1. Call Patterns & Relays
+  // Call Patterns & Relays
   frequent_contact_min_calls: 5,
   call_sequence_max_gap_seconds: 300,
   callback_max_gap_seconds: 86400,
   call_relay_max_gap_seconds: 1800,
   simultaneous_call_window_seconds: 15,
-  // 2. Durations & Night Activity
+  // Durations & Night Activity
   short_duration_burst_seconds: 15,
   short_duration_burst_min_calls: 3,
   long_duration_call_seconds: 1800,
   night_activity_start: 2300,
   night_activity_end: 500,
-  // 3. Network Dispersion & Towers
+  // Network Dispersion & Towers
   star_pattern_min_contacts: 5,
   fan_out_min_targets: 15,
   fan_in_min_sources: 15,
   location_jump_max_hours: 2,
-  // 4. Telecom Fraud & Telephony Exploits
+  // Telecom Fraud & Telephony Exploits
   sim_box_min_calls: 10,
   sim_box_max_avg_duration: 15,
   imei_swap_min_devices: 3,
@@ -17989,7 +18025,14 @@ function RuleThresholdsPanel({ apiFetch, canManageUsers }) {
         res = await apiFetch(fallbackEndpoint, { suppressForbiddenHandler: true });
       }
       if (res && res.results && res.results.config) {
-        setConfig(prev => ({ ...prev, ...res.results.config }));
+        const activeDefaults = isCdr ? DEFAULT_CDR_THRESHOLDS : DEFAULT_THRESHOLDS;
+        const filteredConfig = {};
+        for (const key of Object.keys(activeDefaults)) {
+          if (res.results.config[key] !== undefined) {
+            filteredConfig[key] = res.results.config[key];
+          }
+        }
+        setConfig(prev => ({ ...prev, ...filteredConfig }));
       }
       if (canManageUsers) {
         const histEndpoint = isCdr ? "/rule-thresholds/history?domain_id=cdr&limit=50" : "/rule-thresholds/history?limit=50";
