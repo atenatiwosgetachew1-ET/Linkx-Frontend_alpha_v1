@@ -91,10 +91,9 @@ Replaces banking AML thresholds with **18 telecom parameters** across 4 fieldset
 * **Direct Domain Endpoint**: Interacts directly with `/rule-thresholds?domain_id=cdr` (fallback to `/rule-thresholds`). Score Lineage interacts with `/config/score-lineage?domain_id=cdr` (fallback to `/config/score-lineage`). Prevents 404 errors from unmapped `/api/v1/rules/*` paths.
 
 #### 3. CDR Risk Scoring & Typology Lineage (`ScoreLineagePanel`)
-* **17 Telecom Typologies Grouped by Severity**:
-  * 🚨 **Severe Telecom Fraud (35 - 50)**: `HIGH_RISK_CONTACT` (50), `SIM_BOX_DISTRIBUTION` (45), `WANGIRI_FRAUD` (40), `IMEI_SWAP_DETECTION` (35)
-  * ⚡ **High-Risk Coordination (25 - 30)**: `STAR_PATTERN` (30), `SHORT_DURATION_BURST` (25), `LOCATION_JUMP` (25), `CALL_RELAY` (25)
-  * 📡 **Anomalous Behavioral Signals (10 - 20)**: `SIMULTANEOUS_CALL` (20), `NIGHT_ACTIVITY` (20), `FREQUENT_CONTACT` (15), `CALLBACK_PATTERN` (15), `CALL_SEQUENCE` (10), `FAN_OUT` (10), `FAN_IN` (10), `MISSED_CALL_SIGNAL` (10), `LONG_DURATION_CALL` (10)
+* **17 Telecom Typologies (Unified Seamless Grid)**:
+  * Renders a clean 2-column grid matching the BDR layout without extra headers or emojis:
+  * `HIGH_RISK_CONTACT` (50), `SIM_BOX_DISTRIBUTION` (45), `WANGIRI_FRAUD` (40), `IMEI_SWAP_DETECTION` (35), `STAR_PATTERN` (30), `SHORT_DURATION_BURST` (25), `LOCATION_JUMP` (25), `CALL_RELAY` (25), `SIMULTANEOUS_CALL` (20), `NIGHT_ACTIVITY` (20), `FREQUENT_CONTACT` (15), `CALLBACK_PATTERN` (15), `CALL_SEQUENCE` (10), `FAN_OUT` (10), `FAN_IN` (10), `MISSED_CALL_SIGNAL` (10), `LONG_DURATION_CALL` (10).
 * **Cumulative Duration Volume Score Tiers** (replaces financial amount multipliers):
   * $\ge 7,200\text{ sec}$ (2 hrs) ➔ `+30 points`
   * $\ge 3,600\text{ sec}$ (1 hr) ➔ `+20 points`

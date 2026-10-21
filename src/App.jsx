@@ -17843,39 +17843,10 @@ function ScoreLineagePanel({ apiFetch, canManageUsers }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
       <fieldset>
-        <legend>{isCdr ? "Base Scores by Telecom Typology" : "Base Scores by Typology"} <AdminLockIcon /></legend>
-        {isCdr ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-            <div>
-              <div style={{ fontSize: "11px", fontWeight: "bold", color: "#e57373", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "6px" }}>
-                🚨 Severe Telecom Fraud (Base 35 - 50)
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
-                {["HIGH_RISK_CONTACT", "SIM_BOX_DISTRIBUTION", "WANGIRI_FRAUD", "IMEI_SWAP_DETECTION"].map(renderTypologySlider)}
-              </div>
-            </div>
-            <div>
-              <div style={{ fontSize: "11px", fontWeight: "bold", color: "#ffb74d", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "6px" }}>
-                ⚡ High-Risk Coordination (Base 25 - 30)
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
-                {["STAR_PATTERN", "SHORT_DURATION_BURST", "LOCATION_JUMP", "CALL_RELAY"].map(renderTypologySlider)}
-              </div>
-            </div>
-            <div>
-              <div style={{ fontSize: "11px", fontWeight: "bold", color: "#64b5f6", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "6px" }}>
-                📡 Anomalous Behavioral Signals (Base 10 - 20)
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
-                {["SIMULTANEOUS_CALL", "NIGHT_ACTIVITY", "FREQUENT_CONTACT", "CALLBACK_PATTERN", "CALL_SEQUENCE", "FAN_OUT", "FAN_IN", "MISSED_CALL_SIGNAL", "LONG_DURATION_CALL"].map(renderTypologySlider)}
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}>
-            {Object.keys(baseScores).map(renderTypologySlider)}
-          </div>
-        )}
+        <legend>Base Scores by Typology <AdminLockIcon /></legend>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}>
+          {Object.keys(baseScores).map(renderTypologySlider)}
+        </div>
       </fieldset>
 
       <fieldset>
@@ -18106,7 +18077,7 @@ function RuleThresholdsPanel({ apiFetch, canManageUsers }) {
       {isCdr ? (
         <>
           <fieldset>
-            <legend>1. Call Patterns &amp; Relays <AdminLockIcon /></legend>
+            <legend>Call Patterns &amp; Relays <AdminLockIcon /></legend>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}>
               <div className="configurations_input">
                 <label title="Minimum number of calls between two numbers before flagging a frequent contact cluster.">
@@ -18142,7 +18113,7 @@ function RuleThresholdsPanel({ apiFetch, canManageUsers }) {
           </fieldset>
 
           <fieldset>
-            <legend>2. Durations &amp; Night Activity <AdminLockIcon /></legend>
+            <legend>Durations &amp; Night Activity <AdminLockIcon /></legend>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}>
               <div className="configurations_input">
                 <label title="Calls shorter than this duration are treated as short burst signals.">
@@ -18178,7 +18149,7 @@ function RuleThresholdsPanel({ apiFetch, canManageUsers }) {
           </fieldset>
 
           <fieldset>
-            <legend>3. Network Dispersion &amp; Towers <AdminLockIcon /></legend>
+            <legend>Network Dispersion &amp; Towers <AdminLockIcon /></legend>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}>
               <div className="configurations_input">
                 <label title="Minimum distinct contact numbers to form a star network hub.">
@@ -18208,7 +18179,7 @@ function RuleThresholdsPanel({ apiFetch, canManageUsers }) {
           </fieldset>
 
           <fieldset>
-            <legend>4. Telecom Fraud &amp; Telephony Exploits <AdminLockIcon /></legend>
+            <legend>Telecom Fraud &amp; Telephony Exploits <AdminLockIcon /></legend>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}>
               <div className="configurations_input">
                 <label title="Minimum outbound call count indicating automated SIM box termination.">
