@@ -1,16 +1,18 @@
 # Linkx Service Accounts, Multi-Domain & System Principal Protection — Handoff Document
 
-**Document Version:** 1.0  
+**Document Version:** 2.0  
 **Date:** 2026-10-21  
-**Scope:** Service Account Management, Custom Storage Schemas, Protected System Daemons, Multi-Domain Routing & Deployment
+**Scope:** Service Account Management, Custom Storage Schemas, Protected System Daemons, Multi-Domain Routing, CDR Telecom Alignment & Deployment
 
 ---
 
 ## 1. Overview & Context
 
-This handoff document details the implementation of **Service Account Management**, **Custom Storage & Domain Schema Mappings**, and **Protected System Principal Security** within the Linkx frontend, along with multi-server build and deployment considerations across domains (BDR, CDR, Insurance, etc.).
+This handoff document details the implementation of **Service Account Management**, **Custom Storage & Domain Schema Mappings**, **Protected System Principal Security**, and the enterprise **CDR (Call Data Records) Telecom Domain Alignment** within the Linkx frontend.
 
-All features were integrated into the unified production codebase (`/var/www/linkx-frontend`), supporting both the default golden bank theme (`linkxDS2026`) and the sky-blue CDR theme (`linkxCDR2026`).
+All features are integrated into the unified production codebase (`/var/www/linkx-frontend`), supporting interchangeable build profiles:
+* **BDR Banking Profile** (`npm run build`, `VITE_THEME=nbe`) ➔ Standard banking schema, AML detection thresholds, currency metrics in Birr.
+* **CDR Telecom Profile** (`npm run build:cdr`, `VITE_THEME=cdr`) ➔ Telecom terminology (MSISDN, Duration, Towers), 18 telecom detection thresholds, 17 fraud typologies, duration volume tiers, and emergency hotline whitelists.
 
 ---
 
@@ -39,89 +41,124 @@ Service accounts support custom Elasticsearch storage overrides and projection s
    - Empty state falls back to domain built-in default columns.
 4. **Canonical Column Mapping (`column_mapping`)**:
    - Dynamic Key-Value pair list with interactive row removal and `+ Add Mapping Pair` action.
-   - Maps raw Elasticsearch source columns to LinkX canonical target fields:
-     - `ACCOUNTNO` (Source Account / Sender / Policy No)
-     - `BENACCOUNTNO` (Destination Account / Receiver / Claimant)
-     - `AMOUNTINBIRR` (Transaction Amount / Claim Amount)
-     - `TRANSACTIONDATE` (Timestamp / Date)
-     - `TRANSACTIONID` (Unique Transaction ID / Claim ID)
-     - `ACCOWNERNAME` (Sender / Insured Name)
-     - `BENFULLNAME` (Beneficiary / Claimant Name)
+   - In CDR mode, targets display telecom canonical names (`CALLING_NO`, `CALLED_NO`, `DURATION`, `START_TIME`, `RECORD_ID`).
+   - In Banking mode, targets display financial canonical names (`ACCOUNTNO`, `BENACCOUNTNO`, `AMOUNTINBIRR`, `TRANSACTIONDATE`, `TRANSACTIONID`).
 5. **Template Pre-fill Shortcut**:
    - Dedicated `⚡ Load Template for [Domain]` button that automatically populates fetch columns and mappings with domain recommended defaults.
 
 ---
 
-### B. Protected System Principal Security (xVigilance & Platform Daemons)
-The backend designates internal platform daemons (such as `xvigilance`, ID `999`) as **Protected System Service Accounts** with `is_system: true`. The frontend enforces strict safeguards:
+### B. CDR Telecom Intelligence Alignment (Interchangeable Build Profile)
 
-1. **Distinctive System Badge**:
-   - Accounts with `is_system === true` display a gradient violet/blue pill badge: `🛡 System` next to the client ID.
-2. **Delete Protection**:
-   - The Delete button is permanently disabled (`opacity: 0.45; cursor: not-allowed;`) with tooltip: `"System service accounts cannot be deleted."`.
-   - Client-side validation guard in `deleteAccount()` blocks deletion attempts before any network call.
-3. **Locked Active Status**:
-   - Status is locked permanently to `🔒 Active (Locked)`. Deactivation toggles are disabled with explanatory tooltips.
-   - `saveAccount()` never passes `is_active: false` for system principals.
-4. **Editable Config Settings & Secret Rotation**:
-   - Admins can freely update Elasticsearch coordinates, domain routing, and column mappings in the drawer.
-   - Runtime changes dynamically synchronize to the daemon engine on Server 4 without process restarts.
-   - Secret rotation remains fully enabled.
+When `theme.id === "cdr"` (via `VITE_THEME=cdr`), the UI switches from financial to telecom mode:
+
+#### 1. Terminology Migration & Currency Suppression
+* **Node & Edge Properties Inspection**:
+  * `ACCOUNTNO` ➔ `Calling Number (MSISDN)`
+  * `BENACCOUNTNO` ➔ `Called Number (Destination)`
+  * `AMOUNTINBIRR` / `DURATION` ➔ `Call Duration` formatted as `120 sec (2m 0s)`
+  * `TRANSACTIONDATE` ➔ `Call Start Time`
+  * `BRANCH` / `LOCATION_ID` ➔ `Cell Tower ID / Location`
+  * `HIGH_RISK_COUNTERPARTY` ➔ `High Risk Contact / Watchlist`
+* **Dataframe Flow**: Selects `Calling Number` / `Called Number` with `CALLED` relationship placeholder.
+* **Strict Currency Suppression**: In CDR mode, all currency symbols (`ETB`, `Birr`, `$`) are stripped from values and headers.
+
+#### 2. CDR Detection Thresholds Screen (`RuleThresholdsPanel`)
+Replaces banking AML thresholds with **18 telecom parameters** across 4 fieldsets:
+* **Call Patterns & Relays**:
+  * `frequent_contact_min_calls`: Min Frequent Call Count (`5 calls`)
+  * `call_sequence_max_gap_seconds`: Max Gap Between Sequential Calls (`300 sec`)
+  * `callback_max_gap_seconds`: Max Callback Window (`86400 sec / 24 hrs`)
+  * `call_relay_max_gap_seconds`: Max Relay Window (`1800 sec / 30 min`)
+  * `simultaneous_call_window_seconds`: Max Multi-Call Window (`15 sec`)
+* **Durations & Night Activity**:
+  * `short_duration_burst_seconds`: Burst Duration Threshold (`15 sec`)
+  * `short_duration_burst_min_calls`: Min Burst Call Count (`3 calls`)
+  * `long_duration_call_seconds`: Long Call Duration (`1800 sec / 30 min`)
+  * `night_activity_start`: Night Window Start (`2300` / 23:00)
+  * `night_activity_end`: Night Window End (`0500` / 05:00)
+* **Network Dispersion & Towers**:
+  * `star_pattern_min_contacts`: Star Hub Min Contacts (`5 distinct numbers`)
+  * `fan_out_min_targets`: Min Fan-Out Outbound Numbers (`15 targets`)
+  * `fan_in_min_sources`: Min Fan-In Inbound Callers (`15 sources`)
+  * `location_jump_max_hours`: Max Hours for Cell Tower Jump (`2 hrs`)
+* **Telecom Fraud & Telephony Exploits**:
+  * `sim_box_min_calls`: SIM Box Min Outbound Calls (`10 calls`)
+  * `sim_box_max_avg_duration`: SIM Box Max Avg Duration (`15 sec`)
+  * `imei_swap_min_devices`: IMEI Swap Min Distinct Handsets (`3 devices`)
+  * `wangiri_max_duration_seconds`: Wangiri Missed Call Max Ring (`3 sec`)
+  * `wangiri_min_calls`: Wangiri Min Victim Calls (`3 calls`)
+* **Dual Endpoint**: Interacts with `/api/v1/rules/thresholds?domain_id=cdr` with fallback to `/rule-thresholds?domain_id=cdr`.
+
+#### 3. CDR Risk Scoring & Typology Lineage (`ScoreLineagePanel`)
+* **17 Telecom Typologies Grouped by Severity**:
+  * 🚨 **Severe Telecom Fraud (35 - 50)**: `HIGH_RISK_CONTACT` (50), `SIM_BOX_DISTRIBUTION` (45), `WANGIRI_FRAUD` (40), `IMEI_SWAP_DETECTION` (35)
+  * ⚡ **High-Risk Coordination (25 - 30)**: `STAR_PATTERN` (30), `SHORT_DURATION_BURST` (25), `LOCATION_JUMP` (25), `CALL_RELAY` (25)
+  * 📡 **Anomalous Behavioral Signals (10 - 20)**: `SIMULTANEOUS_CALL` (20), `NIGHT_ACTIVITY` (20), `FREQUENT_CONTACT` (15), `CALLBACK_PATTERN` (15), `CALL_SEQUENCE` (10), `FAN_OUT` (10), `FAN_IN` (10), `MISSED_CALL_SIGNAL` (10), `LONG_DURATION_CALL` (10)
+* **Cumulative Duration Volume Score Tiers** (replaces financial amount multipliers):
+  * $\ge 7,200\text{ sec}$ (2 hrs) ➔ `+30 points`
+  * $\ge 3,600\text{ sec}$ (1 hr) ➔ `+20 points`
+  * $\ge 900\text{ sec}$ (15 min) ➔ `+10 points`
+  * $\ge 300\text{ sec}$ (5 min) ➔ `+5 points`
+
+#### 4. Classified Entities (Emergency Whitelists & Watchlists)
+* Added **`⚡ Load Telecom Emergency Presets`** button to quickly register emergency service hotlines (`911`, `994`, `991`, `980`) with `Pass Through = true`.
+* Added telecom datalist options: `Emergency / Service Hotlines`, `SIM_BOX`, `WANGIRI`, `HIGH_RISK`.
+* Telecom table headers: `Subscriber / Contact Name`, `Identifier (MSISDN)`, `Phone / Contact Number`, `Telecom Classification`, `Pass Through (Suppress Alerts)`.
 
 ---
 
-### C. UI & Styling Alignment
-1. **Expandable Fieldsets**:
-   - "Create User" and "Create Service Account" fieldsets are collapsible with an arrow-only badge toggle (`▲` when expanded, `▼` when collapsed).
-   - Collapsed state displays a summary bar with a `▼ Expand Form` call-to-action button.
-   - Collapse button height inside action bars matches sibling `.action_btns` (`height: 3.2vh; min-height: 30px;`).
-2. **Modal & Container Constraints**:
-   - `.configurations_tab_form`: Border `1px solid #e7e7e7`, border-radius `5px`, margin-bottom `2vh`, padding `1vh 1vw`.
-   - Modals and settings containers constrained to `max-height: 99vh; top: 1.5vh;`.
+### C. Protected System Principal Security (xVigilance & Platform Daemons)
+The backend designates internal platform daemons (such as `xvigilance`, ID `999`) as **Protected System Service Accounts** with `is_system: true`:
+
+1. **Distinctive System Badge**: Accounts with `is_system === true` display `🛡 System` badge.
+2. **Delete Protection**: Delete button permanently disabled with tooltip explanation. Client guard rejects deletion.
+3. **Locked Active Status**: Status locked to `🔒 Active (Locked)`. Deactivation toggles disabled.
+4. **Editable Coordinates & Rotation**: Admins can update storage coordinates, domain routing, and rotate secrets dynamically.
+
+---
+
+### D. Automated Zero-Config Deployment & Runtime Host Guard
+
+To prevent multi-server deployment failures and cross-origin CORS errors:
+
+1. **Smart Host Guard (`resolveApiUrl`)**:
+   * If a bundle is loaded on a host that differs from the statically baked build URL (e.g. loaded on `172.21.13.73` but built with `172.27.23.21`), the client **automatically overrides the target with `window.location.origin`**.
+   * Completely prevents `ERR_CERT_AUTHORITY_INVALID` and CORS preflight block errors.
+2. **Automated Deploy Script ([`deploy.sh`](file:///var/www/linkx-frontend/deploy.sh))**:
+   * Run as `node18` on any target host: `./deploy.sh [all|cdr|nbe]`.
+   * Automatically takes ownership (`chown`), syncs git cleanly (`fetch + reset --hard`), detects `172.21.13.73` host to apply its `.env`, builds the theme bundle, and restores `www-data` ownership.
 
 ---
 
 ## 3. Multi-Server Build & Deployment Workflow
 
-### Build Targets & Environment Configuration
-Vite bakes `VITE_API_URL` and `VITE_THEME` into JavaScript bundles at build time.
+### Build Targets
 
-| Host Server | Deployment Path | Theme (`VITE_THEME`) | API Target (`VITE_API_URL`) | Build Command |
-|-------------|-----------------|---------------------|----------------------------|---------------|
-| `172.27.23.21` (NBE Host) | `/linkxDS2026/` | `nbe` | `https://172.27.23.21` | `npm run build` |
-| `172.27.23.21` (Local CDR) | `/linkxCDR2026/` | `cdr` | `https://172.27.23.21` | `npm run build:cdr` |
-| `172.21.13.73` (Remote CDR) | `/linkxCDR2026/` | `cdr` | `https://172.21.13.73` | `npm run build:cdr` (with target `.env`) |
+| Host Server | Deployment Path | Theme (`VITE_THEME`) | Profile | Build Command |
+|-------------|-----------------|---------------------|---------|---------------|
+| `172.27.23.21` (NBE Host) | `/linkxDS2026/` | `nbe` | Banking (BDR) | `npm run build` |
+| `172.27.23.21` (Local CDR) | `/linkxCDR2026/` | `cdr` | Telecom (CDR) | `npm run build:cdr` |
+| `172.21.13.73` (Remote CDR) | `/linkxCDR2026/` | `cdr` | Telecom (CDR) | `npm run build:cdr` (or `./deploy.sh cdr`) |
 
-### Deploying via Git to Remote CDR (`172.21.13.73`)
-When deploying to `172.21.13.73` via Git:
+### Deploying to Remote CDR (`172.21.13.73`) via `deploy.sh`
+Run on `node18@node18` on the remote server:
 ```bash
 cd /var/www/linkx-frontend
-
-# 1. Ensure node18 owns directory before git operations:
-sudo chown -R node18:node18 /var/www/linkx-frontend
-
-# 2. Sync to latest origin/main:
-git fetch origin main
-git reset --hard origin/main
-
-# 3. Ensure .env points to local server IP (prevents ERR_CERT_AUTHORITY_INVALID):
-cp deploy_pkg_172.21.13.73/.env .env
-
-# 4. Compile the CDR theme:
-npm run build:cdr
-
-# 5. Restore Nginx read permissions:
-sudo chown -R www-data:www-data linkxCDR2026
+./deploy.sh cdr
 ```
+*(Or `bash deploy.sh cdr`)*
 
 ---
 
 ## 4. Key Source Code References
 
-- **Domain Constants & Schema Templates**: [`src/App.jsx`](file:///var/www/linkx-frontend/src/App.jsx#L3880-L4040)
-- **Domain Selector Radio Pills**: [`src/App.jsx`](file:///var/www/linkx-frontend/src/App.jsx#L4110-L4155)
-- **Storage Target & Column Mapping Editor**: [`src/App.jsx`](file:///var/www/linkx-frontend/src/App.jsx#L4160-L4490)
-- **Service Accounts Management Panel**: [`src/App.jsx`](file:///var/www/linkx-frontend/src/App.jsx#L5230-L5890)
-- **Protected System Principal Badges & Styles**: [`src/main.css`](file:///var/www/linkx-frontend/src/main.css#L8325-L8370) and [`src/main.css`](file:///var/www/linkx-frontend/src/main.css#L8890-L8915)
-- **Expandable Form & Action Bar Styles**: [`src/main.css`](file:///var/www/linkx-frontend/src/main.css#L7410-L7470) and [`src/main.css`](file:///var/www/linkx-frontend/src/main.css#L8050-L8070)
-- **Standalone Remote Package Config**: [`deploy_pkg_172.21.13.73/.env`](file:///var/www/linkx-frontend/deploy_pkg_172.21.13.73/.env)
+- **Theme Resolver & Profile Detection**: [`src/themes/index.js`](file:///var/www/linkx-frontend/src/themes/index.js) and `isCdrDomain` in [`src/App.jsx`](file:///var/www/linkx-frontend/src/App.jsx#L90)
+- **Domain Terminology & Formatter**: [`src/App.jsx`](file:///var/www/linkx-frontend/src/App.jsx#L92-L130)
+- **Canonical Columns (Banking vs CDR)**: [`src/App.jsx`](file:///var/www/linkx-frontend/src/App.jsx#L3960-L3985)
+- **CDR Detection Thresholds (`RuleThresholdsPanel`)**: [`src/App.jsx`](file:///var/www/linkx-frontend/src/App.jsx#L17840-L18145)
+- **CDR Score Lineage & Typologies (`ScoreLineagePanel`)**: [`src/App.jsx`](file:///var/www/linkx-frontend/src/App.jsx#L17678-L17838)
+- **Classified Entities Telecom Whitelist/Watchlist**: [`src/App.jsx`](file:///var/www/linkx-frontend/src/App.jsx#L1765-L1880)
+- **Runtime Host Guard (`resolveApiUrl`)**: [`src/App.jsx`](file:///var/www/linkx-frontend/src/App.jsx#L71-L88)
+- **Automated Deployment Script**: [`deploy.sh`](file:///var/www/linkx-frontend/deploy.sh)
+- **Remote Host Config**: [`deploy_pkg_172.21.13.73/.env`](file:///var/www/linkx-frontend/deploy_pkg_172.21.13.73/.env)
