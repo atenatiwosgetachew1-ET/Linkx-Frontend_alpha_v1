@@ -86,6 +86,42 @@ const resolveApiUrl = (configuredUrl) => {
   return configuredUrl || "";
 };
 
+const isCdrDomain = (theme?.id === "cdr");
+
+const formatPropertyKeyLabel = (key, isCdr = false) => {
+  if (!isCdr) return key;
+  const k = String(key || "").toUpperCase();
+  if (k === "ACCOUNTNO" || k === "ACCOUNT_NO" || k === "SOURCE_ACCOUNT" || k === "CALLING_NO") return "Calling Number (MSISDN)";
+  if (k === "BENACCOUNTNO" || k === "TARGET_ACCOUNT" || k === "DESTINATION_ACCOUNT" || k === "CALLED_NO") return "Called Number (Destination)";
+  if (k === "AMOUNTINBIRR" || k === "AMOUNT" || k === "DURATION" || k === "DURATION_SEC") return "Call Duration";
+  if (k === "TRANSACTIONDATE" || k === "TX_DATE" || k === "START_TIME" || k === "CALL_DATE") return "Call Start Time";
+  if (k === "TRANSACTIONID" || k === "TX_ID" || k === "CALL_ID") return "Call Record ID";
+  if (k === "BRANCH" || k === "CHANNEL" || k === "LOCATION_ID" || k === "TOWER_ID") return "Cell Tower ID / Location";
+  if (k === "HIGH_RISK_COUNTERPARTY") return "High Risk Contact / Watchlist";
+  if (k === "ACCOWNERNAME" || k === "CALLER_NAME") return "Caller / Subscriber Name";
+  if (k === "BENFULLNAME" || k === "CALLEE_NAME") return "Called Party Name";
+  return key;
+};
+
+const formatPropertyValue = (key, value, isCdr = false) => {
+  if (!isCdr) return String(value ?? "");
+  const k = String(key || "").toUpperCase();
+  if (k.includes("AMOUNT") || k.includes("DURATION") || k === "VAL") {
+    const strVal = String(value ?? "").replace(/[$,ETB|Birr]/gi, "").trim();
+    const cleanNum = Number(strVal);
+    if (!isNaN(cleanNum) && strVal !== "") {
+      const minutes = Math.floor(cleanNum / 60);
+      const seconds = Math.round(cleanNum % 60);
+      if (cleanNum >= 60) {
+        return `${cleanNum} sec (${minutes}m ${seconds}s)`;
+      }
+      return `${cleanNum} sec`;
+    }
+    return strVal;
+  }
+  return String(value ?? "").replace(/\b(ETB|Birr)\b/gi, "").replace(/\$/g, "").trim();
+};
+
 const clampMs = (value, min, max) => Math.max(min, Math.min(max, Math.round(Number(value) || min)));
 
 const normalizeIdleSettings = (value = {}, fallback = {}) => {
@@ -1726,16 +1762,16 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
               </fieldset>
 
               <fieldset style={{ display: activeConfigTab === "rules" ? "block" : "none" }}>
-                <legend>Classified Entities <AdminLockIcon /></legend>
+                <legend>{isCdrDomain ? "Classified Entities (Telecom Whitelist / Watchlist)" : "Classified Entities"} <AdminLockIcon /></legend>
                 <table className="config_classified_entities_table">
                   <thead>
                     <tr>
                       <th>#</th>
-                      <th>Entity Name</th>
-                      <th>Key</th>
-                      <th>Value</th>
-                      <th>Category</th>
-                      <th>Pass Through</th>
+                      <th>{isCdrDomain ? "Subscriber / Contact Name" : "Entity Name"}</th>
+                      <th>{isCdrDomain ? "Identifier (MSISDN)" : "Key"}</th>
+                      <th>{isCdrDomain ? "Phone / Contact Number" : "Value"}</th>
+                      <th>{isCdrDomain ? "Telecom Classification" : "Category"}</th>
+                      <th>{isCdrDomain ? "Pass Through (Suppress Alerts)" : "Pass Through"}</th>
                       {isAdmin && <th></th>}
                     </tr>
                   </thead>
@@ -1821,16 +1857,55 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
                   </tbody>
                 </table>
                 <datalist id="category-options">
-                  <option value="Trusted" />
-                  <option value="Risk" />
-                  <option value="PEP" />
-                  <option value="Sanction" />
+                  {isCdrDomain ? (
+                    <>
+                      <option value="Emergency / Service Hotlines" />
+                      <option value="SIM_BOX" />
+                      <option value="WANGIRI" />
+                      <option value="HIGH_RISK" />
+                      <option value="Trusted" />
+                      <option value="Risk" />
+                    </>
+                  ) : (
+                    <>
+                      <option value="Trusted" />
+                      <option value="Risk" />
+                      <option value="PEP" />
+                      <option value="Sanction" />
+                    </>
+                  )}
                 </datalist>
 
                 {isAdmin && (
-                  <button type="button" className="action_btns config_trusted_list_add" onClick={handleClassifiedEntityAdd}>
-                    Add row
-                  </button>
+                  <div style={{ display: "flex", gap: "10px", marginTop: "10px" }}>
+                    <button type="button" className="action_btns config_trusted_list_add" onClick={handleClassifiedEntityAdd}>
+                      Add row
+                    </button>
+                    {isCdrDomain && (
+                      <button
+                        type="button"
+                        className="action_btns"
+                        style={{ background: "linear-gradient(135deg, #1b6ca8, #0f3b5e)", color: "#fff", border: "none" }}
+                        onClick={() => {
+                          const presets = [
+                            { name: "Police Emergency Hotlines", key: "MSISDN", value: "911", category: "Emergency / Service Hotlines", pass_through: true },
+                            { name: "Ambulance / Medical Hotlines", key: "MSISDN", value: "994", category: "Emergency / Service Hotlines", pass_through: true },
+                            { name: "Fire & Rescue Hotlines", key: "MSISDN", value: "991", category: "Emergency / Service Hotlines", pass_through: true },
+                            { name: "Civil Defense Hotlines", key: "MSISDN", value: "980", category: "Emergency / Service Hotlines", pass_through: true },
+                          ];
+                          const existingValues = new Set(classifiedEntityEntries.map(e => String(e.value).trim()));
+                          const toAdd = presets.filter(p => !existingValues.has(p.value));
+                          if (toAdd.length === 0) {
+                            alert("Emergency hotlines (911, 994, 991, 980) are already present.");
+                            return;
+                          }
+                          updateClassifiedEntities([...classifiedEntityEntries, ...toAdd]);
+                        }}
+                      >
+                        ⚡ Load Telecom Emergency Presets (911, 994, 991, 980)
+                      </button>
+                    )}
+                  </div>
                 )}
               </fieldset>
 
@@ -3885,7 +3960,7 @@ const normalizeServiceAccountList = (data) => {
   });
 };
 
-const LINKX_CANONICAL_COLUMNS = [
+const LINKX_CANONICAL_COLUMNS_BANK = [
   { value: "ACCOUNTNO", label: "ACCOUNTNO (Source Account / Sender)" },
   { value: "BENACCOUNTNO", label: "BENACCOUNTNO (Destination Account / Receiver)" },
   { value: "AMOUNTINBIRR", label: "AMOUNTINBIRR (Transaction Amount)" },
@@ -3894,6 +3969,18 @@ const LINKX_CANONICAL_COLUMNS = [
   { value: "ACCOWNERNAME", label: "ACCOWNERNAME (Sender Name)" },
   { value: "BENFULLNAME", label: "BENFULLNAME (Beneficiary Name)" },
 ];
+
+const LINKX_CANONICAL_COLUMNS_CDR = [
+  { value: "ACCOUNTNO", label: "CALLING_NO (Calling Number / MSISDN)" },
+  { value: "BENACCOUNTNO", label: "CALLED_NO (Called Number / Destination)" },
+  { value: "AMOUNTINBIRR", label: "DURATION (Call Duration in seconds)" },
+  { value: "TRANSACTIONDATE", label: "START_TIME (Call Start Time)" },
+  { value: "TRANSACTIONID", label: "RECORD_ID (Unique Call Record ID)" },
+  { value: "ACCOWNERNAME", label: "CALLER_NAME (Caller / Subscriber Name)" },
+  { value: "BENFULLNAME", label: "CALLEE_NAME (Called Party Name)" },
+];
+
+const LINKX_CANONICAL_COLUMNS = (theme?.id === "cdr") ? LINKX_CANONICAL_COLUMNS_CDR : LINKX_CANONICAL_COLUMNS_BANK;
 
 const AVAILABLE_DOMAINS = [
   {
@@ -6807,8 +6894,8 @@ function WindowVerticalSplitPanels({id, type, sourceId, initialTopHeight, minTop
                     </div>
                     {Object.entries(nodeProperties).map(([key, value]) => (
                       <div key={key}>
-                        <span title={String(key)}><label>{key}</label></span>
-                        <span title={String(value)}>{String(value)}</span>
+                        <span title={String(key)}><label>{formatPropertyKeyLabel(key, isCdrDomain)}</label></span>
+                        <span title={String(value)}>{formatPropertyValue(key, value, isCdrDomain)}</span>
                       </div>
                     ))}
                   </div>
@@ -8342,9 +8429,9 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
                                     </select>
                                   </div>
                                   <div className="actions_partition">
-                                    <label>Source/Target</label>                                    
+                                    <label>{isCdrDomain ? "Calling/Called Number" : "Source/Target"}</label>                                    
                                     <select id={`batch_files_dataframe_source_select_${type}_${id}`} value={batchFilesDataframeSourceValue ? batchFilesDataframeSourceValue:''} disabled={batchFilesDataframeInfoI[2]  && batchFilesDataframeActionValue === "Source / Target Relationship" ? false:true} onChange={(e) => windowAction(id,"batch_files_source_select","change",e.target.value)} style={{float:'left',position:'relative',width:'32.5%',borderRight:'0.1vh dashed var(--input-border)',marginRight:'0.1vw'}}>
-                                      <option value="" disabled>Select Source</option>
+                                      <option value="" disabled>{isCdrDomain ? "Select Calling No" : "Select Source"}</option>
                                       {batchFilesDataframeInfoI[2] ? (
                                         batchFilesDataframeInfoI[2].map((item, index) => (
                                             <option key={index} value={item}>{item}</option>
@@ -8354,7 +8441,7 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
                                       )}
                                     </select>
                                     <select id={`batch_files_dataframe_target_select_${type}_${id}`} value={batchFilesDataframeTargetValue ? batchFilesDataframeTargetValue:''} disabled={batchFilesDataframeInfoI[2] && batchFilesDataframeActionValue === "Source / Target Relationship" ? false:true} onChange={(e) => windowAction(id,"batch_files_target_select","change",e.target.value)} style={{float:'left',position:'relative',width:'32%',borderRight:'0.1vh dashed var(--input-border)',marginRight:'0.1vw'}}>
-                                      <option value="" disabled>Select Target</option>
+                                      <option value="" disabled>{isCdrDomain ? "Select Called No" : "Select Target"}</option>
                                       {batchFilesDataframeInfoI[2] ? (
                                         batchFilesDataframeInfoI[2].map((item, index) => (
                                             <option key={index} value={item}>{item}</option>
@@ -8366,7 +8453,7 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
                                   </div>
                                   <div className="actions_partition">
                                     <label>Relationship label</label>                                    
-                                    <input placeholder="HAS_RELATIONSHIP" value={batchFilesDataframeRelationshipValue ? batchFilesDataframeRelationshipValue:''} disabled={batchFilesDataframeActionValue === "Source / Target Relationship" && batchFilesDataframeSourceValue && batchFilesDataframeTargetValue ? false:true} onChange={(e) => windowAction(id,"batch_files_relationship_select","change",e.target.value)}
+                                    <input placeholder={isCdrDomain ? "CALLED" : "HAS_RELATIONSHIP"} value={batchFilesDataframeRelationshipValue ? batchFilesDataframeRelationshipValue:''} disabled={batchFilesDataframeActionValue === "Source / Target Relationship" && batchFilesDataframeSourceValue && batchFilesDataframeTargetValue ? false:true} onChange={(e) => windowAction(id,"batch_files_relationship_select","change",e.target.value)}
                                      type='text'/>
                                   </div>
                                   <div className="actions_partition">
@@ -17588,77 +17675,146 @@ function Root() {
 
 export default Root;
 
+const DEFAULT_BANK_TYPOLOGIES = {
+  SANCTIONED_ENTITY_MATCH: 100,
+  HIGH_RISK_LINK: 50,
+  PEP_INVOLVED: 50,
+  FRAUD_AGGREGATOR: 50,
+  CIRCULAR_FLOW: 30,
+  EFFECTIVE_FLOW: 25,
+  RAPID_WITHDRAWAL: 25,
+  DORMANT_TO_ACTIVE: 25,
+  SMURFING: 20,
+  SHARED_IDENTIFIER: 20,
+  JUST_BELOW_THRESHOLD: 20,
+  LATE_NIGHT_TX: 15,
+  ACCOUNT_ACTIVITY_SPIKE: 15,
+  HUB_AND_SPOKE: 10,
+  RAPID_FAN_OUT: 10,
+  ABNORMAL_BALANCE_CHANGE: 10,
+  FUND_FLOW: 10
+};
+
+const DEFAULT_CDR_TYPOLOGIES = {
+  // Severe Telecom Fraud (Base 35 - 50)
+  HIGH_RISK_CONTACT: 50,
+  SIM_BOX_DISTRIBUTION: 45,
+  WANGIRI_FRAUD: 40,
+  IMEI_SWAP_DETECTION: 35,
+  // High-Risk Coordination (Base 25 - 30)
+  STAR_PATTERN: 30,
+  SHORT_DURATION_BURST: 25,
+  LOCATION_JUMP: 25,
+  CALL_RELAY: 25,
+  // Anomalous Behavioral Signals (Base 10 - 20)
+  SIMULTANEOUS_CALL: 20,
+  NIGHT_ACTIVITY: 20,
+  FREQUENT_CONTACT: 15,
+  CALLBACK_PATTERN: 15,
+  CALL_SEQUENCE: 10,
+  FAN_OUT: 10,
+  FAN_IN: 10,
+  MISSED_CALL_SIGNAL: 10,
+  LONG_DURATION_CALL: 10
+};
+
+const DEFAULT_BANK_NODE_THRESHOLDS = [
+  { min_nodes: 10000, add_points: 30 },
+  { min_nodes: 5000, add_points: 20 },
+  { min_nodes: 1000, add_points: 10 },
+  { min_nodes: 100, add_points: 5 }
+];
+
+const DEFAULT_CDR_NODE_THRESHOLDS = [
+  { min_nodes: 100, add_points: 30 },
+  { min_nodes: 50, add_points: 20 },
+  { min_nodes: 20, add_points: 10 },
+  { min_nodes: 5, add_points: 5 }
+];
+
+const DEFAULT_BANK_MONEY_THRESHOLDS = [
+  { min_amount: 10000000, add_points: 40 },
+  { min_amount: 5000000, add_points: 30 },
+  { min_amount: 1000000, add_points: 20 },
+  { min_amount: 500000, add_points: 10 }
+];
+
+const DEFAULT_CDR_DURATION_THRESHOLDS = [
+  { min_amount: 7200, add_points: 30 },
+  { min_amount: 3600, add_points: 20 },
+  { min_amount: 900, add_points: 10 },
+  { min_amount: 300, add_points: 5 }
+];
+
 function ScoreLineagePanel({ apiFetch, canManageUsers }) {
-  const [baseScores, setBaseScores] = React.useState({
-    SANCTIONED_ENTITY_MATCH: 100,
-    HIGH_RISK_LINK: 50,
-    PEP_INVOLVED: 50,
-    FRAUD_AGGREGATOR: 50,
-    CIRCULAR_FLOW: 30,
-    EFFECTIVE_FLOW: 25,
-    RAPID_WITHDRAWAL: 25,
-    DORMANT_TO_ACTIVE: 25,
-    SMURFING: 20,
-    SHARED_IDENTIFIER: 20,
-    JUST_BELOW_THRESHOLD: 20,
-    LATE_NIGHT_TX: 15,
-    ACCOUNT_ACTIVITY_SPIKE: 15,
-    HUB_AND_SPOKE: 10,
-    RAPID_FAN_OUT: 10,
-    ABNORMAL_BALANCE_CHANGE: 10,
-    FUND_FLOW: 10
-  });
+  const isCdr = theme?.id === "cdr";
+  const defaultTypologies = isCdr ? DEFAULT_CDR_TYPOLOGIES : DEFAULT_BANK_TYPOLOGIES;
+  const defaultNodes = isCdr ? DEFAULT_CDR_NODE_THRESHOLDS : DEFAULT_BANK_NODE_THRESHOLDS;
+  const defaultMoney = isCdr ? DEFAULT_CDR_DURATION_THRESHOLDS : DEFAULT_BANK_MONEY_THRESHOLDS;
 
-  const [nodeThresholds, setNodeThresholds] = React.useState([
-    { min_nodes: 10000, add_points: 30 },
-    { min_nodes: 5000, add_points: 20 },
-    { min_nodes: 1000, add_points: 10 },
-    { min_nodes: 100, add_points: 5 }
-  ]);
-
-  const [moneyThresholds, setMoneyThresholds] = React.useState([
-    { min_amount: 10000000, add_points: 40 },
-    { min_amount: 5000000, add_points: 30 },
-    { min_amount: 1000000, add_points: 20 },
-    { min_amount: 500000, add_points: 10 }
-  ]);
-
+  const [baseScores, setBaseScores] = React.useState(defaultTypologies);
+  const [nodeThresholds, setNodeThresholds] = React.useState(defaultNodes);
+  const [moneyThresholds, setMoneyThresholds] = React.useState(defaultMoney);
   const [isSaving, setIsSaving] = React.useState(false);
 
   React.useEffect(() => {
     const fetchLineage = async () => {
       try {
-        const res = await apiFetch("/config/score-lineage", { suppressForbiddenHandler: true });
+        const lineageEndpoint = isCdr ? "/api/v1/rules/score-lineage?domain_id=cdr" : "/config/score-lineage";
+        const fallbackEndpoint = isCdr ? "/config/score-lineage?domain_id=cdr" : "/config/score-lineage";
+        let res;
+        try {
+          res = await apiFetch(lineageEndpoint, { suppressForbiddenHandler: true });
+        } catch {
+          res = await apiFetch(fallbackEndpoint, { suppressForbiddenHandler: true });
+        }
         if (res && res.results && res.results.config) {
           const cfg = res.results.config;
-          if (cfg.base_scores) setBaseScores(cfg.base_scores);
+          if (cfg.base_scores) setBaseScores(prev => ({ ...prev, ...cfg.base_scores }));
           if (cfg.node_thresholds) setNodeThresholds(cfg.node_thresholds);
-          if (cfg.money_thresholds) setMoneyThresholds(cfg.money_thresholds);
+          if (cfg.duration_thresholds) {
+            setMoneyThresholds(cfg.duration_thresholds.map(t => ({ min_amount: t.min_seconds ?? t.min_amount, add_points: t.add_points })));
+          } else if (cfg.money_thresholds) {
+            setMoneyThresholds(cfg.money_thresholds);
+          }
         }
       } catch (e) {
         console.error(e);
       }
     };
     fetchLineage();
-  }, []);
+  }, [isCdr]);
 
   const handleSave = async () => {
     if (!canManageUsers) return;
     setIsSaving(true);
     try {
       const payload = {
+        domain_id: isCdr ? "cdr" : "bank",
         base_scores: Object.fromEntries(Object.entries(baseScores).map(([k, v]) => [k, Number(v)])),
         node_thresholds: nodeThresholds.map(t => ({ min_nodes: Number(t.min_nodes), add_points: Number(t.add_points) })),
-        money_thresholds: moneyThresholds.map(t => ({ min_amount: Number(t.min_amount), add_points: Number(t.add_points) }))
+        money_thresholds: moneyThresholds.map(t => ({ min_amount: Number(t.min_amount), add_points: Number(t.add_points) })),
+        ...(isCdr ? {
+          duration_thresholds: moneyThresholds.map(t => ({ min_seconds: Number(t.min_amount), add_points: Number(t.add_points) }))
+        } : {})
       };
       
-      const res = await apiFetch("/config/score-lineage", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-      if (!res.ok && !res.results) throw new Error("Failed to save configuration");
-      alert("Score Lineage configuration saved successfully as a new version! (Append-only)");
+      const saveEndpoint = isCdr ? "/api/v1/rules/score-lineage?domain_id=cdr" : "/config/score-lineage";
+      const fallbackEndpoint = isCdr ? "/config/score-lineage?domain_id=cdr" : "/config/score-lineage";
+      try {
+        await apiFetch(saveEndpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+      } catch {
+        await apiFetch(fallbackEndpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+      }
+      alert(isCdr ? "CDR Telecom Score Lineage saved successfully!" : "Score Lineage configuration saved successfully as a new version! (Append-only)");
     } catch (e) {
       console.error(e);
       alert("Error saving configuration.");
@@ -17667,38 +17823,72 @@ function ScoreLineagePanel({ apiFetch, canManageUsers }) {
     }
   };
 
+  const renderTypologySlider = (key) => {
+    const val = baseScores[key] ?? 0;
+    return (
+      <div key={key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "5px" }}>
+        <label style={{ flex: 1, fontSize: "12px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={key}>{key}</label>
+        <input 
+          type="range" 
+          min="0" max="100" 
+          value={val} 
+          disabled={!canManageUsers} onChange={e => setBaseScores(prev => ({...prev, [key]: Number(e.target.value)}))} 
+          style={{ flex: 1, marginRight: "10px" }}
+        />
+        <span style={{ width: "30px", textAlign: "right", fontWeight: "bold" }}>{val}</span>
+      </div>
+    );
+  };
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
       <fieldset>
-        <legend>Base Scores by Typology <AdminLockIcon /></legend>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}>
-          {Object.entries(baseScores).map(([key, val]) => (
-            <div key={key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "5px" }}>
-              <label style={{ flex: 1, fontSize: "12px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={key}>{key}</label>
-              <input 
-                type="range" 
-                min="0" max="100" 
-                value={val} 
-                disabled={!canManageUsers} onChange={e => setBaseScores(prev => ({...prev, [key]: Number(e.target.value)}))} 
-                style={{ flex: 1, marginRight: "10px" }}
-              />
-              <span style={{ width: "30px", textAlign: "right", fontWeight: "bold" }}>{val}</span>
+        <legend>{isCdr ? "Base Scores by Telecom Typology" : "Base Scores by Typology"} <AdminLockIcon /></legend>
+        {isCdr ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+            <div>
+              <div style={{ fontSize: "11px", fontWeight: "bold", color: "#e57373", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "6px" }}>
+                🚨 Severe Telecom Fraud (Base 35 - 50)
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                {["HIGH_RISK_CONTACT", "SIM_BOX_DISTRIBUTION", "WANGIRI_FRAUD", "IMEI_SWAP_DETECTION"].map(renderTypologySlider)}
+              </div>
             </div>
-          ))}
-        </div>
+            <div>
+              <div style={{ fontSize: "11px", fontWeight: "bold", color: "#ffb74d", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "6px" }}>
+                ⚡ High-Risk Coordination (Base 25 - 30)
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                {["STAR_PATTERN", "SHORT_DURATION_BURST", "LOCATION_JUMP", "CALL_RELAY"].map(renderTypologySlider)}
+              </div>
+            </div>
+            <div>
+              <div style={{ fontSize: "11px", fontWeight: "bold", color: "#64b5f6", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "6px" }}>
+                📡 Anomalous Behavioral Signals (Base 10 - 20)
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                {["SIMULTANEOUS_CALL", "NIGHT_ACTIVITY", "FREQUENT_CONTACT", "CALLBACK_PATTERN", "CALL_SEQUENCE", "FAN_OUT", "FAN_IN", "MISSED_CALL_SIGNAL", "LONG_DURATION_CALL"].map(renderTypologySlider)}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}>
+            {Object.keys(baseScores).map(renderTypologySlider)}
+          </div>
+        )}
       </fieldset>
 
       <fieldset>
-        <legend>Node Count Multipliers <AdminLockIcon /></legend>
+        <legend>{isCdr ? "Network Scale / Subscriber Multipliers" : "Node Count Multipliers"} <AdminLockIcon /></legend>
         {nodeThresholds.map((t, idx) => (
           <div key={idx} style={{ display: "flex", gap: "10px", marginBottom: "10px", alignItems: "center" }}>
-            <label style={{width: "80px"}}>Min Nodes:</label>
+            <label style={{ width: isCdr ? "160px" : "80px" }}>{isCdr ? "Min Contacts / MSISDNs:" : "Min Nodes:"}</label>
             <input type="number" className="input_text" style={{ flex: 1 }} value={t.min_nodes} disabled={!canManageUsers} onChange={e => {
               const newT = [...nodeThresholds];
               newT[idx].min_nodes = Number(e.target.value);
               setNodeThresholds(newT);
             }} />
-            <label style={{width: "80px"}}>Add Points:</label>
+            <label style={{ width: "80px" }}>Add Points:</label>
             <input type="number" className="input_text" style={{ width: "80px" }} value={t.add_points} disabled={!canManageUsers} onChange={e => {
               const newT = [...nodeThresholds];
               newT[idx].add_points = Number(e.target.value);
@@ -17711,16 +17901,21 @@ function ScoreLineagePanel({ apiFetch, canManageUsers }) {
       </fieldset>
 
       <fieldset>
-        <legend>Financial Value Multipliers <AdminLockIcon /></legend>
+        <legend>{isCdr ? "Cumulative Duration Volume Score Tiers" : "Financial Value Multipliers"} <AdminLockIcon /></legend>
         {moneyThresholds.map((t, idx) => (
           <div key={idx} style={{ display: "flex", gap: "10px", marginBottom: "10px", alignItems: "center" }}>
-            <label style={{width: "80px"}}>Min Amount:</label>
+            <label style={{ width: isCdr ? "160px" : "80px" }}>{isCdr ? "Min Duration (sec):" : "Min Amount:"}</label>
             <input type="number" className="input_text" style={{ flex: 1 }} value={t.min_amount} disabled={!canManageUsers} onChange={e => {
               const newT = [...moneyThresholds];
               newT[idx].min_amount = Number(e.target.value);
               setMoneyThresholds(newT);
             }} />
-            <label style={{width: "80px"}}>Add Points:</label>
+            {isCdr && (
+              <span style={{ fontSize: "11px", color: "var(--brand-muted, #888)", width: "120px", whiteSpace: "nowrap" }}>
+                {t.min_amount >= 3600 ? `~${(t.min_amount / 3600).toFixed(1)} hrs` : t.min_amount >= 60 ? `~${(t.min_amount / 60).toFixed(0)} min` : `${t.min_amount}s`}
+              </span>
+            )}
+            <label style={{ width: "80px" }}>Add Points:</label>
             <input type="number" className="input_text" style={{ width: "80px" }} value={t.add_points} disabled={!canManageUsers} onChange={e => {
               const newT = [...moneyThresholds];
               newT[idx].add_points = Number(e.target.value);
@@ -17741,7 +17936,31 @@ function ScoreLineagePanel({ apiFetch, canManageUsers }) {
   );
 }
 
-
+const DEFAULT_CDR_THRESHOLDS = {
+  // 1. Call Patterns & Relays
+  frequent_contact_min_calls: 5,
+  call_sequence_max_gap_seconds: 300,
+  callback_max_gap_seconds: 86400,
+  call_relay_max_gap_seconds: 1800,
+  simultaneous_call_window_seconds: 15,
+  // 2. Durations & Night Activity
+  short_duration_burst_seconds: 15,
+  short_duration_burst_min_calls: 3,
+  long_duration_call_seconds: 1800,
+  night_activity_start: 2300,
+  night_activity_end: 500,
+  // 3. Network Dispersion & Towers
+  star_pattern_min_contacts: 5,
+  fan_out_min_targets: 15,
+  fan_in_min_sources: 15,
+  location_jump_max_hours: 2,
+  // 4. Telecom Fraud & Telephony Exploits
+  sim_box_min_calls: 10,
+  sim_box_max_avg_duration: 15,
+  imei_swap_min_devices: 3,
+  wangiri_max_duration_seconds: 3,
+  wangiri_min_calls: 3
+};
 
 const DEFAULT_THRESHOLDS = {
   hub_spoke_min_single_amount: 500.0,
@@ -17773,7 +17992,9 @@ const DEFAULT_THRESHOLDS = {
 };
 
 function RuleThresholdsPanel({ apiFetch, canManageUsers }) {
-  const [config, setConfig] = React.useState(DEFAULT_THRESHOLDS);
+  const isCdr = theme?.id === "cdr";
+  const defaultValues = isCdr ? DEFAULT_CDR_THRESHOLDS : DEFAULT_THRESHOLDS;
+  const [config, setConfig] = React.useState(defaultValues);
   const [history, setHistory] = React.useState([]);
   const [isSaving, setIsSaving] = React.useState(false);
   const [loading, setLoading] = React.useState(true);
@@ -17783,17 +18004,31 @@ function RuleThresholdsPanel({ apiFetch, canManageUsers }) {
     const handleUpdate = () => fetchData();
     window.addEventListener('rule_thresholds_updated', handleUpdate);
     return () => window.removeEventListener('rule_thresholds_updated', handleUpdate);
-  }, []);
+  }, [isCdr]);
 
   const fetchData = async () => {
     setLoading(true);
     try {
-      const res = await apiFetch("/rule-thresholds", { suppressForbiddenHandler: true });
+      const thresholdEndpoint = isCdr ? "/api/v1/rules/thresholds?domain_id=cdr" : "/rule-thresholds";
+      const fallbackEndpoint = isCdr ? "/rule-thresholds?domain_id=cdr" : "/rule-thresholds";
+      let res;
+      try {
+        res = await apiFetch(thresholdEndpoint, { suppressForbiddenHandler: true });
+      } catch {
+        res = await apiFetch(fallbackEndpoint, { suppressForbiddenHandler: true });
+      }
       if (res && res.results && res.results.config) {
         setConfig(prev => ({ ...prev, ...res.results.config }));
       }
       if (canManageUsers) {
-        const histRes = await apiFetch("/rule-thresholds/history?limit=50", { suppressForbiddenHandler: true });
+        const histEndpoint = isCdr ? "/api/v1/rules/thresholds/history?domain_id=cdr&limit=50" : "/rule-thresholds/history?limit=50";
+        const fallbackHist = isCdr ? "/rule-thresholds/history?domain_id=cdr&limit=50" : "/rule-thresholds/history?limit=50";
+        let histRes;
+        try {
+          histRes = await apiFetch(histEndpoint, { suppressForbiddenHandler: true });
+        } catch {
+          histRes = await apiFetch(fallbackHist, { suppressForbiddenHandler: true });
+        }
         if (histRes && histRes.results) {
           setHistory(histRes.results);
         }
@@ -17810,35 +18045,50 @@ function RuleThresholdsPanel({ apiFetch, canManageUsers }) {
     if (!canManageUsers) return;
     setIsSaving(true);
     try {
+      const activeDefaults = isCdr ? DEFAULT_CDR_THRESHOLDS : DEFAULT_THRESHOLDS;
       const numericConfig = {};
-      for (const key of Object.keys(DEFAULT_THRESHOLDS)) {
-        if (typeof DEFAULT_THRESHOLDS[key] === "boolean") {
-          // ensure true boolean
+      for (const key of Object.keys(activeDefaults)) {
+        if (typeof activeDefaults[key] === "boolean") {
           numericConfig[key] = config[key] === true || config[key] === "true";
         } else {
           const num = Number(config[key]);
-          numericConfig[key] = isNaN(num) ? DEFAULT_THRESHOLDS[key] : num;
+          numericConfig[key] = isNaN(num) ? activeDefaults[key] : num;
         }
       }
       
-      const res = await apiFetch("/rule-thresholds", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(numericConfig)
-      });
-      alert("Rule Thresholds saved successfully!");
+      const saveEndpoint = isCdr ? "/api/v1/rules/thresholds?domain_id=cdr" : "/rule-thresholds";
+      const fallbackSave = isCdr ? "/rule-thresholds?domain_id=cdr" : "/rule-thresholds";
+      const payload = {
+        ...(isCdr ? { domain_id: "cdr" } : {}),
+        ...numericConfig
+      };
+
+      try {
+        await apiFetch(saveEndpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+      } catch {
+        await apiFetch(fallbackSave, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+      }
+      alert(isCdr ? "CDR Telecom Detection Thresholds saved successfully!" : "Rule Thresholds saved successfully!");
       fetchData();
     } catch (e) {
       console.error(e);
-      alert("Failed to save rule thresholds.");
+      alert("Failed to save detection thresholds.");
     } finally {
       setIsSaving(false);
     }
   };
 
   const handleReset = () => {
-    setConfig(DEFAULT_THRESHOLDS);
-    alert("Rule Thresholds reset to defaults (not saved yet).");
+    setConfig(isCdr ? DEFAULT_CDR_THRESHOLDS : DEFAULT_THRESHOLDS);
+    alert(isCdr ? "CDR Detection Thresholds reset to defaults (not saved yet)." : "Rule Thresholds reset to defaults (not saved yet).");
   };
 
   const handleChange = (e) => {
@@ -17849,139 +18099,283 @@ function RuleThresholdsPanel({ apiFetch, canManageUsers }) {
     }));
   };
 
-  if (loading) return <div style={{marginTop: "20px"}}>Loading rule thresholds...</div>;
+  if (loading) return <div style={{marginTop: "20px"}}>Loading detection thresholds...</div>;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "15px", marginTop: "20px" }}>
-      <fieldset>
-        <legend>Global Baseline Floor <AdminLockIcon /></legend>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "15px" }}>
-          <div className="configurations_input">
-            <label title="Universal baseline floor. Transactions below this value will not trigger anomalies unless explicitly overridden by a rule-specific threshold.">
-              Universal Minimum Anomaly Floor (Amount)
-            </label>
-            <input type="number" step="0.1" name="global_min_anomaly_amount" min="0" max="10000000" required value={config.global_min_anomaly_amount} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
-          </div>
-        </div>
-      </fieldset>
+      {isCdr ? (
+        <>
+          <fieldset>
+            <legend>1. Call Patterns &amp; Relays <AdminLockIcon /></legend>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}>
+              <div className="configurations_input">
+                <label title="Minimum number of calls between two numbers before flagging a frequent contact cluster.">
+                  Min Frequent Call Count (calls)
+                </label>
+                <input type="number" name="frequent_contact_min_calls" min="1" max="1000" required value={config.frequent_contact_min_calls ?? 5} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+              </div>
+              <div className="configurations_input">
+                <label title="Maximum allowed time gap between sequential calls in a chain.">
+                  Max Gap Between Sequential Calls (sec)
+                </label>
+                <input type="number" name="call_sequence_max_gap_seconds" min="1" max="86400" required value={config.call_sequence_max_gap_seconds ?? 300} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+              </div>
+              <div className="configurations_input">
+                <label title="Maximum window within which a return call is treated as a callback pattern.">
+                  Max Callback Window (sec / 24 hrs)
+                </label>
+                <input type="number" name="callback_max_gap_seconds" min="1" max="604800" required value={config.callback_max_gap_seconds ?? 86400} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+              </div>
+              <div className="configurations_input">
+                <label title="Maximum time gap between incoming and forwarded/outbound leg to detect call relaying.">
+                  Max Relay Window (sec / 30 min)
+                </label>
+                <input type="number" name="call_relay_max_gap_seconds" min="1" max="86400" required value={config.call_relay_max_gap_seconds ?? 1800} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+              </div>
+              <div className="configurations_input">
+                <label title="Time tolerance for overlapping active calls on the same handset or MSISDN.">
+                  Max Multi-Call Window (sec)
+                </label>
+                <input type="number" name="simultaneous_call_window_seconds" min="1" max="300" required value={config.simultaneous_call_window_seconds ?? 15} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+              </div>
+            </div>
+          </fieldset>
 
-      <fieldset>
-        <legend>Per-Rule Amount Floors (False Positive Suppression) <AdminLockIcon /></legend>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}>
-          <div className="configurations_input">
-            <label title="Late night transactions below this amount will not be flagged.">Late Night Min Amount (Amount)</label>
-            <input type="number" step="0.1" name="late_night_min_amount" min="0" max="10000000" required value={config.late_night_min_amount} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
-          </div>
-          <div className="configurations_input">
-            <label title="Minimum leg amount required to participate in circular flow detection.">Circular Flow Min Amount (Amount)</label>
-            <input type="number" step="0.1" name="circular_flow_min_amount" min="0" max="10000000" required value={config.circular_flow_min_amount} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
-          </div>
-          <div className="configurations_input">
-            <label title="Minimum inbound/outbound transfer value before rapid withdrawal ratio is evaluated.">Rapid Withdrawal Min Amount (Amount)</label>
-            <input type="number" step="0.1" name="rapid_withdrawal_min_amount" min="0" max="10000000" required value={config.rapid_withdrawal_min_amount} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
-          </div>
-          <div className="configurations_input">
-            <label title="Minimum total volume distributed across counterparties before an account is flagged as a hub.">Hub &amp; Spoke Min Amount (Amount)</label>
-            <input type="number" step="0.1" name="hub_spoke_min_amount" min="0" max="10000000" required value={config.hub_spoke_min_amount} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
-          </div>
-          <div className="configurations_input">
-            <label title="Daily transaction volume must exceed this value for activity spike alerts.">Activity Spike Min Daily Volume (Amount)</label>
-            <input type="number" step="0.1" name="activity_spike_min_amount" min="0" max="10000000" required value={config.activity_spike_min_amount} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
-          </div>
-          <div className="configurations_input">
-            <label title="Minimum balance fluctuation required to evaluate abnormal balance behavior.">Abnormal Balance Min Change (Amount)</label>
-            <input type="number" step="0.1" name="abnormal_balance_min_change" min="0" max="10000000" required value={config.abnormal_balance_min_change} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
-          </div>
-          <div className="configurations_input">
-            <label title="Only transactions greater than or equal to this amount will be evaluated against the account's historical balance baseline. Prevents small retail purchases from triggering balance shift alerts.">Min Transaction Amount for Balance Check (Amount)</label>
-            <input type="number" step="0.1" name="abnormal_balance_min_tx_amount" min="0" max="10000000" required value={config.abnormal_balance_min_tx_amount} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
-          </div>
-          <div className="configurations_input">
-            <label title="Minimum amount to trace multi-hop fund flow pass-throughs.">Fund Flow / Layering Min Amount (Amount)</label>
-            <input type="number" step="0.1" name="fund_flow_min_amount" min="0" max="10000000" required value={config.fund_flow_min_amount} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
-          </div>
-        </div>
-      </fieldset>
+          <fieldset>
+            <legend>2. Durations &amp; Night Activity <AdminLockIcon /></legend>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}>
+              <div className="configurations_input">
+                <label title="Calls shorter than this duration are treated as short burst signals.">
+                  Burst Duration Threshold (sec)
+                </label>
+                <input type="number" name="short_duration_burst_seconds" min="1" max="300" required value={config.short_duration_burst_seconds ?? 15} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+              </div>
+              <div className="configurations_input">
+                <label title="Minimum number of burst calls required to trigger a rapid burst alert.">
+                  Min Burst Call Count (calls)
+                </label>
+                <input type="number" name="short_duration_burst_min_calls" min="1" max="50" required value={config.short_duration_burst_min_calls ?? 3} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+              </div>
+              <div className="configurations_input">
+                <label title="Calls exceeding this duration are flagged for extended voice activity.">
+                  Long Call Duration (sec / 30 min)
+                </label>
+                <input type="number" name="long_duration_call_seconds" min="60" max="86400" required value={config.long_duration_call_seconds ?? 1800} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+              </div>
+              <div className="configurations_input">
+                <label title="Night operating window start time in 24-hour format (e.g. 2300 = 23:00).">
+                  Night Window Start (HHmm / 23:00)
+                </label>
+                <input type="number" name="night_activity_start" min="0" max="2359" required value={config.night_activity_start ?? 2300} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+              </div>
+              <div className="configurations_input">
+                <label title="Night operating window end time in 24-hour format (e.g. 500 = 05:00).">
+                  Night Window End (HHmm / 05:00)
+                </label>
+                <input type="number" name="night_activity_end" min="0" max="2359" required value={config.night_activity_end ?? 500} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+              </div>
+            </div>
+          </fieldset>
 
-      <fieldset>
-        <legend>Structural &amp; Ratio Settings <AdminLockIcon /></legend>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}>
-          <div className="configurations_input">
-            <label>Circular Flow Amount Tolerance (0.01 - 1.0)</label>
-            <input type="number" step="0.01" name="circular_flow_amount_tolerance" min="0.01" max="1.0" required value={config.circular_flow_amount_tolerance} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
-          </div>
-          <div className="configurations_input" style={{ display: "flex", alignItems: "center", gap: "10px", marginTop: "20px" }}>
-            <input type="checkbox" name="circular_flow_check_amounts" id="chk_circular" checked={config.circular_flow_check_amounts} disabled={!canManageUsers} onChange={handleChange} style={{ width: "16px", height: "16px", margin: 0 }} />
-            <label htmlFor="chk_circular" style={{ margin: 0, padding: 0 }}>Circular Flow Check Amounts</label>
-          </div>
-          <div className="configurations_input">
-            <label>Rapid Withdrawal Tolerance (0.01 - 0.5)</label>
-            <input type="number" step="0.01" name="rapid_withdrawal_amount_tolerance" min="0.01" max="0.5" required value={config.rapid_withdrawal_amount_tolerance} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
-          </div>
-          <div className="configurations_input">
-            <label>Hub &amp; Spoke Min Counterparties (2 - 50)</label>
-            <input type="number" name="hub_spoke_min_counterparties" min="2" max="50" required value={config.hub_spoke_min_counterparties} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
-          </div>
-          <div className="configurations_input">
-            <label title="Minimum individual transaction size to be considered a spoke. Filters out airtime and micro-transfers (<50 Birr) from forming fan-in/fan-out clusters.">Min Spoke Transaction Amount (Amount)</label>
-            <input type="number" step="0.1" name="hub_spoke_min_single_amount" min="0" max="10000000" required value={config.hub_spoke_min_single_amount} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
-          </div>
-          <div className="configurations_input">
-            <label>Activity Spike Multiplier (1.5 - 20.0)</label>
-            <input type="number" step="0.1" name="activity_spike_multiplier" min="1.5" max="20" required value={config.activity_spike_multiplier} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
-          </div>
-          <div className="configurations_input">
-            <label>Activity Spike Min Daily Count (3 - 1000)</label>
-            <input type="number" name="activity_spike_min_daily_count" min="3" max="1000" required value={config.activity_spike_min_daily_count} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
-          </div>
-          <div className="configurations_input">
-            <label>Fund Flow Hub Limit</label>
-            <input type="number" name="fund_flow_hub_threshold" min="0" required value={config.fund_flow_hub_threshold} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
-          </div>
-          <div className="configurations_input">
-            <label>Fund Flow Max Downstream Hops (1 - 50)</label>
-            <input type="number" name="fund_flow_max_downstream" min="1" max="50" required value={config.fund_flow_max_downstream} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
-          </div>
-        </div>
-      </fieldset>
+          <fieldset>
+            <legend>3. Network Dispersion &amp; Towers <AdminLockIcon /></legend>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}>
+              <div className="configurations_input">
+                <label title="Minimum distinct contact numbers to form a star network hub.">
+                  Star Hub Min Contacts (distinct numbers)
+                </label>
+                <input type="number" name="star_pattern_min_contacts" min="2" max="100" required value={config.star_pattern_min_contacts ?? 5} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+              </div>
+              <div className="configurations_input">
+                <label title="Minimum distinct outbound targets called within an observation window.">
+                  Min Fan-Out Outbound Numbers (targets)
+                </label>
+                <input type="number" name="fan_out_min_targets" min="2" max="500" required value={config.fan_out_min_targets ?? 15} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+              </div>
+              <div className="configurations_input">
+                <label title="Minimum distinct inbound callers dialing a target within an observation window.">
+                  Min Fan-In Inbound Callers (sources)
+                </label>
+                <input type="number" name="fan_in_min_sources" min="2" max="500" required value={config.fan_in_min_sources ?? 15} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+              </div>
+              <div className="configurations_input">
+                <label title="Maximum hours between cell tower hops to flag unrealistic velocity/relocation.">
+                  Max Hours for Cell Tower Jump (hrs)
+                </label>
+                <input type="number" name="location_jump_max_hours" min="1" max="72" required value={config.location_jump_max_hours ?? 2} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+              </div>
+            </div>
+          </fieldset>
 
-      <fieldset>
-        <legend>Regulatory Limits &amp; Operating Hours <AdminLockIcon /></legend>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}>
-          <div className="configurations_input">
-            <label title="Minimum number of transactions an account must perform in the near-CTR band before flagging structuring. Set to 2 or 3 to avoid false alerts on isolated single payments.">Min Repeated Structuring Count</label>
-            <input type="number" name="just_below_threshold_min_count" min="1" max="50" required value={config.just_below_threshold_min_count} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
-          </div>
-          <div className="configurations_input">
-            <label title="The lower bound percentage of the reporting threshold (e.g. 0.90 = 90% of CTR limit, targeting transfers between 270,000 and 300,000 Birr).">Threshold Proximity Ratio (%)</label>
-            <input type="number" step="0.01" name="just_below_threshold_ratio" min="0.50" max="0.99" required value={config.just_below_threshold_ratio} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
-          </div>
-          <div className="configurations_input">
-            <label>Reporting Threshold (CTR) (Amount)</label>
-            <input type="number" name="reporting_threshold" min="0" required value={config.reporting_threshold} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
-          </div>
-          <div className="configurations_input">
-            <label>Smurfing Single Tx Threshold (Amount)</label>
-            <input type="number" name="smurfing_single_tx_threshold" min="0" required value={config.smurfing_single_tx_threshold} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
-          </div>
-          <div className="configurations_input">
-            <label>Smurfing Cumulative Threshold (Amount)</label>
-            <input type="number" name="smurfing_cumulative_threshold" min="0" required value={config.smurfing_cumulative_threshold} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
-          </div>
-          <div className="configurations_input">
-            <label>Smurfing Min Tx Count</label>
-            <input type="number" name="smurfing_min_tx_count" min="2" required value={config.smurfing_min_tx_count} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
-          </div>
-          <div className="configurations_input">
-            <label>Late Night Window Start (HHmm)</label>
-            <input type="number" name="late_night_start" min="0" max="2359" required value={config.late_night_start} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
-          </div>
-          <div className="configurations_input">
-            <label>Late Night Window End (HHmm)</label>
-            <input type="number" name="late_night_end" min="0" max="2359" required value={config.late_night_end} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
-          </div>
-        </div>
-      </fieldset>
+          <fieldset>
+            <legend>4. Telecom Fraud &amp; Telephony Exploits <AdminLockIcon /></legend>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}>
+              <div className="configurations_input">
+                <label title="Minimum outbound call count indicating automated SIM box termination.">
+                  SIM Box Min Outbound Calls (calls)
+                </label>
+                <input type="number" name="sim_box_min_calls" min="1" max="1000" required value={config.sim_box_min_calls ?? 10} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+              </div>
+              <div className="configurations_input">
+                <label title="Maximum average call duration in seconds typical of SIM box robocalls.">
+                  SIM Box Max Avg Duration (sec)
+                </label>
+                <input type="number" name="sim_box_max_avg_duration" min="1" max="120" required value={config.sim_box_max_avg_duration ?? 15} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+              </div>
+              <div className="configurations_input">
+                <label title="Minimum distinct IMEI handsets associated with a single SIM card.">
+                  IMEI Swap Min Distinct Handsets (devices)
+                </label>
+                <input type="number" name="imei_swap_min_devices" min="2" max="20" required value={config.imei_swap_min_devices ?? 3} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+              </div>
+              <div className="configurations_input">
+                <label title="Maximum ring duration in seconds before hanging up (Wangiri robocall ring).">
+                  Wangiri Missed Call Max Ring (sec)
+                </label>
+                <input type="number" name="wangiri_max_duration_seconds" min="1" max="10" required value={config.wangiri_max_duration_seconds ?? 3} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+              </div>
+              <div className="configurations_input">
+                <label title="Minimum victim calls dialed to flag a Wangiri broadcast campaign.">
+                  Wangiri Min Victim Calls (calls)
+                </label>
+                <input type="number" name="wangiri_min_calls" min="1" max="100" required value={config.wangiri_min_calls ?? 3} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+              </div>
+            </div>
+          </fieldset>
+        </>
+      ) : (
+        <>
+          <fieldset>
+            <legend>Global Baseline Floor <AdminLockIcon /></legend>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "15px" }}>
+              <div className="configurations_input">
+                <label title="Universal baseline floor. Transactions below this value will not trigger anomalies unless explicitly overridden by a rule-specific threshold.">
+                  Universal Minimum Anomaly Floor (Amount)
+                </label>
+                <input type="number" step="0.1" name="global_min_anomaly_amount" min="0" max="10000000" required value={config.global_min_anomaly_amount} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+              </div>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>Per-Rule Amount Floors (False Positive Suppression) <AdminLockIcon /></legend>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}>
+              <div className="configurations_input">
+                <label title="Late night transactions below this amount will not be flagged.">Late Night Min Amount (Amount)</label>
+                <input type="number" step="0.1" name="late_night_min_amount" min="0" max="10000000" required value={config.late_night_min_amount} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+              </div>
+              <div className="configurations_input">
+                <label title="Minimum leg amount required to participate in circular flow detection.">Circular Flow Min Amount (Amount)</label>
+                <input type="number" step="0.1" name="circular_flow_min_amount" min="0" max="10000000" required value={config.circular_flow_min_amount} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+              </div>
+              <div className="configurations_input">
+                <label title="Minimum inbound/outbound transfer value before rapid withdrawal ratio is evaluated.">Rapid Withdrawal Min Amount (Amount)</label>
+                <input type="number" step="0.1" name="rapid_withdrawal_min_amount" min="0" max="10000000" required value={config.rapid_withdrawal_min_amount} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+              </div>
+              <div className="configurations_input">
+                <label title="Minimum total volume distributed across counterparties before an account is flagged as a hub.">Hub &amp; Spoke Min Amount (Amount)</label>
+                <input type="number" step="0.1" name="hub_spoke_min_amount" min="0" max="10000000" required value={config.hub_spoke_min_amount} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+              </div>
+              <div className="configurations_input">
+                <label title="Daily transaction volume must exceed this value for activity spike alerts.">Activity Spike Min Daily Volume (Amount)</label>
+                <input type="number" step="0.1" name="activity_spike_min_amount" min="0" max="10000000" required value={config.activity_spike_min_amount} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+              </div>
+              <div className="configurations_input">
+                <label title="Minimum balance fluctuation required to evaluate abnormal balance behavior.">Abnormal Balance Min Change (Amount)</label>
+                <input type="number" step="0.1" name="abnormal_balance_min_change" min="0" max="10000000" required value={config.abnormal_balance_min_change} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+              </div>
+              <div className="configurations_input">
+                <label title="Only transactions greater than or equal to this amount will be evaluated against the account's historical balance baseline. Prevents small retail purchases from triggering balance shift alerts.">Min Transaction Amount for Balance Check (Amount)</label>
+                <input type="number" step="0.1" name="abnormal_balance_min_tx_amount" min="0" max="10000000" required value={config.abnormal_balance_min_tx_amount} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+              </div>
+              <div className="configurations_input">
+                <label title="Minimum amount to trace multi-hop fund flow pass-throughs.">Fund Flow / Layering Min Amount (Amount)</label>
+                <input type="number" step="0.1" name="fund_flow_min_amount" min="0" max="10000000" required value={config.fund_flow_min_amount} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+              </div>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>Structural &amp; Ratio Settings <AdminLockIcon /></legend>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}>
+              <div className="configurations_input">
+                <label>Circular Flow Amount Tolerance (0.01 - 1.0)</label>
+                <input type="number" step="0.01" name="circular_flow_amount_tolerance" min="0.01" max="1.0" required value={config.circular_flow_amount_tolerance} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+              </div>
+              <div className="configurations_input" style={{ display: "flex", alignItems: "center", gap: "10px", marginTop: "20px" }}>
+                <input type="checkbox" name="circular_flow_check_amounts" id="chk_circular" checked={config.circular_flow_check_amounts} disabled={!canManageUsers} onChange={handleChange} style={{ width: "16px", height: "16px", margin: 0 }} />
+                <label htmlFor="chk_circular" style={{ margin: 0, padding: 0 }}>Circular Flow Check Amounts</label>
+              </div>
+              <div className="configurations_input">
+                <label>Rapid Withdrawal Tolerance (0.01 - 0.5)</label>
+                <input type="number" step="0.01" name="rapid_withdrawal_amount_tolerance" min="0.01" max="0.5" required value={config.rapid_withdrawal_amount_tolerance} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+              </div>
+              <div className="configurations_input">
+                <label>Hub &amp; Spoke Min Counterparties (2 - 50)</label>
+                <input type="number" name="hub_spoke_min_counterparties" min="2" max="50" required value={config.hub_spoke_min_counterparties} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+              </div>
+              <div className="configurations_input">
+                <label title="Minimum individual transaction size to be considered a spoke. Filters out airtime and micro-transfers (<50 Birr) from forming fan-in/fan-out clusters.">Min Spoke Transaction Amount (Amount)</label>
+                <input type="number" step="0.1" name="hub_spoke_min_single_amount" min="0" max="10000000" required value={config.hub_spoke_min_single_amount} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+              </div>
+              <div className="configurations_input">
+                <label>Activity Spike Multiplier (1.5 - 20.0)</label>
+                <input type="number" step="0.1" name="activity_spike_multiplier" min="1.5" max="20" required value={config.activity_spike_multiplier} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+              </div>
+              <div className="configurations_input">
+                <label>Activity Spike Min Daily Count (3 - 1000)</label>
+                <input type="number" name="activity_spike_min_daily_count" min="3" max="1000" required value={config.activity_spike_min_daily_count} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+              </div>
+              <div className="configurations_input">
+                <label>Fund Flow Hub Limit</label>
+                <input type="number" name="fund_flow_hub_threshold" min="0" required value={config.fund_flow_hub_threshold} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+              </div>
+              <div className="configurations_input">
+                <label>Fund Flow Max Downstream Hops (1 - 50)</label>
+                <input type="number" name="fund_flow_max_downstream" min="1" max="50" required value={config.fund_flow_max_downstream} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+              </div>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>Regulatory Limits &amp; Operating Hours <AdminLockIcon /></legend>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}>
+              <div className="configurations_input">
+                <label title="Minimum number of transactions an account must perform in the near-CTR band before flagging structuring. Set to 2 or 3 to avoid false alerts on isolated single payments.">Min Repeated Structuring Count</label>
+                <input type="number" name="just_below_threshold_min_count" min="1" max="50" required value={config.just_below_threshold_min_count} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+              </div>
+              <div className="configurations_input">
+                <label title="The lower bound percentage of the reporting threshold (e.g. 0.90 = 90% of CTR limit, targeting transfers between 270,000 and 300,000 Birr).">Threshold Proximity Ratio (%)</label>
+                <input type="number" step="0.01" name="just_below_threshold_ratio" min="0.50" max="0.99" required value={config.just_below_threshold_ratio} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+              </div>
+              <div className="configurations_input">
+                <label>Reporting Threshold (CTR) (Amount)</label>
+                <input type="number" name="reporting_threshold" min="0" required value={config.reporting_threshold} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+              </div>
+              <div className="configurations_input">
+                <label>Smurfing Single Tx Threshold (Amount)</label>
+                <input type="number" name="smurfing_single_tx_threshold" min="0" required value={config.smurfing_single_tx_threshold} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+              </div>
+              <div className="configurations_input">
+                <label>Smurfing Cumulative Threshold (Amount)</label>
+                <input type="number" name="smurfing_cumulative_threshold" min="0" required value={config.smurfing_cumulative_threshold} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+              </div>
+              <div className="configurations_input">
+                <label>Smurfing Min Tx Count</label>
+                <input type="number" name="smurfing_min_tx_count" min="2" required value={config.smurfing_min_tx_count} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+              </div>
+              <div className="configurations_input">
+                <label>Late Night Window Start (HHmm)</label>
+                <input type="number" name="late_night_start" min="0" max="2359" required value={config.late_night_start} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+              </div>
+              <div className="configurations_input">
+                <label>Late Night Window End (HHmm)</label>
+                <input type="number" name="late_night_end" min="0" max="2359" required value={config.late_night_end} disabled={!canManageUsers} onChange={handleChange} style={{ width: "100%" }} className="input_text" />
+              </div>
+            </div>
+          </fieldset>
+        </>
+      )}
 
       {canManageUsers && (
         <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "10px" }}>
