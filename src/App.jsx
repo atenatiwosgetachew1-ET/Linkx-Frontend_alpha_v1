@@ -3850,6 +3850,7 @@ const normalizeServiceAccountList = (data) => {
       client_id: account.client_id || account.username || "",
       display_name: account.display_name || account.name || account.client_id || "",
       is_active: account.is_active !== false,
+      is_system: Boolean(account.is_system),
       permissions: Array.isArray(account.permissions) ? account.permissions : [],
       config: {
         storage_host: rawCfg.storage_host || "",
@@ -5264,6 +5265,7 @@ function ServiceAccountsPanel({ apiFetch, canManageUsers, onNotice, requestConfi
         String(account.id),
         {
           display_name: account.display_name,
+          is_active: account.is_active !== false,
           permissions: account.permissions || [],
           config: {
             ...defaultServiceConfig,
@@ -5381,6 +5383,9 @@ function ServiceAccountsPanel({ apiFetch, canManageUsers, onNotice, requestConfi
       display_name: sanitizeText(draftPatch.display_name, { maxLength: 120 }).trim(),
       permissions: cleanPermissions,
     };
+    if (!account.is_system && draftPatch.is_active !== undefined) {
+      patch.is_active = Boolean(draftPatch.is_active);
+    }
 
     const cfg = draftPatch.config || {};
     const cleanFetchColumns = Array.isArray(cfg.fetch_columns)
@@ -5427,7 +5432,23 @@ function ServiceAccountsPanel({ apiFetch, canManageUsers, onNotice, requestConfi
     setSaving(true);
     setError("");
     try {
-      await apiFetch("/auth/admin/service-accounts/" + encodeURIComponent(account.id), { method: "PATCH", body: patch });
+      try {
+        await apiFetch("/auth/admin/service-accounts/" + encodeURIComponent(account.id), { method: "PATCH", body: patch });
+      } catch (methodErr) {
+        if (methodErr?.status === 404 || methodErr?.status === 405) {
+          try {
+            await apiFetch("/auth/admin/service-accounts/" + encodeURIComponent(account.id), { method: "PUT", body: patch });
+          } catch (putAdminErr) {
+            if (putAdminErr?.status === 404) {
+              await apiFetch("/auth/service-accounts/" + encodeURIComponent(account.id), { method: "PUT", body: patch });
+            } else {
+              throw putAdminErr;
+            }
+          }
+        } else {
+          throw methodErr;
+        }
+      }
       onNotice?.({ title: "Service account updated", message: account.client_id + " was updated.", source: "Admin", level: "success" });
       setExpandedAccountId(null);
       await loadAccounts();
@@ -5492,6 +5513,15 @@ function ServiceAccountsPanel({ apiFetch, canManageUsers, onNotice, requestConfi
   };
 
   const deleteAccount = async (account) => {
+    if (account.is_system) {
+      onNotice?.({
+        title: "Action Not Allowed",
+        message: "System service accounts cannot be deleted.",
+        source: "Service Accounts",
+        level: "warning",
+      });
+      return;
+    }
     let shouldProceed = false;
     if (typeof requestConfirmation === "function") {
       shouldProceed = await requestConfirmation({
@@ -5730,6 +5760,11 @@ function ServiceAccountsPanel({ apiFetch, canManageUsers, onNotice, requestConfi
                       <div className="service_account_id_badge">
                         <span className="service_account_tag">ID #{account.id}</span>
                         <b className="service_account_client_id">{account.client_id}</b>
+                        {account.is_system && (
+                          <span className="service_system_badge" title="Protected System Service Account">
+                            🛡 System
+                          </span>
+                        )}
                       </div>
                       <div className="service_account_meta">
                         <span className="service_account_display_name">
@@ -5755,7 +5790,21 @@ function ServiceAccountsPanel({ apiFetch, canManageUsers, onNotice, requestConfi
                         <span className="service_perm_chip">
                           {(account.permissions || []).length} permissions
                         </span>
-                        <span className="service_status_chip active">Active</span>
+                        {account.is_system ? (
+                          <span
+                            className="service_status_chip active system_locked"
+                            title="System service accounts are permanently active and locked."
+                          >
+                            🔒 Active
+                          </span>
+                        ) : (
+                          <span
+                            className={`service_status_chip ${account.is_active ? "active" : "inactive"}`}
+                            title={account.is_active ? "Active service account" : "Inactive service account"}
+                          >
+                            {account.is_active ? "Active" : "Inactive"}
+                          </span>
+                        )}
                       </div>
                     </div>
 
@@ -5779,10 +5828,13 @@ function ServiceAccountsPanel({ apiFetch, canManageUsers, onNotice, requestConfi
                       </button>
                       <button
                         type="button"
-                        className="critical_btns"
-                        onClick={() => deleteAccount(account)}
-                        disabled={saving}
-                        title="Delete service account"
+                        className={`critical_btns ${account.is_system ? "is_disabled" : ""}`}
+                        onClick={() => {
+                          if (account.is_system) return;
+                          deleteAccount(account);
+                        }}
+                        disabled={saving || account.is_system}
+                        title={account.is_system ? "System service accounts cannot be deleted." : "Delete service account"}
                       >
                         Delete
                       </button>
@@ -5791,8 +5843,20 @@ function ServiceAccountsPanel({ apiFetch, canManageUsers, onNotice, requestConfi
 
                   {isExpanded && (
                     <div className="service_account_drawer">
+                      {account.is_system && (
+                        <div className="service_system_info_banner">
+                          <span className="service_system_info_icon">🛡</span>
+                          <div className="service_system_info_text">
+                            <b>Protected System Service Account ({account.client_id})</b>
+                            <p>
+                              Platform daemon settings and storage targets are dynamically synced to the runtime engine on Server 4 without process restarts. System accounts are permanently active and protected from deletion.
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
                       <div className="config_endpoint_grid">
-                        <div className="config_endpoint_field config_endpoint_field--wide">
+                        <div className="config_endpoint_field">
                           <label>Display Name</label>
                           <input
                             type="text"
@@ -5802,6 +5866,40 @@ function ServiceAccountsPanel({ apiFetch, canManageUsers, onNotice, requestConfi
                             placeholder="Display name"
                             onChange={(e) => updateEditDraft(account.id, { display_name: sanitizeText(e.target.value, { maxLength: 120 }) })}
                           />
+                        </div>
+
+                        <div className="config_endpoint_field">
+                          <label>Account Status</label>
+                          {account.is_system ? (
+                            <div
+                              className="user_status_toggle_btn active is_locked"
+                              title="System service accounts cannot be deactivated (permanently active)."
+                              style={{ cursor: "not-allowed", opacity: 0.9 }}
+                            >
+                              <span className="user_status_toggle_knob" />
+                              <span className="user_status_toggle_label">🔒 Active (Locked)</span>
+                            </div>
+                          ) : (
+                            <div
+                              className={`user_status_toggle_btn ${editDraft.is_active !== false ? "active" : "inactive"}`}
+                              onClick={() => updateEditDraft(account.id, { is_active: editDraft.is_active === false ? true : false })}
+                              role="checkbox"
+                              aria-checked={editDraft.is_active !== false}
+                              tabIndex={0}
+                              onKeyDown={(e) => {
+                                if (e.key === " " || e.key === "Enter") {
+                                  e.preventDefault();
+                                  updateEditDraft(account.id, { is_active: editDraft.is_active === false ? true : false });
+                                }
+                              }}
+                              title="Toggle account active status"
+                            >
+                              <span className="user_status_toggle_knob" />
+                              <span className="user_status_toggle_label">
+                                {editDraft.is_active !== false ? "Active" : "Inactive"}
+                              </span>
+                            </div>
+                          )}
                         </div>
                       </div>
 

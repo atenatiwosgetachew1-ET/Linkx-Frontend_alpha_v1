@@ -8324,6 +8324,55 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 	border: 1px solid #b7e8c5;
 	color: #137333;
 }
+.service_system_badge {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	font-size: 10px;
+	font-weight: 700;
+	letter-spacing: 0.3px;
+	text-transform: uppercase;
+	background: linear-gradient(135deg, #ede9fe 0%, #e0e7ff 100%);
+	color: #5b21b6;
+	padding: 2px 8px;
+	border-radius: 12px;
+	border: 1px solid #c4b5fd;
+	box-shadow: 0 1px 3px rgba(91, 33, 182, 0.12);
+}
+.service_status_chip.system_locked {
+	background: #f5f3ff;
+	border: 1px solid #ddd6fe;
+	color: #6d28d9;
+	font-weight: 600;
+}
+.service_system_info_banner {
+	display: flex;
+	align-items: flex-start;
+	gap: 10px;
+	background: rgba(245, 243, 255, 0.9);
+	border: 1px solid rgba(196, 181, 253, 0.7);
+	border-radius: 4px;
+	padding: 8px 12px;
+	margin-bottom: 12px;
+	font-size: 12px;
+	color: #4c1d95;
+}
+.service_system_info_banner b {
+	display: block;
+	color: #3b0764;
+	margin-bottom: 2px;
+}
+.service_system_info_banner p {
+	margin: 0;
+	line-height: 1.4;
+	color: #5b21b6;
+}
+.critical_btns:disabled,
+.critical_btns.is_disabled {
+	opacity: 0.45 !important;
+	cursor: not-allowed !important;
+	filter: grayscale(0.6);
+}
 .service_account_row_actions {
 	display: flex;
 	align-items: center;
@@ -8838,6 +8887,28 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 	background: rgba(19, 115, 51, 0.25);
 	border-color: rgba(75, 181, 107, 0.4);
 	color: #72e094;
+}
+[data-theme="dark"] .service_system_badge {
+	background: linear-gradient(135deg, rgba(91, 33, 182, 0.35) 0%, rgba(67, 56, 202, 0.35) 100%);
+	border-color: rgba(167, 139, 250, 0.45);
+	color: #ddd6fe;
+	box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+}
+[data-theme="dark"] .service_status_chip.system_locked {
+	background: rgba(109, 40, 217, 0.25);
+	border-color: rgba(196, 181, 253, 0.4);
+	color: #ddd6fe;
+}
+[data-theme="dark"] .service_system_info_banner {
+	background: rgba(46, 16, 101, 0.35);
+	border-color: rgba(167, 139, 250, 0.35);
+	color: #ede9fe;
+}
+[data-theme="dark"] .service_system_info_banner b {
+	color: #f5f3ff;
+}
+[data-theme="dark"] .service_system_info_banner p {
+	color: #c4b5fd;
 }
 [data-theme="dark"] .service_account_drawer {
 	border-top-color: rgba(93, 130, 146, 0.3);

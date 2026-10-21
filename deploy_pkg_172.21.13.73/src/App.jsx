@@ -3769,38 +3769,754 @@ function PermissionEditor({ value = [], onChange, idPrefix = "permissions" }) {
     else next.add(permission);
     onChange(sanitizePermissionList(Array.from(next).sort()));
   };
+  const toggleGroup = (groupItems) => {
+    const next = new Set(selected);
+    const allSelected = groupItems.every((item) => next.has(item));
+    groupItems.forEach((item) => {
+      if (allSelected) next.delete(item);
+      else next.add(item);
+    });
+    onChange(sanitizePermissionList(Array.from(next).sort()));
+  };
   return (
     <div className="permission_editor">
-      {permissionGroups.map((group) => (
-        <fieldset className="permission_group" key={group.label}>
-          <legend>{group.label}</legend>
-          {group.items.map((permission) => {
-            const inputId = idPrefix + "_" + permission.replace(/[^a-z0-9]/gi, "_");
-            return (
-              <label className="permission_option" htmlFor={inputId} key={permission}>
-                <input id={inputId} type="checkbox" checked={selected.has(permission)} onChange={() => togglePermission(permission)} />
-                <span>{permission}</span>
-              </label>
-            );
-          })}
-        </fieldset>
-      ))}
+      {permissionGroups.map((group) => {
+        const count = group.items.filter((item) => selected.has(item)).length;
+        const allSelected = count === group.items.length;
+        return (
+          <div className="permission_group" key={group.label}>
+            <div
+              className={`permission_group_header ${allSelected ? "all_selected" : count > 0 ? "some_selected" : ""}`}
+              onClick={() => toggleGroup(group.items)}
+              title="Click group title to toggle all permissions in this category"
+            >
+              <span className="permission_group_title">{group.label}</span>
+              <span className="permission_group_badge">{count}/{group.items.length}</span>
+            </div>
+            <div className="permission_group_items">
+              {group.items.map((permission) => {
+                const isChecked = selected.has(permission);
+                return (
+                  <div
+                    className={`permission_option ${isChecked ? "active" : ""}`}
+                    key={permission}
+                    onClick={() => togglePermission(permission)}
+                    role="checkbox"
+                    aria-checked={isChecked}
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === " " || e.key === "Enter") {
+                        e.preventDefault();
+                        togglePermission(permission);
+                      }
+                    }}
+                  >
+                    <span className={`permission_checkbox_box ${isChecked ? "checked" : ""}`}>
+                      {isChecked && (
+                        <svg viewBox="0 0 12 10" className="permission_check_svg">
+                          <polyline points="1.5 5 4.5 8 10.5 1.5" />
+                        </svg>
+                      )}
+                    </span>
+                    <span className="permission_label_text">{permission}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
 
+const defaultServiceConfig = {
+  storage_host: "",
+  storage_port: "5000",
+  storage_endpoint: "",
+  domain: "bank",
+  auth_token: "",
+  fetch_columns: [],
+  column_mapping: {},
+};
+
 const normalizeServiceAccountList = (data) => {
   const raw = Array.isArray(data) ? data : Array.isArray(data?.results) ? data.results : Array.isArray(data?.service_accounts) ? data.service_accounts : Array.isArray(data?.data) ? data.data : [];
-  return raw.map((account) => ({
-    ...account,
-    id: account.id ?? account.client_id,
-    client_id: account.client_id || account.username || "",
-    display_name: account.display_name || account.name || account.client_id || "",
-    is_active: account.is_active !== false,
-    permissions: Array.isArray(account.permissions) ? account.permissions : [],
-  }));
+  return raw.map((account) => {
+    const rawCfg = account.config || {};
+    return {
+      ...account,
+      id: account.id ?? account.client_id,
+      client_id: account.client_id || account.username || "",
+      display_name: account.display_name || account.name || account.client_id || "",
+      is_active: account.is_active !== false,
+      is_system: Boolean(account.is_system),
+      permissions: Array.isArray(account.permissions) ? account.permissions : [],
+      config: {
+        storage_host: rawCfg.storage_host || "",
+        storage_port: rawCfg.storage_port ? String(rawCfg.storage_port) : "5000",
+        storage_endpoint: rawCfg.storage_endpoint || "",
+        domain: rawCfg.domain || "bank",
+        auth_token: rawCfg.auth_token || "",
+        fetch_columns: Array.isArray(rawCfg.fetch_columns) ? rawCfg.fetch_columns : [],
+        column_mapping: (rawCfg.column_mapping && typeof rawCfg.column_mapping === "object" && !Array.isArray(rawCfg.column_mapping))
+          ? rawCfg.column_mapping
+          : {},
+      },
+    };
+  });
 };
-const extractServiceSecret = (data) => (data?.client_secret || data?.secret || data?.results?.client_secret || data?.results?.secret || data?.service_account?.client_secret || data?.service_account?.secret || "");
+
+const LINKX_CANONICAL_COLUMNS = [
+  { value: "ACCOUNTNO", label: "ACCOUNTNO (Source Account / Sender)" },
+  { value: "BENACCOUNTNO", label: "BENACCOUNTNO (Destination Account / Receiver)" },
+  { value: "AMOUNTINBIRR", label: "AMOUNTINBIRR (Transaction Amount)" },
+  { value: "TRANSACTIONDATE", label: "TRANSACTIONDATE (Timestamp / Date)" },
+  { value: "TRANSACTIONID", label: "TRANSACTIONID (Unique Transaction ID)" },
+  { value: "ACCOWNERNAME", label: "ACCOWNERNAME (Sender Name)" },
+  { value: "BENFULLNAME", label: "BENFULLNAME (Beneficiary Name)" },
+];
+
+const AVAILABLE_DOMAINS = [
+  {
+    key: "bank",
+    label: "Bank",
+    tag: "Core Banking",
+    description: "Standard banking schema (ACCOUNTNO, BENACCOUNTNO, AMOUNTINBIRR)",
+  },
+  {
+    key: "microfinance",
+    label: "Microfinance",
+    tag: "Micro-Lending",
+    description: "Community finance and micro-loans (SENDERACCOUNTID, RECEIVERACCOUNTID)",
+  },
+  {
+    key: "insurance",
+    label: "Insurance",
+    tag: "Claims & Policies",
+    description: "Insurance policies, claims settlements, and premium payouts (POLICY_NO, CLAIM_ID)",
+  },
+  {
+    key: "cdr",
+    label: "CDR",
+    tag: "Telecom Sessions",
+    description: "Call Detail Records and telecom logs (CALLER_MSISDN, CALLEE_MSISDN, DURATION)",
+  },
+  {
+    key: "telecom",
+    label: "Telecom",
+    tag: "Carrier Networks",
+    description: "Telecommunications subscriber and voice/SMS transaction schema",
+  },
+  {
+    key: "fintech",
+    label: "Fintech",
+    tag: "Digital Wallets",
+    description: "Digital payments, e-wallets, and payment gateways (PAYER_WALLET, PAYEE_WALLET)",
+  },
+  {
+    key: "enterprise",
+    label: "Enterprise",
+    tag: "Corporate Ledger",
+    description: "General corporate ERP, ledger, and vendor settlements (DEBTOR_ID, CREDITOR_ID)",
+  },
+];
+
+const DOMAIN_SCHEMA_TEMPLATES = {
+  bank: {
+    fetch_columns: [
+      "TRANSACTIONID",
+      "TRANSACTIONDATE",
+      "AMOUNTINBIRR",
+      "ACCOUNTNO",
+      "BENACCOUNTNO",
+      "ACCOWNERNAME",
+      "BENFULLNAME",
+    ],
+    column_mapping: {
+      TRANSACTIONID: "TRANSACTIONID",
+      TRANSACTIONDATE: "TRANSACTIONDATE",
+      AMOUNTINBIRR: "AMOUNTINBIRR",
+      ACCOUNTNO: "ACCOUNTNO",
+      BENACCOUNTNO: "BENACCOUNTNO",
+      ACCOWNERNAME: "ACCOWNERNAME",
+      BENFULLNAME: "BENFULLNAME",
+    },
+  },
+  microfinance: {
+    fetch_columns: [
+      "TRANSFERID",
+      "CREATEDDATE",
+      "TRANSFERAMOUNT",
+      "SENDERACCOUNTID",
+      "RECEIVERACCOUNTID",
+      "SENDER_FULL_NAME",
+      "RECEIVER_FULL_NAME",
+      "NAME",
+    ],
+    column_mapping: {
+      SENDERACCOUNTID: "ACCOUNTNO",
+      RECEIVERACCOUNTID: "BENACCOUNTNO",
+      TRANSFERAMOUNT: "AMOUNTINBIRR",
+      CREATEDDATE: "TRANSACTIONDATE",
+      TRANSFERID: "TRANSACTIONID",
+      SENDER_FULL_NAME: "ACCOWNERNAME",
+      RECEIVER_FULL_NAME: "BENFULLNAME",
+    },
+  },
+  insurance: {
+    fetch_columns: [
+      "CLAIM_ID",
+      "CLAIM_DATE",
+      "CLAIM_AMOUNT",
+      "POLICY_NO",
+      "CLAIMANT_ID",
+      "INSURED_NAME",
+      "CLAIMANT_NAME",
+    ],
+    column_mapping: {
+      POLICY_NO: "ACCOUNTNO",
+      CLAIMANT_ID: "BENACCOUNTNO",
+      CLAIM_AMOUNT: "AMOUNTINBIRR",
+      CLAIM_DATE: "TRANSACTIONDATE",
+      CLAIM_ID: "TRANSACTIONID",
+      INSURED_NAME: "ACCOWNERNAME",
+      CLAIMANT_NAME: "BENFULLNAME",
+    },
+  },
+  cdr: {
+    fetch_columns: [
+      "CALL_ID",
+      "CALL_DATE",
+      "DURATION_SEC",
+      "CALLER_MSISDN",
+      "CALLEE_MSISDN",
+      "CALLER_NAME",
+      "CALLEE_NAME",
+    ],
+    column_mapping: {
+      CALLER_MSISDN: "ACCOUNTNO",
+      CALLEE_MSISDN: "BENACCOUNTNO",
+      DURATION_SEC: "AMOUNTINBIRR",
+      CALL_DATE: "TRANSACTIONDATE",
+      CALL_ID: "TRANSACTIONID",
+      CALLER_NAME: "ACCOWNERNAME",
+      CALLEE_NAME: "BENFULLNAME",
+    },
+  },
+  telecom: {
+    fetch_columns: [
+      "CALL_ID",
+      "CALL_DATE",
+      "DURATION_SEC",
+      "CALLER_MSISDN",
+      "CALLEE_MSISDN",
+      "CALLER_NAME",
+      "CALLEE_NAME",
+    ],
+    column_mapping: {
+      CALLER_MSISDN: "ACCOUNTNO",
+      CALLEE_MSISDN: "BENACCOUNTNO",
+      DURATION_SEC: "AMOUNTINBIRR",
+      CALL_DATE: "TRANSACTIONDATE",
+      CALL_ID: "TRANSACTIONID",
+      CALLER_NAME: "ACCOWNERNAME",
+      CALLEE_NAME: "BENFULLNAME",
+    },
+  },
+  fintech: {
+    fetch_columns: [
+      "TXN_REF",
+      "TIMESTAMP",
+      "AMOUNT",
+      "PAYER_WALLET",
+      "PAYEE_WALLET",
+      "PAYER_NAME",
+      "PAYEE_NAME",
+    ],
+    column_mapping: {
+      PAYER_WALLET: "ACCOUNTNO",
+      PAYEE_WALLET: "BENACCOUNTNO",
+      AMOUNT: "AMOUNTINBIRR",
+      TIMESTAMP: "TRANSACTIONDATE",
+      TXN_REF: "TRANSACTIONID",
+      PAYER_NAME: "ACCOWNERNAME",
+      PAYEE_NAME: "BENFULLNAME",
+    },
+  },
+  enterprise: {
+    fetch_columns: [
+      "RECORD_ID",
+      "TIMESTAMP",
+      "VAL",
+      "DEBTOR_ID",
+      "CREDITOR_ID",
+      "DEBTOR_NAME",
+      "CREDITOR_NAME",
+    ],
+    column_mapping: {
+      DEBTOR_ID: "ACCOUNTNO",
+      CREDITOR_ID: "BENACCOUNTNO",
+      VAL: "AMOUNTINBIRR",
+      TIMESTAMP: "TRANSACTIONDATE",
+      RECORD_ID: "TRANSACTIONID",
+      DEBTOR_NAME: "ACCOWNERNAME",
+      CREDITOR_NAME: "BENFULLNAME",
+    },
+  },
+};
+
+function MappingRow({ sourceKey, targetVal, onChangeKey, onChangeVal, onRemove, idPrefix, index }) {
+  const [localKey, setLocalKey] = useState(sourceKey);
+  useEffect(() => { setLocalKey(sourceKey); }, [sourceKey]);
+
+  return (
+    <div className="schema_mapping_row">
+      <div className="schema_mapping_input_wrap">
+        <input
+          id={`${idPrefix}_src_${index}`}
+          type="text"
+          className="input_text schema_mapping_input"
+          placeholder="e.g. SENDER_ID"
+          value={localKey}
+          maxLength={80}
+          onChange={(e) => setLocalKey(e.target.value.replace(/[^a-zA-Z0-9_]/g, "").toUpperCase())}
+          onBlur={() => {
+            const clean = localKey.trim();
+            if (clean && clean !== sourceKey) {
+              onChangeKey(sourceKey, clean);
+            }
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              e.target.blur();
+            }
+          }}
+        />
+      </div>
+      <span className="schema_mapping_arrow" title="Maps to LinkX Canonical column">➔</span>
+      <div className="schema_mapping_select_wrap">
+        <select
+          id={`${idPrefix}_tgt_${index}`}
+          className="input_text schema_mapping_select"
+          value={targetVal}
+          onChange={(e) => onChangeVal(sourceKey, e.target.value)}
+        >
+          {LINKX_CANONICAL_COLUMNS.map((col) => (
+            <option key={col.value} value={col.value}>
+              {col.label}
+            </option>
+          ))}
+        </select>
+      </div>
+      <button
+        type="button"
+        className="schema_mapping_del_btn"
+        title="Remove mapping pair"
+        onClick={() => onRemove(sourceKey)}
+      >
+        🗑
+      </button>
+    </div>
+  );
+}
+
+function DomainSelector({ value = "bank", onChange, idPrefix = "domain" }) {
+  const currentDomain = value || "bank";
+  return (
+    <div className="config_endpoint_field config_endpoint_field--wide">
+      <div className="service_perm_section_header" style={{ marginBottom: "2px" }}>
+        <label>Domain / Institution (Built-in Schema)</label>
+      </div>
+      <p className="schema_field_hint" style={{ marginTop: "1px", marginBottom: "6px" }}>
+        Select your institution domain. Built-in schema mapping applies automatically unless overridden in Advanced Schema.
+      </p>
+      <div className="domain_selector_grid" role="radiogroup" aria-label="Domain / Institution">
+        {AVAILABLE_DOMAINS.map((domain) => {
+          const isSelected = currentDomain === domain.key;
+          return (
+            <div
+              key={domain.key}
+              id={`${idPrefix}_opt_${domain.key}`}
+              className={`domain_card_option ${isSelected ? "active" : ""}`}
+              onClick={() => onChange?.(domain.key)}
+              role="radio"
+              aria-checked={isSelected}
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === " " || e.key === "Enter") {
+                  e.preventDefault();
+                  onChange?.(domain.key);
+                }
+              }}
+            >
+              <span className={`domain_radio_circle ${isSelected ? "checked" : ""}`}>
+                {isSelected && <span className="domain_radio_dot" />}
+              </span>
+              <div className="domain_card_info">
+                <div className="domain_card_header">
+                  <span className="domain_card_name">{domain.label}</span>
+                  <span className="domain_card_tag">{domain.tag}</span>
+                </div>
+                <span className="domain_card_desc">{domain.description}</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function StorageTargetEditor({ config = defaultServiceConfig, onChange, idPrefix = "target" }) {
+  const currentConfig = { ...defaultServiceConfig, ...(config || {}) };
+  const updateField = (key, val) => onChange?.({ ...currentConfig, [key]: val });
+  const [isAdvancedOpen, setIsAdvancedOpen] = useState(
+    Boolean(
+      (currentConfig.fetch_columns && currentConfig.fetch_columns.length > 0) ||
+      (currentConfig.column_mapping && Object.keys(currentConfig.column_mapping).length > 0)
+    )
+  );
+  const [colInputText, setColInputText] = useState("");
+
+  const fetchCols = Array.isArray(currentConfig.fetch_columns) ? currentConfig.fetch_columns : [];
+  const colMapping = (currentConfig.column_mapping && typeof currentConfig.column_mapping === "object" && !Array.isArray(currentConfig.column_mapping))
+    ? currentConfig.column_mapping
+    : {};
+  const mappingEntries = Object.entries(colMapping);
+
+  const handleAddColumns = (text) => {
+    const rawTokens = (text || "").split(/[,\s]+/);
+    const valid = rawTokens
+      .map((t) => t.trim().replace(/[^a-zA-Z0-9_]/g, "").toUpperCase())
+      .filter(Boolean);
+    if (!valid.length) return;
+    const nextSet = Array.from(new Set([...fetchCols, ...valid]));
+    updateField("fetch_columns", nextSet);
+    setColInputText("");
+  };
+
+  const handleRemoveColumn = (col) => {
+    updateField("fetch_columns", fetchCols.filter((c) => c !== col));
+  };
+
+  const handleClearColumns = () => {
+    updateField("fetch_columns", []);
+  };
+
+  const handleChangeMappingKey = (oldKey, newKey) => {
+    if (!newKey || oldKey === newKey) return;
+    const next = { ...colMapping };
+    const val = next[oldKey] || LINKX_CANONICAL_COLUMNS[0].value;
+    delete next[oldKey];
+    next[newKey] = val;
+    updateField("column_mapping", next);
+  };
+
+  const handleChangeMappingVal = (key, val) => {
+    const next = { ...colMapping, [key]: val };
+    updateField("column_mapping", next);
+  };
+
+  const handleRemoveMapping = (key) => {
+    const next = { ...colMapping };
+    delete next[key];
+    updateField("column_mapping", next);
+  };
+
+  const handleAddMapping = () => {
+    const next = { ...colMapping };
+    let candidate = "SOURCE_COL";
+    let i = 1;
+    while (next[candidate] !== undefined) {
+      candidate = `SOURCE_COL_${i}`;
+      i += 1;
+    }
+    next[candidate] = LINKX_CANONICAL_COLUMNS[0].value;
+    updateField("column_mapping", next);
+  };
+
+  const handleClearMapping = () => {
+    updateField("column_mapping", {});
+  };
+
+  const handleLoadTemplate = () => {
+    const domainKey = currentConfig.domain || "bank";
+    const template = DOMAIN_SCHEMA_TEMPLATES[domainKey] || DOMAIN_SCHEMA_TEMPLATES.bank;
+    onChange?.({
+      ...currentConfig,
+      fetch_columns: [...template.fetch_columns],
+      column_mapping: { ...template.column_mapping },
+    });
+  };
+
+  return (
+    <div className="service_storage_target_section">
+      <div className="service_storage_target_header">
+        <span className="service_storage_target_title">Assigned Storage Target</span>
+        <span className="service_storage_target_hint">Elasticsearch search server and domain routing</span>
+      </div>
+
+      <div className="config_endpoint_grid">
+        <div className="config_endpoint_field">
+          <label htmlFor={`${idPrefix}_host`}>Storage Host / IP</label>
+          <input
+            id={`${idPrefix}_host`}
+            type="text"
+            className="input_text"
+            placeholder="e.g. 192.168.1.100"
+            value={currentConfig.storage_host}
+            maxLength={160}
+            onChange={(e) => updateField("storage_host", sanitizeConnectionValue(e.target.value, { maxLength: 160 }))}
+          />
+        </div>
+
+        <div className="config_endpoint_field">
+          <label htmlFor={`${idPrefix}_port`}>Storage Port</label>
+          <input
+            id={`${idPrefix}_port`}
+            type="text"
+            className="input_text"
+            placeholder="e.g. 8080"
+            value={currentConfig.storage_port}
+            maxLength={10}
+            onChange={(e) => updateField("storage_port", sanitizeConnectionValue(e.target.value, { maxLength: 10 }))}
+          />
+        </div>
+
+        <div className="config_endpoint_field">
+          <label htmlFor={`${idPrefix}_endpoint`}>Strict Search Endpoint</label>
+          <input
+            id={`${idPrefix}_endpoint`}
+            type="text"
+            className="input_text"
+            placeholder="e.g. api/v1/search"
+            value={currentConfig.storage_endpoint}
+            maxLength={160}
+            onChange={(e) => updateField("storage_endpoint", sanitizeConnectionValue(e.target.value, { maxLength: 160 }))}
+          />
+        </div>
+
+        <div className="config_endpoint_field">
+          <label htmlFor={`${idPrefix}_token`}>Auth Token (Optional)</label>
+          <input
+            id={`${idPrefix}_token`}
+            type="password"
+            className="input_text"
+            placeholder="Bearer token (optional)"
+            value={currentConfig.auth_token}
+            maxLength={256}
+            onChange={(e) => updateField("auth_token", sanitizeSecret(e.target.value, { maxLength: 256 }))}
+          />
+        </div>
+
+        <DomainSelector
+          value={currentConfig.domain || "bank"}
+          onChange={(val) => updateField("domain", val)}
+          idPrefix={`${idPrefix}_domain`}
+        />
+      </div>
+
+      {/* ── Advanced Schema & Column Mapping Accordion ── */}
+      <div className="schema_mapping_accordion">
+        <div
+          className="schema_mapping_toggle_bar"
+          onClick={() => setIsAdvancedOpen((prev) => !prev)}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === " " || e.key === "Enter") {
+              e.preventDefault();
+              setIsAdvancedOpen((prev) => !prev);
+            }
+          }}
+        >
+          <div className="schema_mapping_toggle_info">
+            <span className="schema_mapping_toggle_title">
+              Advanced Schema &amp; Column Mapping (Optional)
+            </span>
+            <span className="schema_mapping_toggle_hint">
+              Custom column names and non-standard Elasticsearch schema overrides
+            </span>
+          </div>
+
+          <div className="schema_mapping_toggle_right">
+            {(fetchCols.length > 0 || mappingEntries.length > 0) && (
+              <span className="service_storage_chip" title="Custom schema active">
+                📐 {fetchCols.length} cols · {mappingEntries.length} maps
+              </span>
+            )}
+            <button
+              type="button"
+              className="schema_mapping_expand_btn"
+              tabIndex={-1}
+            >
+              {isAdvancedOpen ? "▲ Hide" : "▼ Expand"}
+            </button>
+          </div>
+        </div>
+
+        {isAdvancedOpen && (
+          <div className="schema_mapping_body">
+            {/* Template Shortcut Bar */}
+            <div className="schema_mapping_template_bar">
+              <span className="schema_mapping_template_hint">
+                Selected domain: <b>{currentConfig.domain || "bank"}</b>. Defaults apply automatically if left empty.
+              </span>
+              <button
+                type="button"
+                className="service_btn_secondary schema_template_btn"
+                onClick={handleLoadTemplate}
+                title={`Load recommended columns & mappings for ${currentConfig.domain || "bank"}`}
+              >
+                ⚡ Load Template for {currentConfig.domain || "bank"}
+              </button>
+            </div>
+
+            {/* A. Fetch Columns (fetch_columns) */}
+            <div className="schema_section_block">
+              <div className="service_perm_section_header">
+                <label htmlFor={`${idPrefix}_fetch_cols_input`}>
+                  Fetch Columns ({fetchCols.length} specified)
+                </label>
+                {fetchCols.length > 0 && (
+                  <div className="service_perm_quick_actions">
+                    <button
+                      type="button"
+                      className="service_quick_link_btn"
+                      onClick={handleClearColumns}
+                    >
+                      Clear All
+                    </button>
+                  </div>
+                )}
+              </div>
+              <p className="schema_field_hint">
+                Elasticsearch source projections to extract. Leave empty to use the domain&apos;s built-in fetch columns.
+              </p>
+
+              {fetchCols.length > 0 && (
+                <div className="schema_chips_wrap">
+                  {fetchCols.map((col) => (
+                    <span className="schema_chip" key={col}>
+                      <span className="schema_chip_text">{col}</span>
+                      <button
+                        type="button"
+                        className="schema_chip_remove"
+                        onClick={() => handleRemoveColumn(col)}
+                        title={`Remove ${col}`}
+                      >
+                        ✕
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              <div className="schema_chip_input_row">
+                <input
+                  id={`${idPrefix}_fetch_cols_input`}
+                  type="text"
+                  className="input_text schema_chip_input"
+                  placeholder="e.g. RECORD_ID, SENDER_ID, RECEIVER_ID, CREATED_AT, AMOUNT"
+                  value={colInputText}
+                  maxLength={160}
+                  onChange={(e) => setColInputText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === ",") {
+                      e.preventDefault();
+                      handleAddColumns(colInputText);
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  className="service_btn_secondary"
+                  onClick={() => handleAddColumns(colInputText)}
+                  disabled={!colInputText.trim()}
+                >
+                  + Add Column
+                </button>
+              </div>
+            </div>
+
+            {/* B. Column Mapping (column_mapping) */}
+            <div className="schema_section_block">
+              <div className="service_perm_section_header">
+                <label>
+                  Canonical Column Mapping ({mappingEntries.length} pairs)
+                </label>
+                {mappingEntries.length > 0 && (
+                  <div className="service_perm_quick_actions">
+                    <button
+                      type="button"
+                      className="service_quick_link_btn"
+                      onClick={handleClearMapping}
+                    >
+                      Clear All
+                    </button>
+                  </div>
+                )}
+              </div>
+              <p className="schema_field_hint">
+                Map raw storage columns to LinkX canonical target fields. If omitted, default domain mapping applies.
+              </p>
+
+              {mappingEntries.length === 0 ? (
+                <div className="schema_mapping_empty">
+                  <span>No custom mapping overrides defined (using domain defaults).</span>
+                </div>
+              ) : (
+                <div className="schema_mapping_list">
+                  <div className="schema_mapping_list_header">
+                    <span>Source Column in Storage</span>
+                    <span></span>
+                    <span>LinkX Canonical Target</span>
+                    <span></span>
+                  </div>
+                  {mappingEntries.map(([srcKey, tgtVal], idx) => (
+                    <MappingRow
+                      key={`${srcKey}_${idx}`}
+                      sourceKey={srcKey}
+                      targetVal={tgtVal}
+                      onChangeKey={handleChangeMappingKey}
+                      onChangeVal={handleChangeMappingVal}
+                      onRemove={handleRemoveMapping}
+                      idPrefix={idPrefix}
+                      index={idx}
+                    />
+                  ))}
+                </div>
+              )}
+
+              <div className="schema_mapping_action_row">
+                <button
+                  type="button"
+                  className="service_btn_secondary"
+                  onClick={handleAddMapping}
+                >
+                  + Add Mapping Pair
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+const extractServiceSecret = (data) => (
+  data?.client_secret ||
+  data?.secret ||
+  data?.result?.client_secret ||
+  data?.result?.secret ||
+  data?.results?.client_secret ||
+  data?.results?.secret ||
+  data?.service_account?.client_secret ||
+  data?.service_account?.secret ||
+  ""
+);
 const generateClientSecret = () => {
   const bytes = new Uint8Array(24);
   window.crypto?.getRandomValues?.(bytes);
@@ -3820,8 +4536,40 @@ function CurrentActorPanel({ actor, roles = [], permissions = [], sessionId, onL
 }
 
 function ServiceSecretNotice({ secret, onClear }) {
+  const [copied, setCopied] = useState(false);
   if (!secret) return null;
-  return <div className="service_secret_notice"><div><b>New client secret</b><p>Copy this now. It will not be shown again.</p></div><code>{secret}</code><button type="button" onClick={() => navigator.clipboard?.writeText(secret)}>Copy</button><button type="button" onClick={onClear}>Dismiss</button></div>;
+  const handleCopy = () => {
+    navigator.clipboard?.writeText(secret);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2200);
+  };
+  return (
+    <div className="service_secret_notice">
+      <div className="service_secret_notice_info">
+        <b>New client secret generated</b>
+        <p>Copy this secret now and update client applications. It cannot be retrieved again.</p>
+      </div>
+      <code className="service_secret_code">{secret}</code>
+      <div className="service_secret_notice_actions">
+        <button
+          type="button"
+          className={`service_btn_secondary service_btn_copy ${copied ? "copied" : ""}`}
+          onClick={handleCopy}
+          title="Copy secret to clipboard"
+        >
+          {copied ? "✓ Copied" : "Copy"}
+        </button>
+        <button
+          type="button"
+          className="service_btn_dismiss_danger"
+          onClick={onClear}
+          title="Dismiss this notification"
+        >
+          Dismiss
+        </button>
+      </div>
+    </div>
+  );
 }
 
 
@@ -3838,12 +4586,83 @@ const normalizeAdminUserList = (data) => {
   }));
 };
 
-function UserManagementPanel({ apiFetch, canManageUsers, canManageSuperusers, onNotice, isActive }) {
+const allSystemPermissions = [
+  "session:create", "session:read",
+  "config:read", "config:write",
+  "source:create", "source:connect", "source:disconnect",
+  "graph:create", "graph:read", "graph:link",
+  "batch:upload", "batch:query",
+  "analysis:run", "reports:read",
+  "users:manage", "auth:verify"
+];
+
+function RoleEditor({ roles = [], onChange, availableRoles = [] }) {
+  const selected = new Set(Array.isArray(roles) ? roles : []);
+  const toggleRole = (role) => {
+    const next = new Set(selected);
+    if (next.has(role)) {
+      if (next.size > 1) {
+        next.delete(role);
+      }
+    } else {
+      next.add(role);
+    }
+    onChange?.(Array.from(next).filter((r) => availableRoles.includes(r)));
+  };
+
+  const roleDescriptions = {
+    superuser: "Full system administration and user management",
+    admin: "Operations, service accounts, and data pipelines",
+    analyst: "Search, analytics queries, and report generation",
+    viewer: "Read-only access to transactions and dashboards",
+  };
+
+  return (
+    <div className="role_editor_grid">
+      {availableRoles.map((role) => {
+        const isChecked = selected.has(role);
+        return (
+          <div
+            key={role}
+            className={`role_card_option ${isChecked ? "active" : ""}`}
+            onClick={() => toggleRole(role)}
+            role="checkbox"
+            aria-checked={isChecked}
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === " " || e.key === "Enter") {
+                e.preventDefault();
+                toggleRole(role);
+              }
+            }}
+          >
+            <span className={`permission_checkbox_box ${isChecked ? "checked" : ""}`}>
+              {isChecked && (
+                <svg viewBox="0 0 12 10" className="permission_check_svg">
+                  <polyline points="1.5 5 4.5 8 10.5 1.5" />
+                </svg>
+              )}
+            </span>
+            <div className="role_card_info">
+              <span className="role_card_name">{role}</span>
+              <span className="role_card_desc">{roleDescriptions[role] || "System role"}</span>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function UserManagementPanel({ apiFetch, canManageUsers, canManageSuperusers, onNotice, requestConfirmation, isActive }) {
   const availableRoles = canManageSuperusers ? ["superuser", "admin", "analyst", "viewer"] : ["analyst", "viewer"];
   const emptyDraft = { username: "", password: "", display_name: "", roles: [availableRoles[0]], is_active: true, permissions: [] };
   const [users, setUsers] = useState([]);
   const [draft, setDraft] = useState(emptyDraft);
   const [editDrafts, setEditDrafts] = useState({});
+  const [expandedUserId, setExpandedUserId] = useState(null);
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [searchFilter, setSearchFilter] = useState("");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -3875,16 +4694,16 @@ function UserManagementPanel({ apiFetch, canManageUsers, canManageSuperusers, on
   }, [isActive, canManageUsers, loadUsers]);
 
   useEffect(() => {
-    setDraft((prev) => ({ ...prev, roles: prev.roles.filter((role) => availableRoles.includes(role)).length ? prev.roles.filter((role) => availableRoles.includes(role)) : [availableRoles[0]] }));
+    setDraft((prev) => ({
+      ...prev,
+      roles: prev.roles.filter((role) => availableRoles.includes(role)).length
+        ? prev.roles.filter((role) => availableRoles.includes(role))
+        : [availableRoles[0]]
+    }));
   }, [canManageSuperusers]);
 
-  const updateEditDraft = (id, patch) => setEditDrafts((prev) => ({ ...prev, [String(id)]: { ...(prev[String(id)] || {}), ...patch } }));
-  const toggleRole = (roles, role) => {
-    const next = new Set(Array.isArray(roles) ? roles : []);
-    if (next.has(role)) next.delete(role);
-    else next.add(role);
-    return Array.from(next).filter((item) => availableRoles.includes(item));
-  };
+  const updateEditDraft = (id, patch) =>
+    setEditDrafts((prev) => ({ ...prev, [String(id)]: { ...(prev[String(id)] || {}), ...patch } }));
 
   const createUser = async () => {
     const payload = {
@@ -3907,6 +4726,7 @@ function UserManagementPanel({ apiFetch, canManageUsers, canManageSuperusers, on
     try {
       await apiFetch("/auth/admin/users", { method: "POST", body: payload });
       setDraft(emptyDraft);
+      setIsCreateOpen(false);
       onNotice?.({ title: "User created", message: payload.username + " was created.", source: "Admin", level: "success" });
       await loadUsers();
     } catch (err) {
@@ -3936,6 +4756,7 @@ function UserManagementPanel({ apiFetch, canManageUsers, canManageSuperusers, on
     try {
       await apiFetch("/auth/admin/users/" + encodeURIComponent(user.id), { method: "PATCH", body: patch });
       onNotice?.({ title: "User updated", message: user.username + " was updated.", source: "Admin", level: "success" });
+      setExpandedUserId(null);
       await loadUsers();
     } catch (err) {
       setError(err?.message || "Failed to update user.");
@@ -3945,12 +4766,26 @@ function UserManagementPanel({ apiFetch, canManageUsers, canManageSuperusers, on
   };
 
   const deleteUser = async (user) => {
-    if (!window.confirm("Delete user " + user.username + "?")) return;
+    let shouldProceed = false;
+    if (typeof requestConfirmation === "function") {
+      shouldProceed = await requestConfirmation({
+        title: "Delete User",
+        message: `Delete user "${user.username}"? This action cannot be undone.`,
+        source: "User Management",
+        level: "error",
+        confirmText: "Delete",
+        cancelText: "Cancel",
+      });
+    } else {
+      shouldProceed = window.confirm("Delete user " + user.username + "?");
+    }
+    if (!shouldProceed) return;
     setSaving(true);
     setError("");
     try {
       await apiFetch("/auth/admin/users/" + encodeURIComponent(user.id), { method: "DELETE" });
       onNotice?.({ title: "User deleted", message: user.username + " was removed.", source: "Admin", level: "warning" });
+      if (expandedUserId === String(user.id)) setExpandedUserId(null);
       await loadUsers();
     } catch (err) {
       setError(err?.message || "Failed to delete user.");
@@ -3959,97 +4794,1173 @@ function UserManagementPanel({ apiFetch, canManageUsers, canManageSuperusers, on
     }
   };
 
-  if (!canManageUsers) return <div className="settings_admin_panel"><fieldset><legend>Users</legend><p className="settings_hint">You need users:manage to manage users.</p></fieldset></div>;
+  if (!canManageUsers) {
+    return (
+      <div className="settings_admin_panel service_accounts_mgmt_panel">
+        <fieldset className="service_accounts_section_fieldset">
+          <legend>Users <AdminLockIcon /></legend>
+          <p className="settings_hint">You need users:manage to manage users.</p>
+        </fieldset>
+      </div>
+    );
+  }
+
+  const filteredUsers = users.filter((u) => {
+    if (!searchFilter.trim()) return true;
+    const q = searchFilter.toLowerCase();
+    return (
+      String(u.username || "").toLowerCase().includes(q) ||
+      String(u.display_name || "").toLowerCase().includes(q) ||
+      (u.roles || []).some((r) => String(r).toLowerCase().includes(q))
+    );
+  });
 
   return (
-    <div className="settings_admin_panel">
+    <div className="settings_admin_panel service_accounts_mgmt_panel">
       {error && <div className="settings_error">{error}</div>}
-      <fieldset><legend>Create User</legend><div className="service_account_form_grid"><label>Username<input className="settings_textinput" value={draft.username} maxLength={120} onChange={(event) => setDraft((prev) => ({ ...prev, username: sanitizeIdentifier(event.target.value, { maxLength: 120 }) }))} /></label><label>Display name<input className="settings_textinput" value={draft.display_name} maxLength={120} onChange={(event) => setDraft((prev) => ({ ...prev, display_name: sanitizeText(event.target.value, { maxLength: 120 }) }))} /></label><label>Password<input className="settings_textinput" type="password" value={draft.password} maxLength={256} onChange={(event) => setDraft((prev) => ({ ...prev, password: sanitizeSecret(event.target.value, { maxLength: 256 }) }))} /></label><label className="settings_inline_check"><input type="checkbox" checked={draft.is_active} onChange={(event) => setDraft((prev) => ({ ...prev, is_active: event.target.checked }))} /> Active</label></div><div className="role_editor">{availableRoles.map((role) => <label key={role} className="permission_option"><input type="checkbox" checked={draft.roles.includes(role)} onChange={() => setDraft((prev) => ({ ...prev, roles: toggleRole(prev.roles, role) }))} /> <span>{role}</span></label>)}</div><PermissionEditor value={draft.permissions} onChange={(permissions) => setDraft((prev) => ({ ...prev, permissions: sanitizePermissionList(permissions) }))} idPrefix="new_user_permissions" /><div className="settings_action_row"><button type="button" onClick={createUser} disabled={saving}>Create user</button></div></fieldset>
-      <fieldset><legend>Existing Users</legend><div className="settings_action_row"><button type="button" onClick={loadUsers} disabled={loading}>{loading ? "Refreshing..." : "Refresh"}</button></div>{users.length === 0 && <p className="settings_hint">No users found.</p>}{users.map((user) => { const editDraft = editDrafts[String(user.id)] || { display_name: user.display_name, roles: user.roles, permissions: user.permissions, is_active: user.is_active, password: "" }; return <div className="service_account_card" key={user.id}><div className="service_account_card_header"><div><b>{user.username}</b><span>{(user.roles || []).join(", ") || "no role"} · {user.is_active ? "Active" : "Inactive"}</span></div><div className="service_account_actions"><button type="button" onClick={() => saveUser(user)} disabled={saving}>Save</button><button type="button" className="critical_btns" onClick={() => deleteUser(user)} disabled={saving}>Delete</button></div></div><label>Display name<input className="settings_textinput" value={editDraft.display_name || ""} maxLength={120} onChange={(event) => updateEditDraft(user.id, { display_name: sanitizeText(event.target.value, { maxLength: 120 }) })} /></label><label>Password reset<input className="settings_textinput" type="password" value={editDraft.password || ""} maxLength={256} placeholder="Leave blank to keep current password" onChange={(event) => updateEditDraft(user.id, { password: sanitizeSecret(event.target.value, { maxLength: 256 }) })} /></label><label className="settings_inline_check"><input type="checkbox" checked={!!editDraft.is_active} onChange={(event) => updateEditDraft(user.id, { is_active: event.target.checked })} /> Active</label><div className="role_editor">{availableRoles.map((role) => <label key={role} className="permission_option"><input type="checkbox" checked={(editDraft.roles || []).includes(role)} onChange={() => updateEditDraft(user.id, { roles: toggleRole(editDraft.roles, role) })} /> <span>{role}</span></label>)}</div><PermissionEditor value={editDraft.permissions || []} onChange={(permissions) => updateEditDraft(user.id, { permissions: sanitizePermissionList(permissions) })} idPrefix={"user_" + user.id + "_permissions"} /></div>; })}</fieldset>
+
+      {/* ── Section 1: Create User ── */}
+      <fieldset className={`service_accounts_section_fieldset service_create_section_fieldset ${isCreateOpen ? "expanded" : "collapsed"}`}>
+        <legend
+          className="service_create_legend"
+          onClick={() => setIsCreateOpen((prev) => !prev)}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === " " || e.key === "Enter") {
+              e.preventDefault();
+              setIsCreateOpen((prev) => !prev);
+            }
+          }}
+          title={isCreateOpen ? "Click to collapse" : "Click to expand create user form"}
+        >
+          <span className="service_create_legend_title">
+            Create User <AdminLockIcon />
+          </span>
+          <span className="service_create_legend_toggle">
+            {isCreateOpen ? "▲" : "▼"}
+          </span>
+        </legend>
+
+        {!isCreateOpen ? (
+          <div
+            className="service_create_collapsed_bar"
+            onClick={() => setIsCreateOpen(true)}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === " " || e.key === "Enter") {
+                e.preventDefault();
+                setIsCreateOpen(true);
+              }
+            }}
+          >
+            <span className="service_create_collapsed_hint">
+              Register a new user account with credentials, system roles, and fine-grained permissions.
+            </span>
+            <button
+              type="button"
+              className="action_btns service_create_expand_action_btn"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsCreateOpen(true);
+              }}
+            >
+              ▼ Expand Form
+            </button>
+          </div>
+        ) : (
+          <div className="service_create_body">
+            <div className="config_endpoint_grid">
+              <div className="config_endpoint_field">
+                <label htmlFor="create_user_username">Username *</label>
+                <input
+                  id="create_user_username"
+                  type="text"
+                  className="input_text"
+                  placeholder="e.g. jdoe_admin"
+                  value={draft.username}
+                  maxLength={120}
+                  onChange={(e) => setDraft((prev) => ({ ...prev, username: sanitizeIdentifier(e.target.value, { maxLength: 120 }) }))}
+                />
+              </div>
+
+              <div className="config_endpoint_field">
+                <label htmlFor="create_user_display_name">Display Name</label>
+                <input
+                  id="create_user_display_name"
+                  type="text"
+                  className="input_text"
+                  placeholder="e.g. John Doe"
+                  value={draft.display_name}
+                  maxLength={120}
+                  onChange={(e) => setDraft((prev) => ({ ...prev, display_name: sanitizeText(e.target.value, { maxLength: 120 }) }))}
+                />
+              </div>
+
+              <div className="config_endpoint_field">
+                <label htmlFor="create_user_password">Password *</label>
+                <input
+                  id="create_user_password"
+                  type="password"
+                  className="input_text"
+                  placeholder="Initial password"
+                  value={draft.password}
+                  maxLength={256}
+                  onChange={(e) => setDraft((prev) => ({ ...prev, password: sanitizeSecret(e.target.value, { maxLength: 256 }) }))}
+                />
+              </div>
+
+              <div className="config_endpoint_field">
+                <label>Account Status</label>
+                <div
+                  className={`user_status_toggle_btn ${draft.is_active ? "active" : "inactive"}`}
+                  onClick={() => setDraft((prev) => ({ ...prev, is_active: !prev.is_active }))}
+                  role="checkbox"
+                  aria-checked={draft.is_active}
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === " " || e.key === "Enter") {
+                      e.preventDefault();
+                      setDraft((prev) => ({ ...prev, is_active: !prev.is_active }));
+                    }
+                  }}
+                >
+                  <span className={`permission_checkbox_box ${draft.is_active ? "checked" : ""}`}>
+                    {draft.is_active && (
+                      <svg viewBox="0 0 12 10" className="permission_check_svg">
+                        <polyline points="1.5 5 4.5 8 10.5 1.5" />
+                      </svg>
+                    )}
+                  </span>
+                  <span>{draft.is_active ? "Active" : "Inactive"}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="service_perm_section_header">
+              <label>Roles ({(draft.roles || []).length} assigned)</label>
+            </div>
+            <RoleEditor
+              roles={draft.roles}
+              onChange={(roles) => setDraft((prev) => ({ ...prev, roles }))}
+              availableRoles={availableRoles}
+            />
+
+            <div className="service_perm_section_header">
+              <label>Permissions ({(draft.permissions || []).length} selected)</label>
+              <div className="service_perm_quick_actions">
+                <button
+                  type="button"
+                  className="service_quick_link_btn"
+                  onClick={() => setDraft((prev) => ({ ...prev, permissions: allSystemPermissions }))}
+                >
+                  Select All
+                </button>
+                <span className="service_perm_action_sep">·</span>
+                <button
+                  type="button"
+                  className="service_quick_link_btn"
+                  onClick={() => setDraft((prev) => ({ ...prev, permissions: [] }))}
+                >
+                  Clear All
+                </button>
+              </div>
+            </div>
+
+            <PermissionEditor
+              value={draft.permissions}
+              onChange={(permissions) => setDraft((prev) => ({ ...prev, permissions: sanitizePermissionList(permissions) }))}
+              idPrefix="new_user_perm"
+            />
+
+            <div className="service_accounts_action_bar">
+              <button
+                type="button"
+                className="service_btn_secondary service_collapse_btn"
+                onClick={() => setIsCreateOpen(false)}
+              >
+                ▲ Collapse
+              </button>
+              <button
+                type="button"
+                className="action_btns"
+                onClick={createUser}
+                disabled={saving}
+              >
+                {saving ? "Creating..." : "Create User"}
+              </button>
+            </div>
+          </div>
+        )}
+      </fieldset>
+
+      {/* ── Section 2: Registered Users ── */}
+      <fieldset className="service_accounts_section_fieldset">
+        <legend>Registered Users <AdminLockIcon /></legend>
+
+        <div className="service_accounts_toolbar">
+          <div className="service_accounts_count">
+            <b>{users.length}</b> {users.length === 1 ? "User registered" : "Users registered"}
+            {searchFilter.trim() && (
+              <span className="user_filter_count_hint">({filteredUsers.length} shown)</span>
+            )}
+          </div>
+          <div className="user_mgmt_toolbar_controls">
+            <input
+              type="text"
+              className="input_text user_search_input"
+              placeholder="Filter users..."
+              value={searchFilter}
+              onChange={(e) => setSearchFilter(e.target.value)}
+            />
+            <button
+              type="button"
+              className="action_btns"
+              onClick={loadUsers}
+              disabled={loading}
+              title="Refresh users list"
+            >
+              {loading ? "Refreshing..." : "⟳ Refresh"}
+            </button>
+          </div>
+        </div>
+
+        {filteredUsers.length === 0 ? (
+          <div className="service_accounts_empty_state">
+            <p className="settings_hint">
+              {users.length === 0 ? "No users found." : `No users match "${searchFilter}".`}
+            </p>
+          </div>
+        ) : (
+          <div className="service_accounts_list">
+            {filteredUsers.map((user) => {
+              const isExpanded = expandedUserId === String(user.id);
+              const editDraft = editDrafts[String(user.id)] || {
+                display_name: user.display_name,
+                roles: user.roles,
+                permissions: user.permissions,
+                is_active: user.is_active,
+                password: "",
+              };
+
+              return (
+                <div
+                  className={`service_account_row_card ${isExpanded ? "expanded" : ""}`}
+                  key={user.id}
+                >
+                  <div className="service_account_row_main">
+                    <div className="service_account_row_info">
+                      <div className="service_account_id_badge">
+                        <span className="service_account_tag">ID #{user.id}</span>
+                        <b className="service_account_client_id">{user.username}</b>
+                      </div>
+                      <div className="service_account_meta">
+                        <span className="service_account_display_name">
+                          {user.display_name || <em className="service_account_no_name">No display name</em>}
+                        </span>
+                        {(user.roles || []).map((role) => (
+                          <span key={role} className={`user_role_chip ${role}`}>
+                            {role}
+                          </span>
+                        ))}
+                        <span className="service_perm_chip">
+                          {(user.permissions || []).length} permissions
+                        </span>
+                        <span className={`service_status_chip ${user.is_active ? "active" : "inactive"}`}>
+                          {user.is_active ? "Active" : "Inactive"}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="service_account_row_actions">
+                      <button
+                        type="button"
+                        className={`action_btns service_btn_toggle_edit ${isExpanded ? "active" : ""}`}
+                        onClick={() => setExpandedUserId(isExpanded ? null : String(user.id))}
+                        title="Edit display name, password, roles, and permissions"
+                      >
+                        {isExpanded ? "▲ Close" : "✎ Edit"}
+                      </button>
+                      <button
+                        type="button"
+                        className="critical_btns"
+                        onClick={() => deleteUser(user)}
+                        disabled={saving}
+                        title="Delete user"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+
+                  {isExpanded && (
+                    <div className="service_account_drawer">
+                      <div className="config_endpoint_grid">
+                        <div className="config_endpoint_field">
+                          <label htmlFor={`edit_user_${user.id}_display_name`}>Display Name</label>
+                          <input
+                            id={`edit_user_${user.id}_display_name`}
+                            type="text"
+                            className="input_text"
+                            placeholder="Display name"
+                            value={editDraft.display_name || ""}
+                            maxLength={120}
+                            onChange={(e) => updateEditDraft(user.id, { display_name: sanitizeText(e.target.value, { maxLength: 120 }) })}
+                          />
+                        </div>
+
+                        <div className="config_endpoint_field">
+                          <label htmlFor={`edit_user_${user.id}_password`}>Password Reset</label>
+                          <input
+                            id={`edit_user_${user.id}_password`}
+                            type="password"
+                            className="input_text"
+                            placeholder="Leave blank to keep password"
+                            value={editDraft.password || ""}
+                            maxLength={256}
+                            onChange={(e) => updateEditDraft(user.id, { password: sanitizeSecret(e.target.value, { maxLength: 256 }) })}
+                          />
+                        </div>
+
+                        <div className="config_endpoint_field">
+                          <label>Account Status</label>
+                          <div
+                            className={`user_status_toggle_btn ${editDraft.is_active ? "active" : "inactive"}`}
+                            onClick={() => updateEditDraft(user.id, { is_active: !editDraft.is_active })}
+                            role="checkbox"
+                            aria-checked={!!editDraft.is_active}
+                            tabIndex={0}
+                            onKeyDown={(e) => {
+                              if (e.key === " " || e.key === "Enter") {
+                                e.preventDefault();
+                                updateEditDraft(user.id, { is_active: !editDraft.is_active });
+                              }
+                            }}
+                          >
+                            <span className={`permission_checkbox_box ${editDraft.is_active ? "checked" : ""}`}>
+                              {editDraft.is_active && (
+                                <svg viewBox="0 0 12 10" className="permission_check_svg">
+                                  <polyline points="1.5 5 4.5 8 10.5 1.5" />
+                                </svg>
+                              )}
+                            </span>
+                            <span>{editDraft.is_active ? "Active" : "Inactive"}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="service_perm_section_header">
+                        <label>Roles ({(editDraft.roles || []).length} assigned)</label>
+                      </div>
+                      <RoleEditor
+                        roles={editDraft.roles || []}
+                        onChange={(roles) => updateEditDraft(user.id, { roles })}
+                        availableRoles={availableRoles}
+                      />
+
+                      <div className="service_perm_section_header">
+                        <label>Permissions ({(editDraft.permissions || []).length} selected)</label>
+                        <div className="service_perm_quick_actions">
+                          <button
+                            type="button"
+                            className="service_quick_link_btn"
+                            onClick={() => updateEditDraft(user.id, { permissions: allSystemPermissions })}
+                          >
+                            Select All
+                          </button>
+                          <span className="service_perm_action_sep">·</span>
+                          <button
+                            type="button"
+                            className="service_quick_link_btn"
+                            onClick={() => updateEditDraft(user.id, { permissions: [] })}
+                          >
+                            Clear All
+                          </button>
+                        </div>
+                      </div>
+
+                      <PermissionEditor
+                        value={editDraft.permissions || []}
+                        onChange={(permissions) => updateEditDraft(user.id, { permissions: sanitizePermissionList(permissions) })}
+                        idPrefix={`user_${user.id}_permissions`}
+                      />
+
+                      <div className="service_accounts_action_bar">
+                        <button
+                          type="button"
+                          className="service_btn_secondary"
+                          onClick={() => setExpandedUserId(null)}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          className="action_btns"
+                          onClick={() => saveUser(user)}
+                          disabled={saving}
+                        >
+                          {saving ? "Saving..." : "Save Changes"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </fieldset>
     </div>
   );
 }
 
-function ServiceAccountsPanel({ apiFetch, canManageUsers, onNotice, isActive }) {
-  const emptyDraft = { client_id: "", client_secret: generateClientSecret(), display_name: "", is_active: true, permissions: [] };
+function ServiceAccountsPanel({ apiFetch, canManageUsers, onNotice, requestConfirmation, isActive }) {
+  const panelRef = useRef(null);
+  const emptyDraft = {
+    client_id: "",
+    client_secret: generateClientSecret(),
+    display_name: "",
+    permissions: [],
+    config: { ...defaultServiceConfig },
+  };
   const [accounts, setAccounts] = useState([]);
   const [draft, setDraft] = useState(emptyDraft);
   const [editDrafts, setEditDrafts] = useState({});
+  const [expandedAccountId, setExpandedAccountId] = useState(null);
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [newSecret, setNewSecret] = useState("");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+
+  const scrollToTop = useCallback(() => {
+    if (panelRef.current) {
+      const tabForm = panelRef.current.closest(".configurations_tab_form");
+      if (tabForm) {
+        if (typeof tabForm.scrollTo === "function") {
+          tabForm.scrollTo({ top: 0, behavior: "smooth" });
+        } else {
+          tabForm.scrollTop = 0;
+        }
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (newSecret) {
+      scrollToTop();
+    }
+  }, [newSecret, scrollToTop]);
+
   const loadAccounts = useCallback(async () => {
     if (!canManageUsers) return;
-    setLoading(true); setError("");
+    setLoading(true);
+    setError("");
     try {
       const data = await apiFetch("/auth/admin/service-accounts", { method: "GET" });
       const normalized = normalizeServiceAccountList(data);
       setAccounts(normalized);
-      setEditDrafts(Object.fromEntries(normalized.map((account) => [String(account.id), { display_name: account.display_name, is_active: account.is_active, permissions: account.permissions }])));
-    } catch (err) { setError(err?.message || "Failed to load service accounts."); }
-    finally { setLoading(false); }
+      setEditDrafts(Object.fromEntries(normalized.map((account) => [
+        String(account.id),
+        {
+          display_name: account.display_name,
+          is_active: account.is_active !== false,
+          permissions: account.permissions || [],
+          config: {
+            ...defaultServiceConfig,
+            ...(account.config || {}),
+            fetch_columns: [...(account.config?.fetch_columns || [])],
+            column_mapping: { ...(account.config?.column_mapping || {}) },
+          },
+        }
+      ])));
+    } catch (err) {
+      setError(err?.message || "Failed to load service accounts.");
+    } finally {
+      setLoading(false);
+    }
   }, [apiFetch, canManageUsers]);
-  useEffect(() => { if (isActive && canManageUsers) loadAccounts(); }, [isActive, canManageUsers, loadAccounts]);
-  const updateEditDraft = (id, patch) => setEditDrafts((prev) => ({ ...prev, [String(id)]: { ...(prev[String(id)] || {}), ...patch } }));
+
+  useEffect(() => {
+    if (isActive && canManageUsers) loadAccounts();
+  }, [isActive, canManageUsers, loadAccounts]);
+
+  const updateEditDraft = (id, patch) =>
+    setEditDrafts((prev) => ({ ...prev, [String(id)]: { ...(prev[String(id)] || {}), ...patch } }));
+
   const createAccount = async () => {
     const clientSecret = sanitizeSecret(draft.client_secret || generateClientSecret(), { maxLength: 128 });
+    const cleanPermissions = sanitizePermissionList(draft.permissions).filter((p) => /^[a-z]+:[a-z_]+$/.test(p));
     const payload = {
       client_id: sanitizeIdentifier(draft.client_id, { maxLength: 80 }).trim(),
       client_secret: clientSecret,
       display_name: sanitizeText(draft.display_name, { maxLength: 120 }).trim(),
-      is_active: !!draft.is_active,
-      permissions: sanitizePermissionList(draft.permissions),
+      permissions: cleanPermissions,
     };
+
+    const cfg = draft.config || {};
+    const cleanFetchColumns = Array.isArray(cfg.fetch_columns)
+      ? Array.from(new Set(cfg.fetch_columns.map((c) => String(c).trim().toUpperCase()).filter(Boolean)))
+      : [];
+    const cleanColumnMapping = {};
+    if (cfg.column_mapping && typeof cfg.column_mapping === "object") {
+      Object.entries(cfg.column_mapping).forEach(([src, target]) => {
+        const cleanSrc = String(src).trim().toUpperCase();
+        const cleanTarget = String(target).trim().toUpperCase();
+        if (cleanSrc && cleanTarget) {
+          cleanColumnMapping[cleanSrc] = cleanTarget;
+        }
+      });
+    }
+
+    const hasConfig = Boolean(
+      cfg.storage_host?.trim() ||
+      cfg.storage_endpoint?.trim() ||
+      cfg.auth_token?.trim() ||
+      (cfg.storage_port && cfg.storage_port !== "5000") ||
+      cleanFetchColumns.length > 0 ||
+      Object.keys(cleanColumnMapping).length > 0
+    );
+    if (hasConfig) {
+      payload.config = {
+        storage_host: sanitizeConnectionValue(cfg.storage_host),
+        storage_port: String(sanitizeConnectionValue(cfg.storage_port || "5000")),
+        storage_endpoint: sanitizeConnectionValue(cfg.storage_endpoint),
+        domain: sanitizeConnectionValue(cfg.domain || "bank"),
+        ...(cfg.auth_token?.trim() ? { auth_token: sanitizeSecret(cfg.auth_token) } : {}),
+        ...(cleanFetchColumns.length > 0 ? { fetch_columns: cleanFetchColumns } : {}),
+        ...(Object.keys(cleanColumnMapping).length > 0 ? { column_mapping: cleanColumnMapping } : {}),
+      };
+    }
+
     const validationError = compactValidationErrors(
       validateRequiredIdentifier(payload.client_id, "Client ID", { minLength: 3, maxLength: 80 }),
       validateClientSecret(payload.client_secret),
       validateDisplayName(payload.display_name),
     );
     if (validationError) { setError(validationError); return; }
-    setSaving(true); setError("");
+    setSaving(true);
+    setError("");
     try {
       const data = await apiFetch("/auth/admin/service-accounts", { method: "POST", body: payload });
-      setNewSecret(extractServiceSecret(data) || clientSecret); setDraft({ ...emptyDraft, client_secret: generateClientSecret() });
+      setNewSecret(extractServiceSecret(data) || clientSecret);
+      setDraft({ ...emptyDraft, client_secret: generateClientSecret() });
+      setIsCreateOpen(false);
       onNotice?.({ title: "Service account created", message: "Copy the generated secret before closing this panel.", source: "Admin", level: "success" });
       await loadAccounts();
-    } catch (err) { setError(err?.message || "Failed to create service account."); }
-    finally { setSaving(false); }
+    } catch (err) {
+      if (payload.config && String(err?.message || "").includes("config")) {
+        try {
+          const fallback = { ...payload };
+          delete fallback.config;
+          const data = await apiFetch("/auth/admin/service-accounts", { method: "POST", body: fallback });
+          setNewSecret(extractServiceSecret(data) || clientSecret);
+          setDraft({ ...emptyDraft, client_secret: generateClientSecret() });
+          setIsCreateOpen(false);
+          onNotice?.({
+            title: "Service account created",
+            message: "Account was created. Note: Backend schema does not yet accept 'config' (pending backend deployment).",
+            source: "Admin",
+            level: "warning",
+          });
+          await loadAccounts();
+          return;
+        } catch (_fbErr) {
+          // fallback failed, show original error
+        }
+      }
+      setError(err?.message || "Failed to create service account.");
+    } finally {
+      setSaving(false);
+    }
   };
+
   const saveAccount = async (account) => {
     const draftPatch = editDrafts[String(account.id)] || {};
+    const cleanPermissions = sanitizePermissionList(draftPatch.permissions).filter((p) => /^[a-z]+:[a-z_]+$/.test(p));
     const patch = {
       display_name: sanitizeText(draftPatch.display_name, { maxLength: 120 }).trim(),
-      is_active: !!draftPatch.is_active,
-      permissions: sanitizePermissionList(draftPatch.permissions),
+      permissions: cleanPermissions,
     };
+    if (!account.is_system && draftPatch.is_active !== undefined) {
+      patch.is_active = Boolean(draftPatch.is_active);
+    }
+
+    const cfg = draftPatch.config || {};
+    const cleanFetchColumns = Array.isArray(cfg.fetch_columns)
+      ? Array.from(new Set(cfg.fetch_columns.map((c) => String(c).trim().toUpperCase()).filter(Boolean)))
+      : [];
+    const cleanColumnMapping = {};
+    if (cfg.column_mapping && typeof cfg.column_mapping === "object") {
+      Object.entries(cfg.column_mapping).forEach(([src, target]) => {
+        const cleanSrc = String(src).trim().toUpperCase();
+        const cleanTarget = String(target).trim().toUpperCase();
+        if (cleanSrc && cleanTarget) {
+          cleanColumnMapping[cleanSrc] = cleanTarget;
+        }
+      });
+    }
+
+    const hadCustomFetchCols = Boolean(account.config?.fetch_columns && account.config.fetch_columns.length > 0);
+    const hadCustomColMapping = Boolean(account.config?.column_mapping && Object.keys(account.config.column_mapping).length > 0);
+
+    const hasConfig = Boolean(
+      cfg.storage_host?.trim() ||
+      cfg.storage_endpoint?.trim() ||
+      cfg.auth_token?.trim() ||
+      account.config?.storage_host ||
+      cleanFetchColumns.length > 0 ||
+      Object.keys(cleanColumnMapping).length > 0 ||
+      hadCustomFetchCols ||
+      hadCustomColMapping
+    );
+    if (hasConfig) {
+      patch.config = {
+        storage_host: sanitizeConnectionValue(cfg.storage_host),
+        storage_port: String(sanitizeConnectionValue(cfg.storage_port || "5000")),
+        storage_endpoint: sanitizeConnectionValue(cfg.storage_endpoint),
+        domain: sanitizeConnectionValue(cfg.domain || "bank"),
+        ...(cfg.auth_token?.trim() ? { auth_token: sanitizeSecret(cfg.auth_token) } : {}),
+        ...(cleanFetchColumns.length > 0 || hadCustomFetchCols ? { fetch_columns: cleanFetchColumns } : {}),
+        ...(Object.keys(cleanColumnMapping).length > 0 || hadCustomColMapping ? { column_mapping: cleanColumnMapping } : {}),
+      };
+    }
+
     const validationError = validateDisplayName(patch.display_name);
     if (validationError) { setError(validationError); return; }
-    setSaving(true); setError("");
-    try { await apiFetch("/auth/admin/service-accounts/" + encodeURIComponent(account.id), { method: "PATCH", body: patch }); onNotice?.({ title: "Service account updated", message: account.client_id + " was updated.", source: "Admin", level: "success" }); await loadAccounts(); }
-    catch (err) { setError(err?.message || "Failed to update service account."); }
-    finally { setSaving(false); }
+    setSaving(true);
+    setError("");
+    try {
+      try {
+        await apiFetch("/auth/admin/service-accounts/" + encodeURIComponent(account.id), { method: "PATCH", body: patch });
+      } catch (methodErr) {
+        if (methodErr?.status === 404 || methodErr?.status === 405) {
+          try {
+            await apiFetch("/auth/admin/service-accounts/" + encodeURIComponent(account.id), { method: "PUT", body: patch });
+          } catch (putAdminErr) {
+            if (putAdminErr?.status === 404) {
+              await apiFetch("/auth/service-accounts/" + encodeURIComponent(account.id), { method: "PUT", body: patch });
+            } else {
+              throw putAdminErr;
+            }
+          }
+        } else {
+          throw methodErr;
+        }
+      }
+      onNotice?.({ title: "Service account updated", message: account.client_id + " was updated.", source: "Admin", level: "success" });
+      setExpandedAccountId(null);
+      await loadAccounts();
+    } catch (err) {
+      if (patch.config && String(err?.message || "").includes("config")) {
+        try {
+          const fallback = { ...patch };
+          delete fallback.config;
+          await apiFetch("/auth/admin/service-accounts/" + encodeURIComponent(account.id), { method: "PATCH", body: fallback });
+          onNotice?.({
+            title: "Service account updated",
+            message: `${account.client_id} was updated. Note: Backend schema does not yet accept 'config' (pending backend deployment).`,
+            source: "Admin",
+            level: "warning",
+          });
+          setExpandedAccountId(null);
+          await loadAccounts();
+          return;
+        } catch (_fbErr) {
+          // fallback failed, show original error
+        }
+      }
+      setError(err?.message || "Failed to update service account.");
+    } finally {
+      setSaving(false);
+    }
   };
+
   const rotateSecret = async (account) => {
-    if (!window.confirm("Rotate secret for " + account.client_id + "? The old secret should stop being used by sibling services.")) return;
-    setSaving(true); setError("");
-    try { const rotatedSecret = sanitizeSecret(generateClientSecret(), { maxLength: 128 }); const secretError = validateClientSecret(rotatedSecret); if (secretError) { setError(secretError); return; } const data = await apiFetch("/auth/admin/service-accounts/" + encodeURIComponent(account.id), { method: "PATCH", body: { rotate_secret: true, client_secret: rotatedSecret } }); setNewSecret(extractServiceSecret(data) || rotatedSecret); onNotice?.({ title: "Secret rotated", message: "Copy the new secret now. It will not be shown again.", source: "Admin", level: "warning" }); await loadAccounts(); }
-    catch (err) { setError(err?.message || "Failed to rotate secret."); }
-    finally { setSaving(false); }
+    let shouldProceed = false;
+    if (typeof requestConfirmation === "function") {
+      shouldProceed = await requestConfirmation({
+        title: "Rotate Secret",
+        message: `Rotate secret for "${account.client_id}"? Sibling services must be updated with the new secret immediately.`,
+        source: "Service Accounts",
+        level: "warning",
+        confirmText: "Rotate Secret",
+        cancelText: "Cancel",
+      });
+    } else {
+      shouldProceed = window.confirm("Rotate secret for " + account.client_id + "? Sibling services must be updated with the new secret immediately.");
+    }
+    if (!shouldProceed) return;
+    setSaving(true);
+    setError("");
+    try {
+      const rotatedSecret = sanitizeSecret(generateClientSecret(), { maxLength: 128 });
+      const secretError = validateClientSecret(rotatedSecret);
+      if (secretError) { setError(secretError); return; }
+      const data = await apiFetch("/auth/admin/service-accounts/" + encodeURIComponent(account.id), {
+        method: "PATCH",
+        body: { client_secret: rotatedSecret }
+      });
+      setNewSecret(extractServiceSecret(data) || rotatedSecret);
+      onNotice?.({ title: "Secret rotated", message: "Copy the new secret now. It will not be shown again.", source: "Admin", level: "warning" });
+      await loadAccounts();
+    } catch (err) {
+      setError(err?.message || "Failed to rotate secret.");
+    } finally {
+      setSaving(false);
+    }
   };
+
   const deleteAccount = async (account) => {
-    if (!window.confirm("Delete service account " + account.client_id + "?")) return;
-    setSaving(true); setError("");
-    try { await apiFetch("/auth/admin/service-accounts/" + encodeURIComponent(account.id), { method: "DELETE" }); onNotice?.({ title: "Service account deleted", message: account.client_id + " was removed.", source: "Admin", level: "warning" }); await loadAccounts(); }
-    catch (err) { setError(err?.message || "Failed to delete service account."); }
-    finally { setSaving(false); }
+    if (account.is_system) {
+      onNotice?.({
+        title: "Action Not Allowed",
+        message: "System service accounts cannot be deleted.",
+        source: "Service Accounts",
+        level: "warning",
+      });
+      return;
+    }
+    let shouldProceed = false;
+    if (typeof requestConfirmation === "function") {
+      shouldProceed = await requestConfirmation({
+        title: "Delete Service Account",
+        message: `Delete service account "${account.client_id}"? This action cannot be undone.`,
+        source: "Service Accounts",
+        level: "error",
+        confirmText: "Delete",
+        cancelText: "Cancel",
+      });
+    } else {
+      shouldProceed = window.confirm("Delete service account " + account.client_id + "?");
+    }
+    if (!shouldProceed) return;
+    setSaving(true);
+    setError("");
+    try {
+      await apiFetch("/auth/admin/service-accounts/" + encodeURIComponent(account.id), { method: "DELETE" });
+      onNotice?.({ title: "Service account deleted", message: account.client_id + " was removed.", source: "Admin", level: "warning" });
+      if (expandedAccountId === String(account.id)) setExpandedAccountId(null);
+      await loadAccounts();
+    } catch (err) {
+      setError(err?.message || "Failed to delete service account.");
+    } finally {
+      setSaving(false);
+    }
   };
-  if (!canManageUsers) return <div className="settings_admin_panel"><fieldset><legend>Service Accounts</legend><p className="settings_hint">You need users:manage to manage service accounts.</p></fieldset></div>;
+
+  if (!canManageUsers) return (
+    <div className="settings_admin_panel service_accounts_mgmt_panel">
+      <fieldset className="service_accounts_section_fieldset">
+        <legend>Service Accounts <AdminLockIcon /></legend>
+        <p className="settings_hint">You need users:manage permission to manage service accounts.</p>
+      </fieldset>
+    </div>
+  );
+
   return (
-    <div className="settings_admin_panel">
-      <ServiceSecretNotice secret={newSecret} onClear={() => setNewSecret("")} />{error && <div className="settings_error">{error}</div>}
-      <fieldset><legend>Create Service Account</legend><div className="service_account_form_grid"><label>Client ID<input className="settings_textinput" value={draft.client_id} maxLength={80} onChange={(event) => setDraft((prev) => ({ ...prev, client_id: sanitizeIdentifier(event.target.value, { maxLength: 80 }) }))} /></label><label>Display name<input className="settings_textinput" value={draft.display_name} maxLength={120} onChange={(event) => setDraft((prev) => ({ ...prev, display_name: sanitizeText(event.target.value, { maxLength: 120 }) }))} /></label><label>Client secret<input className="settings_textinput" value={draft.client_secret} maxLength={128} onChange={(event) => setDraft((prev) => ({ ...prev, client_secret: sanitizeSecret(event.target.value, { maxLength: 128 }) }))} /></label><label className="settings_inline_check"><input type="checkbox" checked={draft.is_active} onChange={(event) => setDraft((prev) => ({ ...prev, is_active: event.target.checked }))} /> Active</label></div><PermissionEditor value={draft.permissions} onChange={(permissions) => setDraft((prev) => ({ ...prev, permissions: sanitizePermissionList(permissions) }))} idPrefix="new_service_permissions" /><div className="settings_action_row"><button type="button" onClick={createAccount} disabled={saving}>Create service account</button></div></fieldset>
-      <fieldset><legend>Existing Service Accounts</legend><div className="settings_action_row"><button type="button" onClick={loadAccounts} disabled={loading}>{loading ? "Refreshing..." : "Refresh"}</button></div>{accounts.length === 0 && <p className="settings_hint">No service accounts found.</p>}{accounts.map((account) => { const editDraft = editDrafts[String(account.id)] || { display_name: account.display_name, is_active: account.is_active, permissions: account.permissions }; return <div className="service_account_card" key={account.id}><div className="service_account_card_header"><div><b>{account.client_id}</b><span>{account.is_active ? "Active" : "Inactive"}</span></div><div className="service_account_actions"><button type="button" onClick={() => saveAccount(account)} disabled={saving}>Save</button><button type="button" onClick={() => rotateSecret(account)} disabled={saving}>Rotate secret</button><button type="button" className="critical_btns" onClick={() => deleteAccount(account)} disabled={saving}>Delete</button></div></div><label>Display name<input className="settings_textinput" value={editDraft.display_name || ""} maxLength={120} onChange={(event) => updateEditDraft(account.id, { display_name: sanitizeText(event.target.value, { maxLength: 120 }) })} /></label><label className="settings_inline_check"><input type="checkbox" checked={!!editDraft.is_active} onChange={(event) => updateEditDraft(account.id, { is_active: event.target.checked })} /> Active</label><PermissionEditor value={editDraft.permissions || []} onChange={(permissions) => updateEditDraft(account.id, { permissions: sanitizePermissionList(permissions) })} idPrefix={"service_" + account.id + "_permissions"} /></div>; })}</fieldset>
+    <div ref={panelRef} className="settings_admin_panel service_accounts_mgmt_panel">
+      <ServiceSecretNotice secret={newSecret} onClear={() => setNewSecret("")} />
+      {error && <div className="settings_error">{error}</div>}
+
+      {/* ── Section 1: Create Service Account (Modeled after Connections Tab layout) ── */}
+      <fieldset className={`service_accounts_section_fieldset service_create_section_fieldset ${isCreateOpen ? "expanded" : "collapsed"}`}>
+        <legend
+          className="service_create_legend"
+          onClick={() => setIsCreateOpen((prev) => !prev)}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === " " || e.key === "Enter") {
+              e.preventDefault();
+              setIsCreateOpen((prev) => !prev);
+            }
+          }}
+          title={isCreateOpen ? "Click to collapse" : "Click to expand create service account form"}
+        >
+          <span className="service_create_legend_title">
+            Create Service Account <AdminLockIcon />
+          </span>
+          <span className="service_create_legend_toggle">
+            {isCreateOpen ? "▲" : "▼"}
+          </span>
+        </legend>
+
+        {!isCreateOpen ? (
+          <div
+            className="service_create_collapsed_bar"
+            onClick={() => setIsCreateOpen(true)}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === " " || e.key === "Enter") {
+                e.preventDefault();
+                setIsCreateOpen(true);
+              }
+            }}
+          >
+            <span className="service_create_collapsed_hint">
+              Configure a new service account with API credentials, domain schema routing, and access permissions.
+            </span>
+            <button
+              type="button"
+              className="action_btns service_create_expand_action_btn"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsCreateOpen(true);
+              }}
+            >
+              ▼ Expand Form
+            </button>
+          </div>
+        ) : (
+          <div className="service_create_body">
+            <div className="config_endpoint_grid">
+              <div className="config_endpoint_field">
+                <label>Client ID *</label>
+                <input
+                  type="text"
+                  className="input_text"
+                  placeholder="e.g. data_pipeline_service"
+                  value={draft.client_id}
+                  maxLength={80}
+                  onChange={(e) => setDraft((prev) => ({ ...prev, client_id: sanitizeIdentifier(e.target.value, { maxLength: 80 }) }))}
+                />
+              </div>
+
+              <div className="config_endpoint_field">
+                <label>Display Name</label>
+                <input
+                  type="text"
+                  className="input_text"
+                  placeholder="e.g. Data Pipeline Service"
+                  value={draft.display_name}
+                  maxLength={120}
+                  onChange={(e) => setDraft((prev) => ({ ...prev, display_name: sanitizeText(e.target.value, { maxLength: 120 }) }))}
+                />
+              </div>
+
+              <div className="config_endpoint_field config_endpoint_field--wide">
+                <label>Client Secret</label>
+                <div className="service_secret_input_wrap">
+                  <input
+                    type="text"
+                    className="input_text"
+                    placeholder="Client secret"
+                    value={draft.client_secret}
+                    maxLength={128}
+                    onChange={(e) => setDraft((prev) => ({ ...prev, client_secret: sanitizeSecret(e.target.value, { maxLength: 128 }) }))}
+                  />
+                  <button
+                    type="button"
+                    className="action_btns service_secret_gen_btn"
+                    onClick={() => setDraft((prev) => ({ ...prev, client_secret: generateClientSecret() }))}
+                    title="Generate a new secure secret"
+                  >
+                    ⟳ Generate
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <StorageTargetEditor
+              config={draft.config}
+              onChange={(config) => setDraft((prev) => ({ ...prev, config }))}
+              idPrefix="create_svc_storage"
+            />
+
+            <div className="service_perm_section_header">
+              <label>Permissions ({(draft.permissions || []).length} selected)</label>
+              <div className="service_perm_quick_actions">
+                <button
+                  type="button"
+                  className="service_quick_link_btn"
+                  onClick={() => setDraft((prev) => ({ ...prev, permissions: allSystemPermissions }))}
+                >
+                  Select All
+                </button>
+                <span className="service_perm_action_sep">·</span>
+                <button
+                  type="button"
+                  className="service_quick_link_btn"
+                  onClick={() => setDraft((prev) => ({ ...prev, permissions: [] }))}
+                >
+                  Clear All
+                </button>
+              </div>
+            </div>
+
+            <PermissionEditor
+              value={draft.permissions}
+              onChange={(permissions) => setDraft((prev) => ({ ...prev, permissions: sanitizePermissionList(permissions) }))}
+              idPrefix="new_svc_perm"
+            />
+
+            <div className="service_accounts_action_bar">
+              <button
+                type="button"
+                className="service_btn_secondary service_collapse_btn"
+                onClick={() => setIsCreateOpen(false)}
+              >
+                ▲ Collapse
+              </button>
+              <button
+                type="button"
+                className="action_btns"
+                onClick={createAccount}
+                disabled={saving}
+              >
+                {saving ? "Creating..." : "Create Service Account"}
+              </button>
+            </div>
+          </div>
+        )}
+      </fieldset>
+
+      {/* ── Section 2: Configured Service Accounts (Modeled after Connections Storage Section) ── */}
+      <fieldset className="service_accounts_section_fieldset">
+        <legend>Configured Service Accounts <AdminLockIcon /></legend>
+
+        <div className="service_accounts_toolbar">
+          <div className="service_accounts_count">
+            <b>{accounts.length}</b> {accounts.length === 1 ? "Service Account configured" : "Service Accounts configured"}
+          </div>
+          <button
+            type="button"
+            className="action_btns"
+            onClick={loadAccounts}
+            disabled={loading}
+            title="Refresh service accounts list"
+          >
+            {loading ? "Refreshing..." : "⟳ Refresh"}
+          </button>
+        </div>
+
+        {accounts.length === 0 ? (
+          <div className="service_accounts_empty_state">
+            <p className="settings_hint">No service accounts found.</p>
+          </div>
+        ) : (
+          <div className="service_accounts_list">
+            {accounts.map((account) => {
+              const isExpanded = expandedAccountId === String(account.id);
+              const editDraft = editDrafts[String(account.id)] || {
+                display_name: account.display_name,
+                permissions: account.permissions || [],
+              };
+
+              return (
+                <div
+                  className={`service_account_row_card ${isExpanded ? "expanded" : ""}`}
+                  key={account.id}
+                >
+                  <div className="service_account_row_main">
+                    <div className="service_account_row_info">
+                      <div className="service_account_id_badge">
+                        <span className="service_account_tag">ID #{account.id}</span>
+                        <b className="service_account_client_id">{account.client_id}</b>
+                        {account.is_system && (
+                          <span className="service_system_badge" title="Protected System Service Account">
+                            🛡 System
+                          </span>
+                        )}
+                      </div>
+                      <div className="service_account_meta">
+                        <span className="service_account_display_name">
+                          {account.display_name || <em className="service_account_no_name">No display name</em>}
+                        </span>
+                        {account.config?.storage_host && (
+                          <span
+                            className="service_storage_chip"
+                            title={`Elasticsearch Target: ${account.config.storage_host}:${account.config.storage_port || "5000"}/${account.config.storage_endpoint || ""}`}
+                          >
+                            🗄 {account.config.domain || "storage"}: {account.config.storage_host}:{account.config.storage_port || "5000"}
+                          </span>
+                        )}
+                        {((account.config?.fetch_columns && account.config.fetch_columns.length > 0) ||
+                          (account.config?.column_mapping && Object.keys(account.config.column_mapping).length > 0)) && (
+                          <span
+                            className="service_schema_chip"
+                            title={`Custom Schema: ${account.config?.fetch_columns?.length || 0} fetch column(s), ${Object.keys(account.config?.column_mapping || {}).length} mapped column(s)`}
+                          >
+                            📐 Schema ({account.config?.fetch_columns?.length || 0} cols{Object.keys(account.config?.column_mapping || {}).length > 0 ? `, ${Object.keys(account.config?.column_mapping || {}).length} mapped` : ""})
+                          </span>
+                        )}
+                        <span className="service_perm_chip">
+                          {(account.permissions || []).length} permissions
+                        </span>
+                        {account.is_system ? (
+                          <span
+                            className="service_status_chip active system_locked"
+                            title="System service accounts are permanently active and locked."
+                          >
+                            🔒 Active
+                          </span>
+                        ) : (
+                          <span
+                            className={`service_status_chip ${account.is_active ? "active" : "inactive"}`}
+                            title={account.is_active ? "Active service account" : "Inactive service account"}
+                          >
+                            {account.is_active ? "Active" : "Inactive"}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="service_account_row_actions">
+                      <button
+                        type="button"
+                        className={`action_btns service_btn_toggle_edit ${isExpanded ? "active" : ""}`}
+                        onClick={() => setExpandedAccountId(isExpanded ? null : String(account.id))}
+                        title="Edit display name and permissions"
+                      >
+                        {isExpanded ? "▲ Close" : "✎ Edit"}
+                      </button>
+                      <button
+                        type="button"
+                        className="action_btns"
+                        onClick={() => rotateSecret(account)}
+                        disabled={saving}
+                        title="Rotate client secret"
+                      >
+                        Rotate Secret
+                      </button>
+                      <button
+                        type="button"
+                        className={`critical_btns ${account.is_system ? "is_disabled" : ""}`}
+                        onClick={() => {
+                          if (account.is_system) return;
+                          deleteAccount(account);
+                        }}
+                        disabled={saving || account.is_system}
+                        title={account.is_system ? "System service accounts cannot be deleted." : "Delete service account"}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+
+                  {isExpanded && (
+                    <div className="service_account_drawer">
+                      {account.is_system && (
+                        <div className="service_system_info_banner">
+                          <span className="service_system_info_icon">🛡</span>
+                          <div className="service_system_info_text">
+                            <b>Protected System Service Account ({account.client_id})</b>
+                            <p>
+                              Platform daemon settings and storage targets are dynamically synced to the runtime engine on Server 4 without process restarts. System accounts are permanently active and protected from deletion.
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="config_endpoint_grid">
+                        <div className="config_endpoint_field">
+                          <label>Display Name</label>
+                          <input
+                            type="text"
+                            className="input_text"
+                            value={editDraft.display_name || ""}
+                            maxLength={120}
+                            placeholder="Display name"
+                            onChange={(e) => updateEditDraft(account.id, { display_name: sanitizeText(e.target.value, { maxLength: 120 }) })}
+                          />
+                        </div>
+
+                        <div className="config_endpoint_field">
+                          <label>Account Status</label>
+                          {account.is_system ? (
+                            <div
+                              className="user_status_toggle_btn active is_locked"
+                              title="System service accounts cannot be deactivated (permanently active)."
+                              style={{ cursor: "not-allowed", opacity: 0.9 }}
+                            >
+                              <span className="user_status_toggle_knob" />
+                              <span className="user_status_toggle_label">🔒 Active (Locked)</span>
+                            </div>
+                          ) : (
+                            <div
+                              className={`user_status_toggle_btn ${editDraft.is_active !== false ? "active" : "inactive"}`}
+                              onClick={() => updateEditDraft(account.id, { is_active: editDraft.is_active === false ? true : false })}
+                              role="checkbox"
+                              aria-checked={editDraft.is_active !== false}
+                              tabIndex={0}
+                              onKeyDown={(e) => {
+                                if (e.key === " " || e.key === "Enter") {
+                                  e.preventDefault();
+                                  updateEditDraft(account.id, { is_active: editDraft.is_active === false ? true : false });
+                                }
+                              }}
+                              title="Toggle account active status"
+                            >
+                              <span className="user_status_toggle_knob" />
+                              <span className="user_status_toggle_label">
+                                {editDraft.is_active !== false ? "Active" : "Inactive"}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <StorageTargetEditor
+                        config={editDraft.config}
+                        onChange={(config) => updateEditDraft(account.id, { config })}
+                        idPrefix={`edit_svc_${account.id}_storage`}
+                      />
+
+                      <div className="service_perm_section_header">
+                        <label>Permissions ({(editDraft.permissions || []).length} selected)</label>
+                        <div className="service_perm_quick_actions">
+                          <button
+                            type="button"
+                            className="service_quick_link_btn"
+                            onClick={() => updateEditDraft(account.id, { permissions: allSystemPermissions })}
+                          >
+                            Select All
+                          </button>
+                          <span className="service_perm_action_sep">·</span>
+                          <button
+                            type="button"
+                            className="service_quick_link_btn"
+                            onClick={() => updateEditDraft(account.id, { permissions: [] })}
+                          >
+                            Clear All
+                          </button>
+                        </div>
+                      </div>
+
+                      <PermissionEditor
+                        value={editDraft.permissions || []}
+                        onChange={(permissions) => updateEditDraft(account.id, { permissions: sanitizePermissionList(permissions) })}
+                        idPrefix={`svc_${account.id}_perm`}
+                      />
+
+                      <div className="service_accounts_action_bar">
+                        <button
+                          type="button"
+                          className="service_btn_secondary"
+                          onClick={() => setExpandedAccountId(null)}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          className="action_btns"
+                          onClick={() => saveAccount(account)}
+                          disabled={saving}
+                        >
+                          {saving ? "Saving..." : "Save Changes"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </fieldset>
     </div>
   );
 }
@@ -4547,7 +6458,7 @@ function SmartVigilancePanel({ apiFetch, toggleAction, onNotice, canAccess }) {
     </div>
   );
 }
-function Settings({ isSettingsOpen, toggleAction, actor, roles = [], permissions = [], canAccess, apiFetch, sessionId, onNotice, onLogout, areBackgroundAnimationsEnabled = true, onBackgroundAnimationsChange }) {
+function Settings({ isSettingsOpen, toggleAction, actor, roles = [], permissions = [], canAccess, apiFetch, sessionId, onNotice, requestConfirmation, onLogout, areBackgroundAnimationsEnabled = true, onBackgroundAnimationsChange }) {
   const [activeSettingsTab, setActiveSettingsTab] = useState("profile");
   const [rememberLayout, setRememberLayout] = useState(true);
   const [enableNotifications, setEnableNotifications] = useState(true);
@@ -4601,12 +6512,12 @@ function Settings({ isSettingsOpen, toggleAction, actor, roles = [], permissions
             </div>
             <div className="configurations_options_panel" style={{ display: activeSettingsTab === "users" ? "block" : "none" }}>
               <PermissionGate permission="users:manage" canAccess={canAccess} fallback={<p className="settings_hint">You need users:manage to open this panel.</p>}>
-                <UserManagementPanel apiFetch={apiFetch} canManageUsers={canManageUsers} canManageSuperusers={canManageSuperusers} onNotice={onNotice} isActive={activeSettingsTab === "users"} />
+                <UserManagementPanel apiFetch={apiFetch} canManageUsers={canManageUsers} canManageSuperusers={canManageSuperusers} onNotice={onNotice} requestConfirmation={requestConfirmation} isActive={activeSettingsTab === "users"} />
               </PermissionGate>
             </div>
             <div className="configurations_options_panel" style={{ display: activeSettingsTab === "service_accounts" ? "block" : "none" }}>
               <PermissionGate permission="users:manage" canAccess={canAccess} fallback={<p className="settings_hint">You need users:manage to open this panel.</p>}>
-                <ServiceAccountsPanel apiFetch={apiFetch} canManageUsers={canManageUsers} onNotice={onNotice} isActive={activeSettingsTab === "service_accounts"} />
+                <ServiceAccountsPanel apiFetch={apiFetch} canManageUsers={canManageUsers} onNotice={onNotice} requestConfirmation={requestConfirmation} isActive={activeSettingsTab === "service_accounts"} />
               </PermissionGate>
             </div>
             <div className="configurations_options_panel" style={{ display: activeSettingsTab === "integration" ? "block" : "none" }}>
@@ -7563,6 +9474,8 @@ function ConfirmationDialog({ items, onResolve }) {
     return () => document.removeEventListener("keydown", onKeyDown, true);
   }, [active.id, onResolve]);
 
+  const isDanger = active.level === "error" || active.level === "danger";
+
   return createPortal(
     (
       <div
@@ -7571,7 +9484,7 @@ function ConfirmationDialog({ items, onResolve }) {
           if (event.target === event.currentTarget) onResolve(active.id, false);
         }}
       >
-        <div className="linkx_interaction_panel_react">
+        <div className={`linkx_interaction_panel_react ${isDanger ? "is_danger" : ""}`}>
           <div className="linkx_interaction_title">{active.title || "Confirm Action"}</div>
           <div className="linkx_interaction_message">{active.message}</div>
           <div className="linkx_interaction_actions">
@@ -7584,7 +9497,7 @@ function ConfirmationDialog({ items, onResolve }) {
             </button>
             <button
               id="linkx_interaction_ok"
-              className="linkx_interaction_btn"
+              className={`linkx_interaction_btn ${isDanger ? "linkx_interaction_btn_danger" : ""}`}
               type="button"
               autoFocus
               onClick={() => onResolve(active.id, true)}
@@ -14132,7 +16045,7 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
           )}
         <Taskbar windows={windows} isTaskBarOpen={isTaskBarOpen} activeWindowId={activeWindowId} focusWindow={handleFocusWindow} toggleAction={handleToggleMenu} isCtrlHeld={isCtrlHeld}/>
         <Configurations sessionId={sessionId} actions={handleConfigurationActions} loadscreenState={loadscreenState} setloadscreenState={setloadscreenState} toggleAction={handleToggleMenu} configurations={configurations} isConfigurationsOpen={isConfigurationsOpen} apiFetch={apiFetch} canAccess={canAccess} idleSettings={idleSettings} idlePolicyMeta={idlePolicyMeta} onIdleSettingsChange={updateIdleSettings} isAdmin={hasRole("admin")}/>
-        <Settings isSettingsOpen={isSettingsOpen} toggleAction={handleToggleMenu} actor={actor || user} roles={roles} permissions={permissions} canAccess={canAccess} apiFetch={apiFetch} sessionId={sessionId} onNotice={pushNotification} onLogout={() => performLogout("user_logout")} areBackgroundAnimationsEnabled={areBackgroundAnimationsEnabled} onBackgroundAnimationsChange={setBackgroundAnimationsEnabled} />
+        <Settings isSettingsOpen={isSettingsOpen} toggleAction={handleToggleMenu} actor={actor || user} roles={roles} permissions={permissions} canAccess={canAccess} apiFetch={apiFetch} sessionId={sessionId} onNotice={pushNotification} requestConfirmation={requestConfirmation} onLogout={() => performLogout("user_logout")} areBackgroundAnimationsEnabled={areBackgroundAnimationsEnabled} onBackgroundAnimationsChange={setBackgroundAnimationsEnabled} />
         <Reports isReportsOpen={isReportsOpen} toggleAction={handleToggleMenu} handleOpenWindows={handleOpenWindows} graphAction={handleGraphActions} actor={actor || user} roles={roles} permissions={permissions} canAccess={canAccess} apiFetch={apiFetch} sessionId={sessionId} onNotice={pushNotification} removeNotification={removeNotification} onLogout={() => performLogout("user_logout")} areBackgroundAnimationsEnabled={areBackgroundAnimationsEnabled} onBackgroundAnimationsChange={setBackgroundAnimationsEnabled} />
         <Main userName={userName} setSessionId={setSessionId} API_URL={API_URL} debounceRef={debounceRef} setConfigurations={setConfigurations} configurations={configurations} windows={windows} setWindows={setWindows} openWindows={handleOpenWindows} themeMode={themeMode} areBackgroundAnimationsEnabled={areBackgroundAnimationsEnabled} />
         {isWorkspaceLocked && (
