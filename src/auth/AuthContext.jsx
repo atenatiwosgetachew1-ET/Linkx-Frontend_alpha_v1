@@ -49,9 +49,22 @@ const readParentProjectConfig = () => ({
   redirectUri: String(import.meta.env.VITE_PARENT_PROJECT_REDIRECT_URI || "").trim(),
 });
 
-const getParentProjectRedirectUri = (configuredRedirectUri = "") => (
-  configuredRedirectUri || `${window.location.origin}${PARENT_PROJECT_CALLBACK_PATH}`
-);
+const getParentProjectRedirectUri = (configuredRedirectUri = "") => {
+  if (typeof window !== "undefined" && window.location?.origin) {
+    if (!configuredRedirectUri) return `${window.location.origin}${PARENT_PROJECT_CALLBACK_PATH}`;
+    try {
+      const parsed = new URL(configuredRedirectUri);
+      if (window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1") {
+        if (parsed.host !== window.location.host) {
+          return `${window.location.origin}${PARENT_PROJECT_CALLBACK_PATH}`;
+        }
+      }
+    } catch {
+      return `${window.location.origin}${PARENT_PROJECT_CALLBACK_PATH}`;
+    }
+  }
+  return configuredRedirectUri || (typeof window !== "undefined" ? `${window.location.origin}${PARENT_PROJECT_CALLBACK_PATH}` : "");
+};
 
 const readParentProjectTransaction = () => {
   try {

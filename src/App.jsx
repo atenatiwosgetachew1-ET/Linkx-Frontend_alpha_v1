@@ -68,6 +68,24 @@ const parsePositiveMs = (value, fallback) => {
   return parsed;
 };
 
+const resolveApiUrl = (configuredUrl) => {
+  if (typeof window !== "undefined" && window.location?.origin) {
+    if (!configuredUrl) return window.location.origin;
+    try {
+      const parsed = new URL(configuredUrl);
+      if (window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1") {
+        if (parsed.host !== window.location.host) {
+          return window.location.origin;
+        }
+      }
+    } catch {
+      return window.location.origin;
+    }
+    return configuredUrl;
+  }
+  return configuredUrl || "";
+};
+
 const clampMs = (value, min, max) => Math.max(min, Math.min(max, Math.round(Number(value) || min)));
 
 const normalizeIdleSettings = (value = {}, fallback = {}) => {
@@ -9635,8 +9653,8 @@ const fileInputRef = useRef(null);
   const toggleMenuRef = useRef(null);
   const tabsToggleButtonRef = useRef(null);
   const darkFloatMenuToggleRef = useRef(null);
-  const API_URL = import.meta.env.VITE_API_URL || window.location.origin
-  const BASE_URL = import.meta.env.VITE_BASE_URL || window.location.origin
+  const API_URL = resolveApiUrl(import.meta.env.VITE_API_URL);
+  const BASE_URL = resolveApiUrl(import.meta.env.VITE_BASE_URL);
   const defaultIdleSettings = useMemo(() => getDefaultIdleSettings(), []);
   const [idleSettings, setIdleSettings] = useState(defaultIdleSettings);
   const [idlePolicyMeta, setIdlePolicyMeta] = useState({
@@ -17533,7 +17551,7 @@ let processedData = [...reportsData];
             fileName="graphs_basic"
             activeGraph="graphs_basic"
             iframeRef={hiddenIframeRef}
-            BASE_URL={import.meta.env.VITE_API_URL || window.location.origin}
+            BASE_URL={resolveApiUrl(import.meta.env.VITE_API_URL)}
             themeMode="light"
           />
           </div>
@@ -17560,7 +17578,7 @@ function AuthenticatedApp() {
 }
 
 function Root() {
-  const API_URL = import.meta.env.VITE_API_URL || window.location.origin;
+  const API_URL = resolveApiUrl(import.meta.env.VITE_API_URL);
   return (
     <AuthProvider apiUrl={API_URL}>
       <AuthenticatedApp />

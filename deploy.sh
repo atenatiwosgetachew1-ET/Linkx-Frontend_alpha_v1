@@ -26,6 +26,17 @@ cd "$REPO_DIR"
 git fetch origin main
 git reset --hard origin/main
 
+# Re-apply executable permission to deploy.sh in case git reset altered it
+chmod +x "$REPO_DIR/deploy.sh" 2>/dev/null || true
+
+# If this machine is the remote CDR server (172.21.13.73), apply its specific .env
+if hostname -I 2>/dev/null | grep -q "172.21.13.73"; then
+  if [ -f "$REPO_DIR/deploy_pkg_172.21.13.73/.env" ]; then
+    echo "  -> Detected 172.21.13.73 host. Applying deploy_pkg_172.21.13.73/.env..."
+    cp -f "$REPO_DIR/deploy_pkg_172.21.13.73/.env" "$REPO_DIR/.env"
+  fi
+fi
+
 # 3. Build
 echo "[3/4] Building..."
 if [ "$THEME" = "all" ]; then
