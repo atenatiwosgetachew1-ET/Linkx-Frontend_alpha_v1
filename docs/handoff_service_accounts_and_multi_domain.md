@@ -88,7 +88,7 @@ Replaces banking AML thresholds with **18 telecom parameters** across 4 fieldset
   * `imei_swap_min_devices`: IMEI Swap Min Distinct Handsets (`3 devices`)
   * `wangiri_max_duration_seconds`: Wangiri Missed Call Max Ring (`3 sec`)
   * `wangiri_min_calls`: Wangiri Min Victim Calls (`3 calls`)
-* **Dual Endpoint**: Interacts with `/api/v1/rules/thresholds?domain_id=cdr` with fallback to `/rule-thresholds?domain_id=cdr`.
+* **Direct Domain Endpoint**: Interacts directly with `/rule-thresholds?domain_id=cdr` (fallback to `/rule-thresholds`). Score Lineage interacts with `/config/score-lineage?domain_id=cdr` (fallback to `/config/score-lineage`). Prevents 404 errors from unmapped `/api/v1/rules/*` paths.
 
 #### 3. CDR Risk Scoring & Typology Lineage (`ScoreLineagePanel`)
 * **17 Telecom Typologies Grouped by Severity**:

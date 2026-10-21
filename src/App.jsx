@@ -17760,8 +17760,8 @@ function ScoreLineagePanel({ apiFetch, canManageUsers }) {
   React.useEffect(() => {
     const fetchLineage = async () => {
       try {
-        const lineageEndpoint = isCdr ? "/api/v1/rules/score-lineage?domain_id=cdr" : "/config/score-lineage";
-        const fallbackEndpoint = isCdr ? "/config/score-lineage?domain_id=cdr" : "/config/score-lineage";
+        const lineageEndpoint = isCdr ? "/config/score-lineage?domain_id=cdr" : "/config/score-lineage";
+        const fallbackEndpoint = "/config/score-lineage";
         let res;
         try {
           res = await apiFetch(lineageEndpoint, { suppressForbiddenHandler: true });
@@ -17799,8 +17799,8 @@ function ScoreLineagePanel({ apiFetch, canManageUsers }) {
         } : {})
       };
       
-      const saveEndpoint = isCdr ? "/api/v1/rules/score-lineage?domain_id=cdr" : "/config/score-lineage";
-      const fallbackEndpoint = isCdr ? "/config/score-lineage?domain_id=cdr" : "/config/score-lineage";
+      const saveEndpoint = isCdr ? "/config/score-lineage?domain_id=cdr" : "/config/score-lineage";
+      const fallbackEndpoint = "/config/score-lineage";
       try {
         await apiFetch(saveEndpoint, {
           method: "POST",
@@ -18009,8 +18009,8 @@ function RuleThresholdsPanel({ apiFetch, canManageUsers }) {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const thresholdEndpoint = isCdr ? "/api/v1/rules/thresholds?domain_id=cdr" : "/rule-thresholds";
-      const fallbackEndpoint = isCdr ? "/rule-thresholds?domain_id=cdr" : "/rule-thresholds";
+      const thresholdEndpoint = isCdr ? "/rule-thresholds?domain_id=cdr" : "/rule-thresholds";
+      const fallbackEndpoint = "/rule-thresholds";
       let res;
       try {
         res = await apiFetch(thresholdEndpoint, { suppressForbiddenHandler: true });
@@ -18021,8 +18021,8 @@ function RuleThresholdsPanel({ apiFetch, canManageUsers }) {
         setConfig(prev => ({ ...prev, ...res.results.config }));
       }
       if (canManageUsers) {
-        const histEndpoint = isCdr ? "/api/v1/rules/thresholds/history?domain_id=cdr&limit=50" : "/rule-thresholds/history?limit=50";
-        const fallbackHist = isCdr ? "/rule-thresholds/history?domain_id=cdr&limit=50" : "/rule-thresholds/history?limit=50";
+        const histEndpoint = isCdr ? "/rule-thresholds/history?domain_id=cdr&limit=50" : "/rule-thresholds/history?limit=50";
+        const fallbackHist = "/rule-thresholds/history?limit=50";
         let histRes;
         try {
           histRes = await apiFetch(histEndpoint, { suppressForbiddenHandler: true });
@@ -18056,8 +18056,8 @@ function RuleThresholdsPanel({ apiFetch, canManageUsers }) {
         }
       }
       
-      const saveEndpoint = isCdr ? "/api/v1/rules/thresholds?domain_id=cdr" : "/rule-thresholds";
-      const fallbackSave = isCdr ? "/rule-thresholds?domain_id=cdr" : "/rule-thresholds";
+      const saveEndpoint = isCdr ? "/rule-thresholds?domain_id=cdr" : "/rule-thresholds";
+      const fallbackSave = "/rule-thresholds";
       const payload = {
         ...(isCdr ? { domain_id: "cdr" } : {}),
         ...numericConfig
