@@ -9635,8 +9635,8 @@ const fileInputRef = useRef(null);
   const toggleMenuRef = useRef(null);
   const tabsToggleButtonRef = useRef(null);
   const darkFloatMenuToggleRef = useRef(null);
-  const API_URL = import.meta.env.VITE_API_URL
-  const BASE_URL = import.meta.env.VITE_BASE_URL
+  const API_URL = import.meta.env.VITE_API_URL || window.location.origin
+  const BASE_URL = import.meta.env.VITE_BASE_URL || window.location.origin
   const defaultIdleSettings = useMemo(() => getDefaultIdleSettings(), []);
   const [idleSettings, setIdleSettings] = useState(defaultIdleSettings);
   const [idlePolicyMeta, setIdlePolicyMeta] = useState({
@@ -17533,7 +17533,7 @@ let processedData = [...reportsData];
             fileName="graphs_basic"
             activeGraph="graphs_basic"
             iframeRef={hiddenIframeRef}
-            BASE_URL={import.meta.env.VITE_API_URL || ""}
+            BASE_URL={import.meta.env.VITE_API_URL || window.location.origin}
             themeMode="light"
           />
           </div>
@@ -17560,7 +17560,7 @@ function AuthenticatedApp() {
 }
 
 function Root() {
-  const API_URL = import.meta.env.VITE_API_URL;
+  const API_URL = import.meta.env.VITE_API_URL || window.location.origin;
   return (
     <AuthProvider apiUrl={API_URL}>
       <AuthenticatedApp />
