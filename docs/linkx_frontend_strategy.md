@@ -1,87 +1,53 @@
-# Linkx Frontend — Multi-Domain Architecture & Incubation Convergence Strategy
+# Linkx Frontend — Multi-Domain Architecture & Future Transition Strategy
 
-**Document Version:** 1.0  
+**Document Version:** 2.0  
 **Date:** 2026-10-21  
-**Scope:** Strategic roadmap for scaling the Linkx frontend across multiple regulatory domains and converging the production monolith with the modular `incubation/` architecture.
+**Scope:** How to manage the Linkx frontend going forward — supporting multiple domains on the current production codebase while preparing for a full transition to the `incubation/` architecture.
 
 ---
 
 ## Table of Contents
 
-1. [Current State Assessment](#1-current-state-assessment)
-2. [Problem Statement](#2-problem-statement)
-3. [Phase 1 — Unified Domain Registry](#3-phase-1--unified-domain-registry)
-4. [Phase 2 — Zero-Config Deployment Automation](#4-phase-2--zero-config-deployment-automation)
-5. [Phase 3 — Strangler Fig Migration to Incubation](#5-phase-3--strangler-fig-migration-to-incubation)
-6. [Domain Onboarding Playbook](#6-domain-onboarding-playbook)
-7. [Risk Matrix & Mitigations](#7-risk-matrix--mitigations)
-8. [Decision Log](#8-decision-log)
+1. [Ground Rules](#1-ground-rules)
+2. [Current State](#2-current-state)
+3. [The Two Codebases](#3-the-two-codebases)
+4. [Multi-Domain Management (Now)](#4-multi-domain-management-now)
+5. [Deployment Workflow](#5-deployment-workflow)
+6. [The Transition (Future)](#6-the-transition-future)
+7. [Domain Onboarding Playbook](#7-domain-onboarding-playbook)
+8. [Risk Matrix](#8-risk-matrix)
+9. [Decision Log](#9-decision-log)
 
 ---
 
-## 1. Current State Assessment
+## 1. Ground Rules
 
-### 1.1 Production Codebase
+> **These are non-negotiable. Every contributor must follow them.**
+
+| # | Rule | Rationale |
+|---|------|-----------|
+| 1 | **Never touch anything inside `incubation/`** | It is a separate project being developed independently. It will replace the current codebase when ready. No one working on the production monolith should modify, refactor, or "help" the incubation code. |
+| 2 | **The current monolith (`src/App.jsx`) is temporary** | It works, it's in production, we maintain it — but we know it will be fully replaced by `incubation/` in the future. Don't invest in heavy architectural refactoring of it. |
+| 3 | **Keep changes to the monolith minimal and surgical** | When adding a new domain, feature, or fix — do the minimum needed. No over-engineering on throwaway code. |
+| 4 | **Always build both themes after changes** | `npm run build && npm run build:cdr` — verify both work. |
+| 5 | **Always verify `git status incubation/` is clean** | If you see changes in `incubation/`, you broke Rule 1. |
+
+---
+
+## 2. Current State
+
+### 2.1 Production Codebase
 
 | Metric | Value |
 |--------|-------|
 | Entry point | `src/App.jsx` |
 | Lines of code | **~18,010** |
-| Architecture | Single-file monolith (auth, graph, settings, service accounts, admin panels — all in one file) |
-| Theme system | Build-time `VITE_THEME` → `src/themes/index.js` → resolves `nbe.js` or `cdr.js` → sets `data-brand` attribute on `<html>` → CSS `[data-brand]` overrides |
-| Build output | `vite.config.js` maps theme IDs to output directories (`nbe` → `linkxDS2026/`, `cdr` → `linkxCDR2026/`) |
-| Domain config | `AVAILABLE_DOMAINS` array (line 3880) and `DOMAIN_SCHEMA_TEMPLATES` object (line 3925) — hardcoded inside `App.jsx` |
-| Deployment | Git pull → `npm run build` / `npm run build:cdr` → Nginx serves static files |
+| Architecture | Single-file monolith (auth, graph, settings, service accounts, admin — all in one file) |
+| Theme system | Build-time `VITE_THEME` → `src/themes/index.js` → resolves `nbe.js` or `cdr.js` → `data-brand` on `<html>` → CSS overrides |
+| Build output | `vite.config.js` maps `nbe` → `linkxDS2026/`, `cdr` → `linkxCDR2026/` |
+| Domain config | `AVAILABLE_DOMAINS` (line ~3880) and `DOMAIN_SCHEMA_TEMPLATES` (line ~3925) inside `App.jsx` |
 
-### 1.2 Incubation Codebase (`incubation/`)
-
-The `incubation/` directory is a **modular rewrite** of the monolith with clean separation of concerns:
-
-```
-incubation/src/
-├── app/              # App composition, providers, top-level routing
-│   ├── App.jsx
-│   └── config.js     # Centralized env config (apiUrl, SSO origins)
-├── features/         # Domain feature modules
-│   ├── chart/        # Chart windows & visualizations
-│   ├── configuration/# Config loading/saving, audit logs
-│   ├── graph/        # Graph windows, iframe messaging, relationships
-│   ├── settings/     # Profile, admin, user/service account management
-│   └── source/       # Source windows, batch/realtime, data streaming
-├── services/         # Backend API clients (strict payload builders)
-│   ├── apiClient.js
-│   ├── authApi.js
-│   ├── sessionApi.js
-│   ├── graphApi.js
-│   ├── configurationApi.js
-│   └── sourceApi.js
-├── workspace/        # Desktop-like shell, window manager, focus/z-index
-│   ├── components/   # WorkspaceFrame, WindowManager, WindowDock, etc.
-│   ├── hooks/        # useWorkspace
-│   └── state/        # workspaceReducer, workspaceContext
-├── shared/           # Reusable UI components, hooks, layout helpers
-│   ├── theme/        # ThemeContext, VisualElementPicker, themeCategories
-│   ├── notifications/# NotificationContext, useNotifications
-│   ├── hooks/
-│   ├── components/
-│   └── layout/
-├── utils/            # inputSecurity, backgroundAnimations
-├── styles/           # Theme tokens, base styles
-├── main.jsx
-└── main.css
-```
-
-**Incubation status:** Phase 1 — authenticated workspace shell only. No full feature parity with the monolith yet. Features are stubbed (`*WindowBody.jsx` components exist but contain placeholder content).
-
-### 1.3 Active Deployment Targets
-
-| Server | IP | Subnet | Theme | Output Dir | API Target (`VITE_API_URL`) | Backend |
-|--------|----|--------|-------|------------|----------------------------|---------|
-| NBE Host | `172.27.23.21` | Primary | `nbe` | `linkxDS2026/` | `https://172.27.23.21` | Local |
-| CDR Host (local) | `172.27.23.21` | Primary | `cdr` | `linkxCDR2026/` | `https://172.27.23.21` | Local |
-| CDR Host (remote) | `172.21.13.73` | Secondary | `cdr` | `linkxCDR2026/` | `https://172.21.13.73` | `172.21.13.70:8000` |
-
-### 1.4 Current Domain Registry (inside `App.jsx`)
+### 2.2 Active Domains
 
 | Domain Key | Label | Schema Focus | Status |
 |------------|-------|-------------|--------|
@@ -93,410 +59,337 @@ incubation/src/
 | `fintech` | Fintech | `PAYER_WALLET`, `PAYEE_WALLET` | ✅ Active |
 | `enterprise` | Enterprise | `DEBTOR_ID`, `CREDITOR_ID` | ✅ Active |
 
----
+### 2.3 Active Deployment Targets
 
-## 2. Problem Statement
-
-### 2.1 Scaling Pain Points
-
-1. **Monolith bloat** — 18,000+ lines in a single file makes feature development, code review, and debugging increasingly difficult. Every domain-specific change risks regressions across unrelated features.
-
-2. **Hardcoded domain config** — `AVAILABLE_DOMAINS` and `DOMAIN_SCHEMA_TEMPLATES` are embedded in `App.jsx`. Adding a new domain requires editing the monolith, rebuilding, and redeploying all instances — even those unrelated to the new domain.
-
-3. **Build-time API coupling** — `VITE_API_URL` is baked into bundles. Deploying the same code to a different server requires rebuilding with a different `.env`. This has already caused production incidents (CDR deployment shipping with NBE API URL → `ERR_CERT_AUTHORITY_INVALID`).
-
-4. **No domain-scoped build isolation** — Currently, every build includes every domain's schemas and UI code, regardless of which deployment target it's for.
-
-5. **Theme ≠ Domain** — The current system conflates "theme" (visual branding) with "domain" (regulatory/business context). CDR is both a theme and a domain, but Insurance is a domain without a theme. This will become confusing as more domains need their own branding.
-
-6. **Permission collisions on shared server** — `www-data` (Nginx) and `node18` (dev user) ownership conflicts on build artifacts have caused deployment failures.
-
-### 2.2 Convergence Challenge
-
-The incubation codebase has the right architecture but lacks feature parity. A "big bang" rewrite would be too risky for a production system. We need an incremental migration strategy.
+| Server | IP | Theme | Output Dir | API Target (`VITE_API_URL`) | Backend |
+|--------|----|-------|------------|----------------------------|---------|
+| NBE Host | `172.27.23.21` | `nbe` | `linkxDS2026/` | `https://172.27.23.21` | Local |
+| CDR Host (local) | `172.27.23.21` | `cdr` | `linkxCDR2026/` | `https://172.27.23.21` | Local |
+| CDR Host (remote) | `172.21.13.73` | `cdr` | `linkxCDR2026/` | `https://172.21.13.73` | `172.21.13.70:8000` |
 
 ---
 
-## 3. Phase 1 — Unified Domain Registry
-
-**Goal:** Extract domain configuration from `App.jsx` into a standalone registry that both the monolith and incubation can consume.
-
-**Timeline:** Can start immediately. Low risk, high value.
-
-### 3.1 Proposed Directory Structure
-
-```
-src/domains/
-├── index.js                 # Registry API: getDomain(), listDomains(), getDomainSchema()
-├── registry.js              # Master domain list with metadata
-├── schemas/
-│   ├── bank.js              # Schema template for bank/BDR
-│   ├── microfinance.js
-│   ├── insurance.js
-│   ├── cdr.js
-│   ├── telecom.js
-│   ├── fintech.js
-│   └── enterprise.js
-└── README.md
-```
-
-### 3.2 Registry Design
-
-```js
-// src/domains/registry.js
-export const DOMAIN_REGISTRY = [
-  {
-    key: "bank",
-    label: "Bank / BDR",
-    description: "Standard banking transaction schema",
-    icon: "🏦",
-    themeId: "nbe",           // Which visual theme this domain uses (if any)
-    deploymentTargets: ["172.27.23.21"],  // Which servers run this domain
-    schemaFile: "./schemas/bank.js",
-  },
-  {
-    key: "cdr",
-    label: "CDR / Telecom Records",
-    description: "Call Detail Records for telecommunications",
-    icon: "📡",
-    themeId: "cdr",
-    deploymentTargets: ["172.27.23.21", "172.21.13.73"],
-    schemaFile: "./schemas/cdr.js",
-  },
-  // ... etc
-];
-```
-
-```js
-// src/domains/schemas/bank.js
-export default {
-  canonicalColumns: {
-    ACCOUNTNO: "Source Account",
-    BENACCOUNTNO: "Destination Account",
-    AMOUNTINBIRR: "Transaction Amount (Birr)",
-    TRANSACTIONDATE: "Transaction Date",
-    TRANSACTIONID: "Transaction ID",
-    ACCOWNERNAME: "Sender Name",
-    BENFULLNAME: "Beneficiary Name",
-  },
-  defaultFetchColumns: [
-    "ACCOUNTNO", "BENACCOUNTNO", "AMOUNTINBIRR",
-    "TRANSACTIONDATE", "TRANSACTIONID",
-    "ACCOWNERNAME", "BENFULLNAME",
-  ],
-  defaultColumnMapping: {
-    ACCOUNTNO: "ACCOUNTNO",
-    BENACCOUNTNO: "BENACCOUNTNO",
-    AMOUNTINBIRR: "AMOUNTINBIRR",
-    TRANSACTIONDATE: "TRANSACTIONDATE",
-    TRANSACTIONID: "TRANSACTIONID",
-    ACCOWNERNAME: "ACCOWNERNAME",
-    BENFULLNAME: "BENFULLNAME",
-  },
-};
-```
-
-### 3.3 Migration Steps
-
-1. Create `src/domains/` with the registry and individual schema files.
-2. Refactor `App.jsx` to import from `src/domains/index.js` instead of using inline `AVAILABLE_DOMAINS` / `DOMAIN_SCHEMA_TEMPLATES`.
-3. Update `DomainSelector` component to read from the registry.
-4. Verify both builds still work (`npm run build && npm run build:cdr`).
-5. The `incubation/` codebase can later import the same `src/domains/` registry.
-
-### 3.4 Adding a New Domain After This Phase
-
-After Phase 1, adding a new domain becomes:
-
-```bash
-# 1. Create schema file:
-cp src/domains/schemas/bank.js src/domains/schemas/new_domain.js
-# 2. Edit the schema with domain-specific columns
-# 3. Add entry to src/domains/registry.js
-# 4. Build & deploy — no changes to App.jsx needed
-```
-
----
-
-## 4. Phase 2 — Zero-Config Deployment Automation
-
-**Goal:** Eliminate build-time IP coupling and streamline multi-server deployments.
-
-**Timeline:** After Phase 1. Medium complexity.
-
-### 4.1 Runtime API URL Resolution
-
-Instead of baking `VITE_API_URL` at compile time, resolve it at runtime:
-
-```js
-// src/config/api.js
-export function getApiBaseUrl() {
-  // 1. Explicit env override (for dev/testing)
-  if (import.meta.env.VITE_API_URL) {
-    return import.meta.env.VITE_API_URL;
-  }
-  // 2. Default: same origin as the served page
-  return window.location.origin;
-}
-```
-
-**Why this works:** In production, Nginx reverse-proxies `/auth/*`, `/init`, `/rule-thresholds`, etc. to the backend. The frontend only needs to call its own origin — Nginx handles routing. This means:
-
-- **One build** can be deployed to **any server** without rebuilding.
-- The `ERR_CERT_AUTHORITY_INVALID` class of deployment bugs becomes impossible.
-- `deploy_pkg_172.21.13.73/.env` is no longer needed.
-
-### 4.2 Per-Domain Build Scripts
-
-Add convenience scripts for future domains:
-
-```json
-{
-  "scripts": {
-    "build": "vite build",
-    "build:nbe": "VITE_THEME=nbe vite build",
-    "build:cdr": "VITE_THEME=cdr vite build",
-    "build:insurance": "VITE_THEME=insurance vite build",
-    "build:all": "npm run build:nbe && npm run build:cdr",
-    "deploy:cdr-remote": "npm run build:cdr && rsync -avz linkxCDR2026/ user@172.21.13.73:/var/www/linkx-frontend/linkxCDR2026/"
-  }
-}
-```
-
-### 4.3 Deployment Ownership Fix
-
-Create a deploy script that handles the `www-data` / `node18` ownership dance:
-
-```bash
-#!/bin/bash
-# deploy.sh — Run as node18 on the target server
-set -e
-
-THEME="${1:-nbe}"
-BUILD_DIR="linkxDS2026"
-[ "$THEME" = "cdr" ] && BUILD_DIR="linkxCDR2026"
-
-echo "=== Deploying $THEME ($BUILD_DIR) ==="
-
-# Take ownership for build
-sudo chown -R $(whoami):$(whoami) /var/www/linkx-frontend
-
-# Pull latest code
-cd /var/www/linkx-frontend
-git fetch origin main
-git reset --hard origin/main
-
-# Install dependencies if needed
-npm ci --prefer-offline 2>/dev/null || true
-
-# Build
-npm run build:$THEME
-
-# Hand ownership back to Nginx
-sudo chown -R www-data:www-data "$BUILD_DIR"
-
-echo "=== ✅ $THEME deployed successfully ==="
-```
-
-### 4.4 vite.config.js — Future Theme Auto-Discovery
-
-```js
-// Future: auto-discover themes from src/themes/
-const THEME_BUILD_PATHS = {
-  nbe: "linkxDS2026",
-  cdr: "linkxCDR2026",
-  insurance: "linkxINS2026",    // Future
-  // Auto-generated from src/domains/registry.js
-};
-```
-
----
-
-## 5. Phase 3 — Strangler Fig Migration to Incubation
-
-**Goal:** Incrementally replace the 18,000-line monolith with the modular `incubation/` architecture — one feature at a time — without any "big bang" rewrite risk.
-
-**Timeline:** Ongoing, after Phases 1 and 2 provide the foundation.
-
-### 5.1 The Strangler Fig Pattern
-
-The [Strangler Fig pattern](https://martinfowler.com/bliki/StranglerFigApplication.html) works by:
-
-1. **Wrapping** the old system with a new facade.
-2. **Growing** new modules around the old ones.
-3. **Redirecting** traffic from old code to new code, one feature at a time.
-4. **Removing** dead old code when no longer referenced.
+## 3. The Two Codebases
 
 ```mermaid
 flowchart LR
-    subgraph Current["Current: Monolith"]
-        A["src/App.jsx<br/>18,010 lines"]
+    subgraph NOW["Production (Now)"]
+        A["src/App.jsx<br/>18,010-line monolith<br/>✅ Full feature set<br/>⚠️ Temporary"]
     end
 
-    subgraph Phase1["Phase 3a: Extract"]
-        B["src/features/auth/"]
-        C["src/features/graph/"]
-        D["src/features/settings/"]
-        E["src/features/source/"]
-        F["src/features/chart/"]
-        G["src/features/admin/"]
+    subgraph FUTURE["Incubation (Future)"]
+        B["incubation/src/<br/>Modular architecture<br/>🚧 Under development<br/>🔒 Do not touch"]
     end
 
-    subgraph Phase2["Phase 3b: Converge"]
-        H["incubation/src/ structure<br/>becomes production src/"]
-    end
+    NOW -->|"Full replacement<br/>when incubation<br/>reaches parity"| FUTURE
 
-    A -->|"Extract one<br/>feature at a time"| Phase1
-    Phase1 -->|"Adopt incubation<br/>patterns"| Phase2
+    style NOW fill:#fff3cd,stroke:#ffc107
+    style FUTURE fill:#d1ecf1,stroke:#0dcaf0
 ```
 
-### 5.2 Feature Migration Priority Matrix
+### What this means in practice:
 
-Features ranked by **extraction value** (how much it simplifies the monolith) and **extraction risk** (how tangled it is with other features):
+- **Need to add a domain?** → Edit `App.jsx` directly. Add the entry to `AVAILABLE_DOMAINS` and `DOMAIN_SCHEMA_TEMPLATES`. Minimal, surgical change.
+- **Need a new theme?** → Add a theme file in `src/themes/`, register it in `index.js`, add build path to `vite.config.js`. Done.
+- **Need to fix a bug?** → Fix it in `src/App.jsx`. Don't restructure surrounding code.
+- **Want to refactor the monolith into modules?** → **Don't.** The incubation codebase is already doing that. Wait for the transition.
 
-| Priority | Feature | Lines (est.) | Value | Risk | Incubation Ready? | Notes |
-|----------|---------|-------------|-------|------|-------------------|-------|
-| 1 | **Domain Registry** | ~200 | 🟢 High | 🟢 Low | N/A (Phase 1) | Already planned above |
-| 2 | **Service Account Management** | ~800 | 🟢 High | 🟡 Medium | Stubbed (`settings/`) | Self-contained UI + API calls |
-| 3 | **Auth / Login / Session** | ~500 | 🟢 High | 🟡 Medium | ✅ (`auth/`, `services/authApi.js`) | Shared by all features |
-| 4 | **Admin Panel** | ~600 | 🟡 Medium | 🟡 Medium | Stubbed (`settings/`) | User management, system config |
-| 5 | **Source Window** | ~2,000 | 🟢 High | 🔴 High | Stubbed (`source/`) | Deeply coupled to graph state |
-| 6 | **Graph Window** | ~4,000 | 🟢 Highest | 🔴 High | Stubbed (`graph/`) | Core feature, iframe messaging |
-| 7 | **Chart Window** | ~1,500 | 🟡 Medium | 🟡 Medium | Stubbed (`chart/`) | Depends on graph data |
-| 8 | **Configuration** | ~1,000 | 🟡 Medium | 🟢 Low | Stubbed (`configuration/`) | Mostly independent |
-| 9 | **Idle/Session Timeout** | ~300 | 🟢 High | 🟢 Low | Not started | Clean hook, few deps |
+---
 
-### 5.3 Migration Workflow Per Feature
+## 4. Multi-Domain Management (Now)
+
+### 4.1 How Domains Work Today
+
+Everything lives in `src/App.jsx`:
+
+1. **`AVAILABLE_DOMAINS` array** (~line 3880) — list of domain objects with `key`, `label`, `icon`, `description`.
+2. **`DOMAIN_SCHEMA_TEMPLATES` object** (~line 3925) — maps each domain key to its Elasticsearch column schema (`fetch_columns`, `column_mapping`).
+3. **`DomainSelector` component** (~line 4125) — renders radio pill cards from `AVAILABLE_DOMAINS`.
+
+### 4.2 Adding a New Domain
+
+To add a new domain (e.g., "Capital Markets"):
+
+**Step 1:** Add to `AVAILABLE_DOMAINS` array (~line 3880):
+```js
+{ key: "capital_markets", label: "Capital Markets", icon: "📈", description: "Securities and stock exchange transactions" },
+```
+
+**Step 2:** Add to `DOMAIN_SCHEMA_TEMPLATES` object (~line 3925):
+```js
+capital_markets: {
+  fetch_columns: ["SECURITY_ID", "BUYER_ACCOUNT", "SELLER_ACCOUNT", "TRADE_AMOUNT", "TRADE_DATE", "SETTLEMENT_DATE"],
+  column_mapping: {
+    SECURITY_ID: "TRANSACTIONID",
+    BUYER_ACCOUNT: "ACCOUNTNO",
+    SELLER_ACCOUNT: "BENACCOUNTNO",
+    TRADE_AMOUNT: "AMOUNTINBIRR",
+    TRADE_DATE: "TRANSACTIONDATE",
+  },
+},
+```
+
+**Step 3:** Build & deploy:
+```bash
+npm run build && npm run build:cdr
+```
+
+That's it. No structural changes, no new files, no refactoring.
+
+### 4.3 Theme vs. Domain
+
+Not every domain needs its own theme. Themes are about **visual branding** (colors, logos, login page). Domains are about **data schemas** (column mappings, Elasticsearch structure).
+
+```
+Does this domain's client/institution need its own branded look?
+│
+├── YES → Create a new theme (see Section 4.4)
+│         Current examples: NBE/BDR (gold theme), CDR (sky-blue theme)
+│
+└── NO  → Just add the domain to AVAILABLE_DOMAINS + DOMAIN_SCHEMA_TEMPLATES
+          Current examples: Insurance, Microfinance, Fintech, Telecom, Enterprise
+          (all use the default NBE theme)
+```
+
+### 4.4 Adding a New Theme (When a Domain Needs Its Own Branding)
+
+When a domain's institution requires its own visual identity:
+
+**Step 1:** Create theme file `src/themes/<theme_id>.js`:
+```js
+export default {
+  id: "insurance",
+  name: "Linkx Insurance",
+  brand: "insurance",
+  // ... brand colors, logo references, etc.
+};
+```
+
+**Step 2:** Register in `src/themes/index.js`:
+```js
+import insurance from "./insurance.js";
+const themes = { nbe, cdr, insurance };
+```
+
+**Step 3:** Add CSS overrides in stylesheets:
+```css
+[data-brand="insurance"] .login_bg { background: ...; }
+```
+
+**Step 4:** Add build path to `vite.config.js`:
+```js
+const THEME_BUILD_PATHS = {
+  nbe: "linkxDS2026",
+  cdr: "linkxCDR2026",
+  insurance: "linkxINS2026",  // New
+};
+```
+
+**Step 5:** Add build script to `package.json`:
+```json
+"build:insurance": "rm -f linkxINS2026/assets/index-*.js linkxINS2026/assets/index-*.css && VITE_THEME=insurance vite build"
+```
+
+**Step 6:** Configure Nginx to serve `/linkxINS2026/`.
+
+---
+
+## 5. Deployment Workflow
+
+### 5.1 Local Server (`172.27.23.21`)
+
+```bash
+cd /var/www/linkx-frontend
+npm run build        # NBE/BDR → linkxDS2026/
+npm run build:cdr    # CDR → linkxCDR2026/
+```
+
+### 5.2 Remote CDR Server (`172.21.13.73`)
+
+Run these commands **on the remote server**:
+
+```bash
+cd /var/www/linkx-frontend
+
+# 1. Take ownership for git/npm operations:
+sudo chown -R node18:node18 /var/www/linkx-frontend
+
+# 2. Pull latest code:
+git fetch origin main
+git reset --hard origin/main
+
+# 3. Set correct .env for this server:
+cp deploy_pkg_172.21.13.73/.env .env
+
+# 4. Build CDR theme:
+npm run build:cdr
+
+# 5. Hand ownership back to Nginx:
+sudo chown -R www-data:www-data linkxCDR2026
+```
+
+### 5.3 Known Deployment Gotchas
+
+| Issue | Cause | Fix |
+|-------|-------|-----|
+| `Permission denied` on git pull/build | `linkxCDR2026/` owned by `www-data` | `sudo chown -R node18:node18 /var/www/linkx-frontend` before git/npm |
+| `ERR_CERT_AUTHORITY_INVALID` in browser | Built with wrong `.env` (wrong `VITE_API_URL`) | `cp deploy_pkg_172.21.13.73/.env .env` before building |
+| Git `unable to unlink` errors | Same ownership issue | Same fix as above |
+| Old version still showing after deploy | Browser cache or Nginx cache | Hard refresh (`Ctrl+Shift+R`) or restart Nginx |
+
+---
+
+## 6. The Transition (Future)
+
+### 6.1 What Will Happen
+
+When the `incubation/` codebase reaches feature parity with the monolith, it will **fully replace** the current `src/` directory. This is not an incremental migration — it's a complete swap.
 
 ```mermaid
 flowchart TD
-    A["1. Identify feature boundaries<br/>in App.jsx"] --> B["2. Create feature directory<br/>src/features/xxx/"]
-    B --> C["3. Extract components, hooks,<br/>state into feature dir"]
-    C --> D["4. Create thin adapter in App.jsx<br/>that imports from feature"]
-    D --> E["5. Verify both builds pass<br/>npm run build && npm run build:cdr"]
-    E --> F["6. Deploy to staging,<br/>regression test"]
-    F --> G["7. Remove dead code from App.jsx"]
-    G --> H["8. Align with incubation/<br/>patterns if applicable"]
+    A["incubation/ reaches<br/>feature parity"] --> B["Swap: incubation/src/ → src/"]
+    B --> C["Retire old App.jsx monolith"]
+    C --> D["incubation/ directory removed"]
+    D --> E["Production runs on<br/>modular architecture"]
+
+    style A fill:#d1ecf1,stroke:#0dcaf0
+    style E fill:#d4edda,stroke:#28a745
 ```
 
-**Key rule:** At every step, `App.jsx` must remain the single entry point. Features are extracted *out of* the monolith but imported *back into* it through clean interfaces.
+### 6.2 Incubation Architecture (Target State)
 
-### 5.4 Shared State Bridge
+```
+src/                          (after transition)
+├── app/                      # App composition, providers, routing
+├── features/                 # Feature modules
+│   ├── chart/                # Chart windows & visualizations
+│   ├── configuration/        # Config loading/saving, audit logs
+│   ├── graph/                # Graph windows, iframe messaging
+│   ├── settings/             # Profile, admin, user/service accounts
+│   └── source/               # Source windows, batch/realtime, streaming
+├── services/                 # Backend API clients
+│   ├── apiClient.js
+│   ├── authApi.js
+│   ├── sessionApi.js
+│   ├── graphApi.js
+│   ├── configurationApi.js
+│   └── sourceApi.js
+├── workspace/                # Desktop-like shell, window manager
+│   ├── components/
+│   ├── hooks/
+│   └── state/
+├── shared/                   # Reusable UI, hooks, layout, theme
+│   ├── theme/
+│   ├── notifications/
+│   ├── hooks/
+│   ├── components/
+│   └── layout/
+├── auth/                     # Authentication
+├── utils/                    # Utilities
+├── styles/                   # Theme tokens, base styles
+└── main.jsx
+```
 
-The biggest challenge is shared state. Currently, `App.jsx` uses a massive `useState`/`useRef` tree. The migration plan:
+### 6.3 What Carries Over
 
-1. **Extract state slices** — Each feature gets its own context/reducer (like `incubation/src/workspace/state/`).
-2. **Bridge via props** — During migration, `App.jsx` passes state down to extracted feature components via props.
-3. **Migrate to context** — Once a feature is fully extracted, replace prop drilling with context providers (matching incubation patterns).
-4. **Final consolidation** — When all features are extracted, `App.jsx` becomes a thin shell (~200 lines) that composes providers and routes.
+When the transition happens, these production artifacts will need to be ported into the incubation structure:
 
-### 5.5 Convergence with Incubation
+| What | Where it lives now | Notes |
+|------|--------------------|-------|
+| Domain definitions | `AVAILABLE_DOMAINS` + `DOMAIN_SCHEMA_TEMPLATES` in `App.jsx` | Copy into appropriate feature module |
+| Theme files | `src/themes/nbe.js`, `src/themes/cdr.js` | Port to `src/shared/theme/` |
+| Service account UI | Inline in `App.jsx` (~800 lines) | Port to `src/features/settings/` |
+| System principal protection | Inline in `App.jsx` | Port to `src/features/settings/` |
+| Idle timeout hook | `useIdleTimeout` in `App.jsx` | Port to `src/shared/hooks/` |
+| Build config | `vite.config.js`, `package.json` scripts | Carry over as-is |
+| Deployment scripts | `deploy_pkg_172.21.13.73/` | Carry over as-is |
 
-The incubation codebase defines the **target architecture**. As features are extracted from the monolith:
+### 6.4 What We Do NOT Do
 
-1. **Adopt incubation's directory structure** — `src/features/`, `src/services/`, `src/shared/`, `src/workspace/`.
-2. **Adopt incubation's API client pattern** — `services/apiClient.js` with strict payload builders instead of inline `fetch()` calls.
-3. **Adopt incubation's context patterns** — `ThemeContext`, `NotificationContext`, `WorkspaceContext`.
-4. **Port incubation code** — Where incubation already has working implementations (e.g., `WorkspaceFrame`, `WindowManager`), port them into the production tree.
-5. **Retire `incubation/`** — Once production `src/` fully mirrors incubation's structure with full feature parity, the `incubation/` directory becomes obsolete.
-
-> **⚠️ Constraint:** Never modify files inside `incubation/` during this process. It remains a read-only reference architecture.
+- ❌ **Do NOT refactor the monolith into modules** — the incubation codebase already has the modular structure. Refactoring the monolith is wasted effort.
+- ❌ **Do NOT extract features from `App.jsx` into `src/features/`** — that's what incubation is for.
+- ❌ **Do NOT try to make the monolith and incubation share code** — they are separate codebases with separate lifecycles.
+- ❌ **Do NOT modify anything inside `incubation/`** from production work.
 
 ---
 
-## 6. Domain Onboarding Playbook
+## 7. Domain Onboarding Playbook
 
-When a new regulatory domain needs to be added (e.g., "Capital Markets", "Customs", "Tax Authority"):
-
-### 6.1 Checklist
+### Quick checklist for adding a new domain to the current production system:
 
 ```
-□ 1. Create schema file: src/domains/schemas/<domain_key>.js
-      - Define canonicalColumns, defaultFetchColumns, defaultColumnMapping
-      
-□ 2. Register domain: Add entry to src/domains/registry.js
-      - key, label, description, icon, themeId, deploymentTargets
+□ 1. Add entry to AVAILABLE_DOMAINS array in src/App.jsx (~line 3880)
+     → { key, label, icon, description }
 
-□ 3. Theme (if needed):
-      □ a. Create src/themes/<domain_key>.js with brand colors/assets
-      □ b. Add CSS overrides: [data-brand="<domain_key>"] { ... }
-      □ c. Register in src/themes/index.js
-      □ d. Add build path to vite.config.js THEME_BUILD_PATHS
-      □ e. Add build script to package.json
+□ 2. Add entry to DOMAIN_SCHEMA_TEMPLATES in src/App.jsx (~line 3925)
+     → { fetch_columns: [...], column_mapping: {...} }
 
-□ 4. If domain does NOT need its own theme:
-      - Set themeId to an existing theme (e.g., "nbe") in registry
+□ 3. Does this domain need its own branded theme?
+     □ YES:
+       □ a. Create src/themes/<id>.js
+       □ b. Register in src/themes/index.js
+       □ c. Add CSS [data-brand="<id>"] overrides
+       □ d. Add build path to vite.config.js
+       □ e. Add build script to package.json
+       □ f. Configure Nginx location block
+     □ NO:
+       → Done. It uses the default theme.
 
-□ 5. Backend:
-      □ a. Elasticsearch index/mapping for domain data
-      □ b. API endpoints registered for domain routing
-      □ c. Service account template for domain
+□ 4. Backend setup:
+     □ a. Elasticsearch index/mapping
+     □ b. API endpoints
+     □ c. Service account template
 
-□ 6. Build & verify:
-      npm run build && npm run build:cdr  (and any new theme builds)
-      
-□ 7. Deploy to target server(s)
+□ 5. Build & verify:
+     npm run build && npm run build:cdr  (+ any new theme builds)
 
-□ 8. Update this strategy doc's domain table
-```
+□ 6. Deploy to target server(s)
 
-### 6.2 Theme vs. Domain — Decision Framework
-
-```
-Does the domain need its own visual branding (colors, logo, login page)?
-├── YES → Create a new theme + build target
-│         Examples: NBE/BDR (gold), CDR (sky-blue)
-│         Result: New output dir (e.g., linkxINS2026/)
-│
-└── NO  → Reuse an existing theme
-          Examples: Insurance uses NBE theme, Microfinance uses NBE theme
-          Result: No new build target needed
+□ 7. Update domain table in this doc (Section 2.2)
 ```
 
 ---
 
-## 7. Risk Matrix & Mitigations
+## 8. Risk Matrix
 
-| Risk | Impact | Likelihood | Mitigation |
-|------|--------|------------|------------|
-| Feature extraction breaks shared state | 🔴 High | 🟡 Medium | Extract one feature at a time. Keep integration tests. Never extract without a working rollback commit. |
-| Build size increases from domain registry | 🟢 Low | 🟢 Low | Tree-shaking eliminates unused schemas. Each schema file is <1KB. |
-| Runtime API URL breaks in non-Nginx environments | 🟡 Medium | 🟢 Low | Keep `VITE_API_URL` env override as escape hatch. |
-| Incubation patterns don't fit production needs | 🟡 Medium | 🟡 Medium | Incubation is a reference, not a mandate. Adapt patterns as needed. |
-| Git conflicts on multi-server deployment | 🟡 Medium | 🟡 Medium | Use `deploy.sh` script with `git fetch + reset --hard`. Never modify tracked build artifacts on production servers. |
-| Permission errors on shared servers | 🟡 Medium | 🟢 Low (after fix) | `deploy.sh` handles `chown` dance. Add `linkxCDR2026/` and `linkxDS2026/` to `.gitignore` to prevent tracking build artifacts. |
-
----
-
-## 8. Decision Log
-
-| Date | Decision | Rationale | Status |
-|------|----------|-----------|--------|
-| 2026-10-21 | Strategy: Strangler Fig, not Big Bang rewrite | Monolith is in production, serves multiple institutions. Can't afford downtime. | ✅ Approved |
-| 2026-10-21 | Phase 1 first: Domain Registry extraction | Highest value, lowest risk. Unblocks both multi-domain scaling and incubation convergence. | 🔜 Next |
-| 2026-10-21 | Runtime API URL resolution | Eliminates build-per-server requirement and deployment bugs. | 🔜 Planned |
-| 2026-10-21 | Never modify `incubation/` | It's a reference architecture. Production evolves toward it, not the other way around. | ✅ Standing rule |
-| 2026-10-21 | Theme ≠ Domain | Domains can share themes. Not every domain needs a separate build target. | ✅ Approved |
+| Risk | Impact | Mitigation |
+|------|--------|------------|
+| Monolith grows even larger as domains are added | 🟡 Medium | Each domain adds ~20 lines. Manageable until the transition. |
+| Wrong `.env` baked into build | 🔴 High | Always verify `VITE_API_URL` matches target server before building. |
+| Permission errors on remote servers | 🟡 Medium | Follow the `chown` dance in Section 5.2. |
+| Incubation transition loses production features | 🔴 High | Maintain the "What Carries Over" checklist (Section 6.3). Test extensively before swapping. |
+| Browser serves stale cached bundles after deploy | 🟢 Low | Vite generates content-hashed filenames. Hard refresh if needed. |
 
 ---
 
-## Appendix A — Current Build & Deploy Commands
+## 9. Decision Log
+
+| Date | Decision | Rationale |
+|------|----------|-----------|
+| 2026-10-21 | **Full replacement, not incremental migration** | The incubation codebase is a clean rewrite. Incrementally extracting features from the monolith into it would create two half-working systems. Better to let incubation mature independently, then swap. |
+| 2026-10-21 | **Never touch `incubation/`** | It's a separate development effort. Production work should not interfere with it. |
+| 2026-10-21 | **Minimal changes to monolith** | Don't over-engineer code that will be thrown away. Add domains/features with surgical edits. |
+| 2026-10-21 | **Theme ≠ Domain** | Domains can share themes. Not every domain needs its own branded build. |
+| 2026-10-21 | **Each server needs its own `.env` before building** | `VITE_API_URL` is baked at compile time. This is a known limitation of the current system that the incubation codebase should fix with runtime resolution. |
+
+---
+
+## Appendix A — Build & Deploy Commands
 
 ```bash
 # Development
-npm run dev          # Start dev server (NBE theme)
-npm run dev:cdr      # Start dev server (CDR theme)
+npm run dev          # Dev server (NBE theme)
+npm run dev:cdr      # Dev server (CDR theme)
 
-# Production builds (on build server)
-npm run build        # Build NBE/BDR → linkxDS2026/
-npm run build:cdr    # Build CDR → linkxCDR2026/
+# Production builds
+npm run build        # NBE/BDR → linkxDS2026/
+npm run build:cdr    # CDR → linkxCDR2026/
 
-# Deploy to remote CDR server (172.21.13.73)
-# Run ON the remote server:
+# Remote CDR deploy (run ON 172.21.13.73)
 sudo chown -R node18:node18 /var/www/linkx-frontend
 cd /var/www/linkx-frontend
-git fetch origin main
-git reset --hard origin/main
+git fetch origin main && git reset --hard origin/main
+cp deploy_pkg_172.21.13.73/.env .env
 npm run build:cdr
 sudo chown -R www-data:www-data linkxCDR2026
 ```
@@ -505,16 +398,15 @@ sudo chown -R www-data:www-data linkxCDR2026
 
 | File | Purpose |
 |------|---------|
-| `src/App.jsx` | Production monolith (18,010 lines) |
+| `src/App.jsx` | Production monolith (~18,010 lines) — **temporary, will be replaced** |
 | `src/themes/index.js` | Theme resolver |
 | `src/themes/nbe.js` | NBE/BDR theme tokens |
 | `src/themes/cdr.js` | CDR theme tokens |
-| `vite.config.js` | Build configuration, theme→output mapping |
+| `vite.config.js` | Build config, theme→output directory mapping |
 | `package.json` | Build scripts |
-| `incubation/src/` | Reference modular architecture |
-| `docs/handoff_multi_theme_system.md` | Theme system handoff |
-| `docs/handoff_service_accounts_and_multi_domain.md` | Service accounts & deployment handoff |
+| `incubation/src/` | Future replacement architecture — **do not touch** |
+| `deploy_pkg_172.21.13.73/` | Remote CDR server deployment config |
 
 ---
 
-*This is a living document. Update it as phases are completed and new domains are onboarded.*
+*This is a living document. Update it as new domains are onboarded and the incubation transition progresses.*
