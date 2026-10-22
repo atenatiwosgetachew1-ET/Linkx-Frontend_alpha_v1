@@ -1,8 +1,8 @@
 # Linkx Service Accounts, Multi-Domain & System Principal Protection — Handoff Document
 
-**Document Version:** 2.0  
-**Date:** 2026-10-21  
-**Scope:** Service Account Management, Custom Storage Schemas, Protected System Daemons, Multi-Domain Routing, CDR Telecom Alignment & Deployment
+**Document Version:** 2.2  
+**Date:** 2026-10-22  
+**Scope:** Service Account Management, Custom Storage Schemas, Protected System Daemons, Multi-Domain Routing, CDR Telecom Alignment, Iframe Semantic Synchronization, Engine Tracker Alignment & Deployment
 
 ---
 
@@ -104,6 +104,46 @@ Replaces banking AML thresholds with **18 telecom parameters** across 4 fieldset
 * Added **`⚡ Load Telecom Emergency Presets`** button to quickly register emergency service hotlines (`911`, `994`, `991`, `980`) with `Pass Through = true`.
 * Added telecom datalist options: `Emergency / Service Hotlines`, `SIM_BOX`, `WANGIRI`, `HIGH_RISK`.
 * Telecom table headers: `Subscriber / Contact Name`, `Identifier (MSISDN)`, `Phone / Contact Number`, `Telecom Classification`, `Pass Through (Suppress Alerts)`.
+
+#### 5. Iframe & Embedded Graph Alignment (`public/temp_placeholders/`)
+* **Semantic Legend Card (`graphs_basic.html`)**:
+  * Solid Arrow (`->`): `Observed call / communication session` (CDR) vs `Observed financial transfer` (BDR).
+  * Dotted Arrow (`-->`): `Time-ordered call sequence` (CDR) vs `Time-ordered sequence (not a transfer)` (BDR).
+  * Dashed Line (`---`): `Analytical grouping (shared tower / device)` (CDR) vs `Analytical grouping (shared property)` (BDR).
+  * Fine Amber Line: `Node flag (property of call record)` (CDR) vs `Node flag (property of transaction)` (BDR).
+* **Edge Context Menu (`graphs_basic.html`)**: Right-click info displays `Call Session Flow: Yes/No` (CDR) vs `Financial Flow: Yes/No` (BDR).
+* **Graph Control Script (`graphs_adjuster.js`)**:
+  * Added dynamic domain detection (`isCdrDomain()`, `getGraphBrand()`) inspecting `?brand=cdr`, pathnames, and `theme_brand` messages.
+  * In `resolveEdgeSemantic(edge)`: Generates telecom-specific edge tooltips.
+  * In `generateEdgeTitleSafely`: Replaces `Hub Account` with `Hub Contact / MSISDN` in CDR mode.
+  * In `downloadGraphReport`: Metric label switches from `Financial Bonus` to `Volume Bonus` in CDR mode.
+* **Source Placeholder (`source_placeholder.html`)**:
+  * Direct-source slide text dynamically updates to `telecom CDR data streams` in CDR mode (vs `financial data streams` in BDR mode).
+
+#### 6. Engine Progress Tracker & Smart Vigilance Alignment (`SmartVigilancePanel`)
+* **Progress Tracker Fieldset**:
+  * Legend dynamically adapts: `CDR Ingestion Progress Tracker` (CDR) vs `Progress Tracker` (BDR).
+  * Feed Name displays `Data Stream: [feed]` (CDR) vs `Feed Name: [feed]` (BDR).
+  * Stream names automatically transform raw backend tokens (e.g. `bdr_transactions` ➔ `CDR Calls / CDRs`).
+  * Ingestion window timestamp displays `Last Ingestion Window End Time` (CDR) vs `Last Window End` (BDR).
+  * Pause/Resume toggle tooltips: `Pause/Resume CDR Engine` (CDR) vs `Pause/Resume Engine` (BDR).
+* **Total Digested Counter**:
+  * Legend: `Total Digested Calls & Sessions` (CDR) vs `Total Digested Counter` (BDR).
+  * Counter subtext: `{totalAnalyzed} calls / sessions analyzed` (CDR) vs `records analyzed` (BDR).
+  * Action button: `Re-Analyze CDR History` (CDR) vs `Re-Analyze History` (BDR).
+* **Rewind Modal**:
+  * Title: `Re-Analyze History (Rewind CDR Stream)` (CDR) vs `Re-Analyze History (Rewind)` (BDR).
+  * Warning text: `... force the engine to re-process all call records (CDRs)` (CDR) vs `... force the engine to re-process all transactions` (BDR).
+* **Audit Log Table & Summaries**:
+  * Legend: `CDR Stream Audit Log` (CDR) vs `Audit Log` (BDR).
+  * Column header: `Calls (CDRs)` (CDR) vs `Records` (BDR).
+  * Empty run notification: `This audit run processed 0 call records, so there are no findings to display` (CDR).
+  * PDF summary export: `Total Calls / Sessions Analyzed` with `Calls (CDRs)` table columns.
+
+#### 7. Role & Schema Descriptions Alignment
+* **Role Editor (`RoleEditor`)**: Viewer role description dynamically displays `Read-only access to call records and dashboards` (CDR) vs `Read-only access to transactions and dashboards` (BDR).
+* **Domain Schema Templates**: Telecom template description set to `Telecommunications subscriber and voice/SMS call detail records (CDR) schema`.
+* **Investigation Reports**: Evidence panel replaces dollar icon (`$`) and label `Financial Bonus` with duration/clock icon and `Volume Bonus` in CDR mode. Generated PDF tables use `Leading Entity (MSISDN / ID)`.
 
 ---
 

@@ -1736,7 +1736,7 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
                             className="subinput config_trusted_list_input"
                             value={entry.value || ""}
                             onChange={(e) => handleColumnMappingChange(index, "value", e.target.value)}
-                            placeholder="e.g. TRANSACTIONDATE"
+                            placeholder={isCdrDomain ? "e.g. START_TIME" : "e.g. TRANSACTIONDATE"}
                           />
                         </td>
                         <td className="config_trusted_list_actions">
@@ -4018,7 +4018,7 @@ const AVAILABLE_DOMAINS = [
     key: "telecom",
     label: "Telecom",
     tag: "Carrier Networks",
-    description: "Telecommunications subscriber and voice/SMS transaction schema",
+    description: "Telecommunications subscriber and voice/SMS call detail records (CDR) schema",
   },
   {
     key: "fintech",
@@ -4726,7 +4726,7 @@ function RoleEditor({ roles = [], onChange, availableRoles = [] }) {
     superuser: "Full system administration and user management",
     admin: "Operations, service accounts, and data pipelines",
     analyst: "Search, analytics queries, and report generation",
-    viewer: "Read-only access to transactions and dashboards",
+    viewer: isCdrDomain ? "Read-only access to call records and dashboards" : "Read-only access to transactions and dashboards",
   };
 
   return (
@@ -6294,10 +6294,16 @@ function SmartVigilancePanel({ apiFetch, toggleAction, onNotice, canAccess }) {
       doc.setFont("helvetica", "normal");
       
       let y = 55;
-      doc.text(`Feed Name: ${checkpoint.feed_name || 'N/A'}`, 14, y);
+      const isCdr = isCdrDomain;
+      const rawFeedName = checkpoint.feed_name;
+      const feedName = !rawFeedName 
+        ? (isCdr ? "CDR Voice/SMS Stream" : "BDR Transaction Stream")
+        : (isCdr ? String(rawFeedName).replace(/transactions?/gi, "Calls / CDRs").replace(/bdr/gi, "CDR") : rawFeedName);
+
+      doc.text(`Feed Name: ${feedName}`, 14, y);
       doc.text(`Last Window End: ${checkpoint.last_window_end || 'N/A'}`, 110, y);
       y += 8;
-      doc.text(`Total Records Analyzed: ${checkpoint.total_graph_analyzed || 0}`, 14, y);
+      doc.text(`Total ${isCdr ? "Calls / Sessions" : "Records"} Analyzed: ${checkpoint.total_graph_analyzed || 0}`, 14, y);
       doc.text(`Status: ${(checkpoint.status || 'inactive').toUpperCase()}`, 110, y);
       y += 15;
       
@@ -6321,7 +6327,7 @@ function SmartVigilancePanel({ apiFetch, toggleAction, onNotice, canAccess }) {
       
       autoTable(doc, {
         startY: y,
-        head: [['Run ID', 'Window', 'Duration (ms)', 'Records', 'Status']],
+        head: [['Run ID', 'Window', 'Duration (ms)', isCdr ? 'Calls (CDRs)' : 'Records', 'Status']],
         body: successfulRuns.map(r => [r.run_id, `${r.window_start} - ${r.window_end}`, r.duration_ms, r.records_count, r.status]),
         theme: 'striped',
         headStyles: { fillColor: headColor, textColor: 255, fontSize: 10 },
@@ -6347,7 +6353,7 @@ function SmartVigilancePanel({ apiFetch, toggleAction, onNotice, canAccess }) {
         
         autoTable(doc, {
           startY: y,
-          head: [['Run ID', 'Window', 'Duration (ms)', 'Records', 'Status']],
+          head: [['Run ID', 'Window', 'Duration (ms)', isCdr ? 'Calls (CDRs)' : 'Records', 'Status']],
           body: failedRuns.map(r => [r.run_id, `${r.window_start} - ${r.window_end}`, r.duration_ms, r.records_count, r.status]),
           theme: 'striped',
           headStyles: { fillColor: [200, 50, 50], textColor: 255, fontSize: 10 },
@@ -6364,8 +6370,19 @@ function SmartVigilancePanel({ apiFetch, toggleAction, onNotice, canAccess }) {
     }
   };
 
+  const isCdr = isCdrDomain;
   const { checkpoint, recent_runs } = data;
-  const feedName = checkpoint.feed_name || "Unknown Feed";
+  const rawFeedName = checkpoint.feed_name;
+  let feedName;
+  if (!rawFeedName) {
+    feedName = isCdr ? "CDR Voice/SMS Stream" : "BDR Transaction Stream";
+  } else if (isCdr) {
+    feedName = String(rawFeedName)
+      .replace(/transactions?/gi, "Calls / CDRs")
+      .replace(/bdr/gi, "CDR");
+  } else {
+    feedName = rawFeedName;
+  }
   const lastWindowEnd = checkpoint.last_window_end || "N/A";
   const totalAnalyzed = (checkpoint.total_graph_analyzed || 0).toLocaleString();
   const status = checkpoint.status || "inactive";
@@ -6405,9 +6422,9 @@ function SmartVigilancePanel({ apiFetch, toggleAction, onNotice, canAccess }) {
             background: "rgba(255, 255, 255, 1)", color: "#333", padding: "20px", borderRadius: "8px", 
             width: "400px", maxWidth: "90%", boxShadow: "0 4px 12px rgba(0,0,0,0.5)", marginTop: "-15vh"
           }}>
-            <h3 style={{ marginTop: 0, color: "#e74c3c" }}>Re-Analyze History (Rewind)</h3>
+            <h3 style={{ marginTop: 0, color: "#e74c3c" }}>{isCdr ? "Re-Analyze History (Rewind CDR Stream)" : "Re-Analyze History (Rewind)"}</h3>
             <div style={{ background: "rgba(231, 76, 60, 0.1)", border: "1px solid #e74c3c", padding: "10px", borderRadius: "4px", marginBottom: "15px", fontSize: "13px", color: "#333" }}>
-              <strong>Warning:</strong> Rewinding the clock will clear the audit log after the selected date and force the engine to re-process all transactions. This may cause high CPU usage.
+              <strong>Warning:</strong> Rewinding the clock will clear the audit log after the selected date and force the engine to re-process all {isCdr ? "call records (CDRs)" : "transactions"}. This may cause high CPU usage.
             </div>
             <div style={{ display: "block" }}>
               <label style={{ display: "block", marginBottom: "5px", fontSize: "14px" }}>Select Date & Time</label>
@@ -6431,11 +6448,11 @@ function SmartVigilancePanel({ apiFetch, toggleAction, onNotice, canAccess }) {
       )}
 
       <fieldset className="settings_admin_panel">
-        <legend>Progress Tracker</legend>
+        <legend>{isCdr ? "CDR Ingestion Progress Tracker" : "Progress Tracker"}</legend>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div>
-            <h4 style={{ margin: "0 0 5px 0" }}>Feed Name: {feedName}</h4>
-            <p style={{ margin: 0, opacity: 0.8 }}>Last Window End: {lastWindowEnd}</p>
+            <h4 style={{ margin: "0 0 5px 0" }}>{isCdr ? "Data Stream" : "Feed Name"}: {feedName}</h4>
+            <p style={{ margin: 0, opacity: 0.8 }}>{isCdr ? "Last Window End Time" : "Last Window End"}: {lastWindowEnd}</p>
           </div>
           <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
             <span style={{ 
@@ -6450,7 +6467,7 @@ function SmartVigilancePanel({ apiFetch, toggleAction, onNotice, canAccess }) {
             {canAccess && canAccess("users:manage") && (
               <div 
                 onClick={() => { if (!togglingPause) handleTogglePause(!checkpoint.is_paused); }}
-                title={checkpoint.is_paused ? "Resume Engine" : "Pause Engine"}
+                title={checkpoint.is_paused ? (isCdr ? "Resume CDR Engine" : "Resume Engine") : (isCdr ? "Pause CDR Engine" : "Pause Engine")}
                 style={{
                   display: "flex", alignItems: "center", justifyContent: "space-between",
                   width: "44px", height: "22px", borderRadius: "11px", 
@@ -6476,10 +6493,10 @@ function SmartVigilancePanel({ apiFetch, toggleAction, onNotice, canAccess }) {
       </fieldset>
 
       <fieldset className="settings_admin_panel">
-        <legend>Total Digested Counter</legend>
+        <legend>{isCdr ? "Total Digested Calls & Sessions" : "Total Digested Counter"}</legend>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div style={{ fontSize: "24px", fontWeight: "bold" }}>
-            {totalAnalyzed} <span style={{ fontSize: "14px", fontWeight: "normal", opacity: 0.8 }}>records analyzed</span>
+            {totalAnalyzed} <span style={{ fontSize: "14px", fontWeight: "normal", opacity: 0.8 }}>{isCdr ? "calls / sessions analyzed" : "records analyzed"}</span>
           </div>
           <div style={{ display: "flex", gap: "10px" }}>
             {canAccess && canAccess("users:manage") && (
@@ -6489,7 +6506,7 @@ function SmartVigilancePanel({ apiFetch, toggleAction, onNotice, canAccess }) {
                 style={{ opacity: 0.9, backgroundColor: "#e74c3c" }}
                 onClick={() => setShowRewindModal(true)}
               >
-                Re-Analyze History
+                {isCdr ? "Re-Analyze CDR History" : "Re-Analyze History"}
               </button>
             )}
             <button 
@@ -6520,7 +6537,7 @@ function SmartVigilancePanel({ apiFetch, toggleAction, onNotice, canAccess }) {
       </fieldset>
 
       <fieldset className="settings_admin_panel" style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
-        <legend>Audit Log</legend>
+        <legend>{isCdr ? "CDR Stream Audit Log" : "Audit Log"}</legend>
         <div className="cleanup_audit_table_wrap" style={{ flex: 1, minHeight: 0, overflowY: "auto", maxHeight: "none" }}>
           <table className="cleanup_audit_table" cellSpacing="0" cellPadding="0" style={{ width: "100%", tableLayout: "fixed" }}>
             <colgroup>
@@ -6536,7 +6553,7 @@ function SmartVigilancePanel({ apiFetch, toggleAction, onNotice, canAccess }) {
                 <th>Run ID</th>
                 <th>Window</th>
                 <th>Duration (ms)</th>
-                <th>Records</th>
+                <th>{isCdr ? "Calls (CDRs)" : "Records"}</th>
                 <th>Status</th>
                 <th>Action</th>
               </tr>
@@ -6564,10 +6581,13 @@ function SmartVigilancePanel({ apiFetch, toggleAction, onNotice, canAccess }) {
 
                     // Short-circuit: if the run explicitly processed 0 records, there are definitely no findings.
                     if (Number(run.records_count) === 0) {
+                      const zeroMsg = isCdr 
+                        ? "This audit run processed 0 call records, so there are no findings to display."
+                        : "This audit run processed 0 records, so there are no findings to display.";
                       if (onNotice) {
-                        onNotice({ id: Date.now(), title: "No Records", message: "This audit run processed 0 records, so there are no findings to display.", level: "warning" });
+                        onNotice({ id: Date.now(), title: "No Records", message: zeroMsg, level: "warning" });
                       } else {
-                        alert("This audit run processed 0 records, so there are no findings to display.");
+                        alert(zeroMsg);
                       }
                       return;
                     }
