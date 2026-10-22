@@ -48,6 +48,8 @@
   --chrome-bg-alt: #2e465d;
   --sidebar-bg: #19212e;
   --logo-gradient: linear-gradient(90deg, #ae794f, #7f4f23);
+  --brand-gradient-start: #ae794f;
+  --brand-gradient-end: #7f4f23;
   --logo-circle-bg: #925e35;
   --login-shell-bg: #041327;
   --login-overlay: linear-gradient(#050b11, #081019cc, #0a1622);
@@ -139,6 +141,8 @@
   --brand-badge-gradient: linear-gradient(90deg, #4aafe6, #1b6ca8);
   --brand-badge-stop-1: #4aafe6;
   --brand-badge-stop-2: #1b6ca8;
+  --brand-gradient-start: #4aafe6;
+  --brand-gradient-end: #1b6ca8;
 }
 
 [data-brand="cdr"][data-theme="dark"] {
@@ -161,6 +165,8 @@
   --brand-badge-gradient: linear-gradient(90deg, #4aafe6, #1b6ca8);
   --brand-badge-stop-1: #4aafe6;
   --brand-badge-stop-2: #1b6ca8;
+  --brand-gradient-start: #4aafe6;
+  --brand-gradient-end: #1b6ca8;
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -10013,6 +10019,29 @@ button.settings_textinput:active {
 .workspace_lock_scene_overlay{
   display: none;
 }
+.workspace_lock_light_plane {
+  position: absolute;
+  inset: 0;
+  background: var(--workspace-light-bg);
+  z-index: 1;
+  pointer-events: none;
+}
+.workspace_lock_badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  margin-bottom: 14px;
+  background: linear-gradient(135deg, #ae794f, #7f4f23);
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(127, 79, 35, 0.3);
+}
+.workspace_lock_badge svg {
+  width: 22px;
+  height: 22px;
+}
 .workspace_lock_panel{
   position: relative;
   z-index: 2;
@@ -10077,9 +10106,32 @@ button.settings_textinput:active {
   opacity: 0.62;
   cursor: wait;
 }
+
 [data-theme="dark"] .workspace_lock_overlay{
   background: rgba(7, 16, 23, 0.72);
   backdrop-filter: blur(14px) saturate(110%);
+}
+[data-theme="dark"] .workspace_lock_media {
+  display: block;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+  z-index: 0;
+}
+[data-theme="dark"] .workspace_lock_scene_overlay {
+  display: block;
+  position: absolute;
+  inset: 0;
+  background: var(--login-overlay, linear-gradient(#050b11, #081019cc, #0a1622));
+  z-index: 1;
+  pointer-events: none;
+}
+[data-theme="dark"] .workspace_lock_badge {
+  background: linear-gradient(135deg, #ae794f, #5a3819);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
 }
 [data-theme="dark"] .workspace_lock_panel{
   background: rgba(10, 23, 33, 0.86);
@@ -10107,6 +10159,142 @@ button.settings_textinput:active {
 [data-theme="dark"] .workspace_lock_actions button:hover:not(:disabled){
   background: rgb(190 226 236 / 26%);
   border-color: rgb(150 192 200 / 68%);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   CDR Brand — Workspace Lockscreen Palette (Sky-Blue & Navy)
+   ═══════════════════════════════════════════════════════════════ */
+
+[data-brand="cdr"] .workspace_lock_overlay,
+[data-brand="cdr"][data-theme="light"] .workspace_lock_overlay {
+  background: rgba(230, 241, 252, 0.82);
+  backdrop-filter: blur(14px) saturate(110%);
+}
+
+[data-brand="cdr"] .workspace_lock_panel,
+[data-brand="cdr"][data-theme="light"] .workspace_lock_panel {
+  border: 1px solid rgba(74, 175, 230, 0.45);
+  background: linear-gradient(180deg, rgba(246, 251, 255, 0.98), rgba(232, 244, 253, 0.95));
+  color: #0f3b5e;
+  box-shadow: 0 18px 42px rgba(15, 59, 94, 0.16);
+}
+
+[data-brand="cdr"] .workspace_lock_panel h2,
+[data-brand="cdr"][data-theme="light"] .workspace_lock_panel h2 {
+  color: #0f3b5e;
+}
+
+[data-brand="cdr"] .workspace_lock_panel p,
+[data-brand="cdr"][data-theme="light"] .workspace_lock_panel p {
+  color: #2b5577;
+}
+
+[data-brand="cdr"] .workspace_lock_panel .workspace_lock_hint,
+[data-brand="cdr"][data-theme="light"] .workspace_lock_panel .workspace_lock_hint {
+  color: #1b6ca8;
+}
+
+[data-brand="cdr"] .workspace_lock_badge,
+[data-brand="cdr"][data-theme="light"] .workspace_lock_badge {
+  background: linear-gradient(135deg, #4aafe6, #1b6ca8);
+  color: #ffffff;
+  box-shadow: 0 4px 14px rgba(27, 108, 168, 0.35);
+}
+
+[data-brand="cdr"] .workspace_lock_actions button,
+[data-brand="cdr"][data-theme="light"] .workspace_lock_actions button {
+  background: linear-gradient(135deg, #1b6ca8, #0f3b5e);
+  border: 1px solid rgba(74, 175, 230, 0.55);
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(27, 108, 168, 0.22);
+}
+
+[data-brand="cdr"] .workspace_lock_actions button:hover:not(:disabled),
+[data-brand="cdr"][data-theme="light"] .workspace_lock_actions button:hover:not(:disabled) {
+  background: linear-gradient(135deg, #2482c4, #154c79);
+  border-color: rgba(74, 175, 230, 0.85);
+  box-shadow: 0 4px 12px rgba(27, 108, 168, 0.32);
+}
+
+[data-brand="cdr"] .workspace_lock_actions button:last-child,
+[data-brand="cdr"][data-theme="light"] .workspace_lock_actions button:last-child {
+  background: rgba(222, 238, 250, 0.88);
+  border: 1px solid rgba(74, 175, 230, 0.35);
+  color: #0f3b5e;
+  box-shadow: none;
+}
+
+[data-brand="cdr"] .workspace_lock_actions button:last-child:hover:not(:disabled),
+[data-brand="cdr"][data-theme="light"] .workspace_lock_actions button:last-child:hover:not(:disabled) {
+  background: rgba(208, 232, 248, 0.96);
+  border-color: rgba(74, 175, 230, 0.60);
+  color: #09263d;
+}
+
+/* Dark mode CDR lock screen */
+[data-brand="cdr"][data-theme="dark"] .workspace_lock_overlay {
+  background: rgba(6, 24, 44, 0.82);
+  backdrop-filter: blur(16px) saturate(120%);
+}
+
+[data-brand="cdr"][data-theme="dark"] .workspace_lock_panel {
+  background: rgba(10, 28, 48, 0.90);
+  border: 1px solid rgba(74, 175, 230, 0.38);
+  color: #e3f2fd;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5), 0 0 30px rgba(27, 108, 168, 0.20);
+}
+
+[data-brand="cdr"][data-theme="dark"] .workspace_lock_panel h2 {
+  color: #e3f2fd;
+}
+
+[data-brand="cdr"][data-theme="dark"] .workspace_lock_panel p {
+  color: #b0d2ec;
+}
+
+[data-brand="cdr"][data-theme="dark"] .workspace_lock_panel .workspace_lock_hint {
+  color: #7ec2ed;
+}
+
+[data-brand="cdr"][data-theme="dark"] .workspace_lock_badge {
+  background: linear-gradient(135deg, #4aafe6, #1b6ca8);
+  color: #ffffff;
+  box-shadow: 0 4px 18px rgba(74, 175, 230, 0.40);
+}
+
+[data-brand="cdr"][data-theme="dark"] .workspace_lock_actions button {
+  background: linear-gradient(135deg, #1b6ca8, #134e79);
+  border: 1px solid rgba(74, 175, 230, 0.60);
+  color: #ffffff;
+  box-shadow: 0 2px 12px rgba(27, 108, 168, 0.40);
+}
+
+[data-brand="cdr"][data-theme="dark"] .workspace_lock_actions button:hover:not(:disabled) {
+  background: linear-gradient(135deg, #2880c2, #185c8e);
+  border-color: rgba(74, 175, 230, 0.85);
+  box-shadow: 0 4px 16px rgba(27, 108, 168, 0.50);
+}
+
+[data-brand="cdr"][data-theme="dark"] .workspace_lock_actions button:last-child {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(74, 175, 230, 0.30);
+  color: #b0d2ec;
+  box-shadow: none;
+}
+
+[data-brand="cdr"][data-theme="dark"] .workspace_lock_actions button:last-child:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(74, 175, 230, 0.55);
+  color: #e3f2fd;
+}
+
+[data-brand="cdr"] .linkx_workspace_layer--locked #configurations_container::after,
+[data-brand="cdr"] .linkx_workspace_layer--locked .settings_panel::after,
+[data-brand="cdr"] .linkx_workspace_layer--locked [id^="window_graph_"]::after,
+[data-brand="cdr"] .linkx_workspace_layer--locked [id^="window_chart_"]::after {
+  background: rgba(6, 24, 44, 0.78);
+  color: #7ec2ed;
+  border: 1px solid rgba(74, 175, 230, 0.25);
 }
 
 .linkx_workspace_layer--locked #configurations_container,

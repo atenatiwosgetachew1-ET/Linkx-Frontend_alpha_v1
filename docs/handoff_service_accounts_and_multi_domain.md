@@ -145,6 +145,13 @@ Replaces banking AML thresholds with **18 telecom parameters** across 4 fieldset
 * **Domain Schema Templates**: Telecom template description set to `Telecommunications subscriber and voice/SMS call detail records (CDR) schema`.
 * **Investigation Reports**: Evidence panel replaces dollar icon (`$`) and label `Financial Bonus` with duration/clock icon and `Volume Bonus` in CDR mode. Generated PDF tables use `Leading Entity (MSISDN / ID)`.
 
+#### 8. Workspace Lockscreen Styling Alignment (`WorkspaceLockOverlay`)
+* **Light Mode Overlay**: Replaced the BDR warm-gold/cream backdrop with a crisp sky-blue and slate blur overlay (`rgba(230, 241, 252, 0.82)`), sky-blue border (`rgba(74, 175, 230, 0.45)`), deep-navy typography (`#0f3b5e`, `#2b5577`), and sky-blue hint styling (`#1b6ca8`).
+* **Dark Mode Overlay**: Styled with a deep midnight-navy acrylic overlay (`rgba(6, 24, 44, 0.82)`), cyan glow border, and sky-blue action accents.
+* **Lock Badge & Icons**: Added `.workspace_lock_badge` styled with the active theme gradient (`linear-gradient(135deg, #4aafe6, #1b6ca8)` for CDR vs gold for BDR). Configured `--brand-gradient-start` and `--brand-gradient-end` tokens for dynamic SVG rendering in `AdminLockIcon`.
+* **Action Buttons**: Primary unlock button displays sky-blue gradient (`#1b6ca8` ➔ `#0f3b5e`) with glowing cyan hover; secondary logout button uses frosted sky-blue chrome.
+* **Locked Layer Watermark**: `.linkx_workspace_layer--locked` background watermark adapts to dark telecom navy with cyan lettering.
+
 ---
 
 ### C. Protected System Principal Security (xVigilance & Platform Daemons)
