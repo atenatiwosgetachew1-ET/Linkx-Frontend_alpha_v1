@@ -50,9 +50,31 @@ window.isTrustedIframeParentEvent = (event) => {
   return String(event?.origin || "") === LINKX_PARENT_ORIGIN;
 };
 
+window.getGraphBrand = function() {
+  try {
+    const brandAttr = document.documentElement.getAttribute("data-brand");
+    if (brandAttr) return brandAttr;
+    const direct = new URLSearchParams(window.location.search).get("brand");
+    if (direct) return direct.toLowerCase();
+    if (window.location.pathname.toLowerCase().includes("cdr")) return "cdr";
+  } catch (_err) {}
+  return "nbe";
+};
+
+window.isCdrDomain = function() {
+  return window.getGraphBrand() === "cdr";
+};
+
+try {
+  const initBrand = window.getGraphBrand();
+  if (initBrand) {
+    document.documentElement.setAttribute("data-brand", initBrand);
+  }
+} catch (_) {}
+
 window.addEventListener("message", (event) => {
   if (typeof window.isTrustedIframeParentEvent === "function" && !window.isTrustedIframeParentEvent(event)) return;
-  const { action, payload } = event.data;
+  const { action, payload } = event.data || {};
   if (action === "theme_mode") {
     const nextMode = payload === "dark" ? "dark" : "light";
     document.documentElement.setAttribute("data-theme", nextMode);
@@ -60,6 +82,17 @@ window.addEventListener("message", (event) => {
       renderVisibleGraphBatch();
     } else if (typeof renderVisibleGraph === "function") {
       renderVisibleGraph();
+    }
+    return;
+  }
+  if (action === "theme_brand" || action === "brand_mode") {
+    const nextBrand = String(payload || "").toLowerCase() === "cdr" ? "cdr" : "nbe";
+    document.documentElement.setAttribute("data-brand", nextBrand);
+    if (typeof window.updateGraphDomainTerminology === "function") {
+      window.updateGraphDomainTerminology();
+    }
+    if (typeof updateAllEdgeTitles === "function") {
+      updateAllEdgeTitles();
     }
     return;
   }
@@ -2865,6 +2898,7 @@ function rebuildAdjacencyFromFullGraph() {
 function resolveEdgeSemantic(edge) {
   if (!edge) return null;
 
+  const isCdr = typeof window.isCdrDomain === "function" ? window.isCdrDomain() : false;
   const semantic = edge.edge_semantic;
   const financialFlow = edge.financial_flow;
   const directedDisplay = edge.directed_display;
@@ -2882,18 +2916,22 @@ function resolveEdgeSemantic(edge) {
       width: 0.5,
       color: "#f39c12", // warning amber
       _semanticType: "node_flag",
-      _semanticTooltip: "Node flag — property of this transaction"
+      _semanticTooltip: isCdr
+        ? "Node flag — property of this call record"
+        : "Node flag — property of this transaction"
     };
   }
 
-  // OBSERVED_FLOW — real money movement (solid arrow)
+  // OBSERVED_FLOW — real money movement (solid arrow) / call session flow
   if (financialFlow === true && directedDisplay === true) {
     return {
       arrows: "to",
       dashes: false,
       width: 1.2,
       _semanticType: "observed_flow",
-      _semanticTooltip: "Observed financial transfer"
+      _semanticTooltip: isCdr
+        ? "Observed call / communication session"
+        : "Observed financial transfer"
     };
   }
 
@@ -2904,7 +2942,9 @@ function resolveEdgeSemantic(edge) {
       dashes: [5, 5],
       width: 0.85,
       _semanticType: "temporal_sequence",
-      _semanticTooltip: "Time-ordered sequence — arrow shows order, not money flow"
+      _semanticTooltip: isCdr
+        ? "Time-ordered call sequence"
+        : "Time-ordered sequence — arrow shows order, not money flow"
     };
   }
 
@@ -2915,7 +2955,9 @@ function resolveEdgeSemantic(edge) {
       dashes: [8, 4],
       width: 0.7,
       _semanticType: "grouping",
-      _semanticTooltip: "Analytical grouping — shared property (not a transfer)"
+      _semanticTooltip: isCdr
+        ? "Analytical grouping — shared tower / device"
+        : "Analytical grouping — shared property (not a transfer)"
     };
   }
 
@@ -7616,10 +7658,14 @@ async function downloadGraphReport(report) {
     
     const evidence = info.score_evidence;
     if (evidence && typeof evidence === 'object') {
+       const isCdr = typeof window.isCdrDomain === "function" ? window.isCdrDomain() : false;
        const evListItems = [];
        if (evidence.base_score_applied) evListItems.push({ label: "Base Score", value: evidence.base_score_applied });
        if (evidence.node_count_bonus) evListItems.push({ label: "Node Count Bonus", value: evidence.node_count_bonus });
-       if (evidence.financial_bonus) evListItems.push({ label: "Financial Bonus", value: evidence.financial_bonus });
+       if (evidence.financial_bonus) evListItems.push({ 
+         label: isCdr ? "Volume Bonus" : "Financial Bonus", 
+         value: evidence.financial_bonus 
+       });
        if (evidence.config_version) evListItems.push({ label: "Config Version", value: evidence.config_version });
        
        drawList(
@@ -8278,7 +8324,9 @@ function generateEdgeTitleSafely(edge) {
       tooltip += `\nReason: ${merged.reason}`;
     }
     if (merged.hub_account) {
-      tooltip += `\nHub Account: ${merged.hub_account}`;
+      const isCdr = typeof window.isCdrDomain === "function" ? window.isCdrDomain() : false;
+      const hubLabel = isCdr ? "Hub Contact / MSISDN" : "Hub Account";
+      tooltip += `\n${hubLabel}: ${merged.hub_account}`;
     }
 
     return tooltip;

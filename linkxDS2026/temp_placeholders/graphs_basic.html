@@ -1211,21 +1211,38 @@
 									<div style="font-weight: bold; margin-bottom: 4px; font-size: 12px;">Relationship Types</div>
 									<div style="display: flex; align-items: center; gap: 8px;">
 										<svg width="40" height="10"><path d="M0,5 L34,5" stroke="currentColor" stroke-width="1.5"/><polygon points="34,2 40,5 34,8" fill="currentColor"/></svg>
-										<span>Observed financial transfer</span>
+										<span id="legend-observed-flow">Observed financial transfer</span>
 									</div>
 									<div style="display: flex; align-items: center; gap: 8px; opacity: 0.85;">
 										<svg width="40" height="10"><path d="M0,5 L34,5" stroke="currentColor" stroke-width="1.5" stroke-dasharray="4,4"/><polygon points="34,2 40,5 34,8" fill="currentColor"/></svg>
-										<span>Time-ordered sequence (not a transfer)</span>
+										<span id="legend-temporal-sequence">Time-ordered sequence (not a transfer)</span>
 									</div>
 									<div style="display: flex; align-items: center; gap: 8px; opacity: 0.7;">
 										<svg width="40" height="10"><path d="M0,5 L40,5" stroke="currentColor" stroke-width="1.5" stroke-dasharray="6,3"/></svg>
-										<span>Analytical grouping (shared property)</span>
+										<span id="legend-grouping">Analytical grouping (shared property)</span>
 									</div>
 									<div style="display: flex; align-items: center; gap: 8px;">
 										<svg width="40" height="10"><path d="M0,5 L40,5" stroke="#f39c12" stroke-width="1.5" stroke-dasharray="2,2"/></svg>
-										<span style="color: #f39c12;">Node flag (property of transaction)</span>
+										<span id="legend-node-flag" style="color: #f39c12;">Node flag (property of transaction)</span>
 									</div>
 								</div>
+								<script>
+									window.updateGraphDomainTerminology = function() {
+										const isCdr = (typeof window.isCdrDomain === "function" && window.isCdrDomain()) ||
+											new URLSearchParams(window.location.search).get("brand") === "cdr" ||
+											window.location.pathname.toLowerCase().includes("cdr") ||
+											document.documentElement.getAttribute("data-brand") === "cdr";
+										const elObs = document.getElementById("legend-observed-flow");
+										if (elObs) elObs.textContent = isCdr ? "Observed call / communication session" : "Observed financial transfer";
+										const elSeq = document.getElementById("legend-temporal-sequence");
+										if (elSeq) elSeq.textContent = isCdr ? "Time-ordered call sequence" : "Time-ordered sequence (not a transfer)";
+										const elGrp = document.getElementById("legend-grouping");
+										if (elGrp) elGrp.textContent = isCdr ? "Analytical grouping (shared tower / device)" : "Analytical grouping (shared property)";
+										const elFlg = document.getElementById("legend-node-flag");
+										if (elFlg) elFlg.textContent = isCdr ? "Node flag (property of call record)" : "Node flag (property of transaction)";
+									};
+									window.updateGraphDomainTerminology();
+								</script>
 								<!-- Alerts Overlay -->
 								<div id="alerts-overlay" style="
 									position: absolute;
@@ -1434,6 +1451,16 @@
 										document.documentElement.setAttribute("data-theme", graphThemeMode);
 										applyThemeDefaultsToExistingGraph(graphThemeMode);
 										applyNetworkThemeDefaults(graphThemeMode);
+									}
+									if (e.data?.action === "theme_brand" || e.data?.action === "brand_mode") {
+										const nextBrand = String(e.data.payload || "").toLowerCase() === "cdr" ? "cdr" : "nbe";
+										document.documentElement.setAttribute("data-brand", nextBrand);
+										if (typeof window.updateGraphDomainTerminology === "function") {
+											window.updateGraphDomainTerminology();
+										}
+										if (typeof updateAllEdgeTitles === "function") {
+											updateAllEdgeTitles();
+										}
 									}
 									if (e.data?.type === "init_graph") {
 										graphData = e.data.payload;
@@ -1958,7 +1985,8 @@ smooth: {
 								        menuHTML += `<div style="padding: 8px 12px; border-bottom: 1px solid var(--border-color, #eee); margin-bottom: 4px; font-size: 11px; opacity: 0.9; cursor: default;">`;
 								        menuHTML += `<strong style="font-size: 12px; display: block; margin-bottom: 4px;">Edge Information</strong>`;
 								        menuHTML += `Semantic: <strong>${edgeData.edge_semantic || "N/A"}</strong><br>`;
-								        menuHTML += `Financial Flow: <strong>${edgeData.financial_flow ? "Yes" : "No"}</strong><br>`;
+								        const flowLabel = (typeof window.isCdrDomain === "function" && window.isCdrDomain()) ? "Call Session Flow" : "Financial Flow";
+								        menuHTML += `${flowLabel}: <strong>${edgeData.financial_flow ? "Yes" : "No"}</strong><br>`;
 								        menuHTML += `Directed Display: <strong>${edgeData.directed_display ? "Yes" : "No"}</strong>`;
 								        if (edgeData.reason) {
 								            menuHTML += `<br>Reason: <span style="opacity: 0.8">${edgeData.reason}</span>`;

@@ -255,7 +255,7 @@ html[data-theme="light"] .dots {
     <div class="title">Direct-source</div>
     <div class="text">
       Fetch real-time data directly from APIs or brokers. This ensures your analysis uses the most up-to-date data.  
-      Use this when you need live feeds or financial data streams.  
+      Use this when you need live feeds or <span id="direct-source-stream-desc">financial data streams</span>.  
       Ensure API keys and error handling are configured properly.
     </div>
   </div>
@@ -346,6 +346,22 @@ const LINKX_PARENT_ORIGIN = (() => {
   return window.location.origin;
 })();
 
+function updateSourcePlaceholderBrand(brand) {
+  const isCdr = brand === "cdr" || (!brand && (
+    new URLSearchParams(window.location.search).get("brand") === "cdr" ||
+    window.location.pathname.toLowerCase().includes("cdr") ||
+    document.documentElement.getAttribute("data-brand") === "cdr"
+  ));
+  if (isCdr && !document.documentElement.getAttribute("data-brand")) {
+    document.documentElement.setAttribute("data-brand", "cdr");
+  }
+  const elStream = document.getElementById("direct-source-stream-desc");
+  if (elStream) {
+    elStream.textContent = isCdr ? "telecom CDR data streams" : "financial data streams";
+  }
+}
+updateSourcePlaceholderBrand();
+
 window.addEventListener("message", (event) => {
   if (LINKX_PARENT_ORIGIN && String(event.origin || "") !== LINKX_PARENT_ORIGIN) return;
   if (event?.data?.action === "theme_mode") {
@@ -355,6 +371,7 @@ window.addEventListener("message", (event) => {
   if (event?.data?.action === "theme_brand" || event?.data?.action === "brand_mode") {
     const nextBrand = event.data.payload === "cdr" ? "cdr" : "nbe";
     document.documentElement.setAttribute("data-brand", nextBrand);
+    updateSourcePlaceholderBrand(nextBrand);
   }
 });
 </script>

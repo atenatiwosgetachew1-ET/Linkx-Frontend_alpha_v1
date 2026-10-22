@@ -16754,7 +16754,7 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
               if (Object.keys(degreeCount).length > 0) {
                   const topNodeId = Object.keys(degreeCount).reduce((a, b) => degreeCount[a] > degreeCount[b] ? a : b);
                   const topNode = Array.isArray(pObj.nodes) ? pObj.nodes.find(n => String(n.id) === topNodeId) : null;
-                  leadingEntity = topNode ? (topNode.account_number || topNode.label || topNode.id || topNodeId) : topNodeId;
+                  leadingEntity = topNode ? (topNode.account_number || topNode.calling_no || topNode.label || topNode.id || topNodeId) : topNodeId;
               }
           }
           
@@ -16803,7 +16803,7 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
               if (Object.keys(degreeCount).length > 0) {
                   const topNodeId = Object.keys(degreeCount).reduce((a, b) => degreeCount[a] > degreeCount[b] ? a : b);
                   const topNode = Array.isArray(pObj.nodes) ? pObj.nodes.find(n => String(n.id) === topNodeId) : null;
-                  leadingEntity = topNode ? (topNode.account_number || topNode.label || topNode.id || topNodeId) : topNodeId;
+                  leadingEntity = topNode ? (topNode.account_number || topNode.calling_no || topNode.label || topNode.id || topNodeId) : topNodeId;
               }
           }
 
@@ -16880,7 +16880,7 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
         
         autoTable(doc, {
           startY: finalY,
-          head: [['No.', 'Leading Entity (Account / ID)', 'Frequency (Appearances)', 'Most Flagged Ref ID']],
+          head: [['No.', isCdrDomain ? 'Leading Entity (MSISDN / ID)' : 'Leading Entity (Account / ID)', 'Frequency (Appearances)', 'Most Flagged Ref ID']],
           body: summaryBody,
           theme: 'striped',
           headStyles: { fillColor: headColor, textColor: 255, fontSize: 9 },
@@ -17657,10 +17657,16 @@ let processedData = [...reportsData];
                         </span>
                         <b>{scoreEvidence.node_count_bonus}</b>
                         <span>
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                            <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
-                          </svg>
-                          Financial Bonus
+                          {isCdrDomain ? (
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                              <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+                            </svg>
+                          ) : (
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                              <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                            </svg>
+                          )}
+                          {isCdrDomain ? "Volume Bonus" : "Financial Bonus"}
                         </span>
                         <b>{scoreEvidence.financial_bonus}</b>
                       </>
