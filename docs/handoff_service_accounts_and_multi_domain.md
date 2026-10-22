@@ -110,10 +110,17 @@ Replaces banking AML thresholds with **18 telecom parameters** across 4 fieldset
 ### C. Protected System Principal Security (xVigilance & Platform Daemons)
 The backend designates internal platform daemons (such as `xvigilance`, ID `999`) as **Protected System Service Accounts** with `is_system: true`:
 
-1. **Distinctive System Badge**: Accounts with `is_system === true` display `🛡 System` badge.
-2. **Delete Protection**: Delete button permanently disabled with tooltip explanation. Client guard rejects deletion.
-3. **Locked Active Status**: Status locked to `🔒 Active (Locked)`. Deactivation toggles disabled.
-4. **Editable Coordinates & Rotation**: Admins can update storage coordinates, domain routing, and rotate secrets dynamically.
+1. **Distinctive System Badge**: Accounts with `is_system === true` display the muted `🔒 SYSTEM SERVICE` protection chip.
+2. **Immutable Read-Only Permissions**: Permissions list remains visible for inspection, but checkboxes are locked (`disabled={account.is_system}`) with the tooltip `"System daemon permissions are immutable and managed by the platform."`. "Select All" / "Clear All" actions are suppressed.
+3. **Delete Protection**: Delete action is disabled (`disabled={account.is_system}`) with `"Protected system accounts cannot be deleted."` tooltip and client-side guards.
+4. **Secret Rotation Guard**: Secret rotation action is disabled (`disabled={account.is_system}`) with `"Protected system account secret cannot be modified."` tooltip and client-side guards.
+5. **Locked Active Status**: Status toggle is locked to `🔒 Active (Locked)`. Deactivation toggles are disabled.
+6. **Immutable Client ID**: `client_id` is locked/disabled in the edit drawer. Only non-critical metadata (display name) and storage target configurations remain editable.
+7. **Graceful 403 Safeguards**: Specialized toast alerts handle backend forbidden errors:
+   - `cannot_modify_system_service_account_permissions` ➔ `"Protected system account permissions cannot be modified."`
+   - `cannot_delete_system_service_account` ➔ `"Protected system accounts cannot be deleted."`
+   - `cannot_deactivate_system_service_account` ➔ `"Protected system accounts cannot be deactivated."`
+   - `cannot_modify_system_service_account_secret` ➔ `"Protected system account secret cannot be modified."`
 
 ---
 

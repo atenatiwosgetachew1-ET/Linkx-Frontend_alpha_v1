@@ -3843,7 +3843,7 @@ function PermissionGate({ permission, canAccess, children, fallback = null }) {
   return canAccess(permission) ? children : fallback;
 }
 
-function PermissionEditor({ value = [], onChange, idPrefix = "permissions" }) {
+function PermissionEditor({ value = [], onChange, idPrefix = "permissions", disabled = false, disabledTooltip = "" }) {
   const permissionGroups = [
     { label: "Session", items: ["session:create", "session:read"] },
     { label: "Config", items: ["config:read", "config:write"] },
@@ -3857,12 +3857,14 @@ function PermissionEditor({ value = [], onChange, idPrefix = "permissions" }) {
   ];
   const selected = new Set(Array.isArray(value) ? value : []);
   const togglePermission = (permission) => {
+    if (disabled) return;
     const next = new Set(selected);
     if (next.has(permission)) next.delete(permission);
     else next.add(permission);
     onChange(sanitizePermissionList(Array.from(next).sort()));
   };
   const toggleGroup = (groupItems) => {
+    if (disabled) return;
     const next = new Set(selected);
     const allSelected = groupItems.every((item) => next.has(item));
     groupItems.forEach((item) => {
@@ -3872,7 +3874,7 @@ function PermissionEditor({ value = [], onChange, idPrefix = "permissions" }) {
     onChange(sanitizePermissionList(Array.from(next).sort()));
   };
   return (
-    <div className="permission_editor">
+    <div className={`permission_editor ${disabled ? "is_disabled" : ""}`} title={disabled ? disabledTooltip : undefined}>
       {permissionGroups.map((group) => {
         const count = group.items.filter((item) => selected.has(item)).length;
         const allSelected = count === group.items.length;
@@ -3881,7 +3883,8 @@ function PermissionEditor({ value = [], onChange, idPrefix = "permissions" }) {
             <div
               className={`permission_group_header ${allSelected ? "all_selected" : count > 0 ? "some_selected" : ""}`}
               onClick={() => toggleGroup(group.items)}
-              title="Click group title to toggle all permissions in this category"
+              title={disabled ? (disabledTooltip || "Permissions are locked") : "Click group title to toggle all permissions in this category"}
+              style={disabled ? { cursor: "not-allowed" } : undefined}
             >
               <span className="permission_group_title">{group.label}</span>
               <span className="permission_group_badge">{count}/{group.items.length}</span>
@@ -3891,13 +3894,17 @@ function PermissionEditor({ value = [], onChange, idPrefix = "permissions" }) {
                 const isChecked = selected.has(permission);
                 return (
                   <div
-                    className={`permission_option ${isChecked ? "active" : ""}`}
+                    className={`permission_option ${isChecked ? "active" : ""} ${disabled ? "is_disabled" : ""}`}
                     key={permission}
                     onClick={() => togglePermission(permission)}
                     role="checkbox"
                     aria-checked={isChecked}
-                    tabIndex={0}
+                    aria-disabled={disabled}
+                    tabIndex={disabled ? -1 : 0}
+                    title={disabled ? (disabledTooltip || "System daemon permissions are immutable and managed by the platform.") : permission}
+                    style={disabled ? { cursor: "not-allowed" } : undefined}
                     onKeyDown={(e) => {
+                      if (disabled) return;
                       if (e.key === " " || e.key === "Enter") {
                         e.preventDefault();
                         togglePermission(permission);
@@ -5320,6 +5327,23 @@ function UserManagementPanel({ apiFetch, canManageUsers, canManageSuperusers, on
   );
 }
 
+const formatServiceAccountError = (err, defaultMsg = "An error occurred.") => {
+  const raw = String(err?.data?.error || err?.data?.detail || err?.data?.message || err?.message || "");
+  if (raw.includes("cannot_modify_system_service_account_permissions")) {
+    return "Protected system account permissions cannot be modified.";
+  }
+  if (raw.includes("cannot_delete_system_service_account")) {
+    return "Protected system accounts cannot be deleted.";
+  }
+  if (raw.includes("cannot_deactivate_system_service_account")) {
+    return "Protected system accounts cannot be deactivated.";
+  }
+  if (raw.includes("cannot_modify_system_service_account_secret")) {
+    return "Protected system account secret cannot be modified.";
+  }
+  return err?.message || defaultMsg;
+};
+
 function ServiceAccountsPanel({ apiFetch, canManageUsers, onNotice, requestConfirmation, isActive }) {
   const panelRef = useRef(null);
   const emptyDraft = {
@@ -5486,10 +5510,12 @@ function ServiceAccountsPanel({ apiFetch, canManageUsers, onNotice, requestConfi
     const cleanPermissions = sanitizePermissionList(draftPatch.permissions).filter((p) => /^[a-z]+:[a-z_]+$/.test(p));
     const patch = {
       display_name: sanitizeText(draftPatch.display_name, { maxLength: 120 }).trim(),
-      permissions: cleanPermissions,
     };
-    if (!account.is_system && draftPatch.is_active !== undefined) {
-      patch.is_active = Boolean(draftPatch.is_active);
+    if (!account.is_system) {
+      patch.permissions = cleanPermissions;
+      if (draftPatch.is_active !== undefined) {
+        patch.is_active = Boolean(draftPatch.is_active);
+      }
     }
 
     const cfg = draftPatch.config || {};
@@ -5573,16 +5599,32 @@ function ServiceAccountsPanel({ apiFetch, canManageUsers, onNotice, requestConfi
           await loadAccounts();
           return;
         } catch (_fbErr) {
-          // fallback failed, show original error
+          // fallback failed, show formatted error
         }
       }
-      setError(err?.message || "Failed to update service account.");
+      const errMsg = formatServiceAccountError(err, "Failed to update service account.");
+      setError(errMsg);
+      onNotice?.({
+        title: "Action Restricted",
+        message: errMsg,
+        source: "Service Accounts",
+        level: "warning",
+      });
     } finally {
       setSaving(false);
     }
   };
 
   const rotateSecret = async (account) => {
+    if (account.is_system) {
+      onNotice?.({
+        title: "Action Restricted",
+        message: "Protected system account secret cannot be modified.",
+        source: "Service Accounts",
+        level: "warning",
+      });
+      return;
+    }
     let shouldProceed = false;
     if (typeof requestConfirmation === "function") {
       shouldProceed = await requestConfirmation({
@@ -5611,7 +5653,14 @@ function ServiceAccountsPanel({ apiFetch, canManageUsers, onNotice, requestConfi
       onNotice?.({ title: "Secret rotated", message: "Copy the new secret now. It will not be shown again.", source: "Admin", level: "warning" });
       await loadAccounts();
     } catch (err) {
-      setError(err?.message || "Failed to rotate secret.");
+      const errMsg = formatServiceAccountError(err, "Failed to rotate secret.");
+      setError(errMsg);
+      onNotice?.({
+        title: "Action Restricted",
+        message: errMsg,
+        source: "Service Accounts",
+        level: "warning",
+      });
     } finally {
       setSaving(false);
     }
@@ -5620,8 +5669,8 @@ function ServiceAccountsPanel({ apiFetch, canManageUsers, onNotice, requestConfi
   const deleteAccount = async (account) => {
     if (account.is_system) {
       onNotice?.({
-        title: "Action Not Allowed",
-        message: "System service accounts cannot be deleted.",
+        title: "Action Restricted",
+        message: "Protected system accounts cannot be deleted.",
         source: "Service Accounts",
         level: "warning",
       });
@@ -5649,7 +5698,14 @@ function ServiceAccountsPanel({ apiFetch, canManageUsers, onNotice, requestConfi
       if (expandedAccountId === String(account.id)) setExpandedAccountId(null);
       await loadAccounts();
     } catch (err) {
-      setError(err?.message || "Failed to delete service account.");
+      const errMsg = formatServiceAccountError(err, "Failed to delete service account.");
+      setError(errMsg);
+      onNotice?.({
+        title: "Action Restricted",
+        message: errMsg,
+        source: "Service Accounts",
+        level: "warning",
+      });
     } finally {
       setSaving(false);
     }
@@ -5867,7 +5923,7 @@ function ServiceAccountsPanel({ apiFetch, canManageUsers, onNotice, requestConfi
                         <b className="service_account_client_id">{account.client_id}</b>
                         {account.is_system && (
                           <span className="service_system_badge" title="Protected System Service Account">
-                            🛡 System
+                            🔒 SYSTEM SERVICE
                           </span>
                         )}
                       </div>
@@ -5898,7 +5954,7 @@ function ServiceAccountsPanel({ apiFetch, canManageUsers, onNotice, requestConfi
                         {account.is_system ? (
                           <span
                             className="service_status_chip active system_locked"
-                            title="System service accounts are permanently active and locked."
+                            title="Protected system accounts cannot be deactivated."
                           >
                             🔒 Active
                           </span>
@@ -5918,16 +5974,27 @@ function ServiceAccountsPanel({ apiFetch, canManageUsers, onNotice, requestConfi
                         type="button"
                         className={`action_btns service_btn_toggle_edit ${isExpanded ? "active" : ""}`}
                         onClick={() => setExpandedAccountId(isExpanded ? null : String(account.id))}
-                        title="Edit display name and permissions"
+                        title={account.is_system ? "Inspect daemon configuration and storage coordinates" : "Edit display name and permissions"}
                       >
                         {isExpanded ? "▲ Close" : "✎ Edit"}
                       </button>
                       <button
                         type="button"
-                        className="action_btns"
-                        onClick={() => rotateSecret(account)}
-                        disabled={saving}
-                        title="Rotate client secret"
+                        className={`action_btns ${account.is_system ? "is_disabled" : ""}`}
+                        onClick={() => {
+                          if (account.is_system) {
+                            onNotice?.({
+                              title: "Action Restricted",
+                              message: "Protected system account secret cannot be modified.",
+                              source: "Service Accounts",
+                              level: "warning",
+                            });
+                            return;
+                          }
+                          rotateSecret(account);
+                        }}
+                        disabled={saving || account.is_system}
+                        title={account.is_system ? "Protected system account secret cannot be modified." : "Rotate client secret"}
                       >
                         Rotate Secret
                       </button>
@@ -5935,11 +6002,19 @@ function ServiceAccountsPanel({ apiFetch, canManageUsers, onNotice, requestConfi
                         type="button"
                         className={`critical_btns ${account.is_system ? "is_disabled" : ""}`}
                         onClick={() => {
-                          if (account.is_system) return;
+                          if (account.is_system) {
+                            onNotice?.({
+                              title: "Action Restricted",
+                              message: "Protected system accounts cannot be deleted.",
+                              source: "Service Accounts",
+                              level: "warning",
+                            });
+                            return;
+                          }
                           deleteAccount(account);
                         }}
                         disabled={saving || account.is_system}
-                        title={account.is_system ? "System service accounts cannot be deleted." : "Delete service account"}
+                        title={account.is_system ? "Protected system accounts cannot be deleted." : "Delete service account"}
                       >
                         Delete
                       </button>
@@ -5950,17 +6025,31 @@ function ServiceAccountsPanel({ apiFetch, canManageUsers, onNotice, requestConfi
                     <div className="service_account_drawer">
                       {account.is_system && (
                         <div className="service_system_info_banner">
-                          <span className="service_system_info_icon">🛡</span>
+                          <span className="service_system_info_icon">🔒</span>
                           <div className="service_system_info_text">
                             <b>Protected System Service Account ({account.client_id})</b>
                             <p>
-                              Platform daemon settings and storage targets are dynamically synced to the runtime engine on Server 4 without process restarts. System accounts are permanently active and protected from deletion.
+                              System daemon permissions, secret credentials, and active status are immutable and managed by the platform. Non-critical metadata and domain-specific storage coordinates may still be adjusted.
                             </p>
                           </div>
                         </div>
                       )}
 
                       <div className="config_endpoint_grid">
+                        {account.is_system && (
+                          <div className="config_endpoint_field">
+                            <label>Client ID</label>
+                            <input
+                              type="text"
+                              className="input_text"
+                              value={account.client_id}
+                              disabled
+                              style={{ opacity: 0.75, cursor: "not-allowed" }}
+                              title="Client ID cannot be modified."
+                            />
+                          </div>
+                        )}
+
                         <div className="config_endpoint_field">
                           <label>Display Name</label>
                           <input
@@ -5978,8 +6067,8 @@ function ServiceAccountsPanel({ apiFetch, canManageUsers, onNotice, requestConfi
                           {account.is_system ? (
                             <div
                               className="user_status_toggle_btn active is_locked"
-                              title="System service accounts cannot be deactivated (permanently active)."
-                              style={{ cursor: "not-allowed", opacity: 0.9 }}
+                              title="Protected system accounts cannot be deactivated."
+                              style={{ cursor: "not-allowed", opacity: 0.85 }}
                             >
                               <span className="user_status_toggle_knob" />
                               <span className="user_status_toggle_label">🔒 Active (Locked)</span>
@@ -6016,29 +6105,40 @@ function ServiceAccountsPanel({ apiFetch, canManageUsers, onNotice, requestConfi
 
                       <div className="service_perm_section_header">
                         <label>Permissions ({(editDraft.permissions || []).length} selected)</label>
-                        <div className="service_perm_quick_actions">
-                          <button
-                            type="button"
-                            className="service_quick_link_btn"
-                            onClick={() => updateEditDraft(account.id, { permissions: allSystemPermissions })}
-                          >
-                            Select All
-                          </button>
-                          <span className="service_perm_action_sep">·</span>
-                          <button
-                            type="button"
-                            className="service_quick_link_btn"
-                            onClick={() => updateEditDraft(account.id, { permissions: [] })}
-                          >
-                            Clear All
-                          </button>
-                        </div>
+                        {account.is_system ? (
+                          <span className="service_perm_locked_hint" style={{ fontSize: "11px", color: "var(--brand-muted, #78909c)", fontStyle: "italic" }}>
+                            🔒 System daemon permissions are immutable and managed by the platform.
+                          </span>
+                        ) : (
+                          <div className="service_perm_quick_actions">
+                            <button
+                              type="button"
+                              className="service_quick_link_btn"
+                              onClick={() => updateEditDraft(account.id, { permissions: allSystemPermissions })}
+                            >
+                              Select All
+                            </button>
+                            <span className="service_perm_action_sep">·</span>
+                            <button
+                              type="button"
+                              className="service_quick_link_btn"
+                              onClick={() => updateEditDraft(account.id, { permissions: [] })}
+                            >
+                              Clear All
+                            </button>
+                          </div>
+                        )}
                       </div>
 
                       <PermissionEditor
                         value={editDraft.permissions || []}
-                        onChange={(permissions) => updateEditDraft(account.id, { permissions: sanitizePermissionList(permissions) })}
+                        onChange={(permissions) => {
+                          if (account.is_system) return;
+                          updateEditDraft(account.id, { permissions: sanitizePermissionList(permissions) });
+                        }}
                         idPrefix={`svc_${account.id}_perm`}
+                        disabled={account.is_system}
+                        disabledTooltip="System daemon permissions are immutable and managed by the platform."
                       />
 
                       <div className="service_accounts_action_bar">
@@ -10211,10 +10311,23 @@ const fileInputRef = useRef(null);
         durationMs: 6000,
       });
     },
-    onForbidden: () => {
+    onForbidden: (data) => {
+      const errCode = String(data?.error || data?.detail || data?.message || "");
+      let msg = "You do not have access to do that.";
+      if (errCode.includes("cannot_modify_system_service_account_permissions")) {
+        msg = "Protected system account permissions cannot be modified.";
+      } else if (errCode.includes("cannot_delete_system_service_account")) {
+        msg = "Protected system accounts cannot be deleted.";
+      } else if (errCode.includes("cannot_deactivate_system_service_account")) {
+        msg = "Protected system accounts cannot be deactivated.";
+      } else if (errCode.includes("cannot_modify_system_service_account_secret")) {
+        msg = "Protected system account secret cannot be modified.";
+      } else if (data?.message) {
+        msg = data.message;
+      }
       pushNotification({
         title: "Permission denied",
-        message: "You do not have access to do that.",
+        message: msg,
         source: "RBAC",
         level: "warning",
       });
