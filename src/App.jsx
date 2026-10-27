@@ -3930,20 +3930,58 @@ function PermissionEditor({ value = [], onChange, idPrefix = "permissions", disa
   );
 }
 
-const defaultServiceConfig = {
-  storage_host: "",
-  storage_port: "5000",
-  storage_endpoint: "",
-  domain: "bank",
+const defaultDomainConfig = (domainKey = "banking") => ({
+  storage_host: "172.27.23.43",
+  storage_port: domainKey === "microfinance" ? "5007" : "5000",
+  storage_endpoint: "api/search/uii",
   auth_token: "",
   fetch_columns: [],
   column_mapping: {},
+});
+
+const defaultServiceConfig = {
+  registered_domains: ["banking"],
+  domains: {
+    banking: defaultDomainConfig("banking"),
+  },
 };
 
 const normalizeServiceAccountList = (data) => {
   const raw = Array.isArray(data) ? data : Array.isArray(data?.results) ? data.results : Array.isArray(data?.service_accounts) ? data.service_accounts : Array.isArray(data?.data) ? data.data : [];
   return raw.map((account) => {
     const rawCfg = account.config || {};
+    
+    let registered_domains = Array.isArray(account.registered_domains)
+      ? account.registered_domains
+      : Array.isArray(rawCfg.registered_domains)
+      ? rawCfg.registered_domains
+      : [];
+
+    let rawDomains = (account.domains && typeof account.domains === "object" && !Array.isArray(account.domains))
+      ? account.domains
+      : (rawCfg.domains && typeof rawCfg.domains === "object" && !Array.isArray(rawCfg.domains))
+      ? rawCfg.domains
+      : {};
+
+    const normalizedDomains = {};
+    Object.entries(rawDomains).forEach(([domKey, domCfg]) => {
+      if (!domKey || typeof domCfg !== "object" || !domCfg) return;
+      normalizedDomains[domKey] = {
+        storage_host: domCfg.storage_host || "",
+        storage_port: domCfg.storage_port ? String(domCfg.storage_port) : (domKey === "microfinance" ? "5007" : "5000"),
+        storage_endpoint: domCfg.storage_endpoint || "api/search/uii",
+        auth_token: domCfg.auth_token || "",
+        fetch_columns: Array.isArray(domCfg.fetch_columns) ? domCfg.fetch_columns : [],
+        column_mapping: (domCfg.column_mapping && typeof domCfg.column_mapping === "object" && !Array.isArray(domCfg.column_mapping))
+          ? domCfg.column_mapping
+          : {},
+      };
+    });
+
+    if (!registered_domains.length) {
+      registered_domains = Object.keys(normalizedDomains);
+    }
+
     return {
       ...account,
       id: account.id ?? account.client_id,
@@ -3952,16 +3990,11 @@ const normalizeServiceAccountList = (data) => {
       is_active: account.is_active !== false,
       is_system: Boolean(account.is_system),
       permissions: Array.isArray(account.permissions) ? account.permissions : [],
+      registered_domains,
+      domains: normalizedDomains,
       config: {
-        storage_host: rawCfg.storage_host || "",
-        storage_port: rawCfg.storage_port ? String(rawCfg.storage_port) : "5000",
-        storage_endpoint: rawCfg.storage_endpoint || "",
-        domain: rawCfg.domain || "bank",
-        auth_token: rawCfg.auth_token || "",
-        fetch_columns: Array.isArray(rawCfg.fetch_columns) ? rawCfg.fetch_columns : [],
-        column_mapping: (rawCfg.column_mapping && typeof rawCfg.column_mapping === "object" && !Array.isArray(rawCfg.column_mapping))
-          ? rawCfg.column_mapping
-          : {},
+        registered_domains,
+        domains: normalizedDomains,
       },
     };
   });
@@ -4035,6 +4068,26 @@ const AVAILABLE_DOMAINS = [
 ];
 
 const DOMAIN_SCHEMA_TEMPLATES = {
+  banking: {
+    fetch_columns: [
+      "TRANSACTIONID",
+      "TRANSACTIONDATE",
+      "AMOUNTINBIRR",
+      "ACCOUNTNO",
+      "BENACCOUNTNO",
+      "ACCOWNERNAME",
+      "BENFULLNAME",
+    ],
+    column_mapping: {
+      TRANSACTIONID: "TRANSACTIONID",
+      TRANSACTIONDATE: "TRANSACTIONDATE",
+      AMOUNTINBIRR: "AMOUNTINBIRR",
+      ACCOUNTNO: "ACCOUNTNO",
+      BENACCOUNTNO: "BENACCOUNTNO",
+      ACCOWNERNAME: "ACCOWNERNAME",
+      BENFULLNAME: "BENFULLNAME",
+    },
+  },
   bank: {
     fetch_columns: [
       "TRANSACTIONID",
@@ -4176,6 +4229,26 @@ const DOMAIN_SCHEMA_TEMPLATES = {
       CREDITOR_NAME: "BENFULLNAME",
     },
   },
+  social_media: {
+    fetch_columns: [
+      "POST_ID",
+      "TIMESTAMP",
+      "AUTHOR_ID",
+      "MENTIONED_USER_ID",
+      "AUTHOR_HANDLE",
+      "RECIPIENT_HANDLE",
+      "ENGAGEMENT_SCORE",
+    ],
+    column_mapping: {
+      AUTHOR_ID: "ACCOUNTNO",
+      MENTIONED_USER_ID: "BENACCOUNTNO",
+      ENGAGEMENT_SCORE: "AMOUNTINBIRR",
+      TIMESTAMP: "TRANSACTIONDATE",
+      POST_ID: "TRANSACTIONID",
+      AUTHOR_HANDLE: "ACCOWNERNAME",
+      RECIPIENT_HANDLE: "BENFULLNAME",
+    },
+  },
 };
 
 function MappingRow({ sourceKey, targetVal, onChangeKey, onChangeVal, onRemove, idPrefix, index }) {
@@ -4234,67 +4307,85 @@ function MappingRow({ sourceKey, targetVal, onChangeKey, onChangeVal, onRemove, 
   );
 }
 
-function DomainSelector({ value = "bank", onChange, idPrefix = "domain" }) {
-  const currentDomain = value || "bank";
-  return (
-    <div className="config_endpoint_field config_endpoint_field--wide">
-      <div className="service_perm_section_header" style={{ marginBottom: "2px" }}>
-        <label>Domain / Institution (Built-in Schema)</label>
-      </div>
-      <p className="schema_field_hint" style={{ marginTop: "1px", marginBottom: "6px" }}>
-        Select your institution domain. Built-in schema mapping applies automatically unless overridden in Advanced Schema.
-      </p>
-      <div className="domain_selector_grid" role="radiogroup" aria-label="Domain / Institution">
-        {AVAILABLE_DOMAINS.map((domain) => {
-          const isSelected = currentDomain === domain.key;
-          return (
-            <div
-              key={domain.key}
-              id={`${idPrefix}_opt_${domain.key}`}
-              className={`domain_card_option ${isSelected ? "active" : ""}`}
-              onClick={() => onChange?.(domain.key)}
-              role="radio"
-              aria-checked={isSelected}
-              tabIndex={0}
-              onKeyDown={(e) => {
-                if (e.key === " " || e.key === "Enter") {
-                  e.preventDefault();
-                  onChange?.(domain.key);
-                }
-              }}
-            >
-              <span className={`domain_radio_circle ${isSelected ? "checked" : ""}`}>
-                {isSelected && <span className="domain_radio_dot" />}
-              </span>
-              <div className="domain_card_info">
-                <div className="domain_card_header">
-                  <span className="domain_card_name">{domain.label}</span>
-                  <span className="domain_card_tag">{domain.tag}</span>
-                </div>
-                <span className="domain_card_desc">{domain.description}</span>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
+function StorageTargetEditor({
+  config = defaultServiceConfig,
+  onChange,
+  idPrefix = "target",
+  availableDomains = [],
+  catalogError = "",
+  catalogLoading = false,
+  onRefreshCatalog,
+}) {
+  const currentConfig = config || defaultServiceConfig;
+  const registeredDomains = Array.isArray(currentConfig.registered_domains) ? currentConfig.registered_domains : [];
+  const domains = (currentConfig.domains && typeof currentConfig.domains === "object" && !Array.isArray(currentConfig.domains))
+    ? currentConfig.domains
+    : {};
 
-function StorageTargetEditor({ config = defaultServiceConfig, onChange, idPrefix = "target" }) {
-  const currentConfig = { ...defaultServiceConfig, ...(config || {}) };
-  const updateField = (key, val) => onChange?.({ ...currentConfig, [key]: val });
-  const [isAdvancedOpen, setIsAdvancedOpen] = useState(
-    Boolean(
-      (currentConfig.fetch_columns && currentConfig.fetch_columns.length > 0) ||
-      (currentConfig.column_mapping && Object.keys(currentConfig.column_mapping).length > 0)
-    )
-  );
+  const [activeDomainTab, setActiveDomainTab] = useState(registeredDomains[0] || "");
+  const [customDomainInput, setCustomDomainInput] = useState("");
+  const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
   const [colInputText, setColInputText] = useState("");
 
-  const fetchCols = Array.isArray(currentConfig.fetch_columns) ? currentConfig.fetch_columns : [];
-  const colMapping = (currentConfig.column_mapping && typeof currentConfig.column_mapping === "object" && !Array.isArray(currentConfig.column_mapping))
-    ? currentConfig.column_mapping
+  // Keep activeDomainTab in sync when registeredDomains change
+  useEffect(() => {
+    if (!activeDomainTab || !registeredDomains.includes(activeDomainTab)) {
+      setActiveDomainTab(registeredDomains[0] || "");
+    }
+  }, [registeredDomains, activeDomainTab]);
+
+  const activeDomainConfig = (activeDomainTab && domains[activeDomainTab])
+    ? domains[activeDomainTab]
+    : defaultDomainConfig(activeDomainTab || "banking");
+
+  const updateDomainField = (field, value) => {
+    if (!activeDomainTab) return;
+    const updatedDomain = {
+      ...activeDomainConfig,
+      [field]: value,
+    };
+    onChange?.({
+      ...currentConfig,
+      registered_domains: registeredDomains,
+      domains: {
+        ...domains,
+        [activeDomainTab]: updatedDomain,
+      },
+    });
+  };
+
+  const handleToggleDomainRegistration = (domKey) => {
+    const key = domKey.trim().toLowerCase();
+    if (!key) return;
+    let nextReg;
+    let nextDomains = { ...domains };
+    if (registeredDomains.includes(key)) {
+      nextReg = registeredDomains.filter((d) => d !== key);
+      // We keep the configuration inside nextDomains so nothing is lost if re-added
+    } else {
+      nextReg = [...registeredDomains, key];
+      if (!nextDomains[key]) {
+        nextDomains[key] = defaultDomainConfig(key);
+      }
+      setActiveDomainTab(key);
+    }
+    onChange?.({
+      ...currentConfig,
+      registered_domains: nextReg,
+      domains: nextDomains,
+    });
+  };
+
+  const handleAddCustomDomain = () => {
+    const clean = customDomainInput.trim().toLowerCase().replace(/[^a-z0-9_]/g, "");
+    if (!clean) return;
+    handleToggleDomainRegistration(clean);
+    setCustomDomainInput("");
+  };
+
+  const fetchCols = Array.isArray(activeDomainConfig.fetch_columns) ? activeDomainConfig.fetch_columns : [];
+  const colMapping = (activeDomainConfig.column_mapping && typeof activeDomainConfig.column_mapping === "object" && !Array.isArray(activeDomainConfig.column_mapping))
+    ? activeDomainConfig.column_mapping
     : {};
   const mappingEntries = Object.entries(colMapping);
 
@@ -4305,16 +4396,16 @@ function StorageTargetEditor({ config = defaultServiceConfig, onChange, idPrefix
       .filter(Boolean);
     if (!valid.length) return;
     const nextSet = Array.from(new Set([...fetchCols, ...valid]));
-    updateField("fetch_columns", nextSet);
+    updateDomainField("fetch_columns", nextSet);
     setColInputText("");
   };
 
   const handleRemoveColumn = (col) => {
-    updateField("fetch_columns", fetchCols.filter((c) => c !== col));
+    updateDomainField("fetch_columns", fetchCols.filter((c) => c !== col));
   };
 
   const handleClearColumns = () => {
-    updateField("fetch_columns", []);
+    updateDomainField("fetch_columns", []);
   };
 
   const handleChangeMappingKey = (oldKey, newKey) => {
@@ -4323,18 +4414,18 @@ function StorageTargetEditor({ config = defaultServiceConfig, onChange, idPrefix
     const val = next[oldKey] || LINKX_CANONICAL_COLUMNS[0].value;
     delete next[oldKey];
     next[newKey] = val;
-    updateField("column_mapping", next);
+    updateDomainField("column_mapping", next);
   };
 
   const handleChangeMappingVal = (key, val) => {
     const next = { ...colMapping, [key]: val };
-    updateField("column_mapping", next);
+    updateDomainField("column_mapping", next);
   };
 
   const handleRemoveMapping = (key) => {
     const next = { ...colMapping };
     delete next[key];
-    updateField("column_mapping", next);
+    updateDomainField("column_mapping", next);
   };
 
   const handleAddMapping = () => {
@@ -4346,275 +4437,379 @@ function StorageTargetEditor({ config = defaultServiceConfig, onChange, idPrefix
       i += 1;
     }
     next[candidate] = LINKX_CANONICAL_COLUMNS[0].value;
-    updateField("column_mapping", next);
+    updateDomainField("column_mapping", next);
   };
 
   const handleClearMapping = () => {
-    updateField("column_mapping", {});
+    updateDomainField("column_mapping", {});
   };
 
   const handleLoadTemplate = () => {
-    const domainKey = currentConfig.domain || "bank";
-    const template = DOMAIN_SCHEMA_TEMPLATES[domainKey] || DOMAIN_SCHEMA_TEMPLATES.bank;
-    onChange?.({
-      ...currentConfig,
-      fetch_columns: [...template.fetch_columns],
-      column_mapping: { ...template.column_mapping },
-    });
+    const templateKey = (activeDomainTab === "banking" || activeDomainTab === "bank") ? "bank" : activeDomainTab;
+    const template = DOMAIN_SCHEMA_TEMPLATES[templateKey] || DOMAIN_SCHEMA_TEMPLATES.bank;
+    updateDomainField("fetch_columns", [...template.fetch_columns]);
+    updateDomainField("column_mapping", { ...template.column_mapping });
   };
 
   return (
     <div className="service_storage_target_section">
       <div className="service_storage_target_header">
-        <span className="service_storage_target_title">Assigned Storage Target</span>
-        <span className="service_storage_target_hint">Elasticsearch search server and domain routing</span>
+        <span className="service_storage_target_title">Multi-Domain Storage Configuration</span>
+        <span className="service_storage_target_hint">Storage targets and column schemas per forensic domain</span>
       </div>
 
-      <div className="config_endpoint_grid">
-        <div className="config_endpoint_field">
-          <label htmlFor={`${idPrefix}_host`}>Storage Host / IP</label>
-          <input
-            id={`${idPrefix}_host`}
-            type="text"
-            className="input_text"
-            placeholder="e.g. 192.168.1.100"
-            value={currentConfig.storage_host}
-            maxLength={160}
-            onChange={(e) => updateField("storage_host", sanitizeConnectionValue(e.target.value, { maxLength: 160 }))}
-          />
-        </div>
-
-        <div className="config_endpoint_field">
-          <label htmlFor={`${idPrefix}_port`}>Storage Port</label>
-          <input
-            id={`${idPrefix}_port`}
-            type="text"
-            className="input_text"
-            placeholder="e.g. 8080"
-            value={currentConfig.storage_port}
-            maxLength={10}
-            onChange={(e) => updateField("storage_port", sanitizeConnectionValue(e.target.value, { maxLength: 10 }))}
-          />
-        </div>
-
-        <div className="config_endpoint_field">
-          <label htmlFor={`${idPrefix}_endpoint`}>Strict Search Endpoint</label>
-          <input
-            id={`${idPrefix}_endpoint`}
-            type="text"
-            className="input_text"
-            placeholder="e.g. api/v1/search"
-            value={currentConfig.storage_endpoint}
-            maxLength={160}
-            onChange={(e) => updateField("storage_endpoint", sanitizeConnectionValue(e.target.value, { maxLength: 160 }))}
-          />
-        </div>
-
-        <div className="config_endpoint_field">
-          <label htmlFor={`${idPrefix}_token`}>Auth Token (Optional)</label>
-          <input
-            id={`${idPrefix}_token`}
-            type="password"
-            className="input_text"
-            placeholder="Bearer token (optional)"
-            value={currentConfig.auth_token}
-            maxLength={256}
-            onChange={(e) => updateField("auth_token", sanitizeSecret(e.target.value, { maxLength: 256 }))}
-          />
-        </div>
-
-        <DomainSelector
-          value={currentConfig.domain || "bank"}
-          onChange={(val) => updateField("domain", val)}
-          idPrefix={`${idPrefix}_domain`}
-        />
-      </div>
-
-      {/* ── Advanced Schema & Column Mapping Accordion ── */}
-      <div className="schema_mapping_accordion">
-        <div
-          className="schema_mapping_toggle_bar"
-          onClick={() => setIsAdvancedOpen((prev) => !prev)}
-          role="button"
-          tabIndex={0}
-          onKeyDown={(e) => {
-            if (e.key === " " || e.key === "Enter") {
-              e.preventDefault();
-              setIsAdvancedOpen((prev) => !prev);
-            }
-          }}
-        >
-          <div className="schema_mapping_toggle_info">
-            <span className="schema_mapping_toggle_title">
-              Advanced Schema &amp; Column Mapping (Optional)
-            </span>
-            <span className="schema_mapping_toggle_hint">
-              Custom column names and non-standard Elasticsearch schema overrides
-            </span>
-          </div>
-
-          <div className="schema_mapping_toggle_right">
-            {(fetchCols.length > 0 || mappingEntries.length > 0) && (
-              <span className="service_storage_chip" title="Custom schema active">
-                📐 {fetchCols.length} cols · {mappingEntries.length} maps
-              </span>
-            )}
+      {/* ── Domain Registration Multi-Select ── */}
+      <div className="service_domain_registration_block" style={{ marginBottom: "12px" }}>
+        <div className="service_perm_section_header" style={{ marginBottom: "4px" }}>
+          <label>Registered Domains ({registeredDomains.length} selected)</label>
+          {onRefreshCatalog && (
             <button
               type="button"
-              className="schema_mapping_expand_btn"
-              tabIndex={-1}
+              className="service_quick_link_btn"
+              onClick={onRefreshCatalog}
+              disabled={catalogLoading}
+              title="Refresh available domains from catalog"
             >
-              {isAdvancedOpen ? "▲ Hide" : "▼ Expand"}
+              {catalogLoading ? "Loading..." : "⟳ Refresh Catalog"}
             </button>
-          </div>
+          )}
         </div>
+        <p className="schema_field_hint" style={{ marginTop: "1px", marginBottom: "6px" }}>
+          Select or add forensic domains to register with this service account.
+        </p>
 
-        {isAdvancedOpen && (
-          <div className="schema_mapping_body">
-            {/* Template Shortcut Bar */}
-            <div className="schema_mapping_template_bar">
-              <span className="schema_mapping_template_hint">
-                Selected domain: <b>{currentConfig.domain || "bank"}</b>. Defaults apply automatically if left empty.
-              </span>
-              <button
-                type="button"
-                className="service_btn_secondary schema_template_btn"
-                onClick={handleLoadTemplate}
-                title={`Load recommended columns & mappings for ${currentConfig.domain || "bank"}`}
-              >
-                ⚡ Load Template for {currentConfig.domain || "bank"}
-              </button>
-            </div>
+        {catalogError ? (
+          <div className="service_catalog_error_banner">
+            <span>⚠️</span> {catalogError}
+          </div>
+        ) : (availableDomains && availableDomains.length > 0) ? (
+          <div className="service_domain_pills_wrap">
+            {availableDomains.map((dom) => {
+              const isRegistered = registeredDomains.includes(dom);
+              return (
+                <button
+                  key={dom}
+                  type="button"
+                  id={`${idPrefix}_dom_pill_${dom}`}
+                  className={`service_domain_pill ${isRegistered ? "selected" : ""}`}
+                  onClick={() => handleToggleDomainRegistration(dom)}
+                  title={isRegistered ? `Click to remove ${dom}` : `Click to register ${dom}`}
+                >
+                  <span>{isRegistered ? "✓" : "+"}</span>
+                  <span style={{ textTransform: "capitalize" }}>{dom}</span>
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
 
-            {/* A. Fetch Columns (fetch_columns) */}
-            <div className="schema_section_block">
-              <div className="service_perm_section_header">
-                <label htmlFor={`${idPrefix}_fetch_cols_input`}>
-                  Fetch Columns ({fetchCols.length} specified)
-                </label>
-                {fetchCols.length > 0 && (
-                  <div className="service_perm_quick_actions">
-                    <button
-                      type="button"
-                      className="service_quick_link_btn"
-                      onClick={handleClearColumns}
-                    >
-                      Clear All
-                    </button>
-                  </div>
-                )}
-              </div>
-              <p className="schema_field_hint">
-                Elasticsearch source projections to extract. Leave empty to use the domain&apos;s built-in fetch columns.
-              </p>
+        <div className="service_custom_domain_row" style={{ display: "flex", gap: "8px", alignItems: "center", marginTop: "4px" }}>
+          <input
+            type="text"
+            className="input_text"
+            placeholder="Add custom domain (e.g. banking, microfinance, cdr)"
+            value={customDomainInput}
+            maxLength={40}
+            style={{ maxWidth: "260px", height: "28px", fontSize: "11.5px" }}
+            onChange={(e) => setCustomDomainInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                handleAddCustomDomain();
+              }
+            }}
+          />
+          <button
+            type="button"
+            className="service_btn_secondary"
+            style={{ height: "28px", padding: "0 10px", fontSize: "11.5px" }}
+            onClick={handleAddCustomDomain}
+            disabled={!customDomainInput.trim()}
+          >
+            + Register Domain
+          </button>
+        </div>
+      </div>
 
-              {fetchCols.length > 0 && (
-                <div className="schema_chips_wrap">
-                  {fetchCols.map((col) => (
-                    <span className="schema_chip" key={col}>
-                      <span className="schema_chip_text">{col}</span>
-                      <button
-                        type="button"
-                        className="schema_chip_remove"
-                        onClick={() => handleRemoveColumn(col)}
-                        title={`Remove ${col}`}
-                      >
-                        ✕
-                      </button>
-                    </span>
-                  ))}
+      {/* ── Domain-Specific Tabs & Storage Cards ── */}
+      {registeredDomains.length === 0 ? (
+        <div style={{ padding: "14px", background: "rgba(0,0,0,0.02)", borderRadius: "4px", textAlign: "center", color: "#607684", fontSize: "12px" }}>
+          No domains registered yet. Select or add a domain above to configure storage endpoints.
+        </div>
+      ) : (
+        <div className="service_domain_editor_wrap">
+          <div className="service_domain_tabs_bar">
+            {registeredDomains.map((dom) => {
+              const isActive = activeDomainTab === dom;
+              return (
+                <button
+                  key={dom}
+                  type="button"
+                  id={`${idPrefix}_tab_${dom}`}
+                  className={`service_domain_tab_btn ${isActive ? "active" : ""}`}
+                  onClick={() => setActiveDomainTab(dom)}
+                >
+                  <span style={{ textTransform: "capitalize" }}>{dom}</span>
+                  <span
+                    className="service_domain_tab_remove"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleToggleDomainRegistration(dom);
+                    }}
+                    title={`Unregister ${dom}`}
+                  >
+                    ✕
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {activeDomainTab && (
+            <div className="service_domain_card_body">
+              <div className="config_endpoint_grid">
+                <div className="config_endpoint_field">
+                  <label htmlFor={`${idPrefix}_${activeDomainTab}_host`}>Storage Host / IP ({activeDomainTab})</label>
+                  <input
+                    id={`${idPrefix}_${activeDomainTab}_host`}
+                    type="text"
+                    className="input_text"
+                    placeholder="e.g. 172.27.23.43"
+                    value={activeDomainConfig.storage_host || ""}
+                    maxLength={160}
+                    onChange={(e) => updateDomainField("storage_host", sanitizeConnectionValue(e.target.value, { maxLength: 160 }))}
+                  />
                 </div>
-              )}
 
-              <div className="schema_chip_input_row">
-                <input
-                  id={`${idPrefix}_fetch_cols_input`}
-                  type="text"
-                  className="input_text schema_chip_input"
-                  placeholder="e.g. RECORD_ID, SENDER_ID, RECEIVER_ID, CREATED_AT, AMOUNT"
-                  value={colInputText}
-                  maxLength={160}
-                  onChange={(e) => setColInputText(e.target.value)}
+                <div className="config_endpoint_field">
+                  <label htmlFor={`${idPrefix}_${activeDomainTab}_port`}>Storage Port ({activeDomainTab})</label>
+                  <input
+                    id={`${idPrefix}_${activeDomainTab}_port`}
+                    type="text"
+                    className="input_text"
+                    placeholder={activeDomainTab === "microfinance" ? "5007" : "5000"}
+                    value={activeDomainConfig.storage_port || ""}
+                    maxLength={10}
+                    onChange={(e) => updateDomainField("storage_port", sanitizeConnectionValue(e.target.value, { maxLength: 10 }))}
+                  />
+                </div>
+
+                <div className="config_endpoint_field">
+                  <label htmlFor={`${idPrefix}_${activeDomainTab}_endpoint`}>Storage Endpoint ({activeDomainTab})</label>
+                  <input
+                    id={`${idPrefix}_${activeDomainTab}_endpoint`}
+                    type="text"
+                    className="input_text"
+                    placeholder="e.g. api/search/uii"
+                    value={activeDomainConfig.storage_endpoint || ""}
+                    maxLength={160}
+                    onChange={(e) => updateDomainField("storage_endpoint", sanitizeConnectionValue(e.target.value, { maxLength: 160 }))}
+                  />
+                </div>
+
+                <div className="config_endpoint_field">
+                  <label htmlFor={`${idPrefix}_${activeDomainTab}_token`}>Auth Token (Optional - {activeDomainTab})</label>
+                  <input
+                    id={`${idPrefix}_${activeDomainTab}_token`}
+                    type="password"
+                    className="input_text"
+                    placeholder="Bearer token (optional)"
+                    value={activeDomainConfig.auth_token || ""}
+                    maxLength={256}
+                    onChange={(e) => updateDomainField("auth_token", sanitizeSecret(e.target.value, { maxLength: 256 }))}
+                  />
+                </div>
+              </div>
+
+              {/* Advanced Schema & Column Mapping Accordion (100% Preserved) */}
+              <div className="schema_mapping_accordion">
+                <div
+                  className="schema_mapping_toggle_bar"
+                  onClick={() => setIsAdvancedOpen((prev) => !prev)}
+                  role="button"
+                  tabIndex={0}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === ",") {
+                    if (e.key === " " || e.key === "Enter") {
                       e.preventDefault();
-                      handleAddColumns(colInputText);
+                      setIsAdvancedOpen((prev) => !prev);
                     }
                   }}
-                />
-                <button
-                  type="button"
-                  className="service_btn_secondary"
-                  onClick={() => handleAddColumns(colInputText)}
-                  disabled={!colInputText.trim()}
                 >
-                  + Add Column
-                </button>
-              </div>
-            </div>
+                  <div className="schema_mapping_toggle_info">
+                    <span className="schema_mapping_toggle_title">
+                      Advanced Schema &amp; Column Mapping for {activeDomainTab.toUpperCase()} (Optional)
+                    </span>
+                    <span className="schema_mapping_toggle_hint">
+                      Custom column names and Elasticsearch schema overrides for this domain
+                    </span>
+                  </div>
 
-            {/* B. Column Mapping (column_mapping) */}
-            <div className="schema_section_block">
-              <div className="service_perm_section_header">
-                <label>
-                  Canonical Column Mapping ({mappingEntries.length} pairs)
-                </label>
-                {mappingEntries.length > 0 && (
-                  <div className="service_perm_quick_actions">
+                  <div className="schema_mapping_toggle_right">
+                    {(fetchCols.length > 0 || mappingEntries.length > 0) && (
+                      <span className="service_storage_chip" title="Custom schema active">
+                        📐 {fetchCols.length} cols · {mappingEntries.length} maps
+                      </span>
+                    )}
                     <button
                       type="button"
-                      className="service_quick_link_btn"
-                      onClick={handleClearMapping}
+                      className="schema_mapping_expand_btn"
+                      tabIndex={-1}
                     >
-                      Clear All
+                      {isAdvancedOpen ? "▲ Hide" : "▼ Expand"}
                     </button>
+                  </div>
+                </div>
+
+                {isAdvancedOpen && (
+                  <div className="schema_mapping_body">
+                    {/* Template Shortcut Bar */}
+                    <div className="schema_mapping_template_bar">
+                      <span className="schema_mapping_template_hint">
+                        Domain: <b>{activeDomainTab}</b>. Defaults apply automatically if left empty.
+                      </span>
+                      <button
+                        type="button"
+                        className="service_btn_secondary schema_template_btn"
+                        onClick={handleLoadTemplate}
+                        title={`Load recommended columns & mappings for ${activeDomainTab}`}
+                      >
+                        ⚡ Load Template for {activeDomainTab}
+                      </button>
+                    </div>
+
+                    {/* A. Fetch Columns */}
+                    <div className="schema_section_block">
+                      <div className="service_perm_section_header">
+                        <label htmlFor={`${idPrefix}_${activeDomainTab}_fetch_cols_input`}>
+                          Fetch Columns ({fetchCols.length} specified)
+                        </label>
+                        {fetchCols.length > 0 && (
+                          <div className="service_perm_quick_actions">
+                            <button
+                              type="button"
+                              className="service_quick_link_btn"
+                              onClick={handleClearColumns}
+                            >
+                              Clear All
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                      <p className="schema_field_hint">
+                        Elasticsearch source projections for {activeDomainTab}. Leave empty to use domain defaults.
+                      </p>
+
+                      {fetchCols.length > 0 && (
+                        <div className="schema_chips_wrap">
+                          {fetchCols.map((col) => (
+                            <span className="schema_chip" key={col}>
+                              <span className="schema_chip_text">{col}</span>
+                              <button
+                                type="button"
+                                className="schema_chip_remove"
+                                onClick={() => handleRemoveColumn(col)}
+                                title={`Remove ${col}`}
+                              >
+                                ✕
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      <div className="schema_chip_input_row">
+                        <input
+                          id={`${idPrefix}_${activeDomainTab}_fetch_cols_input`}
+                          type="text"
+                          className="input_text schema_chip_input"
+                          placeholder="e.g. RECORD_ID, SENDER_ID, RECEIVER_ID, CREATED_AT, AMOUNT"
+                          value={colInputText}
+                          maxLength={160}
+                          onChange={(e) => setColInputText(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === ",") {
+                              e.preventDefault();
+                              handleAddColumns(colInputText);
+                            }
+                          }}
+                        />
+                        <button
+                          type="button"
+                          className="service_btn_secondary"
+                          onClick={() => handleAddColumns(colInputText)}
+                          disabled={!colInputText.trim()}
+                        >
+                          + Add Column
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* B. Column Mapping */}
+                    <div className="schema_section_block">
+                      <div className="service_perm_section_header">
+                        <label>
+                          Canonical Column Mapping ({mappingEntries.length} pairs)
+                        </label>
+                        {mappingEntries.length > 0 && (
+                          <div className="service_perm_quick_actions">
+                            <button
+                              type="button"
+                              className="service_quick_link_btn"
+                              onClick={handleClearMapping}
+                            >
+                              Clear All
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                      <p className="schema_field_hint">
+                        Map raw storage columns to LinkX canonical target fields for {activeDomainTab}.
+                      </p>
+
+                      {mappingEntries.length === 0 ? (
+                        <div className="schema_mapping_empty">
+                          <span>No custom mapping overrides defined (using domain defaults).</span>
+                        </div>
+                      ) : (
+                        <div className="schema_mapping_list">
+                          <div className="schema_mapping_list_header">
+                            <span>Source Column in Storage</span>
+                            <span></span>
+                            <span>LinkX Canonical Target</span>
+                            <span></span>
+                          </div>
+                          {mappingEntries.map(([srcKey, tgtVal], idx) => (
+                            <MappingRow
+                              key={`${srcKey}_${idx}`}
+                              sourceKey={srcKey}
+                              targetVal={tgtVal}
+                              onChangeKey={handleChangeMappingKey}
+                              onChangeVal={handleChangeMappingVal}
+                              onRemove={handleRemoveMapping}
+                              idPrefix={`${idPrefix}_${activeDomainTab}`}
+                              index={idx}
+                            />
+                          ))}
+                        </div>
+                      )}
+
+                      <div className="schema_mapping_action_row">
+                        <button
+                          type="button"
+                          className="service_btn_secondary"
+                          onClick={handleAddMapping}
+                        >
+                          + Add Mapping Pair
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
-              <p className="schema_field_hint">
-                Map raw storage columns to LinkX canonical target fields. If omitted, default domain mapping applies.
-              </p>
-
-              {mappingEntries.length === 0 ? (
-                <div className="schema_mapping_empty">
-                  <span>No custom mapping overrides defined (using domain defaults).</span>
-                </div>
-              ) : (
-                <div className="schema_mapping_list">
-                  <div className="schema_mapping_list_header">
-                    <span>Source Column in Storage</span>
-                    <span></span>
-                    <span>LinkX Canonical Target</span>
-                    <span></span>
-                  </div>
-                  {mappingEntries.map(([srcKey, tgtVal], idx) => (
-                    <MappingRow
-                      key={`${srcKey}_${idx}`}
-                      sourceKey={srcKey}
-                      targetVal={tgtVal}
-                      onChangeKey={handleChangeMappingKey}
-                      onChangeVal={handleChangeMappingVal}
-                      onRemove={handleRemoveMapping}
-                      idPrefix={idPrefix}
-                      index={idx}
-                    />
-                  ))}
-                </div>
-              )}
-
-              <div className="schema_mapping_action_row">
-                <button
-                  type="button"
-                  className="service_btn_secondary"
-                  onClick={handleAddMapping}
-                >
-                  + Add Mapping Pair
-                </button>
-              </div>
             </div>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -5363,6 +5558,10 @@ function ServiceAccountsPanel({ apiFetch, canManageUsers, onNotice, requestConfi
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
+  const [availableDomains, setAvailableDomains] = useState([]);
+  const [catalogError, setCatalogError] = useState("");
+  const [catalogLoading, setCatalogLoading] = useState(false);
+
   const scrollToTop = useCallback(() => {
     if (panelRef.current) {
       const tabForm = panelRef.current.closest(".configurations_tab_form");
@@ -5382,6 +5581,43 @@ function ServiceAccountsPanel({ apiFetch, canManageUsers, onNotice, requestConfi
     }
   }, [newSecret, scrollToTop]);
 
+  const loadCatalog = useCallback(async () => {
+    if (!canManageUsers) return;
+    setCatalogLoading(true);
+    setCatalogError("");
+    try {
+      const data = await apiFetch("/api/v1/rules/catalog?domain=all&format=summary", { method: "GET" });
+      let doms = [];
+      if (Array.isArray(data)) {
+        doms = data.map((d) => (typeof d === "string" ? d : d.domain || d.name || d.id || "")).filter(Boolean);
+      } else if (Array.isArray(data?.domains)) {
+        doms = data.domains.map((d) => (typeof d === "string" ? d : d.domain || d.name || d.id || "")).filter(Boolean);
+      } else if (data?.domains && typeof data.domains === "object") {
+        doms = Object.keys(data.domains);
+      } else if (Array.isArray(data?.data)) {
+        doms = data.data.map((d) => (typeof d === "string" ? d : d.domain || d.name || d.id || "")).filter(Boolean);
+      } else if (Array.isArray(data?.results)) {
+        doms = data.results.map((d) => (typeof d === "string" ? d : d.domain || d.name || d.id || "")).filter(Boolean);
+      } else if (data && typeof data === "object") {
+        const keys = Object.keys(data).filter((k) => !["status", "success", "format", "total", "message"].includes(k));
+        if (keys.length > 0) doms = keys;
+      }
+      const clean = Array.from(new Set(doms.map((d) => String(d).trim().toLowerCase()).filter(Boolean)));
+      if (clean.length > 0) {
+        setAvailableDomains(clean);
+        setCatalogError("");
+      } else {
+        setAvailableDomains([]);
+        setCatalogError("Domains not available!");
+      }
+    } catch (_err) {
+      setAvailableDomains([]);
+      setCatalogError("Domains not available!");
+    } finally {
+      setCatalogLoading(false);
+    }
+  }, [apiFetch, canManageUsers]);
+
   const loadAccounts = useCallback(async () => {
     if (!canManageUsers) return;
     setLoading(true);
@@ -5390,20 +5626,30 @@ function ServiceAccountsPanel({ apiFetch, canManageUsers, onNotice, requestConfi
       const data = await apiFetch("/auth/admin/service-accounts", { method: "GET" });
       const normalized = normalizeServiceAccountList(data);
       setAccounts(normalized);
-      setEditDrafts(Object.fromEntries(normalized.map((account) => [
-        String(account.id),
-        {
-          display_name: account.display_name,
-          is_active: account.is_active !== false,
-          permissions: account.permissions || [],
-          config: {
-            ...defaultServiceConfig,
-            ...(account.config || {}),
-            fetch_columns: [...(account.config?.fetch_columns || [])],
-            column_mapping: { ...(account.config?.column_mapping || {}) },
-          },
-        }
-      ])));
+      setEditDrafts(Object.fromEntries(normalized.map((account) => {
+        const accCfg = account.config || {};
+        const regDoms = Array.isArray(accCfg.registered_domains) ? accCfg.registered_domains : [];
+        const domsMap = {};
+        Object.entries(accCfg.domains || {}).forEach(([dKey, dVal]) => {
+          domsMap[dKey] = {
+            ...dVal,
+            fetch_columns: [...(dVal.fetch_columns || [])],
+            column_mapping: { ...(dVal.column_mapping || {}) },
+          };
+        });
+        return [
+          String(account.id),
+          {
+            display_name: account.display_name,
+            is_active: account.is_active !== false,
+            permissions: account.permissions || [],
+            config: {
+              registered_domains: [...regDoms],
+              domains: domsMap,
+            },
+          }
+        ];
+      })));
     } catch (err) {
       setError(err?.message || "Failed to load service accounts.");
     } finally {
@@ -5412,8 +5658,11 @@ function ServiceAccountsPanel({ apiFetch, canManageUsers, onNotice, requestConfi
   }, [apiFetch, canManageUsers]);
 
   useEffect(() => {
-    if (isActive && canManageUsers) loadAccounts();
-  }, [isActive, canManageUsers, loadAccounts]);
+    if (isActive && canManageUsers) {
+      loadAccounts();
+      loadCatalog();
+    }
+  }, [isActive, canManageUsers, loadAccounts, loadCatalog]);
 
   const updateEditDraft = (id, patch) =>
     setEditDrafts((prev) => ({ ...prev, [String(id)]: { ...(prev[String(id)] || {}), ...patch } }));
@@ -5429,37 +5678,39 @@ function ServiceAccountsPanel({ apiFetch, canManageUsers, onNotice, requestConfi
     };
 
     const cfg = draft.config || {};
-    const cleanFetchColumns = Array.isArray(cfg.fetch_columns)
-      ? Array.from(new Set(cfg.fetch_columns.map((c) => String(c).trim().toUpperCase()).filter(Boolean)))
-      : [];
-    const cleanColumnMapping = {};
-    if (cfg.column_mapping && typeof cfg.column_mapping === "object") {
-      Object.entries(cfg.column_mapping).forEach(([src, target]) => {
-        const cleanSrc = String(src).trim().toUpperCase();
-        const cleanTarget = String(target).trim().toUpperCase();
-        if (cleanSrc && cleanTarget) {
-          cleanColumnMapping[cleanSrc] = cleanTarget;
-        }
-      });
-    }
+    const registered_domains = Array.isArray(cfg.registered_domains) ? cfg.registered_domains : [];
+    const cleanDomains = {};
 
-    const hasConfig = Boolean(
-      cfg.storage_host?.trim() ||
-      cfg.storage_endpoint?.trim() ||
-      cfg.auth_token?.trim() ||
-      (cfg.storage_port && cfg.storage_port !== "5000") ||
-      cleanFetchColumns.length > 0 ||
-      Object.keys(cleanColumnMapping).length > 0
-    );
-    if (hasConfig) {
-      payload.config = {
-        storage_host: sanitizeConnectionValue(cfg.storage_host),
-        storage_port: String(sanitizeConnectionValue(cfg.storage_port || "5000")),
-        storage_endpoint: sanitizeConnectionValue(cfg.storage_endpoint),
-        domain: sanitizeConnectionValue(cfg.domain || "bank"),
-        ...(cfg.auth_token?.trim() ? { auth_token: sanitizeSecret(cfg.auth_token) } : {}),
+    registered_domains.forEach((dom) => {
+      const dCfg = cfg.domains?.[dom] || {};
+      const cleanFetchColumns = Array.isArray(dCfg.fetch_columns)
+        ? Array.from(new Set(dCfg.fetch_columns.map((c) => String(c).trim().toUpperCase()).filter(Boolean)))
+        : [];
+      const cleanColumnMapping = {};
+      if (dCfg.column_mapping && typeof dCfg.column_mapping === "object") {
+        Object.entries(dCfg.column_mapping).forEach(([src, target]) => {
+          const cleanSrc = String(src).trim().toUpperCase();
+          const cleanTarget = String(target).trim().toUpperCase();
+          if (cleanSrc && cleanTarget) {
+            cleanColumnMapping[cleanSrc] = cleanTarget;
+          }
+        });
+      }
+
+      cleanDomains[dom] = {
+        storage_host: sanitizeConnectionValue(dCfg.storage_host || ""),
+        storage_port: String(sanitizeConnectionValue(dCfg.storage_port || (dom === "microfinance" ? "5007" : "5000"))),
+        storage_endpoint: sanitizeConnectionValue(dCfg.storage_endpoint || "api/search/uii"),
+        auth_token: dCfg.auth_token?.trim() ? sanitizeSecret(dCfg.auth_token) : null,
         ...(cleanFetchColumns.length > 0 ? { fetch_columns: cleanFetchColumns } : {}),
         ...(Object.keys(cleanColumnMapping).length > 0 ? { column_mapping: cleanColumnMapping } : {}),
+      };
+    });
+
+    if (registered_domains.length > 0) {
+      payload.config = {
+        registered_domains,
+        domains: cleanDomains,
       };
     }
 
@@ -5519,44 +5770,42 @@ function ServiceAccountsPanel({ apiFetch, canManageUsers, onNotice, requestConfi
     }
 
     const cfg = draftPatch.config || {};
-    const cleanFetchColumns = Array.isArray(cfg.fetch_columns)
-      ? Array.from(new Set(cfg.fetch_columns.map((c) => String(c).trim().toUpperCase()).filter(Boolean)))
-      : [];
-    const cleanColumnMapping = {};
-    if (cfg.column_mapping && typeof cfg.column_mapping === "object") {
-      Object.entries(cfg.column_mapping).forEach(([src, target]) => {
-        const cleanSrc = String(src).trim().toUpperCase();
-        const cleanTarget = String(target).trim().toUpperCase();
-        if (cleanSrc && cleanTarget) {
-          cleanColumnMapping[cleanSrc] = cleanTarget;
-        }
-      });
-    }
+    const registered_domains = Array.isArray(cfg.registered_domains) ? cfg.registered_domains : [];
+    const cleanDomains = {};
 
-    const hadCustomFetchCols = Boolean(account.config?.fetch_columns && account.config.fetch_columns.length > 0);
-    const hadCustomColMapping = Boolean(account.config?.column_mapping && Object.keys(account.config.column_mapping).length > 0);
+    // Non-destructive: merge any registered domains with existing domains
+    const existingDomains = account.domains || account.config?.domains || {};
+    const allDomainKeys = Array.from(new Set([...registered_domains, ...Object.keys(existingDomains)]));
+    allDomainKeys.forEach((dom) => {
+      const dCfg = cfg.domains?.[dom] || existingDomains[dom] || {};
+      const cleanFetchColumns = Array.isArray(dCfg.fetch_columns)
+        ? Array.from(new Set(dCfg.fetch_columns.map((c) => String(c).trim().toUpperCase()).filter(Boolean)))
+        : [];
+      const cleanColumnMapping = {};
+      if (dCfg.column_mapping && typeof dCfg.column_mapping === "object") {
+        Object.entries(dCfg.column_mapping).forEach(([src, target]) => {
+          const cleanSrc = String(src).trim().toUpperCase();
+          const cleanTarget = String(target).trim().toUpperCase();
+          if (cleanSrc && cleanTarget) {
+            cleanColumnMapping[cleanSrc] = cleanTarget;
+          }
+        });
+      }
 
-    const hasConfig = Boolean(
-      cfg.storage_host?.trim() ||
-      cfg.storage_endpoint?.trim() ||
-      cfg.auth_token?.trim() ||
-      account.config?.storage_host ||
-      cleanFetchColumns.length > 0 ||
-      Object.keys(cleanColumnMapping).length > 0 ||
-      hadCustomFetchCols ||
-      hadCustomColMapping
-    );
-    if (hasConfig) {
-      patch.config = {
-        storage_host: sanitizeConnectionValue(cfg.storage_host),
-        storage_port: String(sanitizeConnectionValue(cfg.storage_port || "5000")),
-        storage_endpoint: sanitizeConnectionValue(cfg.storage_endpoint),
-        domain: sanitizeConnectionValue(cfg.domain || "bank"),
-        ...(cfg.auth_token?.trim() ? { auth_token: sanitizeSecret(cfg.auth_token) } : {}),
-        ...(cleanFetchColumns.length > 0 || hadCustomFetchCols ? { fetch_columns: cleanFetchColumns } : {}),
-        ...(Object.keys(cleanColumnMapping).length > 0 || hadCustomColMapping ? { column_mapping: cleanColumnMapping } : {}),
+      cleanDomains[dom] = {
+        storage_host: sanitizeConnectionValue(dCfg.storage_host || ""),
+        storage_port: String(sanitizeConnectionValue(dCfg.storage_port || (dom === "microfinance" ? "5007" : "5000"))),
+        storage_endpoint: sanitizeConnectionValue(dCfg.storage_endpoint || "api/search/uii"),
+        auth_token: dCfg.auth_token?.trim() ? sanitizeSecret(dCfg.auth_token) : null,
+        ...(cleanFetchColumns.length > 0 ? { fetch_columns: cleanFetchColumns } : {}),
+        ...(Object.keys(cleanColumnMapping).length > 0 ? { column_mapping: cleanColumnMapping } : {}),
       };
-    }
+    });
+
+    patch.config = {
+      registered_domains,
+      domains: cleanDomains,
+    };
 
     const validationError = validateDisplayName(patch.display_name);
     if (validationError) { setError(validationError); return; }
@@ -5829,6 +6078,10 @@ function ServiceAccountsPanel({ apiFetch, canManageUsers, onNotice, requestConfi
               config={draft.config}
               onChange={(config) => setDraft((prev) => ({ ...prev, config }))}
               idPrefix="create_svc_storage"
+              availableDomains={availableDomains}
+              catalogError={catalogError}
+              catalogLoading={catalogLoading}
+              onRefreshCatalog={loadCatalog}
             />
 
             <div className="service_perm_section_header">
@@ -5931,14 +6184,27 @@ function ServiceAccountsPanel({ apiFetch, canManageUsers, onNotice, requestConfi
                         <span className="service_account_display_name">
                           {account.display_name || <em className="service_account_no_name">No display name</em>}
                         </span>
-                        {account.config?.storage_host && (
+                        {((account.registered_domains || account.config?.registered_domains || []).length > 0) ? (
+                          (account.registered_domains || account.config?.registered_domains || []).map((dom) => {
+                            const dCfg = account.domains?.[dom] || account.config?.domains?.[dom] || {};
+                            return (
+                              <span
+                                key={dom}
+                                className="service_storage_chip"
+                                title={`Domain [${dom}]: ${dCfg.storage_host || "172.27.23.43"}:${dCfg.storage_port || (dom === "microfinance" ? "5007" : "5000")}/${dCfg.storage_endpoint || "api/search/uii"}`}
+                              >
+                                🗄 {dom}: {dCfg.storage_port || (dom === "microfinance" ? "5007" : "5000")}
+                              </span>
+                            );
+                          })
+                        ) : account.config?.storage_host ? (
                           <span
                             className="service_storage_chip"
                             title={`Elasticsearch Target: ${account.config.storage_host}:${account.config.storage_port || "5000"}/${account.config.storage_endpoint || ""}`}
                           >
                             🗄 {account.config.domain || "storage"}: {account.config.storage_host}:{account.config.storage_port || "5000"}
                           </span>
-                        )}
+                        ) : null}
                         {((account.config?.fetch_columns && account.config.fetch_columns.length > 0) ||
                           (account.config?.column_mapping && Object.keys(account.config.column_mapping).length > 0)) && (
                           <span
@@ -6101,6 +6367,10 @@ function ServiceAccountsPanel({ apiFetch, canManageUsers, onNotice, requestConfi
                         config={editDraft.config}
                         onChange={(config) => updateEditDraft(account.id, { config })}
                         idPrefix={`edit_svc_${account.id}_storage`}
+                        availableDomains={availableDomains}
+                        catalogError={catalogError}
+                        catalogLoading={catalogLoading}
+                        onRefreshCatalog={loadCatalog}
                       />
 
                       <div className="service_perm_section_header">

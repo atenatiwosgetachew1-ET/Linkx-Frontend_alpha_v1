@@ -7627,6 +7627,102 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 	gap: 4px;
 }
 
+/* Multi-Domain Service Account Tabs & Pills */
+.service_domain_tabs_bar {
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	border-bottom: 2px solid rgba(194, 216, 235, 0.7);
+	margin-bottom: 12px;
+	padding-bottom: 0px;
+	overflow-x: auto;
+}
+.service_domain_tab_btn {
+	background: rgba(246, 250, 253, 0.7);
+	border: 1px solid rgba(194, 216, 235, 0.7);
+	border-bottom: none;
+	border-radius: 4px 4px 0 0;
+	padding: 5px 12px;
+	font-size: 11.5px;
+	font-weight: 600;
+	color: #3b556b;
+	cursor: pointer;
+	transition: all 0.15s ease;
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	outline: none;
+}
+.service_domain_tab_btn:hover {
+	background: #fff;
+	color: #1b6ca8;
+}
+.service_domain_tab_btn.active {
+	background: #fff;
+	border-color: #1b6ca8;
+	color: #1b6ca8;
+	font-weight: 700;
+	margin-bottom: -2px;
+	border-bottom: 2px solid #fff;
+}
+.service_domain_tab_remove {
+	font-size: 10px;
+	color: #8fa2b0;
+	padding: 0 2px;
+	cursor: pointer;
+	border-radius: 50%;
+	line-height: 1;
+}
+.service_domain_tab_remove:hover {
+	color: #d32f2f;
+	background: rgba(211, 47, 47, 0.1);
+}
+.service_domain_pills_wrap {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	margin: 6px 0 10px 0;
+}
+.service_domain_pill {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	padding: 4px 10px;
+	border-radius: 14px;
+	border: 1px solid rgba(194, 216, 235, 0.8);
+	background: rgba(246, 250, 253, 0.8);
+	color: #3b556b;
+	font-size: 11.5px;
+	font-weight: 500;
+	cursor: pointer;
+	transition: all 0.15s ease;
+	outline: none;
+}
+.service_domain_pill:hover {
+	border-color: #1b6ca8;
+	background: #fff;
+	color: #104e7d;
+}
+.service_domain_pill.selected {
+	background: #e8f4fd;
+	border-color: #1b6ca8;
+	color: #104e7d;
+	font-weight: 700;
+}
+.service_catalog_error_banner {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	background: rgba(229, 57, 53, 0.08);
+	border: 1px solid rgba(229, 57, 53, 0.3);
+	color: #d32f2f;
+	padding: 6px 10px;
+	border-radius: 4px;
+	font-size: 12px;
+	font-weight: 600;
+	margin-bottom: 8px;
+}
+
 /* Advanced Schema & Column Mapping inside StorageTargetEditor */
 .schema_mapping_accordion {
 	margin-top: 10px;
@@ -8769,6 +8865,43 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 }
 
 /* Dark Mode Expandable Create & Domain Overrides */
+[data-theme="dark"] .service_domain_tabs_bar {
+	border-bottom-color: rgba(60, 90, 120, 0.7);
+}
+[data-theme="dark"] .service_domain_tab_btn {
+	background: rgba(30, 45, 60, 0.6);
+	border-color: rgba(60, 90, 120, 0.6);
+	color: #90a4ae;
+}
+[data-theme="dark"] .service_domain_tab_btn:hover {
+	background: rgba(40, 60, 80, 0.9);
+	color: #64b5f6;
+}
+[data-theme="dark"] .service_domain_tab_btn.active {
+	background: #1e293b;
+	border-color: #64b5f6;
+	color: #64b5f6;
+	border-bottom: 2px solid #1e293b;
+}
+[data-theme="dark"] .service_domain_pill {
+	background: rgba(30, 45, 60, 0.6);
+	border-color: rgba(60, 90, 120, 0.6);
+	color: #90a4ae;
+}
+[data-theme="dark"] .service_domain_pill:hover {
+	border-color: #64b5f6;
+	color: #e2e8f0;
+}
+[data-theme="dark"] .service_domain_pill.selected {
+	background: rgba(27, 108, 168, 0.35);
+	border-color: #64b5f6;
+	color: #90caf9;
+}
+[data-theme="dark"] .service_catalog_error_banner {
+	background: rgba(229, 57, 53, 0.15);
+	border-color: rgba(229, 57, 53, 0.4);
+	color: #ef5350;
+}
 [data-theme="dark"] .service_create_collapsed_hint {
 	color: #8da4b5;
 }
