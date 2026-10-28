@@ -17048,9 +17048,83 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
   const [selectedReport, setSelectedReport] = useState(null);
   const [highlightWindow, setHighlightWindow] = useState(null);
   const [hiddenRendererState, setHiddenRendererState] = useState(null);
+  const [graphAvailability, setGraphAvailability] = useState({});
   const hiddenIframeRef = useRef(null);
 
   const limit = 50;
+
+  const isReportGraphAbsent = (report, availabilityMap = {}) => {
+    if (!report) return false;
+    const traceId = report.external_reference_id || report.id;
+    if (traceId && availabilityMap[traceId] !== undefined) {
+      return availabilityMap[traceId] === false;
+    }
+    let pObj = {};
+    try {
+      pObj = typeof report.payload === "string" ? JSON.parse(report.payload) : (report.payload || {});
+    } catch (_e) {}
+
+    if (report.has_graph === false || pObj.has_graph === false) return true;
+    if (report.graph_available === false || pObj.graph_available === false) return true;
+    if (report.include_graph === false || pObj.include_graph === false) return true;
+    if (pObj.graph === null || pObj.graph === false) return true;
+    return false;
+  };
+
+  const isReportGraphPresent = (report, availabilityMap = {}) => {
+    if (!report) return false;
+    const traceId = report.external_reference_id || report.id;
+    if (traceId && availabilityMap[traceId] !== undefined) {
+      return availabilityMap[traceId] === true;
+    }
+    let pObj = {};
+    try {
+      pObj = typeof report.payload === "string" ? JSON.parse(report.payload) : (report.payload || {});
+    } catch (_e) {}
+
+    if (report.has_graph === true || pObj.has_graph === true) return true;
+    if (report.graph_available === true || pObj.graph_available === true) return true;
+    if (report.include_graph === true || pObj.include_graph === true) return true;
+    return false;
+  };
+
+  useEffect(() => {
+    if (!selectedReport || activeReportsTab !== "evidence") return;
+    const traceId = selectedReport.external_reference_id || selectedReport.id;
+    if (!traceId || graphAvailability[traceId] !== undefined) return;
+
+    if (isReportGraphAbsent(selectedReport, graphAvailability)) {
+      setGraphAvailability(prev => ({ ...prev, [traceId]: false }));
+      return;
+    }
+    if (isReportGraphPresent(selectedReport, graphAvailability)) {
+      setGraphAvailability(prev => ({ ...prev, [traceId]: true }));
+      return;
+    }
+
+    let cancelled = false;
+    const controller = new AbortController();
+    (async () => {
+      try {
+        const payload = { id: "evidence", trace_id: traceId };
+        const data = await requestGraphFetch(apiFetch, payload, controller.signal);
+        if (cancelled) return;
+        const nodes = Array.isArray(data?.results?.nodes) ? data.results.nodes : [];
+        const edges = Array.isArray(data?.results?.edges) ? data.results.edges : [];
+        const hasGraph = nodes.length > 0 || edges.length > 0;
+        setGraphAvailability(prev => ({ ...prev, [traceId]: hasGraph }));
+      } catch (_e) {
+        if (!cancelled) {
+          setGraphAvailability(prev => ({ ...prev, [traceId]: false }));
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [selectedReport, activeReportsTab]);
 
   useEffect(() => {
     if (!hiddenRendererState || !hiddenIframeRef.current) return;
@@ -17092,39 +17166,50 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
     }
 
     const notificationId = `download-report-${traceId}`;
-    onNotice({ id: notificationId, title: "Generating Report", message: "Fetching graph data...", level: "info" });
-    
-    try {
-      const payload = { id: "evidence", trace_id: traceId };
-      const controller = new AbortController();
-      const data = await requestGraphFetch(apiFetch, payload, controller.signal);
-      
-      const nodes = Array.isArray(data?.results?.nodes) ? data.results.nodes : [];
-      const edges = Array.isArray(data?.results?.edges) ? data.results.edges : [];
-      
-      if (nodes.length === 0 && edges.length === 0) {
-        onNotice({ id: notificationId, title: "Archived", message: "Graph data is empty or archived. Cannot generate report.", level: "warning" });
-        return;
+    const explicitlyNoGraph = isReportGraphAbsent(report, graphAvailability);
+
+    let nodes = [];
+    let edges = [];
+
+    if (!explicitlyNoGraph) {
+      onNotice({ id: notificationId, title: "Generating Report", message: "Checking graph data...", level: "info" });
+      try {
+        const payload = { id: "evidence", trace_id: traceId };
+        const controller = new AbortController();
+        const data = await requestGraphFetch(apiFetch, payload, controller.signal);
+        
+        nodes = Array.isArray(data?.results?.nodes) ? data.results.nodes : [];
+        edges = Array.isArray(data?.results?.edges) ? data.results.edges : [];
+        const hasGraph = nodes.length > 0 || edges.length > 0;
+        setGraphAvailability(prev => ({ ...prev, [traceId]: hasGraph }));
+      } catch (e) {
+        console.warn("Evidence graph fetch failed or unavailable, proceeding with report metrics only:", e);
+        setGraphAvailability(prev => ({ ...prev, [traceId]: false }));
       }
-      
-      onNotice({ id: notificationId, title: "Rendering", message: "Rendering graph and building PDF...", level: "info" });
-      
-      setHiddenRendererState({
-        windowId: `hidden_${traceId}_${Date.now()}`,
-        nodes,
-        edges,
-        notificationId,
-        traceId,
-        selectedReport: report
-      });
-    } catch(e) {
-      pushNotification({ id: notificationId, title: "Error", message: e.message || "Failed to fetch data.", level: "error" });
+    } else {
+      setGraphAvailability(prev => ({ ...prev, [traceId]: false }));
     }
+
+    onNotice({ id: notificationId, title: "Rendering", message: "Rendering report and building PDF...", level: "info" });
+    
+    setHiddenRendererState({
+      windowId: `hidden_${traceId}_${Date.now()}`,
+      nodes,
+      edges,
+      notificationId,
+      traceId,
+      selectedReport: report
+    });
   };
 
   const handleShowGraph = async (traceId) => {
     if (!traceId) {
       onNotice({ title: "Error", message: "No trace ID found for this report.", level: "error" });
+      return;
+    }
+
+    if (graphAvailability[traceId] === false) {
+      onNotice({ title: "Unavailable", message: "Graph data is not available for this evidence report.", level: "warning" });
       return;
     }
 
@@ -17144,10 +17229,12 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
       const edges = Array.isArray(data?.results?.edges) ? data.results.edges : [];
       
       if (nodes.length === 0 && edges.length === 0) {
-        onNotice({ id: notificationId, title: "Archived", message: "This graph evidence is older and has been moved to archive. Please contact the system administrator.", level: "warning" });
+        setGraphAvailability(prev => ({ ...prev, [traceId]: false }));
+        onNotice({ id: notificationId, title: "No Graph", message: "No graph data found for this evidence report.", level: "warning" });
         return;
       }
       
+      setGraphAvailability(prev => ({ ...prev, [traceId]: true }));
       removeNotification(notificationId);
       
       if (typeof handleOpenWindows === "function" && typeof graphAction === "function") {
@@ -17160,8 +17247,8 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
         onNotice({ title: "Error", message: "Graph manager not available.", level: "error" });
       }
     } catch (e) {
-      onNotice({ id: notificationId, title: "Error", message: e.message || "Failed to fetch graph data.", level: "error" });
-
+      setGraphAvailability(prev => ({ ...prev, [traceId]: false }));
+      onNotice({ id: notificationId, title: "Unavailable", message: e.message || "Failed to fetch graph data.", level: "error" });
     }
   };
 
@@ -18192,24 +18279,36 @@ let processedData = [...reportsData];
               </div>
 
               {/* Footer Action */}
-              <div style={{ padding: "16px 30px", borderTop: "1px solid rgba(128,128,128,0.15)", background: "rgba(128,128,128,0.02)" }}>
-                <button 
-                  type="button"
-                  className="report_tab_btn active"
-                  style={{ 
-                    width: "100%", 
-                    padding: "10px", 
-                    fontWeight: "600", 
-                    borderRadius: "6px",
-                    cursor: "pointer",
-                    transition: "opacity 0.2s, box-shadow 0.2s"
-                  }}
-                  onMouseOver={(e) => e.target.style.opacity = 0.85}
-                  onMouseOut={(e) => e.target.style.opacity = 1}
-                  onClick={() => handleShowGraph(selectedReport.external_reference_id || selectedReport.id)}
-                >
-                  Show Graph
-                </button>
+              <div style={{ padding: "16px 30px", borderTop: "1px solid rgba(128,128,128,0.15)", background: "rgba(128,128,128,0.02)", display: "flex", flexDirection: "column", gap: "10px" }}>
+                {(() => {
+                  const traceId = selectedReport.external_reference_id || selectedReport.id;
+                  const isExplicitlyAbsent = isReportGraphAbsent(selectedReport, graphAvailability);
+                  const isGraphDisabled = activeReportsTab === "evidence" && (isExplicitlyAbsent || graphAvailability[traceId] === false);
+
+                  return (
+                    <button 
+                      type="button"
+                      className={`report_tab_btn ${isGraphDisabled ? "" : "active"}`}
+                      disabled={isGraphDisabled}
+                      title={isGraphDisabled ? "No graph data available for this evidence report" : "View graph in a new graph window"}
+                      style={{ 
+                        width: "100%", 
+                        padding: "10px", 
+                        fontWeight: "600", 
+                        borderRadius: "6px",
+                        cursor: isGraphDisabled ? "not-allowed" : "pointer",
+                        opacity: isGraphDisabled ? 0.45 : 1,
+                        filter: isGraphDisabled ? "grayscale(70%)" : "none",
+                        transition: "opacity 0.2s, box-shadow 0.2s"
+                      }}
+                      onMouseOver={(e) => { if (!isGraphDisabled) e.target.style.opacity = 0.85; }}
+                      onMouseOut={(e) => { if (!isGraphDisabled) e.target.style.opacity = 1; }}
+                      onClick={() => handleShowGraph(traceId)}
+                    >
+                      {isGraphDisabled ? "No Graph Available" : "Show Graph"}
+                    </button>
+                  );
+                })()}
                 <button 
                   type="button" 
                   className="report_tab_btn"
@@ -18218,13 +18317,13 @@ let processedData = [...reportsData];
                     padding: "10px", 
                     fontWeight: "600", 
                     borderRadius: "6px",
-                    cursor: "pointer",
+                    cursor: hiddenRendererState ? "not-allowed" : "pointer",
                     background: "transparent",
                     color: "inherit",
                     border: "1px solid rgba(128,128,128,0.3)",
                     transition: "opacity 0.2s, background 0.2s"
                   }}
-                  onMouseOver={(e) => { e.target.style.background = "rgba(128,128,128,0.1)"; }}
+                  onMouseOver={(e) => { if (!hiddenRendererState) e.target.style.background = "rgba(128,128,128,0.1)"; }}
                   onMouseOut={(e) => { e.target.style.background = "transparent"; }}
                   onClick={() => handleDownloadReport(selectedReport)}
                   disabled={hiddenRendererState !== null}

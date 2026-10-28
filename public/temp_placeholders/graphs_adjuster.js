@@ -7606,22 +7606,46 @@ async function downloadGraphReport(report) {
       imageHeight = 18;
     }
     y += imageHeight + 16;
+  } else {
+    drawSectionTitle("Evidence Snapshot");
+    ensureSpace(40);
+    const frameX = margin + 10;
+    const frameY = y - 4;
+    const frameWidth = contentWidth - 20;
+    const frameHeight = 24;
+    doc.setFillColor(250, 251, 253);
+    doc.roundedRect(frameX, frameY, frameWidth, frameHeight, 4, 4, "F");
+    doc.setDrawColor(217, 224, 233);
+    doc.setLineWidth(0.6);
+    doc.roundedRect(frameX, frameY, frameWidth, frameHeight, 4, 4, "S");
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8.8);
+    doc.setTextColor(110, 113, 117);
+    doc.text("Graph snapshot is unavailable for this report.", margin + 18, y + 12);
+    y += frameHeight + 16;
   }
 
 
   // Evidence Info Section
   if (report.reportInfo && Object.keys(report.reportInfo).length > 0) {
     const info = report.reportInfo;
+    const payloadObj = typeof info.payload === "string"
+      ? (() => { try { return JSON.parse(info.payload); } catch(e) { return {}; } })()
+      : (info.payload || {});
+
     drawSectionTitle("Evidence Information");
     
-    let band = info.score_band ?? "-";
-    if (info.fraud_score >= 90) band = "Fatal";
+    const fraudScore = info.fraud_score ?? payloadObj.fraud_score ?? info.score ?? payloadObj.score ?? "-";
+    let band = info.score_band ?? payloadObj.score_band ?? "-";
+    if (Number(fraudScore) >= 90) band = "Fatal";
+    const statusVal = info.status ?? payloadObj.status ?? "-";
+    const typologyVal = info.typology ?? payloadObj.typology ?? payloadObj.anomaly_type ?? "-";
     
     const evRows = [
-      ["Fraud Score", info.fraud_score ?? info.score ?? "-"],
+      ["Fraud Score", fraudScore],
       ["Score Band", band],
-      ["Status", info.status ?? "-"],
-      ["Typology", info.typology ?? "-"]
+      ["Status", statusVal],
+      ["Typology", typologyVal]
     ];
     
     const summaryGap = 10;
@@ -7656,17 +7680,21 @@ async function downloadGraphReport(report) {
     }
     y += evSectionHeight + 3;
     
-    const evidence = info.score_evidence;
-    if (evidence && typeof evidence === 'object') {
+    const evidence = info.score_evidence || payloadObj.score_evidence;
+    const reasonVal = payloadObj.reason || info.reason;
+    if (reasonVal || (evidence && typeof evidence === 'object')) {
        const isCdr = typeof window.isCdrDomain === "function" ? window.isCdrDomain() : false;
        const evListItems = [];
-       if (evidence.base_score_applied) evListItems.push({ label: "Base Score", value: evidence.base_score_applied });
-       if (evidence.node_count_bonus) evListItems.push({ label: "Node Count Bonus", value: evidence.node_count_bonus });
-       if (evidence.financial_bonus) evListItems.push({ 
-         label: isCdr ? "Volume Bonus" : "Financial Bonus", 
-         value: evidence.financial_bonus 
-       });
-       if (evidence.config_version) evListItems.push({ label: "Config Version", value: evidence.config_version });
+       if (reasonVal) evListItems.push({ label: "Reason", value: reasonVal });
+       if (evidence && typeof evidence === 'object') {
+         if (evidence.base_score_applied != null) evListItems.push({ label: "Base Score", value: evidence.base_score_applied });
+         if (evidence.node_count_bonus != null) evListItems.push({ label: "Node Count Bonus", value: evidence.node_count_bonus });
+         if (evidence.financial_bonus != null) evListItems.push({ 
+           label: isCdr ? "Volume Bonus" : "Financial Bonus", 
+           value: evidence.financial_bonus 
+         });
+         if (evidence.config_version) evListItems.push({ label: "Config Version", value: evidence.config_version });
+       }
        
        drawList(
          evListItems,
@@ -7847,10 +7875,10 @@ async function generateEvidenceReport(payload) {
   edgesData.clear();
   FULL_GRAPH.edgesByNode = null;
   
-  initializeFullGraph({ nodes, edges });
+  initializeFullGraph({ nodes: nodes || [], edges: edges || [] });
   setCurrentGraphScope("");
 
-  if (FULL_GRAPH.nodes.size > 0) {
+  if (FULL_GRAPH.nodes && FULL_GRAPH.nodes.size > 0) {
     const degreeCounter = new Map();
     const originalIdMap = new Map();
     
@@ -7888,44 +7916,51 @@ async function generateEvidenceReport(payload) {
         VISIBLE_STATE.edges.add(edgeId);
       }
     }
-  }
 
-  window.currentSettings.layoutType = "concentric";
-  window.currentSettings.showLabels = true;
-  window.currentSettings.limit = 100;
-  window.limitOverridden = true;
-  
-  try { updateGraphOption("layout_type", "concentric"); } catch(e) {}
-  
-  if (typeof renderVisibleGraphBatch === "function") {
-    renderVisibleGraphBatch();
-  } else if (typeof renderVisibleGraph === "function") {
-    renderVisibleGraph();
-  }
-  
-  if (network) {
-    network.setOptions({ physics: false });
-  }
-
-  if (typeof applyManualLayout === "function") {
-    applyManualLayout("concentric", { fitToView: true, redraw: true });
-  }
-
-  suspendGraphHistoryEnd();
-
-  setTimeout(() => {
-    if (network) {
-      network.fit({ animation: false });
+    window.currentSettings.layoutType = "concentric";
+    window.currentSettings.showLabels = true;
+    window.currentSettings.limit = 100;
+    window.limitOverridden = true;
+    
+    try { updateGraphOption("layout_type", "concentric"); } catch(e) {}
+    
+    if (typeof renderVisibleGraphBatch === "function") {
+      renderVisibleGraphBatch();
+    } else if (typeof renderVisibleGraph === "function") {
+      renderVisibleGraph();
     }
+    
+    if (network) {
+      network.setOptions({ physics: false });
+    }
+
+    if (typeof applyManualLayout === "function") {
+      applyManualLayout("concentric", { fitToView: true, redraw: true });
+    }
+
+    suspendGraphHistoryEnd();
+
+    setTimeout(() => {
+      if (network) {
+        network.fit({ animation: false });
+      }
+      setTimeout(() => {
+        generateGraphReport(payload);
+      }, 200);
+    }, 1000);
+  } else {
+    VISIBLE_STATE.nodes.clear();
+    VISIBLE_STATE.edges.clear();
+    suspendGraphHistoryEnd();
     setTimeout(() => {
       generateGraphReport(payload);
-    }, 200);
-  }, 1000);
+    }, 100);
+  }
 }
 
 async function generateGraphReport(payload) {
   const report = buildGraphReportData(payload);
-  report.graphSnapshotDataUrl = getGraphSnapshotDataUrl();
+  report.graphSnapshotDataUrl = (FULL_GRAPH && FULL_GRAPH.nodes && FULL_GRAPH.nodes.size > 0) ? getGraphSnapshotDataUrl() : null;
   await downloadGraphReport(report);
 }
 

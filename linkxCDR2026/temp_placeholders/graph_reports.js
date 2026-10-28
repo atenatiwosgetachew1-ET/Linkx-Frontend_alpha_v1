@@ -97,37 +97,58 @@
 
   function buildKeyFindings(report) {
     const findings = [];
+    const info = report.reportInfo;
+    const payloadObj = typeof info?.payload === "string"
+      ? (() => { try { return JSON.parse(info.payload); } catch(e) { return {}; } })()
+      : (info?.payload || {});
 
-    findings.push(
-      `Observed ${formatNumber(report.visibleNodes)} entities and ${formatNumber(report.visibleEdges)} relationships in the active scope.`
-    );
-
-    const topRel = (Array.isArray(report.relationshipTypes) ? report.relationshipTypes : [])
-      .slice()
-      .sort((a, b) => numberValue(b.count) - numberValue(a.count))[0];
-    if (topRel) {
+    if (report.visibleNodes > 0 || report.visibleEdges > 0) {
       findings.push(
-        `Dominant relationship pattern: ${topRel.type} (${formatNumber(topRel.count)} links).`
+        `Observed ${formatNumber(report.visibleNodes)} entities and ${formatNumber(report.visibleEdges)} relationships in the active scope.`
       );
-    }
 
-    const topIdentity = (Array.isArray(report.nodeIdentityDistribution) ? report.nodeIdentityDistribution : [])
-      .slice()
-      .sort((a, b) => numberValue(b.count) - numberValue(a.count))[0];
-    if (topIdentity) {
-      findings.push(
-        `Most common entity category: ${normalizeIdentity(topIdentity.identity)} (${formatNumber(topIdentity.count)} entities).`
-      );
-    }
+      const topRel = (Array.isArray(report.relationshipTypes) ? report.relationshipTypes : [])
+        .slice()
+        .sort((a, b) => numberValue(b.count) - numberValue(a.count))[0];
+      if (topRel) {
+        findings.push(
+          `Dominant relationship pattern: ${topRel.type} (${formatNumber(topRel.count)} links).`
+        );
+      }
 
-    const topNode = (Array.isArray(report.topNodesByDegree) ? report.topNodesByDegree : [])[0];
-    if (topNode) {
-      const label = topNode.label && String(topNode.label).trim() !== ""
-        ? topNode.label
-        : topNode.id;
-      findings.push(
-        `Highest connected entity in current view: ${label} (degree: ${formatNumber(topNode.degree)}).`
-      );
+      const topIdentity = (Array.isArray(report.nodeIdentityDistribution) ? report.nodeIdentityDistribution : [])
+        .slice()
+        .sort((a, b) => numberValue(b.count) - numberValue(a.count))[0];
+      if (topIdentity) {
+        findings.push(
+          `Most common entity category: ${normalizeIdentity(topIdentity.identity)} (${formatNumber(topIdentity.count)} entities).`
+        );
+      }
+
+      const topNode = (Array.isArray(report.topNodesByDegree) ? report.topNodesByDegree : [])[0];
+      if (topNode) {
+        const label = topNode.label && String(topNode.label).trim() !== ""
+          ? topNode.label
+          : topNode.id;
+        findings.push(
+          `Highest connected entity in current view: ${label} (degree: ${formatNumber(topNode.degree)}).`
+        );
+      }
+    } else {
+      findings.push("Graph topology payload was excluded or archived for this service evidence report.");
+      const fraudScore = info?.fraud_score ?? payloadObj?.fraud_score ?? info?.score ?? payloadObj?.score;
+      const scoreBand = info?.score_band ?? payloadObj?.score_band;
+      if (fraudScore !== undefined && fraudScore !== null && fraudScore !== "") {
+        findings.push(`Computed evaluation score: ${fraudScore} (Score Band: ${scoreBand || "Standard"}).`);
+      }
+      const reason = payloadObj?.reason || info?.reason;
+      if (reason) {
+        findings.push(`Flagged trigger reason: ${reason}`);
+      }
+      const typology = payloadObj?.anomaly_type || payloadObj?.typology || info?.typology;
+      if (typology) {
+        findings.push(`Investigative typology category: ${typology}`);
+      }
     }
 
     return findings;
@@ -140,6 +161,17 @@
     const connectivity = numberValue(report.averageDegree).toFixed(2);
     const selectedNodes = formatNumber(report.selectedNodes);
     const status = deriveCaseStatus(report);
+
+    if (report.visibleNodes <= 0 && report.visibleEdges <= 0) {
+      const info = report.reportInfo;
+      const payloadObj = typeof info?.payload === "string"
+        ? (() => { try { return JSON.parse(info.payload); } catch(e) { return {}; } })()
+        : (info?.payload || {});
+      const score = info?.fraud_score ?? payloadObj?.fraud_score ?? info?.score ?? payloadObj?.score ?? "-";
+      const band = info?.score_band ?? payloadObj?.score_band ?? "Standard";
+      const repStatus = info?.status || status;
+      return `This evidence report was generated without an embedded graph topology payload. The recorded assessment indicates an evaluation score of ${score} (${band}) with status ${repStatus}. Detailed evidence metrics and investigative findings are summarized in the evidence profile above.`;
+    }
 
     return `Based on the current graph scope, the investigation indicates ${entities} observed entities connected through ${relations} relationships. The network shows a density of ${density} with a connectivity index of ${connectivity}. Current focus includes ${selectedNodes} selected entities. Overall assessment status: ${status}. This remark is generated from the active analytical snapshot and should be reviewed together with the detailed findings above before final case submission.`;
   }
@@ -169,6 +201,50 @@
     setText("report_avg_degree", numberValue(report.averageDegree).toFixed(2));
     setText("report_density", formatPercent(report.densityPercent));
     setGraphSnapshot(report.graphSnapshotDataUrl || "");
+
+    // Populate Evidence Information section
+    const evSection = document.getElementById("evidence_section");
+    const info = report.reportInfo;
+    if (info && typeof info === "object") {
+      const payloadObj = typeof info.payload === "string"
+        ? (() => { try { return JSON.parse(info.payload); } catch(e) { return {}; } })()
+        : (info.payload || {});
+
+      const fraudScore = info.fraud_score ?? payloadObj.fraud_score ?? info.score ?? payloadObj.score ?? "-";
+      let band = info.score_band ?? payloadObj.score_band ?? "-";
+      if (Number(fraudScore) >= 90) band = "Fatal";
+      const statusVal = info.status ?? payloadObj.status ?? "-";
+      const typologyVal = info.typology ?? payloadObj.typology ?? payloadObj.anomaly_type ?? "-";
+      const reasonVal = payloadObj.reason || info.reason;
+
+      setText("ev_fraud_score", fraudScore);
+      setText("ev_score_band", band);
+      setText("ev_status", statusVal);
+      setText("ev_typology", typologyVal);
+
+      const evList = [];
+      if (reasonVal) {
+        evList.push(`Reason: ${reasonVal}`);
+      }
+      const scoreEvidence = info.score_evidence || payloadObj.score_evidence;
+      if (scoreEvidence && typeof scoreEvidence === "object") {
+        if (scoreEvidence.config_version) evList.push(`Config Version: ${scoreEvidence.config_version}`);
+        if (scoreEvidence.base_score_applied != null) evList.push(`Base Score: ${scoreEvidence.base_score_applied}`);
+        if (scoreEvidence.node_count_bonus != null) evList.push(`Node Count Bonus: ${scoreEvidence.node_count_bonus}`);
+        if (scoreEvidence.financial_bonus != null) {
+          const isCdr = typeof window.isCdrDomain === "function" ? window.isCdrDomain() : false;
+          evList.push(`${isCdr ? "Volume Bonus" : "Financial Bonus"}: ${scoreEvidence.financial_bonus}`);
+        }
+      }
+      
+      renderList("ev_evidence_list", evList, "No additional evidence parameters recorded.", (item) => item);
+
+      if (evSection) {
+        evSection.style.display = "block";
+      }
+    } else if (evSection) {
+      evSection.style.display = "none";
+    }
 
     renderList(
       "report_key_findings",
