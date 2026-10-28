@@ -7106,13 +7106,25 @@ function buildGraphReportData(payload) {
     : 0;
   const averageDegree = nodeCount > 0 ? (2 * edgeCount) / nodeCount : 0;
 
+  let pObj = {};
+  try {
+    pObj = typeof reportInfo?.payload === "string" ? JSON.parse(reportInfo.payload) : (reportInfo?.payload || {});
+  } catch(e) {}
+
+  const totalNodesCount = (FULL_GRAPH && FULL_GRAPH.nodes && FULL_GRAPH.nodes.size > 0)
+    ? FULL_GRAPH.nodes.size
+    : (pObj.linked_accounts_count ?? 0);
+  const totalEdgesCount = (FULL_GRAPH && FULL_GRAPH.edges && FULL_GRAPH.edges.size > 0)
+    ? FULL_GRAPH.edges.size
+    : (pObj.all_relationships ?? 0);
+
   return {
     sourceWindowId,
     generatedAt: new Date().toLocaleString(),
     visibleNodes: nodeCount,
     visibleEdges: edgeCount,
-    totalNodes: FULL_GRAPH.nodes.size,
-    totalEdges: FULL_GRAPH.edges.size,
+    totalNodes: totalNodesCount,
+    totalEdges: totalEdgesCount,
     selectedNodes: selectedNodeIds.length,
     selectedEdges: selectedEdgeIds.length,
     averageDegree,
@@ -7635,11 +7647,11 @@ async function downloadGraphReport(report) {
 
     drawSectionTitle("Evidence Information");
     
-    const fraudScore = info.fraud_score ?? payloadObj.fraud_score ?? info.score ?? payloadObj.score ?? "-";
-    let band = info.score_band ?? payloadObj.score_band ?? "-";
+    const fraudScore = info.fraud_score ?? payloadObj.fraud_score ?? info.score ?? payloadObj.score ?? (payloadObj.network_centrality_score != null ? `${(payloadObj.network_centrality_score * 100).toFixed(0)}%` : "-");
+    let band = info.score_band ?? payloadObj.score_band ?? (payloadObj.is_flagged ? "Flagged" : "-");
     if (Number(fraudScore) >= 90) band = "Fatal";
     const statusVal = info.status ?? payloadObj.status ?? "-";
-    const typologyVal = info.typology ?? payloadObj.typology ?? payloadObj.anomaly_type ?? "-";
+    const typologyVal = info.typology ?? payloadObj.typology ?? payloadObj.anomaly_type ?? (Array.isArray(payloadObj.flagged_rules) ? payloadObj.flagged_rules.join(", ") : payloadObj.flagged_rules) ?? "-";
     
     const evRows = [
       ["Fraud Score", fraudScore],
@@ -7682,17 +7694,29 @@ async function downloadGraphReport(report) {
     
     const evidence = info.score_evidence || payloadObj.score_evidence;
     const reasonVal = payloadObj.reason || info.reason;
-    if (reasonVal || (evidence && typeof evidence === 'object')) {
+    const hasEnriched = payloadObj.account_no || payloadObj.entity_id || payloadObj.flagged_rules || payloadObj.linked_accounts_count != null;
+    if (reasonVal || hasEnriched || (evidence && typeof evidence === 'object')) {
        const isCdr = typeof window.isCdrDomain === "function" ? window.isCdrDomain() : false;
        const evListItems = [];
+       if (payloadObj.account_no || payloadObj.entity_id) evListItems.push({ label: "Account / Entity", value: payloadObj.account_no || payloadObj.entity_id });
+       if (payloadObj.domain || payloadObj.resolved_domain) evListItems.push({ label: "Domain", value: payloadObj.domain || payloadObj.resolved_domain });
+       if (payloadObj.is_flagged !== undefined) evListItems.push({ label: "Flagged", value: payloadObj.is_flagged ? "Yes" : "No" });
+       if (payloadObj.beneficiary_blacklisted !== undefined) evListItems.push({ label: "Beneficiary Blacklisted", value: payloadObj.beneficiary_blacklisted ? "Yes" : "No" });
+       if (payloadObj.linked_accounts_count != null) evListItems.push({ label: "Linked Accounts", value: payloadObj.linked_accounts_count });
+       if (payloadObj.all_relationships != null) evListItems.push({ label: "All Relationships", value: payloadObj.all_relationships });
+       if (payloadObj.network_centrality_score != null) evListItems.push({ label: "Centrality Score", value: payloadObj.network_centrality_score });
+       if (payloadObj.max_path_length != null) evListItems.push({ label: "Max Path Depth", value: payloadObj.max_path_length });
+       if (payloadObj.duration_ms != null) evListItems.push({ label: "Analysis Duration", value: `${(payloadObj.duration_ms / 1000).toFixed(2)}s` });
        if (reasonVal) evListItems.push({ label: "Reason", value: reasonVal });
        if (evidence && typeof evidence === 'object') {
          if (evidence.base_score_applied != null) evListItems.push({ label: "Base Score", value: evidence.base_score_applied });
          if (evidence.node_count_bonus != null) evListItems.push({ label: "Node Count Bonus", value: evidence.node_count_bonus });
-         if (evidence.financial_bonus != null) evListItems.push({ 
-           label: isCdr ? "Volume Bonus" : "Financial Bonus", 
-           value: evidence.financial_bonus 
-         });
+         if (evidence.financial_bonus != null) {
+           evListItems.push({ 
+             label: isCdr ? "Volume Bonus" : "Financial Bonus", 
+             value: evidence.financial_bonus 
+           });
+         }
          if (evidence.config_version) evListItems.push({ label: "Config Version", value: evidence.config_version });
        }
        

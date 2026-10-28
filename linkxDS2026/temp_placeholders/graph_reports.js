@@ -136,6 +136,18 @@
       }
     } else {
       findings.push("Graph topology payload was excluded or archived for this service evidence report.");
+      if (payloadObj?.account_no || payloadObj?.entity_id) {
+        findings.push(`Target Subject: Entity/Account ${payloadObj.account_no || payloadObj.entity_id} (${payloadObj.domain || payloadObj.resolved_domain || "Universal"}).`);
+      }
+      if (payloadObj?.flagged_rules && payloadObj.flagged_rules.length > 0) {
+        findings.push(`Flagged Typology Rules: ${Array.isArray(payloadObj.flagged_rules) ? payloadObj.flagged_rules.join(", ") : payloadObj.flagged_rules}.`);
+      }
+      if (payloadObj?.linked_accounts_count != null || payloadObj?.all_relationships != null) {
+        findings.push(`Analytical Scope: ${formatNumber(payloadObj.linked_accounts_count ?? 0)} linked accounts across ${formatNumber(payloadObj.all_relationships ?? 0)} total relationships.`);
+      }
+      if (payloadObj?.network_centrality_score != null) {
+        findings.push(`Network Centrality Index: ${payloadObj.network_centrality_score} (Max Path Depth: ${payloadObj.max_path_length ?? "N/A"}).`);
+      }
       const fraudScore = info?.fraud_score ?? payloadObj?.fraud_score ?? info?.score ?? payloadObj?.score;
       const scoreBand = info?.score_band ?? payloadObj?.score_band;
       if (fraudScore !== undefined && fraudScore !== null && fraudScore !== "") {
@@ -146,7 +158,7 @@
         findings.push(`Flagged trigger reason: ${reason}`);
       }
       const typology = payloadObj?.anomaly_type || payloadObj?.typology || info?.typology;
-      if (typology) {
+      if (typology && !payloadObj?.flagged_rules) {
         findings.push(`Investigative typology category: ${typology}`);
       }
     }
@@ -167,9 +179,12 @@
       const payloadObj = typeof info?.payload === "string"
         ? (() => { try { return JSON.parse(info.payload); } catch(e) { return {}; } })()
         : (info?.payload || {});
-      const score = info?.fraud_score ?? payloadObj?.fraud_score ?? info?.score ?? payloadObj?.score ?? "-";
-      const band = info?.score_band ?? payloadObj?.score_band ?? "Standard";
+      const score = info?.fraud_score ?? payloadObj?.fraud_score ?? info?.score ?? payloadObj?.score ?? (payloadObj?.network_centrality_score != null ? `${(payloadObj.network_centrality_score * 100).toFixed(0)}%` : "-");
+      const band = info?.score_band ?? payloadObj?.score_band ?? (payloadObj?.is_flagged ? "Flagged" : "Standard");
       const repStatus = info?.status || status;
+      if (payloadObj?.account_no || payloadObj?.entity_id) {
+        return `This service evidence report for account ${payloadObj.account_no || payloadObj.entity_id} was generated without an embedded graph topology payload. Analysis identified ${formatNumber(payloadObj.linked_accounts_count ?? 0)} linked accounts and ${formatNumber(payloadObj.all_relationships ?? 0)} total relationships with a network centrality score of ${payloadObj.network_centrality_score ?? "N/A"}. Flagged typologies: ${Array.isArray(payloadObj.flagged_rules) ? payloadObj.flagged_rules.join(", ") : (payloadObj.flagged_rules || "None")}. Please review the detailed analytical metrics above.`;
+      }
       return `This evidence report was generated without an embedded graph topology payload. The recorded assessment indicates an evaluation score of ${score} (${band}) with status ${repStatus}. Detailed evidence metrics and investigative findings are summarized in the evidence profile above.`;
     }
 
@@ -210,11 +225,11 @@
         ? (() => { try { return JSON.parse(info.payload); } catch(e) { return {}; } })()
         : (info.payload || {});
 
-      const fraudScore = info.fraud_score ?? payloadObj.fraud_score ?? info.score ?? payloadObj.score ?? "-";
-      let band = info.score_band ?? payloadObj.score_band ?? "-";
+      const fraudScore = info.fraud_score ?? payloadObj.fraud_score ?? info.score ?? payloadObj.score ?? (payloadObj.network_centrality_score != null ? `${(payloadObj.network_centrality_score * 100).toFixed(0)}%` : "-");
+      let band = info.score_band ?? payloadObj.score_band ?? (payloadObj.is_flagged ? "Flagged" : "-");
       if (Number(fraudScore) >= 90) band = "Fatal";
       const statusVal = info.status ?? payloadObj.status ?? "-";
-      const typologyVal = info.typology ?? payloadObj.typology ?? payloadObj.anomaly_type ?? "-";
+      const typologyVal = info.typology ?? payloadObj.typology ?? payloadObj.anomaly_type ?? (Array.isArray(payloadObj.flagged_rules) ? payloadObj.flagged_rules.join(", ") : payloadObj.flagged_rules) ?? "-";
       const reasonVal = payloadObj.reason || info.reason;
 
       setText("ev_fraud_score", fraudScore);
@@ -223,9 +238,20 @@
       setText("ev_typology", typologyVal);
 
       const evList = [];
-      if (reasonVal) {
-        evList.push(`Reason: ${reasonVal}`);
+      if (payloadObj.account_no || payloadObj.entity_id) evList.push(`Account / Entity: ${payloadObj.account_no || payloadObj.entity_id}`);
+      if (payloadObj.domain || payloadObj.resolved_domain) evList.push(`Domain: ${payloadObj.domain || payloadObj.resolved_domain}`);
+      if (payloadObj.is_flagged !== undefined) evList.push(`Flagged: ${payloadObj.is_flagged ? "Yes" : "No"}`);
+      if (payloadObj.beneficiary_blacklisted !== undefined) evList.push(`Beneficiary Blacklisted: ${payloadObj.beneficiary_blacklisted ? "Yes" : "No"}`);
+      if (payloadObj.flagged_rules && Array.isArray(payloadObj.flagged_rules) && payloadObj.flagged_rules.length > 0) {
+        evList.push(`Flagged Rules: ${payloadObj.flagged_rules.join(", ")}`);
       }
+      if (payloadObj.linked_accounts_count != null) evList.push(`Linked Accounts: ${formatNumber(payloadObj.linked_accounts_count)}`);
+      if (payloadObj.all_relationships != null) evList.push(`All Relationships: ${formatNumber(payloadObj.all_relationships)}`);
+      if (payloadObj.network_centrality_score != null) evList.push(`Network Centrality: ${payloadObj.network_centrality_score}`);
+      if (payloadObj.max_path_length != null) evList.push(`Max Path Length: ${payloadObj.max_path_length}`);
+      if (payloadObj.duration_ms != null) evList.push(`Analysis Duration: ${(payloadObj.duration_ms / 1000).toFixed(2)}s`);
+      if (reasonVal) evList.push(`Reason: ${reasonVal}`);
+
       const scoreEvidence = info.score_evidence || payloadObj.score_evidence;
       if (scoreEvidence && typeof scoreEvidence === "object") {
         if (scoreEvidence.config_version) evList.push(`Config Version: ${scoreEvidence.config_version}`);

@@ -17914,8 +17914,10 @@ let processedData = [...reportsData];
                     </td>
                     { (activeReportsTab === "xvigilance" || activeReportsTab === "evidence") && (
                       <>
-                        <td style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{pObj.anomaly_type || "-"}</td>
-                        <td>{pObj.fraud_score !== undefined ? pObj.fraud_score : "-"}</td>
+                        <td style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={pObj.anomaly_type || (Array.isArray(pObj.flagged_rules) ? pObj.flagged_rules.join(", ") : pObj.flagged_rules) || ""}>
+                          {pObj.anomaly_type || (Array.isArray(pObj.flagged_rules) ? pObj.flagged_rules.join(", ") : pObj.flagged_rules) || "-"}
+                        </td>
+                        <td>{pObj.fraud_score !== undefined ? pObj.fraud_score : (pObj.network_centrality_score !== undefined ? `${(pObj.network_centrality_score * 100).toFixed(0)}%` : "-")}</td>
                         <td>
                           {scoreBand ? (
                             <span style={{ 
@@ -17932,9 +17934,26 @@ let processedData = [...reportsData];
                             }}>
                               {scoreBand}
                             </span>
-                          ) : "-"}
+                          ) : (pObj.is_flagged ? (
+                            <span style={{ 
+                              background: "rgba(231, 76, 60, 0.15)", 
+                              color: "#c0392b", 
+                              border: "1px solid rgba(231, 76, 60, 0.4)",
+                              padding: "3px 8px", 
+                              borderRadius: "12px", 
+                              fontSize: "10px", 
+                              fontWeight: "700",
+                              textTransform: "uppercase",
+                              letterSpacing: "0.5px",
+                              display: "inline-block"
+                            }}>
+                              FLAGGED
+                            </span>
+                          ) : "-")}
                         </td>
-                        <td style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={pObj.reason || ""}>{pObj.reason || "-"}</td>
+                        <td style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={pObj.reason || (pObj.beneficiary_blacklisted ? "Beneficiary Blacklisted" : (pObj.is_flagged ? "Flagged Network Activity" : "")) || ""}>
+                          {pObj.reason || (pObj.beneficiary_blacklisted ? "Beneficiary Blacklisted" : (pObj.is_flagged ? "Flagged Network Activity" : "-"))}
+                        </td>
                       </>
                     )}
                     <td>
@@ -18210,43 +18229,158 @@ let processedData = [...reportsData];
                       pObj = typeof selectedReport.payload === "string" ? JSON.parse(selectedReport.payload) : (selectedReport.payload || {});
                     } catch(e) {}
                     const scoreEvidence = pObj.score_evidence;
-                    if (!scoreEvidence) return null;
                     return (
                       <>
-                        <span>
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
-                          </svg>
-                          Config Version
-                        </span>
-                        <b>{scoreEvidence.config_version}</b>
-                        <span>
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M12 20v-6M6 20V10M18 20V4"/>
-                          </svg>
-                          Base Score
-                        </span>
-                        <b>{scoreEvidence.base_score_applied}</b>
-                        <span>
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                            <circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>
-                          </svg>
-                          Node Bonus
-                        </span>
-                        <b>{scoreEvidence.node_count_bonus}</b>
-                        <span>
-                          {isCdrDomain ? (
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                              <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-                            </svg>
-                          ) : (
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                              <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
-                            </svg>
-                          )}
-                          {isCdrDomain ? "Volume Bonus" : "Financial Bonus"}
-                        </span>
-                        <b>{scoreEvidence.financial_bonus}</b>
+                        {/* Enriched Evidence Metrics */}
+                        {(pObj.account_no || pObj.entity_id) && (
+                          <>
+                            <span>
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                                <rect x="3" y="4" width="18" height="16" rx="2"/><line x1="7" y1="8" x2="17" y2="8"/><line x1="7" y1="12" x2="17" y2="12"/>
+                              </svg>
+                              Entity / Account
+                            </span>
+                            <b style={{ wordBreak: "break-all" }}>{pObj.account_no || pObj.entity_id}</b>
+                          </>
+                        )}
+
+                        {(pObj.domain || pObj.resolved_domain) && (
+                          <>
+                            <span>
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                                <circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/>
+                              </svg>
+                              Domain
+                            </span>
+                            <b style={{ textTransform: "capitalize" }}>{pObj.domain || pObj.resolved_domain}</b>
+                          </>
+                        )}
+
+                        {pObj.flagged_rules && (
+                          <>
+                            <span>
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/>
+                              </svg>
+                              Flagged Rules
+                            </span>
+                            <b style={{ color: "#e74c3c" }}>{Array.isArray(pObj.flagged_rules) ? pObj.flagged_rules.join(", ") : pObj.flagged_rules}</b>
+                          </>
+                        )}
+
+                        {pObj.linked_accounts_count != null && (
+                          <>
+                            <span>
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                              </svg>
+                              Linked Accounts
+                            </span>
+                            <b>{Number(pObj.linked_accounts_count).toLocaleString()}</b>
+                          </>
+                        )}
+
+                        {pObj.all_relationships != null && (
+                          <>
+                            <span>
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                                <line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/>
+                              </svg>
+                              Relationships
+                            </span>
+                            <b>{Number(pObj.all_relationships).toLocaleString()}</b>
+                          </>
+                        )}
+
+                        {pObj.network_centrality_score != null && (
+                          <>
+                            <span>
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                                <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>
+                              </svg>
+                              Centrality Score
+                            </span>
+                            <b>{pObj.network_centrality_score}</b>
+                          </>
+                        )}
+
+                        {pObj.max_path_length != null && (
+                          <>
+                            <span>
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+                              </svg>
+                              Max Path Length
+                            </span>
+                            <b>{pObj.max_path_length}</b>
+                          </>
+                        )}
+
+                        {pObj.beneficiary_blacklisted !== undefined && (
+                          <>
+                            <span>
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                                <circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
+                              </svg>
+                              Blacklisted
+                            </span>
+                            <b style={{ color: pObj.beneficiary_blacklisted ? "#e74c3c" : "#27ae60" }}>
+                              {pObj.beneficiary_blacklisted ? "Yes" : "No"}
+                            </b>
+                          </>
+                        )}
+
+                        {pObj.duration_ms != null && (
+                          <>
+                            <span>
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                                <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+                              </svg>
+                              Analysis Duration
+                            </span>
+                            <b>{(pObj.duration_ms / 1000).toFixed(2)}s</b>
+                          </>
+                        )}
+
+                        {/* Classic score_evidence metrics */}
+                        {scoreEvidence && (
+                          <>
+                            <span>
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                              </svg>
+                              Config Version
+                            </span>
+                            <b>{scoreEvidence.config_version}</b>
+                            <span>
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M12 20v-6M6 20V10M18 20V4"/>
+                              </svg>
+                              Base Score
+                            </span>
+                            <b>{scoreEvidence.base_score_applied}</b>
+                            <span>
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                                <circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>
+                              </svg>
+                              Node Bonus
+                            </span>
+                            <b>{scoreEvidence.node_count_bonus}</b>
+                            <span>
+                              {isCdrDomain ? (
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                                  <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+                                </svg>
+                              ) : (
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                                  <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                                </svg>
+                              )}
+                              {isCdrDomain ? "Volume Bonus" : "Financial Bonus"}
+                            </span>
+                            <b>{scoreEvidence.financial_bonus}</b>
+                          </>
+                        )}
                       </>
                     );
                   })()}
