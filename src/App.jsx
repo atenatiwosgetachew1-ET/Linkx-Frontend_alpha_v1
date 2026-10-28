@@ -4307,6 +4307,45 @@ function MappingRow({ sourceKey, targetVal, onChangeKey, onChangeVal, onRemove, 
   );
 }
 
+const STANDARD_FORENSIC_DOMAINS = [
+  { id: "banking", label: "Banking", icon: "🏦", tag: "Transactions", defaultPort: "5000" },
+  { id: "microfinance", label: "Microfinance", icon: "💳", tag: "MFI Transfers", defaultPort: "5007" },
+  { id: "cdr", label: "CDR / Telecom", icon: "📞", tag: "Call Records", defaultPort: "5000" },
+  { id: "insurance", label: "Insurance", icon: "🛡️", tag: "Claims & Policies", defaultPort: "5000" },
+  { id: "social_media", label: "Social Media", icon: "🌐", tag: "Network Graph", defaultPort: "5000" },
+];
+
+const getDomainMeta = (dom) => {
+  const key = String(dom || "").toLowerCase().trim();
+  if (key === "banking" || key === "bank") {
+    return { label: "Banking", icon: "🏦", tag: "Core Banking", defaultPort: "5000" };
+  }
+  if (key === "microfinance" || key === "mfi") {
+    return { label: "Microfinance", icon: "💳", tag: "MFI & Wallets", defaultPort: "5007" };
+  }
+  if (key === "cdr" || key === "telecom") {
+    return { label: key === "telecom" ? "Telecom" : "CDR / Telecom", icon: "📞", tag: "Call Detail Records", defaultPort: "5000" };
+  }
+  if (key === "insurance") {
+    return { label: "Insurance", icon: "🛡️", tag: "Claims & Policies", defaultPort: "5000" };
+  }
+  if (key === "social_media" || key === "social") {
+    return { label: "Social Media", icon: "🌐", tag: "Network Graph", defaultPort: "5000" };
+  }
+  if (key === "fintech") {
+    return { label: "Fintech", icon: "⚡", tag: "Digital Wallets", defaultPort: "5000" };
+  }
+  if (key === "enterprise") {
+    return { label: "Enterprise", icon: "🏢", tag: "ERP / Ledger", defaultPort: "5000" };
+  }
+  return {
+    label: key.charAt(0).toUpperCase() + key.slice(1),
+    icon: "🏷️",
+    tag: "Custom Domain",
+    defaultPort: "5000",
+  };
+};
+
 function StorageTargetEditor({
   config = defaultServiceConfig,
   onChange,
@@ -4451,6 +4490,47 @@ function StorageTargetEditor({
     updateDomainField("column_mapping", { ...template.column_mapping });
   };
 
+  // Merge dynamic catalog domains, standard forensic presets, and registered custom domains
+  const catalogDomainList = useMemo(() => {
+    const list = [];
+    const seen = new Set();
+
+    if (Array.isArray(availableDomains) && availableDomains.length > 0) {
+      availableDomains.forEach((d) => {
+        const k = String(d || "").toLowerCase().trim();
+        if (k && !seen.has(k)) {
+          seen.add(k);
+          list.push(k);
+        }
+      });
+    } else {
+      STANDARD_FORENSIC_DOMAINS.forEach((d) => {
+        seen.add(d.id);
+        list.push(d.id);
+      });
+    }
+
+    registeredDomains.forEach((d) => {
+      const k = String(d || "").toLowerCase().trim();
+      if (k && !seen.has(k)) {
+        seen.add(k);
+        list.push(k);
+      }
+    });
+
+    return list;
+  }, [availableDomains, registeredDomains]);
+
+  const handleCardClick = (domKey) => {
+    const key = domKey.trim().toLowerCase();
+    if (!key) return;
+    if (!registeredDomains.includes(key)) {
+      handleToggleDomainRegistration(key);
+    } else {
+      setActiveDomainTab(key);
+    }
+  };
+
   return (
     <div className="service_storage_target_section">
       <div className="service_storage_target_header">
@@ -4458,89 +4538,175 @@ function StorageTargetEditor({
         <span className="service_storage_target_hint">Storage targets and column schemas per forensic domain</span>
       </div>
 
-      {/* ── Domain Registration Multi-Select ── */}
-      <div className="service_domain_registration_block" style={{ marginBottom: "12px" }}>
-        <div className="service_perm_section_header" style={{ marginBottom: "4px" }}>
-          <label>Registered Domains ({registeredDomains.length} selected)</label>
-          {onRefreshCatalog && (
+      {/* ── Modern Forensic Domain Catalog & Registration Card ── */}
+      <div className="service_domain_catalog_card">
+        <div className="service_domain_catalog_header">
+          <div className="service_domain_catalog_title_group">
+            <span className="service_domain_catalog_icon">🌐</span>
+            <div>
+              <div className="service_domain_catalog_title">
+                Forensic Domain Catalog
+                <span className="service_domain_count_badge">
+                  {registeredDomains.length} Active
+                </span>
+              </div>
+              <div className="service_domain_catalog_subtitle">
+                Select forensic domains to register or configure custom storage endpoints.
+              </div>
+            </div>
+          </div>
+
+          <div className="service_domain_catalog_status_group">
+            {catalogLoading ? (
+              <span className="service_catalog_status_badge loading">
+                <span className="status_spinner" /> Syncing Catalog...
+              </span>
+            ) : catalogError ? (
+              <div className="service_catalog_status_badge error" title="Catalog API unreachable">
+                <span className="status_dot warning" />
+                <span className="status_text">{catalogError}</span>
+                {onRefreshCatalog && (
+                  <button
+                    type="button"
+                    className="service_catalog_retry_icon_btn"
+                    onClick={onRefreshCatalog}
+                    title="Retry fetching live catalog"
+                  >
+                    ⟳
+                  </button>
+                )}
+              </div>
+            ) : (availableDomains && availableDomains.length > 0) ? (
+              <div className="service_catalog_status_badge live">
+                <span className="status_dot live" />
+                <span className="status_text">Live Catalog ({availableDomains.length})</span>
+                {onRefreshCatalog && (
+                  <button
+                    type="button"
+                    className="service_catalog_retry_icon_btn"
+                    onClick={onRefreshCatalog}
+                    title="Refresh catalog"
+                  >
+                    ⟳
+                  </button>
+                )}
+              </div>
+            ) : null}
+          </div>
+        </div>
+
+        {/* ── Domain Selection Grid / Interactive Cards ── */}
+        <div className="service_domain_grid">
+          {catalogDomainList.map((domKey) => {
+            const isRegistered = registeredDomains.includes(domKey);
+            const meta = getDomainMeta(domKey);
+            const domConfig = domains[domKey] || {};
+            const isConfigured = Boolean(domConfig.storage_host || domConfig.storage_port);
+
+            return (
+              <div
+                key={domKey}
+                id={`${idPrefix}_dom_card_${domKey}`}
+                className={`service_domain_card ${isRegistered ? "registered" : ""} ${activeDomainTab === domKey ? "current_tab" : ""}`}
+                onClick={() => handleCardClick(domKey)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === " " || e.key === "Enter") {
+                    e.preventDefault();
+                    handleCardClick(domKey);
+                  }
+                }}
+                title={isRegistered ? `Active domain. Click to view tab or ✕ to unregister.` : `Click to register ${meta.label}`}
+              >
+                <div className="service_domain_card_top">
+                  <span className="service_domain_card_icon">{meta.icon}</span>
+                  <div className="service_domain_card_info">
+                    <span className="service_domain_card_label">{meta.label}</span>
+                    <span className="service_domain_card_tag">{meta.tag}</span>
+                  </div>
+                </div>
+
+                <div className="service_domain_card_bottom">
+                  {isRegistered ? (
+                    <span className="service_domain_status_pill active">
+                      ✓ Active
+                      <span
+                        className="service_domain_card_unreg"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleToggleDomainRegistration(domKey);
+                        }}
+                        title={`Unregister ${meta.label}`}
+                      >
+                        ✕
+                      </span>
+                    </span>
+                  ) : (
+                    <span className="service_domain_status_pill add">
+                      + Register
+                    </span>
+                  )}
+                  {isRegistered && isConfigured && (
+                    <span className="service_domain_config_mini_badge" title={`Configured port ${domConfig.storage_port || meta.defaultPort}`}>
+                      :{domConfig.storage_port || meta.defaultPort}
+                    </span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* ── Custom Domain Input Bar ── */}
+        <div className="service_custom_domain_bar">
+          <div className="service_custom_domain_input_group">
+            <span className="service_custom_domain_icon">🏷️</span>
+            <input
+              type="text"
+              className="service_custom_domain_input"
+              placeholder="Register custom domain (e.g. crypto, logistics, customs)..."
+              value={customDomainInput}
+              maxLength={40}
+              onChange={(e) => setCustomDomainInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  handleAddCustomDomain();
+                }
+              }}
+            />
             <button
               type="button"
-              className="service_quick_link_btn"
-              onClick={onRefreshCatalog}
-              disabled={catalogLoading}
-              title="Refresh available domains from catalog"
+              className="service_custom_domain_add_btn"
+              onClick={handleAddCustomDomain}
+              disabled={!customDomainInput.trim()}
+              title="Add this custom domain"
             >
-              {catalogLoading ? "Loading..." : "⟳ Refresh Catalog"}
+              + Add Domain
             </button>
-          )}
-        </div>
-        <p className="schema_field_hint" style={{ marginTop: "1px", marginBottom: "6px" }}>
-          Select or add forensic domains to register with this service account.
-        </p>
-
-        {catalogError ? (
-          <div className="service_catalog_error_banner">
-            <span>⚠️</span> {catalogError}
           </div>
-        ) : (availableDomains && availableDomains.length > 0) ? (
-          <div className="service_domain_pills_wrap">
-            {availableDomains.map((dom) => {
-              const isRegistered = registeredDomains.includes(dom);
-              return (
-                <button
-                  key={dom}
-                  type="button"
-                  id={`${idPrefix}_dom_pill_${dom}`}
-                  className={`service_domain_pill ${isRegistered ? "selected" : ""}`}
-                  onClick={() => handleToggleDomainRegistration(dom)}
-                  title={isRegistered ? `Click to remove ${dom}` : `Click to register ${dom}`}
-                >
-                  <span>{isRegistered ? "✓" : "+"}</span>
-                  <span style={{ textTransform: "capitalize" }}>{dom}</span>
-                </button>
-              );
-            })}
-          </div>
-        ) : null}
-
-        <div className="service_custom_domain_row" style={{ display: "flex", gap: "8px", alignItems: "center", marginTop: "4px" }}>
-          <input
-            type="text"
-            className="input_text"
-            placeholder="Add custom domain (e.g. banking, microfinance, cdr)"
-            value={customDomainInput}
-            maxLength={40}
-            style={{ maxWidth: "260px", height: "28px", fontSize: "11.5px" }}
-            onChange={(e) => setCustomDomainInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                handleAddCustomDomain();
-              }
-            }}
-          />
-          <button
-            type="button"
-            className="service_btn_secondary"
-            style={{ height: "28px", padding: "0 10px", fontSize: "11.5px" }}
-            onClick={handleAddCustomDomain}
-            disabled={!customDomainInput.trim()}
-          >
-            + Register Domain
-          </button>
         </div>
       </div>
 
       {/* ── Domain-Specific Tabs & Storage Cards ── */}
       {registeredDomains.length === 0 ? (
-        <div style={{ padding: "14px", background: "rgba(0,0,0,0.02)", borderRadius: "4px", textAlign: "center", color: "#607684", fontSize: "12px" }}>
-          No domains registered yet. Select or add a domain above to configure storage endpoints.
+        <div className="service_domain_empty_state">
+          <span className="service_domain_empty_icon">📂</span>
+          <div className="service_domain_empty_title">No Forensic Domains Registered</div>
+          <div className="service_domain_empty_desc">
+            Select one or more domains from the catalog above to configure their storage endpoints and schema mappings.
+          </div>
         </div>
       ) : (
         <div className="service_domain_editor_wrap">
           <div className="service_domain_tabs_bar">
             {registeredDomains.map((dom) => {
               const isActive = activeDomainTab === dom;
+              const meta = getDomainMeta(dom);
+              const domCfg = domains[dom] || {};
+              const hasConfig = Boolean(domCfg.storage_host || domCfg.storage_port);
+
               return (
                 <button
                   key={dom}
@@ -4549,14 +4715,19 @@ function StorageTargetEditor({
                   className={`service_domain_tab_btn ${isActive ? "active" : ""}`}
                   onClick={() => setActiveDomainTab(dom)}
                 >
-                  <span style={{ textTransform: "capitalize" }}>{dom}</span>
+                  <span className="service_tab_icon">{meta.icon}</span>
+                  <span className="service_tab_label">{meta.label}</span>
+                  <span
+                    className={`service_tab_dot ${hasConfig ? "configured" : "pending"}`}
+                    title={hasConfig ? "Storage target configured" : "Pending endpoint setup"}
+                  />
                   <span
                     className="service_domain_tab_remove"
                     onClick={(e) => {
                       e.stopPropagation();
                       handleToggleDomainRegistration(dom);
                     }}
-                    title={`Unregister ${dom}`}
+                    title={`Unregister ${meta.label}`}
                   >
                     ✕
                   </span>
@@ -4567,6 +4738,30 @@ function StorageTargetEditor({
 
           {activeDomainTab && (
             <div className="service_domain_card_body">
+              <div className="service_domain_active_banner">
+                <div className="service_domain_active_left">
+                  <span className="service_domain_active_icon">{getDomainMeta(activeDomainTab).icon}</span>
+                  <div>
+                    <span className="service_domain_active_title">
+                      {getDomainMeta(activeDomainTab).label} Storage Target
+                    </span>
+                    <span className="service_domain_active_subtitle">
+                      Domain key: <code>{activeDomainTab}</code> · Recommended port: <code>{activeDomainTab === "microfinance" ? "5007" : "5000"}</code>
+                    </span>
+                  </div>
+                </div>
+                <div className="service_domain_active_actions">
+                  <button
+                    type="button"
+                    className="service_quick_link_btn"
+                    onClick={handleLoadTemplate}
+                    title={`Autofill recommended schema for ${activeDomainTab}`}
+                  >
+                    ⚡ Load Template
+                  </button>
+                </div>
+              </div>
+
               <div className="config_endpoint_grid">
                 <div className="config_endpoint_field">
                   <label htmlFor={`${idPrefix}_${activeDomainTab}_host`}>Storage Host / IP ({activeDomainTab})</label>

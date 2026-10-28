@@ -7627,56 +7627,490 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 	gap: 4px;
 }
 
-/* Multi-Domain Service Account Tabs & Pills */
+/* Multi-Domain Service Account Tabs & Modern Forensic Catalog UI */
+.service_domain_catalog_card {
+	background: #f8fafc;
+	border: 1px solid #cbd5e1;
+	border-radius: 8px;
+	padding: 12px 14px;
+	margin-bottom: 14px;
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+}
+
+.service_domain_catalog_header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	margin-bottom: 10px;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.service_domain_catalog_title_group {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.service_domain_catalog_icon {
+	font-size: 20px;
+	line-height: 1;
+}
+
+.service_domain_catalog_title {
+	font-size: 13px;
+	font-weight: 700;
+	color: #0f172a;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.service_domain_count_badge {
+	background: rgba(27, 108, 168, 0.1);
+	color: #104e7d;
+	font-size: 11px;
+	font-weight: 700;
+	padding: 2px 7px;
+	border-radius: 10px;
+	border: 1px solid rgba(27, 108, 168, 0.2);
+}
+
+.service_domain_catalog_subtitle {
+	font-size: 11.5px;
+	color: #64748b;
+	margin-top: 1px;
+}
+
+.service_domain_catalog_status_group {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.service_catalog_status_badge {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 3px 9px;
+	border-radius: 12px;
+	font-size: 11px;
+	font-weight: 600;
+	line-height: 1.2;
+}
+
+.service_catalog_status_badge.loading {
+	background: rgba(59, 130, 246, 0.08);
+	color: #2563eb;
+	border: 1px solid rgba(59, 130, 246, 0.25);
+}
+
+.service_catalog_status_badge.error {
+	background: rgba(239, 68, 68, 0.08);
+	color: #b91c1c;
+	border: 1px solid rgba(239, 68, 68, 0.25);
+}
+
+.service_catalog_status_badge.live {
+	background: rgba(34, 197, 94, 0.08);
+	color: #15803d;
+	border: 1px solid rgba(34, 197, 94, 0.25);
+}
+
+.status_dot {
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	display: inline-block;
+}
+
+.status_dot.warning {
+	background: #dc2626;
+	box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.2);
+}
+
+.status_dot.live {
+	background: #16a34a;
+	box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.2);
+}
+
+.status_spinner {
+	width: 8px;
+	height: 8px;
+	border: 1.5px solid #2563eb;
+	border-top-color: transparent;
+	border-radius: 50%;
+	display: inline-block;
+	animation: spin 0.8s linear infinite;
+}
+
+.service_catalog_retry_icon_btn {
+	background: transparent;
+	border: none;
+	color: inherit;
+	cursor: pointer;
+	font-size: 12px;
+	font-weight: bold;
+	padding: 0 2px;
+	opacity: 0.75;
+	line-height: 1;
+	transition: opacity 0.15s ease;
+}
+
+.service_catalog_retry_icon_btn:hover {
+	opacity: 1;
+}
+
+/* Domain Selection Grid */
+.service_domain_grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(135px, 1fr));
+	gap: 8px;
+	margin-bottom: 12px;
+}
+
+.service_domain_card {
+	background: #ffffff;
+	border: 1px solid #cbd5e1;
+	border-radius: 7px;
+	padding: 8px 10px;
+	cursor: pointer;
+	transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+	display: flex;
+	flex-direction: column;
+	justify-content: space-between;
+	min-height: 62px;
+	user-select: none;
+	outline: none;
+}
+
+.service_domain_card:hover {
+	border-color: #1b6ca8;
+	transform: translateY(-1px);
+	box-shadow: 0 3px 8px rgba(0, 0, 0, 0.05);
+}
+
+.service_domain_card.registered {
+	background: linear-gradient(135deg, rgba(232, 244, 253, 0.95) 0%, rgba(246, 250, 254, 0.95) 100%);
+	border-color: #1b6ca8;
+	box-shadow: 0 1px 3px rgba(27, 108, 168, 0.1);
+}
+
+.service_domain_card.current_tab {
+	outline: 2px solid rgba(27, 108, 168, 0.45);
+	outline-offset: 1px;
+}
+
+.service_domain_card_top {
+	display: flex;
+	align-items: flex-start;
+	gap: 7px;
+}
+
+.service_domain_card_icon {
+	font-size: 16px;
+	line-height: 1.2;
+}
+
+.service_domain_card_info {
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+}
+
+.service_domain_card_label {
+	font-size: 11.5px;
+	font-weight: 700;
+	color: #0f172a;
+	line-height: 1.2;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.service_domain_card_tag {
+	font-size: 9.5px;
+	color: #64748b;
+	margin-top: 1px;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.service_domain_card_bottom {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	margin-top: 6px;
+}
+
+.service_domain_status_pill {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	border-radius: 8px;
+	font-size: 9.5px;
+	font-weight: 700;
+	padding: 1.5px 6px;
+	line-height: 1.2;
+	transition: all 0.15s ease;
+}
+
+.service_domain_status_pill.active {
+	background: #1b6ca8;
+	color: #ffffff;
+}
+
+.service_domain_status_pill.add {
+	background: rgba(100, 116, 139, 0.12);
+	color: #475569;
+}
+
+.service_domain_card_unreg {
+	font-size: 9px;
+	line-height: 1;
+	opacity: 0.75;
+	padding: 0 1px;
+	cursor: pointer;
+}
+
+.service_domain_card_unreg:hover {
+	opacity: 1;
+	color: #fecaca;
+}
+
+.service_domain_config_mini_badge {
+	font-size: 9.5px;
+	font-family: monospace;
+	color: #104e7d;
+	font-weight: 600;
+	background: rgba(27, 108, 168, 0.08);
+	padding: 1px 4px;
+	border-radius: 4px;
+}
+
+/* Custom Domain Bar */
+.service_custom_domain_bar {
+	display: flex;
+	align-items: center;
+	border-top: 1px dashed rgba(203, 213, 225, 0.8);
+	padding-top: 9px;
+	margin-top: 4px;
+}
+
+.service_custom_domain_input_group {
+	display: flex;
+	align-items: center;
+	background: #ffffff;
+	border: 1px solid #cbd5e1;
+	border-radius: 6px;
+	padding: 2px 4px 2px 8px;
+	gap: 6px;
+	width: 100%;
+	max-width: 440px;
+	transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.service_custom_domain_input_group:focus-within {
+	border-color: #1b6ca8;
+	box-shadow: 0 0 0 2px rgba(27, 108, 168, 0.12);
+}
+
+.service_custom_domain_icon {
+	font-size: 13px;
+	opacity: 0.6;
+}
+
+.service_custom_domain_input {
+	border: none;
+	outline: none;
+	background: transparent;
+	font-size: 11.5px;
+	color: #0f172a;
+	flex: 1;
+	padding: 3px 0;
+}
+
+.service_custom_domain_add_btn {
+	background: #1b6ca8;
+	color: #ffffff;
+	border: none;
+	border-radius: 4px;
+	padding: 4px 9px;
+	font-size: 11px;
+	font-weight: 600;
+	cursor: pointer;
+	transition: background 0.15s ease;
+}
+
+.service_custom_domain_add_btn:hover:not(:disabled) {
+	background: #104e7d;
+}
+
+.service_custom_domain_add_btn:disabled {
+	opacity: 0.45;
+	cursor: not-allowed;
+}
+
+/* Segmented Domain Tabs Bar */
 .service_domain_tabs_bar {
 	display: flex;
 	align-items: center;
-	gap: 5px;
-	border-bottom: 2px solid rgba(194, 216, 235, 0.7);
+	gap: 6px;
+	border-bottom: 1px solid rgba(203, 213, 225, 0.7);
 	margin-bottom: 12px;
-	padding-bottom: 0px;
+	padding: 2px 2px 8px 2px;
 	overflow-x: auto;
 }
+
 .service_domain_tab_btn {
-	background: rgba(246, 250, 253, 0.7);
-	border: 1px solid rgba(194, 216, 235, 0.7);
-	border-bottom: none;
-	border-radius: 4px 4px 0 0;
-	padding: 5px 12px;
+	background: rgba(241, 245, 249, 0.8);
+	border: 1px solid #cbd5e1;
+	border-radius: 6px;
+	padding: 5px 10px;
 	font-size: 11.5px;
 	font-weight: 600;
-	color: #3b556b;
+	color: #475569;
 	cursor: pointer;
 	transition: all 0.15s ease;
 	display: inline-flex;
 	align-items: center;
 	gap: 6px;
 	outline: none;
+	white-space: nowrap;
 }
+
 .service_domain_tab_btn:hover {
-	background: #fff;
+	background: #ffffff;
 	color: #1b6ca8;
+	border-color: rgba(27, 108, 168, 0.4);
 }
+
 .service_domain_tab_btn.active {
-	background: #fff;
+	background: #ffffff;
 	border-color: #1b6ca8;
-	color: #1b6ca8;
+	color: #104e7d;
 	font-weight: 700;
-	margin-bottom: -2px;
-	border-bottom: 2px solid #fff;
+	box-shadow: 0 1px 3px rgba(27, 108, 168, 0.15);
 }
+
+.service_tab_icon {
+	font-size: 13px;
+	line-height: 1;
+}
+
+.service_tab_label {
+	text-transform: capitalize;
+}
+
+.service_tab_dot {
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	display: inline-block;
+}
+
+.service_tab_dot.configured {
+	background: #16a34a;
+}
+
+.service_tab_dot.pending {
+	background: #f59e0b;
+}
+
 .service_domain_tab_remove {
 	font-size: 10px;
-	color: #8fa2b0;
-	padding: 0 2px;
+	color: #94a3b8;
+	padding: 1px 3px;
 	cursor: pointer;
 	border-radius: 50%;
 	line-height: 1;
+	transition: all 0.15s ease;
 }
+
 .service_domain_tab_remove:hover {
-	color: #d32f2f;
-	background: rgba(211, 47, 47, 0.1);
+	color: #dc2626;
+	background: rgba(220, 38, 38, 0.1);
 }
+
+/* Active Domain Context Banner */
+.service_domain_active_banner {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	background: rgba(241, 245, 249, 0.7);
+	border: 1px solid rgba(203, 213, 225, 0.7);
+	border-radius: 6px;
+	padding: 8px 12px;
+	margin-bottom: 12px;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.service_domain_active_left {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.service_domain_active_icon {
+	font-size: 18px;
+	line-height: 1;
+}
+
+.service_domain_active_title {
+	font-size: 12px;
+	font-weight: 700;
+	color: #0f172a;
+	display: block;
+}
+
+.service_domain_active_subtitle {
+	font-size: 11px;
+	color: #64748b;
+}
+
+.service_domain_active_subtitle code {
+	background: rgba(0, 0, 0, 0.05);
+	padding: 1px 4px;
+	border-radius: 3px;
+	font-family: monospace;
+	color: #104e7d;
+}
+
+/* Empty State */
+.service_domain_empty_state {
+	padding: 20px;
+	background: rgba(248, 250, 252, 0.8);
+	border: 1px dashed #cbd5e1;
+	border-radius: 8px;
+	text-align: center;
+	color: #64748b;
+	margin-top: 4px;
+}
+
+.service_domain_empty_icon {
+	font-size: 24px;
+	display: block;
+	margin-bottom: 4px;
+	opacity: 0.7;
+}
+
+.service_domain_empty_title {
+	font-size: 12.5px;
+	font-weight: 700;
+	color: #334155;
+	margin-bottom: 2px;
+}
+
+.service_domain_empty_desc {
+	font-size: 11.5px;
+	color: #64748b;
+	max-width: 380px;
+	margin: 0 auto;
+}
+
+/* Backward compatibility aliases */
 .service_domain_pills_wrap {
 	display: flex;
 	flex-wrap: wrap;
@@ -8864,25 +9298,166 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 	border-color: rgba(140, 90, 48, 0.35) !important;
 }
 
-/* Dark Mode Expandable Create & Domain Overrides */
+/* Dark Mode Expandable Create & Modern Domain Overrides */
+[data-theme="dark"] .service_domain_catalog_card {
+	background: rgba(15, 23, 42, 0.65);
+	border-color: rgba(51, 65, 85, 0.7);
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+[data-theme="dark"] .service_domain_catalog_title {
+	color: #f1f5f9;
+}
+
+[data-theme="dark"] .service_domain_count_badge {
+	background: rgba(56, 189, 248, 0.15);
+	color: #38bdf8;
+	border-color: rgba(56, 189, 248, 0.3);
+}
+
+[data-theme="dark"] .service_domain_catalog_subtitle {
+	color: #94a3b8;
+}
+
+[data-theme="dark"] .service_catalog_status_badge.loading {
+	background: rgba(59, 130, 246, 0.15);
+	color: #60a5fa;
+	border-color: rgba(59, 130, 246, 0.35);
+}
+
+[data-theme="dark"] .service_catalog_status_badge.error {
+	background: rgba(239, 68, 68, 0.15);
+	color: #f87171;
+	border-color: rgba(239, 68, 68, 0.35);
+}
+
+[data-theme="dark"] .service_catalog_status_badge.live {
+	background: rgba(34, 197, 94, 0.15);
+	color: #4ade80;
+	border-color: rgba(34, 197, 94, 0.35);
+}
+
+[data-theme="dark"] .service_domain_card {
+	background: rgba(30, 41, 59, 0.7);
+	border-color: rgba(71, 85, 105, 0.7);
+}
+
+[data-theme="dark"] .service_domain_card:hover {
+	border-color: #38bdf8;
+	background: rgba(30, 41, 59, 0.95);
+	box-shadow: 0 3px 8px rgba(0, 0, 0, 0.3);
+}
+
+[data-theme="dark"] .service_domain_card.registered {
+	background: linear-gradient(135deg, rgba(14, 116, 144, 0.25) 0%, rgba(30, 41, 59, 0.85) 100%);
+	border-color: #38bdf8;
+	box-shadow: 0 1px 4px rgba(56, 189, 248, 0.15);
+}
+
+[data-theme="dark"] .service_domain_card.current_tab {
+	outline-color: rgba(56, 189, 248, 0.5);
+}
+
+[data-theme="dark"] .service_domain_card_label {
+	color: #f1f5f9;
+}
+
+[data-theme="dark"] .service_domain_card_tag {
+	color: #94a3b8;
+}
+
+[data-theme="dark"] .service_domain_status_pill.active {
+	background: #0284c7;
+	color: #ffffff;
+}
+
+[data-theme="dark"] .service_domain_status_pill.add {
+	background: rgba(148, 163, 184, 0.12);
+	color: #94a3b8;
+}
+
+[data-theme="dark"] .service_domain_config_mini_badge {
+	color: #38bdf8;
+	background: rgba(56, 189, 248, 0.12);
+}
+
+[data-theme="dark"] .service_custom_domain_bar {
+	border-top-color: rgba(71, 85, 105, 0.7);
+}
+
+[data-theme="dark"] .service_custom_domain_input_group {
+	background: rgba(15, 23, 42, 0.7);
+	border-color: rgba(71, 85, 105, 0.7);
+}
+
+[data-theme="dark"] .service_custom_domain_input_group:focus-within {
+	border-color: #38bdf8;
+	box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.18);
+}
+
+[data-theme="dark"] .service_custom_domain_input {
+	color: #f1f5f9;
+}
+
+[data-theme="dark"] .service_custom_domain_add_btn {
+	background: #0284c7;
+}
+
+[data-theme="dark"] .service_custom_domain_add_btn:hover:not(:disabled) {
+	background: #0369a1;
+}
+
 [data-theme="dark"] .service_domain_tabs_bar {
-	border-bottom-color: rgba(60, 90, 120, 0.7);
+	border-bottom-color: rgba(71, 85, 105, 0.7);
 }
+
 [data-theme="dark"] .service_domain_tab_btn {
-	background: rgba(30, 45, 60, 0.6);
-	border-color: rgba(60, 90, 120, 0.6);
-	color: #90a4ae;
+	background: rgba(30, 41, 59, 0.6);
+	border-color: rgba(71, 85, 105, 0.7);
+	color: #94a3b8;
 }
+
 [data-theme="dark"] .service_domain_tab_btn:hover {
-	background: rgba(40, 60, 80, 0.9);
-	color: #64b5f6;
+	background: rgba(51, 65, 85, 0.8);
+	color: #38bdf8;
+	border-color: rgba(56, 189, 248, 0.4);
 }
+
 [data-theme="dark"] .service_domain_tab_btn.active {
 	background: #1e293b;
-	border-color: #64b5f6;
-	color: #64b5f6;
-	border-bottom: 2px solid #1e293b;
+	border-color: #38bdf8;
+	color: #38bdf8;
+	box-shadow: 0 1px 3px rgba(56, 189, 248, 0.2);
 }
+
+[data-theme="dark"] .service_domain_active_banner {
+	background: rgba(30, 41, 59, 0.5);
+	border-color: rgba(71, 85, 105, 0.7);
+}
+
+[data-theme="dark"] .service_domain_active_title {
+	color: #f1f5f9;
+}
+
+[data-theme="dark"] .service_domain_active_subtitle {
+	color: #94a3b8;
+}
+
+[data-theme="dark"] .service_domain_active_subtitle code {
+	background: rgba(0, 0, 0, 0.3);
+	color: #38bdf8;
+}
+
+[data-theme="dark"] .service_domain_empty_state {
+	background: rgba(15, 23, 42, 0.5);
+	border-color: rgba(71, 85, 105, 0.7);
+	color: #94a3b8;
+}
+
+[data-theme="dark"] .service_domain_empty_title {
+	color: #e2e8f0;
+}
+
 [data-theme="dark"] .service_domain_pill {
 	background: rgba(30, 45, 60, 0.6);
 	border-color: rgba(60, 90, 120, 0.6);
