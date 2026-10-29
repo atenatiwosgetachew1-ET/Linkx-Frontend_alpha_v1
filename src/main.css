@@ -547,7 +547,7 @@ body{
 	margin: 0;
 	padding: 0;
 	overflow: hidden;
-	font-family: "Segoe UI", Roboto, Arial, sans-serif;
+	font-family: "Manrope", "Segoe UI", Roboto, Arial, sans-serif;
 	filter: hue-rotate(0deg);
 }
 #root{
@@ -4815,7 +4815,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   margin: auto;
   left: 0;
   right: 0;
-  font-family: sans-serif;
+  font-family: "Manrope", sans-serif;
   font-size: calc(0.4vh + 0.5vw);
 }
 .window .properties_container .reference_container .top_panel .ppt_tabs_body_container .graph_infos_container .graph_options_infos div{
@@ -5711,7 +5711,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   border-radius: 0.5vh;
   padding: 0.8vw;
   color: #333;
-  font-family: "Segoe UI", Roboto, Arial, sans-serif;
+  font-family: "Manrope", "Segoe UI", Roboto, Arial, sans-serif;
 }
 .linkx_interaction_panel_react .linkx_interaction_title {
   font-size: 14px;
@@ -5744,7 +5744,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   color: #333;
   font-weight: 420;
   font-size: 12px;
-  font-family: "Segoe UI", Roboto, Arial, sans-serif;
+  font-family: "Manrope", "Segoe UI", Roboto, Arial, sans-serif;
   line-height: normal;
   text-shadow: none;
   cursor: pointer;
@@ -10474,7 +10474,7 @@ button.settings_textinput:active {
   background: transparent;
   color: var(--on-scene-text);
   cursor: pointer;
-  font-family: "Segoe UI", Roboto, Arial, sans-serif;
+  font-family: "Manrope", "Segoe UI", Roboto, Arial, sans-serif;
   font-size: 15px;
   font-weight: 100;
   transition: background-color 160ms ease, color 160ms ease, transform 120ms ease, opacity 120ms ease;
@@ -10596,7 +10596,7 @@ button.settings_textinput:active {
   box-sizing: border-box;
   padding: 0 32px 18px;
   color: var(--on-scene-text-muted);
-  font-family: "Segoe UI", Roboto, Arial, sans-serif;
+  font-family: "Manrope", "Segoe UI", Roboto, Arial, sans-serif;
   font-size: 13px;
   pointer-events: auto;
 }
@@ -10741,7 +10741,7 @@ button.settings_textinput:active {
   background: transparent;
   color: var(--on-scene-text);
   cursor: pointer;
-  font-family: "Segoe UI", Roboto, Arial, sans-serif;
+  font-family: "Manrope", "Segoe UI", Roboto, Arial, sans-serif;
   font-size: 15px;
   font-weight: 100;
   transition: background-color 160ms ease, color 160ms ease, transform 120ms ease, opacity 120ms ease;
@@ -10786,7 +10786,7 @@ button.settings_textinput:active {
   box-sizing: border-box;
   padding: 0 62px 18px;
   color: var(--on-scene-text-muted);
-  font-family: "Segoe UI", Roboto, Arial, sans-serif;
+  font-family: "Manrope", "Segoe UI", Roboto, Arial, sans-serif;
   font-size: 13px;
   pointer-events: auto;
 }

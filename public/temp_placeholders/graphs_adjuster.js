@@ -290,7 +290,7 @@ function ensureInteractionPopupUi() {
         border-radius: 0.5vh;
         padding: 0.8vw;
         color: #333;
-        font-family: "Segoe UI", Roboto, Arial, sans-serif;
+        font-family: "Manrope", "Segoe UI", Roboto, Arial, sans-serif;
       }
       #linkx_interaction_title {
         font-size: 14px;
@@ -2192,7 +2192,7 @@ function ensureGraphLoadingUi() {
   color: #304559;
   padding: 10px 12px;
   box-shadow: 0 10px 24px rgba(0,0,0,0.20);
-  font-family: "Segoe UI", Arial, sans-serif;
+  font-family: "Manrope", "Segoe UI", Arial, sans-serif;
   pointer-events: none;
 }
 #linkx_graph_loading_title {
