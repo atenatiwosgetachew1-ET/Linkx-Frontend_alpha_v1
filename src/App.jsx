@@ -7986,12 +7986,14 @@ function IframeEmbed({wId,id,fileName,title,activeGraph,graphAction,iframeRef,BA
   }
   else {
     const iframeFile = fileName || activeGraph;
-    const isRelaxed = sandboxMode === "relaxed" || String(wId || "").startsWith("hidden_");
+    const isNoSandbox = sandboxMode === "none" || String(wId || "").startsWith("hidden_");
+    const isRelaxed = sandboxMode === "relaxed";
+    const sandboxAttr = isNoSandbox ? undefined : (isRelaxed ? relaxedSandbox : strictSandbox);
     return (
       <div className="iframe_graph">
         <iframe
           ref={iframeRef}
-          sandbox={isRelaxed ? relaxedSandbox : strictSandbox}
+          {...(sandboxAttr ? { sandbox: sandboxAttr } : {})}
           src={`${iframeBasePath}/${iframeFile}.html?${iframeQueryParams}`}
           width="100%"
           height="98%"
@@ -17263,6 +17265,29 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
     const handleReportGenerated = (e) => {
       const detail = e.detail || {};
       if (detail.success) {
+        if (detail.dataUri) {
+          try {
+            const [header, base64] = String(detail.dataUri).split(",");
+            const mime = header.match(/:(.*?);/)?.[1] || "application/pdf";
+            const binary = atob(base64);
+            const len = binary.length;
+            const buffer = new Uint8Array(len);
+            for (let i = 0; i < len; i++) {
+              buffer[i] = binary.charCodeAt(i);
+            }
+            const blob = new Blob([buffer], { type: mime });
+            const blobUrl = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = blobUrl;
+            a.download = detail.filename || `LinkxInvestigation_report_${Date.now()}.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            setTimeout(() => URL.revokeObjectURL(blobUrl), 2000);
+          } catch (dlErr) {
+            console.warn("Parent PDF download trigger fallback:", dlErr);
+          }
+        }
         cleanup(true, detail.filename ? `Downloaded ${detail.filename}` : "Report PDF generated successfully.");
       } else {
         cleanup(false, detail.error || "Report generation failed.");
@@ -18740,7 +18765,7 @@ let processedData = [...reportsData];
               iframeRef={hiddenIframeRef}
               BASE_URL={resolveApiUrl(import.meta.env.VITE_API_URL)}
               themeMode="light"
-              sandboxMode="relaxed"
+              sandboxMode="none"
             />
           </div>
         </div>

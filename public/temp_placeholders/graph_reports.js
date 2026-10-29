@@ -325,7 +325,7 @@
   })();
 
   window.addEventListener("message", function (event) {
-  if (LINKX_REPORT_PARENT_ORIGIN && String(event.origin || "") !== LINKX_REPORT_PARENT_ORIGIN) return;
+    if (event.source !== window.parent && LINKX_REPORT_PARENT_ORIGIN && String(event.origin || "") !== LINKX_REPORT_PARENT_ORIGIN) return;
     const data = event?.data || {};
     if (data.action !== "graph_report") return;
     updateReport(data.payload);

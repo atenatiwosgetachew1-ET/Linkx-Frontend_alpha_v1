@@ -46,6 +46,7 @@ const LINKX_PARENT_ORIGIN = (() => {
 })();
 window.__LINKX_PARENT_ORIGIN__ = LINKX_PARENT_ORIGIN;
 window.isTrustedIframeParentEvent = (event) => {
+  if (event?.source === window.parent) return true;
   if (!LINKX_PARENT_ORIGIN) return true;
   return String(event?.origin || "") === LINKX_PARENT_ORIGIN;
 };
@@ -7364,7 +7365,6 @@ async function renderReportCanvasFromTemplate(report) {
   iframe.style.border = "0";
   iframe.style.opacity = "0";
   iframe.style.pointerEvents = "none";
-  iframe.setAttribute("sandbox", "allow-scripts allow-same-origin");
 
   try {
     await new Promise((resolve, reject) => {
@@ -7459,14 +7459,18 @@ async function downloadGraphReport(report) {
       const drawY = marginPdf;
       const imageData = templateCanvas.toDataURL("image/png");
       doc.addImage(imageData, "PNG", drawX, drawY, drawWidth, drawHeight, undefined, "FAST");
+      let dataUri = null;
+      try {
+        dataUri = doc.output("datauristring");
+      } catch (_e) {}
       const savedByBlobPreferred = downloadPdfViaBlobUrl(doc, filename);
-      if (!savedByBlobPreferred) {
+      if (!savedByBlobPreferred && !dataUri) {
         try { doc.save(filename); } catch (_e) {}
       }
       try {
         window.parent?.postMessage({
           type: "evidence_report_generated",
-          payload: { success: true, filename, downloaded: savedByBlobPreferred }
+          payload: { success: true, filename, dataUri, downloaded: savedByBlobPreferred }
         }, window.__LINKX_PARENT_ORIGIN__ || "*");
       } catch (_e) {}
       return;
@@ -7898,14 +7902,18 @@ async function downloadGraphReport(report) {
   doc.line(signatureLineStartX, y + 1, signatureLineEndX, y + 1);
   doc.text("-", signatureLineStartX + 4, y);
 
+  let dataUri = null;
+  try {
+    dataUri = doc.output("datauristring");
+  } catch (_e) {}
   const savedByBlob = downloadPdfViaBlobUrl(doc, filename);
-  if (!savedByBlob) {
+  if (!savedByBlob && !dataUri) {
     try { doc.save(filename); } catch (_e) {}
   }
   try {
     window.parent?.postMessage({
       type: "evidence_report_generated",
-      payload: { success: true, filename, downloaded: savedByBlob }
+      payload: { success: true, filename, dataUri, downloaded: savedByBlob }
     }, window.__LINKX_PARENT_ORIGIN__ || "*");
   } catch (_e) {}
 }
