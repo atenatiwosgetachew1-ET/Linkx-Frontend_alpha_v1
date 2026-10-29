@@ -2938,6 +2938,49 @@ const normalizeGraphFetchResponse = (data) => {
   };
 };
 
+/**
+ * Extract nodes and edges arrays from a graph fetch response using all known key paths.
+ * Consolidates the duplicated 20-line cascade that was used in 3 places.
+ */
+const extractNodesEdges = (data) => {
+  const cand = getGraphPayloadCandidate(data);
+  const graphObj = cand?.graph || cand?.graph_entities || data?.results?.graph || data?.results?.graph_entities || data?.data?.graph || data?.data?.graph_entities;
+  const nodes = Array.isArray(cand?.nodes)
+    ? cand.nodes
+    : Array.isArray(graphObj?.nodes)
+      ? graphObj.nodes
+      : Array.isArray(data?.results?.nodes)
+        ? data.results.nodes
+        : Array.isArray(data?.data?.nodes)
+          ? data.data.nodes
+          : Array.isArray(data?.nodes)
+            ? data.nodes
+            : [];
+  const edges = Array.isArray(cand?.edges)
+    ? cand.edges
+    : Array.isArray(graphObj?.edges)
+      ? graphObj.edges
+      : Array.isArray(data?.results?.edges)
+        ? data.results.edges
+        : Array.isArray(data?.data?.edges)
+          ? data.data.edges
+          : Array.isArray(data?.edges)
+            ? data.edges
+            : [];
+  return { nodes, edges };
+};
+
+/**
+ * Build the whitelisted payload for /get_graph evidence requests.
+ */
+const buildEvidencePayload = (traceId, report) => ({
+  id: "evidence",
+  trace_id: traceId,
+  source_id: traceId,
+  ...(report?.id ? { report_id: String(report.id) } : {}),
+  ...(report?.external_reference_id ? { external_reference_id: String(report.external_reference_id) } : {}),
+});
+
 const requestGraphFetch = async (apiFetch, payload, signal, options = {}) => {
   const response = await apiFetch('/get_graph', {
     method: 'POST',
@@ -17097,7 +17140,11 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
   const [hiddenRendererState, setHiddenRendererState] = useState(null);
   const [graphAvailability, setGraphAvailability] = useState({});
   const [probingGraphTraceId, setProbingGraphTraceId] = useState(null);
+  const [showGraphInFlight, setShowGraphInFlight] = useState(null);
+  const [downloadReportInFlight, setDownloadReportInFlight] = useState(null);
   const hiddenIframeRef = useRef(null);
+  const graphDataCache = useRef({});
+  const activeAbortControllers = useRef({});
 
   const limit = 50;
 
@@ -17178,45 +17225,22 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
 
     let cancelled = false;
     const controller = new AbortController();
+    // Track abort controller for cleanup
+    activeAbortControllers.current[`probe_${traceId}`] = controller;
     setProbingGraphTraceId(traceId);
 
     (async () => {
       try {
-        const payload = { 
-          id: "evidence", 
-          trace_id: traceId,
-          source_id: traceId,
-          ...(selectedReport?.id ? { report_id: String(selectedReport.id) } : {}),
-          ...(selectedReport?.external_reference_id ? { external_reference_id: String(selectedReport.external_reference_id) } : {})
-        };
+        const payload = buildEvidencePayload(traceId, selectedReport);
         const data = await requestGraphFetch(apiFetch, payload, controller.signal);
         if (cancelled) return;
-        const cand = getGraphPayloadCandidate(data);
-        const graphObj = cand?.graph || cand?.graph_entities || data?.results?.graph || data?.results?.graph_entities || data?.data?.graph || data?.data?.graph_entities;
-        const nodes = Array.isArray(cand?.nodes)
-          ? cand.nodes
-          : Array.isArray(graphObj?.nodes)
-            ? graphObj.nodes
-            : Array.isArray(data?.results?.nodes)
-              ? data.results.nodes
-              : Array.isArray(data?.data?.nodes)
-                ? data.data.nodes
-                : Array.isArray(data?.nodes)
-                  ? data.nodes
-                  : [];
-        const edges = Array.isArray(cand?.edges)
-          ? cand.edges
-          : Array.isArray(graphObj?.edges)
-            ? graphObj.edges
-            : Array.isArray(data?.results?.edges)
-              ? data.results.edges
-              : Array.isArray(data?.data?.edges)
-                ? data.data.edges
-                : Array.isArray(data?.edges)
-                  ? data.edges
-                  : [];
+        const { nodes, edges } = extractNodesEdges(data);
         const hasGraph = nodes.length > 0 || edges.length > 0;
         setGraphAvailability(prev => ({ ...prev, [traceId]: hasGraph }));
+        // Cache the fetched data so handleShowGraph/handleDownloadReport can reuse it
+        if (hasGraph) {
+          graphDataCache.current[traceId] = { nodes, edges, rawData: data };
+        }
       } catch (_e) {
         console.warn("[graph availability probe]", _e);
         if (!cancelled && !isInitiallyClaimed) {
@@ -17225,6 +17249,7 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
       } finally {
         if (!cancelled) {
           setProbingGraphTraceId(null);
+          delete activeAbortControllers.current[`probe_${traceId}`];
         }
       }
     })();
@@ -17233,6 +17258,7 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
       cancelled = true;
       setProbingGraphTraceId(null);
       controller.abort();
+      delete activeAbortControllers.current[`probe_${traceId}`];
     };
   }, [selectedReport, activeReportsTab]);
 
@@ -17337,6 +17363,10 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
       return;
     }
 
+    // Prevent duplicate requests
+    if (downloadReportInFlight || hiddenRendererState) return;
+    setDownloadReportInFlight(traceId);
+
     const notificationId = `download-report-${traceId}`;
     const explicitlyNoGraph = activeReportsTab !== "evidence" || isReportGraphAbsent(report, graphAvailability);
 
@@ -17344,47 +17374,32 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
     let edges = [];
 
     if (!explicitlyNoGraph) {
-      onNotice({ id: notificationId, title: "Generating Report", message: "Checking graph data...", level: "info" });
-      try {
-        const payload = { 
-          id: "evidence", 
-          trace_id: traceId,
-          source_id: traceId,
-          ...(report?.id ? { report_id: String(report.id) } : {}),
-          ...(report?.external_reference_id ? { external_reference_id: String(report.external_reference_id) } : {})
-        };
-        const controller = new AbortController();
-        const data = await requestGraphFetch(apiFetch, payload, controller.signal);
-        
-        const cand = getGraphPayloadCandidate(data);
-        const graphObj = cand?.graph || cand?.graph_entities || data?.results?.graph || data?.results?.graph_entities || data?.data?.graph || data?.data?.graph_entities;
-        nodes = Array.isArray(cand?.nodes)
-          ? cand.nodes
-          : Array.isArray(graphObj?.nodes)
-            ? graphObj.nodes
-            : Array.isArray(data?.results?.nodes)
-              ? data.results.nodes
-              : Array.isArray(data?.data?.nodes)
-                ? data.data.nodes
-                : Array.isArray(data?.nodes)
-                  ? data.nodes
-                  : [];
-        edges = Array.isArray(cand?.edges)
-          ? cand.edges
-          : Array.isArray(graphObj?.edges)
-            ? graphObj.edges
-            : Array.isArray(data?.results?.edges)
-              ? data.results.edges
-              : Array.isArray(data?.data?.edges)
-                ? data.data.edges
-                : Array.isArray(data?.edges)
-                  ? data.edges
-                  : [];
-        const hasGraph = nodes.length > 0 || edges.length > 0;
-        setGraphAvailability(prev => ({ ...prev, [traceId]: hasGraph }));
-      } catch (e) {
-        console.warn("Evidence graph fetch failed or unavailable, proceeding with report metrics only:", e);
-        setGraphAvailability(prev => ({ ...prev, [traceId]: false }));
+      // Reuse cached graph data from probe if available
+      const cached = graphDataCache.current[traceId];
+      if (cached && cached.nodes.length > 0) {
+        nodes = cached.nodes;
+        edges = cached.edges;
+      } else {
+        onNotice({ id: notificationId, title: "Generating Report", message: "Checking graph data...", level: "info" });
+        try {
+          const payload = buildEvidencePayload(traceId, report);
+          const controller = new AbortController();
+          activeAbortControllers.current[`download_${traceId}`] = controller;
+          const data = await requestGraphFetch(apiFetch, payload, controller.signal);
+          delete activeAbortControllers.current[`download_${traceId}`];
+          const extracted = extractNodesEdges(data);
+          nodes = extracted.nodes;
+          edges = extracted.edges;
+          const hasGraph = nodes.length > 0 || edges.length > 0;
+          setGraphAvailability(prev => ({ ...prev, [traceId]: hasGraph }));
+          if (hasGraph) {
+            graphDataCache.current[traceId] = { nodes, edges, rawData: data };
+          }
+        } catch (e) {
+          console.warn("Evidence graph fetch failed or unavailable, proceeding with report metrics only:", e);
+          setGraphAvailability(prev => ({ ...prev, [traceId]: false }));
+          delete activeAbortControllers.current[`download_${traceId}`];
+        }
       }
     } else {
       setGraphAvailability(prev => ({ ...prev, [traceId]: false }));
@@ -17405,6 +17420,7 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
       traceId,
       selectedReport: report
     });
+    setDownloadReportInFlight(null);
   };
 
   const handleShowGraph = async (traceId) => {
@@ -17418,48 +17434,38 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
       return;
     }
 
+    // Prevent duplicate requests
+    if (showGraphInFlight) return;
+    setShowGraphInFlight(traceId);
+
     const notificationId = `fetch-evidence-${traceId}`;
     onNotice({ id: notificationId, title: "Loading", message: "Checking evidence graph data...", level: "info" });
     
     try {
-      const payload = { 
-        id: "evidence", 
-        trace_id: traceId,
-        source_id: traceId,
-        ...(selectedReport?.id ? { report_id: String(selectedReport.id) } : {}),
-        ...(selectedReport?.external_reference_id ? { external_reference_id: String(selectedReport.external_reference_id) } : {})
-      };
-      const controller = new AbortController();
-      const data = await requestGraphFetch(apiFetch, payload, controller.signal, {
-        onQueued: () => {
-          onNotice({ id: notificationId, title: "Queued", message: "Evidence graph request is queued...", level: "info" });
-        }
-      });
-      
-      const cand = getGraphPayloadCandidate(data);
-      const graphObj = cand?.graph || cand?.graph_entities || data?.results?.graph || data?.results?.graph_entities || data?.data?.graph || data?.data?.graph_entities;
-      const nodes = Array.isArray(cand?.nodes)
-        ? cand.nodes
-        : Array.isArray(graphObj?.nodes)
-          ? graphObj.nodes
-          : Array.isArray(data?.results?.nodes)
-            ? data.results.nodes
-            : Array.isArray(data?.data?.nodes)
-              ? data.data.nodes
-              : Array.isArray(data?.nodes)
-                ? data.nodes
-                : [];
-      const edges = Array.isArray(cand?.edges)
-        ? cand.edges
-        : Array.isArray(graphObj?.edges)
-          ? graphObj.edges
-          : Array.isArray(data?.results?.edges)
-            ? data.results.edges
-            : Array.isArray(data?.data?.edges)
-              ? data.data.edges
-              : Array.isArray(data?.edges)
-                ? data.edges
-                : [];
+      let data;
+      let nodes;
+      let edges;
+
+      // Reuse cached graph data from probe if available
+      const cached = graphDataCache.current[traceId];
+      if (cached && cached.nodes.length > 0) {
+        data = cached.rawData;
+        nodes = cached.nodes;
+        edges = cached.edges;
+      } else {
+        const payload = buildEvidencePayload(traceId, selectedReport);
+        const controller = new AbortController();
+        activeAbortControllers.current[`show_${traceId}`] = controller;
+        data = await requestGraphFetch(apiFetch, payload, controller.signal, {
+          onQueued: () => {
+            onNotice({ id: notificationId, title: "Queued", message: "Evidence graph request is queued...", level: "info" });
+          }
+        });
+        delete activeAbortControllers.current[`show_${traceId}`];
+        const extracted = extractNodesEdges(data);
+        nodes = extracted.nodes;
+        edges = extracted.edges;
+      }
       
       if (nodes.length === 0 && edges.length === 0) {
         setGraphAvailability(prev => ({ ...prev, [traceId]: false }));
@@ -17468,6 +17474,8 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
       }
       
       setGraphAvailability(prev => ({ ...prev, [traceId]: true }));
+      // Cache for future use
+      graphDataCache.current[traceId] = { nodes, edges, rawData: data };
       removeNotification(notificationId);
       
       if (typeof handleOpenWindows === "function" && typeof graphAction === "function") {
@@ -17487,6 +17495,9 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
     } catch (e) {
       setGraphAvailability(prev => ({ ...prev, [traceId]: false }));
       onNotice({ id: notificationId, title: "Unavailable", message: e.message || "Failed to fetch graph data.", level: "error" });
+      delete activeAbortControllers.current[`show_${traceId}`];
+    } finally {
+      setShowGraphInFlight(null);
     }
   };
 
@@ -18658,7 +18669,8 @@ let processedData = [...reportsData];
                   const isProbing = probingGraphTraceId === traceId && graphAvailability[traceId] === undefined;
                   const isEvidenceTab = activeReportsTab === "evidence";
                   const hasKnownNoGraph = isExplicitlyAbsent || graphAvailability[traceId] === false;
-                  const isGraphDisabled = !isEvidenceTab || !traceId || hasKnownNoGraph || isProbing;
+                  const isShowingGraph = showGraphInFlight === traceId;
+                  const isGraphDisabled = !isEvidenceTab || !traceId || hasKnownNoGraph || isProbing || isShowingGraph;
 
                   let buttonText = "Open Graph";
                   let buttonTitle = "View graph in a new graph window";
@@ -18666,6 +18678,9 @@ let processedData = [...reportsData];
                   if (!isEvidenceTab) {
                     buttonText = "No Graph Available";
                     buttonTitle = "Graph visualization is only available for service evidence reports";
+                  } else if (isShowingGraph) {
+                    buttonText = "Loading Graph...";
+                    buttonTitle = "Fetching and opening evidence graph...";
                   } else if (isProbing) {
                     buttonText = "Checking Graph...";
                     buttonTitle = "Checking graph data availability...";
@@ -18698,7 +18713,7 @@ let processedData = [...reportsData];
                       onMouseOut={(e) => { if (!isGraphDisabled) e.currentTarget.style.opacity = "1"; }}
                       onClick={() => handleShowGraph(traceId)}
                     >
-                      {isProbing ? (
+                      {(isProbing || isShowingGraph) ? (
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: "14px", height: "14px", animation: "spin 1s linear infinite" }}>
                           <line x1="12" y1="2" x2="12" y2="6"></line>
                           <line x1="12" y1="18" x2="12" y2="22"></line>
@@ -18735,18 +18750,18 @@ let processedData = [...reportsData];
                     padding: "10px", 
                     fontWeight: "600", 
                     borderRadius: "6px",
-                    cursor: hiddenRendererState ? "not-allowed" : "pointer",
+                    cursor: (hiddenRendererState || downloadReportInFlight) ? "not-allowed" : "pointer",
                     background: "transparent",
                     color: "inherit",
                     border: "1px solid rgba(128,128,128,0.3)",
                     transition: "opacity 0.2s, background 0.2s"
                   }}
-                  onMouseOver={(e) => { if (!hiddenRendererState) e.target.style.background = "rgba(128,128,128,0.1)"; }}
+                  onMouseOver={(e) => { if (!hiddenRendererState && !downloadReportInFlight) e.target.style.background = "rgba(128,128,128,0.1)"; }}
                   onMouseOut={(e) => { e.target.style.background = "transparent"; }}
                   onClick={() => handleDownloadReport(selectedReport)}
-                  disabled={hiddenRendererState !== null}
+                  disabled={hiddenRendererState !== null || downloadReportInFlight !== null}
                 >
-                  {hiddenRendererState ? "Generating..." : "Download Report"}
+                  {downloadReportInFlight ? "Fetching Graph..." : hiddenRendererState ? "Generating..." : "Download Report"}
                 </button>
               </div>
             </div>
