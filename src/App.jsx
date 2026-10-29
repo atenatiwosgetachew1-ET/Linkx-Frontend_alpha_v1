@@ -2864,35 +2864,63 @@ const normalizeGraphRelationships = (value) => {
 const getGraphPayloadCandidate = (data) => {
   const parsedData = parseMaybeSerializedGraphPayload(data);
   const source = parsedData === data ? data : parsedData;
+  if (!source || typeof source !== "object") return {};
   if (Array.isArray(source?.results?.nodes) || Array.isArray(source?.results?.edges)) return source.results;
   if (Array.isArray(source?.nodes) || Array.isArray(source?.edges)) return source;
+  if (Array.isArray(source?.data?.nodes) || Array.isArray(source?.data?.edges)) return source.data;
   if (source?.graph && (Array.isArray(source.graph.nodes) || Array.isArray(source.graph.edges))) return source.graph;
+  if (source?.graph_entities && (Array.isArray(source.graph_entities.nodes) || Array.isArray(source.graph_entities.edges))) return source.graph_entities;
   if (source?.results?.graph && (Array.isArray(source.results.graph.nodes) || Array.isArray(source.results.graph.edges))) return source.results.graph;
+  if (source?.results?.graph_entities && (Array.isArray(source.results.graph_entities.nodes) || Array.isArray(source.results.graph_entities.edges))) return source.results.graph_entities;
+  if (source?.data?.graph && (Array.isArray(source.data.graph.nodes) || Array.isArray(source.data.graph.edges))) return source.data.graph;
+  if (source?.data?.graph_entities && (Array.isArray(source.data.graph_entities.nodes) || Array.isArray(source.data.graph_entities.edges))) return source.data.graph_entities;
+  if (source?.findings?.graph && (Array.isArray(source.findings.graph.nodes) || Array.isArray(source.findings.graph.edges))) return source.findings.graph;
+  if (source?.findings?.graph_entities && (Array.isArray(source.findings.graph_entities.nodes) || Array.isArray(source.findings.graph_entities.edges))) return source.findings.graph_entities;
   const parsedResult = parseMaybeSerializedGraphPayload(source?.results?.result);
   if (parsedResult && typeof parsedResult === "object") return parsedResult;
   if (source?.results?.result && typeof source.results.result === "object") return source.results.result;
-  return source?.results ?? source;
+  return source?.results ?? source?.data ?? source;
 };
 
 const hasGraphPayload = (data) => {
   const payload = getGraphPayloadCandidate(data);
-  const graphPayload = payload?.graph && typeof payload.graph === "object" ? payload.graph : data?.graph;
-  return Array.isArray(payload?.nodes) || Array.isArray(payload?.edges) || Array.isArray(graphPayload?.nodes) || Array.isArray(graphPayload?.edges);
+  const graphPayload = (payload?.graph && typeof payload.graph === "object")
+    ? payload.graph
+    : (payload?.graph_entities && typeof payload.graph_entities === "object")
+      ? payload.graph_entities
+      : (data?.graph || data?.graph_entities || data?.data?.graph || data?.data?.graph_entities || data?.findings?.graph || data?.findings?.graph_entities);
+  return Array.isArray(payload?.nodes) || Array.isArray(payload?.edges) || Array.isArray(graphPayload?.nodes) || Array.isArray(graphPayload?.edges) || Array.isArray(data?.results?.nodes) || Array.isArray(data?.data?.nodes) || Array.isArray(data?.nodes);
 };
 
 const normalizeGraphFetchResponse = (data) => {
   const payload = getGraphPayloadCandidate(data) || {};
-  const graphPayload = payload.graph && typeof payload.graph === "object" ? payload.graph : data?.graph;
+  const graphPayload = (payload.graph && typeof payload.graph === "object")
+    ? payload.graph
+    : (payload.graph_entities && typeof payload.graph_entities === "object")
+      ? payload.graph_entities
+      : (data?.graph || data?.graph_entities || data?.data?.graph || data?.data?.graph_entities || data?.findings?.graph || data?.findings?.graph_entities);
   const nodes = Array.isArray(payload.nodes)
     ? payload.nodes
     : Array.isArray(graphPayload?.nodes)
       ? graphPayload.nodes
-      : [];
+      : Array.isArray(data?.results?.nodes)
+        ? data.results.nodes
+        : Array.isArray(data?.data?.nodes)
+          ? data.data.nodes
+          : Array.isArray(data?.nodes)
+            ? data.nodes
+            : [];
   const edges = Array.isArray(payload.edges)
     ? payload.edges
     : Array.isArray(graphPayload?.edges)
       ? graphPayload.edges
-      : [];
+      : Array.isArray(data?.results?.edges)
+        ? data.results.edges
+        : Array.isArray(data?.data?.edges)
+          ? data.data.edges
+          : Array.isArray(data?.edges)
+            ? data.edges
+            : [];
 
   return {
     ...data,
@@ -12735,16 +12763,15 @@ const fileInputRef = useRef(null);
       return;
     }
 
-    const domain = payload?.domain || undefined;
-    const accountNo = payload?.account_no || undefined;
-    const externalRefId = payload?.external_reference_id || undefined;
+    const reportId = payload?.report_id || payload?.reportId || undefined;
+    const externalRefId = payload?.external_reference_id || payload?.externalReferenceId || undefined;
 
     const newPayload = {
       id: "evidence",
       trace_id: traceId,
-      ...(domain ? { domain } : {}),
-      ...(accountNo ? { account_no: accountNo } : {}),
-      ...(externalRefId ? { external_reference_id: externalRefId } : {}),
+      source_id: traceId,
+      ...(reportId ? { report_id: String(reportId) } : {}),
+      ...(externalRefId ? { external_reference_id: String(externalRefId) } : {}),
     };
 
     if (graphFetchAbortControllersRef.current[graphWindowId]) {
@@ -17081,6 +17108,10 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
       pObj = typeof report.payload === "string" ? JSON.parse(report.payload) : (report.payload || {});
     } catch (_e) {}
 
+    // If report payload explicitly claims graph is present or include_graph with flagged anomalies, it is NOT absent
+    if (pObj.has_graph === true || pObj.has_graph === "true" || pObj.has_graph === 1) return false;
+    if (pObj.include_graph === true && (pObj.is_flagged === true || (Array.isArray(pObj.flagged_rules) && pObj.flagged_rules.length > 0))) return false;
+
     if (report.has_graph === false || report.has_graph === "false" || report.has_graph === 0) return true;
     if (pObj.has_graph === false || pObj.has_graph === "false" || pObj.has_graph === 0) return true;
     if (report.graph_available === false || report.graph_available === "false" || report.graph_available === 0) return true;
@@ -17103,12 +17134,12 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
       pObj = typeof report.payload === "string" ? JSON.parse(report.payload) : (report.payload || {});
     } catch (_e) {}
 
-    if (report.has_graph === true || report.has_graph === "true" || report.has_graph === 1) return true;
     if (pObj.has_graph === true || pObj.has_graph === "true" || pObj.has_graph === 1) return true;
+    if (pObj.include_graph === true && (pObj.is_flagged === true || (Array.isArray(pObj.flagged_rules) && pObj.flagged_rules.length > 0))) return true;
+    if (report.has_graph === true || report.has_graph === "true" || report.has_graph === 1) return true;
     if (report.graph_available === true || report.graph_available === "true" || report.graph_available === 1) return true;
     if (pObj.graph_available === true || pObj.graph_available === "true" || pObj.graph_available === 1) return true;
     if (report.include_graph === true || report.include_graph === "true" || report.include_graph === 1) return true;
-    if (pObj.include_graph === true || pObj.include_graph === "true" || pObj.include_graph === 1) return true;
     if (Array.isArray(pObj.nodes) && pObj.nodes.length > 0) return true;
     return false;
   };
@@ -17130,15 +17161,6 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
       setGraphAvailability(prev => ({ ...prev, [traceId]: true }));
     }
 
-    let pObj = {};
-    try {
-      pObj = typeof selectedReport.payload === "string" ? JSON.parse(selectedReport.payload) : (selectedReport.payload || {});
-    } catch (_e) {}
-
-    const resolvedDomain = pObj.resolved_domain || pObj.domain || selectedReport.domain || undefined;
-    const accountNo = pObj.account_no || pObj.entity_id || undefined;
-    const externalRefId = selectedReport.external_reference_id || undefined;
-
     let cancelled = false;
     const controller = new AbortController();
     setProbingGraphTraceId(traceId);
@@ -17148,18 +17170,41 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
         const payload = { 
           id: "evidence", 
           trace_id: traceId,
-          ...(resolvedDomain ? { domain: resolvedDomain } : {}),
-          ...(accountNo ? { account_no: accountNo } : {}),
-          ...(externalRefId ? { external_reference_id: externalRefId } : {})
+          source_id: traceId,
+          ...(selectedReport?.id ? { report_id: String(selectedReport.id) } : {}),
+          ...(selectedReport?.external_reference_id ? { external_reference_id: String(selectedReport.external_reference_id) } : {})
         };
         const data = await requestGraphFetch(apiFetch, payload, controller.signal);
         if (cancelled) return;
-        const nodes = Array.isArray(data?.results?.nodes) ? data.results.nodes : [];
-        const edges = Array.isArray(data?.results?.edges) ? data.results.edges : [];
+        const cand = getGraphPayloadCandidate(data);
+        const graphObj = cand?.graph || cand?.graph_entities || data?.results?.graph || data?.results?.graph_entities || data?.data?.graph || data?.data?.graph_entities;
+        const nodes = Array.isArray(cand?.nodes)
+          ? cand.nodes
+          : Array.isArray(graphObj?.nodes)
+            ? graphObj.nodes
+            : Array.isArray(data?.results?.nodes)
+              ? data.results.nodes
+              : Array.isArray(data?.data?.nodes)
+                ? data.data.nodes
+                : Array.isArray(data?.nodes)
+                  ? data.nodes
+                  : [];
+        const edges = Array.isArray(cand?.edges)
+          ? cand.edges
+          : Array.isArray(graphObj?.edges)
+            ? graphObj.edges
+            : Array.isArray(data?.results?.edges)
+              ? data.results.edges
+              : Array.isArray(data?.data?.edges)
+                ? data.data.edges
+                : Array.isArray(data?.edges)
+                  ? data.edges
+                  : [];
         const hasGraph = nodes.length > 0 || edges.length > 0;
         setGraphAvailability(prev => ({ ...prev, [traceId]: hasGraph }));
       } catch (_e) {
-        if (!cancelled) {
+        console.warn("[graph availability probe]", _e);
+        if (!cancelled && !isInitiallyClaimed) {
           setGraphAvailability(prev => ({ ...prev, [traceId]: false }));
         }
       } finally {
@@ -17224,26 +17269,40 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
     if (!explicitlyNoGraph) {
       onNotice({ id: notificationId, title: "Generating Report", message: "Checking graph data...", level: "info" });
       try {
-        let pObj = {};
-        try {
-          pObj = typeof report.payload === "string" ? JSON.parse(report.payload) : (report.payload || {});
-        } catch (_e) {}
-        const resolvedDomain = pObj.resolved_domain || pObj.domain || report.domain || undefined;
-        const accountNo = pObj.account_no || pObj.entity_id || undefined;
-        const externalRefId = report.external_reference_id || undefined;
-
         const payload = { 
           id: "evidence", 
           trace_id: traceId,
-          ...(resolvedDomain ? { domain: resolvedDomain } : {}),
-          ...(accountNo ? { account_no: accountNo } : {}),
-          ...(externalRefId ? { external_reference_id: externalRefId } : {})
+          source_id: traceId,
+          ...(report?.id ? { report_id: String(report.id) } : {}),
+          ...(report?.external_reference_id ? { external_reference_id: String(report.external_reference_id) } : {})
         };
         const controller = new AbortController();
         const data = await requestGraphFetch(apiFetch, payload, controller.signal);
         
-        nodes = Array.isArray(data?.results?.nodes) ? data.results.nodes : [];
-        edges = Array.isArray(data?.results?.edges) ? data.results.edges : [];
+        const cand = getGraphPayloadCandidate(data);
+        const graphObj = cand?.graph || cand?.graph_entities || data?.results?.graph || data?.results?.graph_entities || data?.data?.graph || data?.data?.graph_entities;
+        nodes = Array.isArray(cand?.nodes)
+          ? cand.nodes
+          : Array.isArray(graphObj?.nodes)
+            ? graphObj.nodes
+            : Array.isArray(data?.results?.nodes)
+              ? data.results.nodes
+              : Array.isArray(data?.data?.nodes)
+                ? data.data.nodes
+                : Array.isArray(data?.nodes)
+                  ? data.nodes
+                  : [];
+        edges = Array.isArray(cand?.edges)
+          ? cand.edges
+          : Array.isArray(graphObj?.edges)
+            ? graphObj.edges
+            : Array.isArray(data?.results?.edges)
+              ? data.results.edges
+              : Array.isArray(data?.data?.edges)
+                ? data.data.edges
+                : Array.isArray(data?.edges)
+                  ? data.edges
+                  : [];
         const hasGraph = nodes.length > 0 || edges.length > 0;
         setGraphAvailability(prev => ({ ...prev, [traceId]: hasGraph }));
       } catch (e) {
@@ -17281,20 +17340,12 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
     onNotice({ id: notificationId, title: "Loading", message: "Checking evidence graph data...", level: "info" });
     
     try {
-      let pObj = {};
-      try {
-        pObj = typeof selectedReport?.payload === "string" ? JSON.parse(selectedReport.payload) : (selectedReport?.payload || {});
-      } catch (_e) {}
-      const resolvedDomain = pObj.resolved_domain || pObj.domain || selectedReport?.domain || undefined;
-      const accountNo = pObj.account_no || pObj.entity_id || undefined;
-      const externalRefId = selectedReport?.external_reference_id || undefined;
-
       const payload = { 
         id: "evidence", 
         trace_id: traceId,
-        ...(resolvedDomain ? { domain: resolvedDomain } : {}),
-        ...(accountNo ? { account_no: accountNo } : {}),
-        ...(externalRefId ? { external_reference_id: externalRefId } : {})
+        source_id: traceId,
+        ...(selectedReport?.id ? { report_id: String(selectedReport.id) } : {}),
+        ...(selectedReport?.external_reference_id ? { external_reference_id: String(selectedReport.external_reference_id) } : {})
       };
       const controller = new AbortController();
       const data = await requestGraphFetch(apiFetch, payload, controller.signal, {
@@ -17303,8 +17354,30 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
         }
       });
       
-      const nodes = Array.isArray(data?.results?.nodes) ? data.results.nodes : [];
-      const edges = Array.isArray(data?.results?.edges) ? data.results.edges : [];
+      const cand = getGraphPayloadCandidate(data);
+      const graphObj = cand?.graph || cand?.graph_entities || data?.results?.graph || data?.results?.graph_entities || data?.data?.graph || data?.data?.graph_entities;
+      const nodes = Array.isArray(cand?.nodes)
+        ? cand.nodes
+        : Array.isArray(graphObj?.nodes)
+          ? graphObj.nodes
+          : Array.isArray(data?.results?.nodes)
+            ? data.results.nodes
+            : Array.isArray(data?.data?.nodes)
+              ? data.data.nodes
+              : Array.isArray(data?.nodes)
+                ? data.nodes
+                : [];
+      const edges = Array.isArray(cand?.edges)
+        ? cand.edges
+        : Array.isArray(graphObj?.edges)
+          ? graphObj.edges
+          : Array.isArray(data?.results?.edges)
+            ? data.results.edges
+            : Array.isArray(data?.data?.edges)
+              ? data.data.edges
+              : Array.isArray(data?.edges)
+                ? data.edges
+                : [];
       
       if (nodes.length === 0 && edges.length === 0) {
         setGraphAvailability(prev => ({ ...prev, [traceId]: false }));
@@ -17319,7 +17392,12 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
         const newGraphId = handleOpenWindows("graph", "");
         if (newGraphId) {
           toggleAction("toggle_menu_new_report_window");
-          graphAction(newGraphId, "get_graph", "evidence", { fetchType: "evidence", traceId: traceId, domain: resolvedDomain, account_no: accountNo }, { initialData: data });
+          graphAction(newGraphId, "get_graph", "evidence", { 
+            fetchType: "evidence", 
+            traceId: traceId,
+            reportId: selectedReport?.id,
+            externalReferenceId: selectedReport?.external_reference_id
+          }, { initialData: data });
         }
       } else {
         onNotice({ title: "Error", message: "Graph manager not available.", level: "error" });
