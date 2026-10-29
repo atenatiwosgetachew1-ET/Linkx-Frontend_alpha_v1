@@ -12735,9 +12735,16 @@ const fileInputRef = useRef(null);
       return;
     }
 
+    const domain = payload?.domain || undefined;
+    const accountNo = payload?.account_no || undefined;
+    const externalRefId = payload?.external_reference_id || undefined;
+
     const newPayload = {
       id: "evidence",
       trace_id: traceId,
+      ...(domain ? { domain } : {}),
+      ...(accountNo ? { account_no: accountNo } : {}),
+      ...(externalRefId ? { external_reference_id: externalRefId } : {}),
     };
 
     if (graphFetchAbortControllersRef.current[graphWindowId]) {
@@ -17115,10 +17122,22 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
       setGraphAvailability(prev => ({ ...prev, [traceId]: false }));
       return;
     }
-    if (isReportGraphPresent(selectedReport, graphAvailability)) {
+
+    // Set optimistic initial state if metadata claims graph is present,
+    // but proceed with background verification to ensure graph isn't empty or evicted
+    const isInitiallyClaimed = isReportGraphPresent(selectedReport, graphAvailability);
+    if (isInitiallyClaimed) {
       setGraphAvailability(prev => ({ ...prev, [traceId]: true }));
-      return;
     }
+
+    let pObj = {};
+    try {
+      pObj = typeof selectedReport.payload === "string" ? JSON.parse(selectedReport.payload) : (selectedReport.payload || {});
+    } catch (_e) {}
+
+    const resolvedDomain = pObj.resolved_domain || pObj.domain || selectedReport.domain || undefined;
+    const accountNo = pObj.account_no || pObj.entity_id || undefined;
+    const externalRefId = selectedReport.external_reference_id || undefined;
 
     let cancelled = false;
     const controller = new AbortController();
@@ -17126,7 +17145,13 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
 
     (async () => {
       try {
-        const payload = { id: "evidence", trace_id: traceId };
+        const payload = { 
+          id: "evidence", 
+          trace_id: traceId,
+          ...(resolvedDomain ? { domain: resolvedDomain } : {}),
+          ...(accountNo ? { account_no: accountNo } : {}),
+          ...(externalRefId ? { external_reference_id: externalRefId } : {})
+        };
         const data = await requestGraphFetch(apiFetch, payload, controller.signal);
         if (cancelled) return;
         const nodes = Array.isArray(data?.results?.nodes) ? data.results.nodes : [];
@@ -17199,7 +17224,21 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
     if (!explicitlyNoGraph) {
       onNotice({ id: notificationId, title: "Generating Report", message: "Checking graph data...", level: "info" });
       try {
-        const payload = { id: "evidence", trace_id: traceId };
+        let pObj = {};
+        try {
+          pObj = typeof report.payload === "string" ? JSON.parse(report.payload) : (report.payload || {});
+        } catch (_e) {}
+        const resolvedDomain = pObj.resolved_domain || pObj.domain || report.domain || undefined;
+        const accountNo = pObj.account_no || pObj.entity_id || undefined;
+        const externalRefId = report.external_reference_id || undefined;
+
+        const payload = { 
+          id: "evidence", 
+          trace_id: traceId,
+          ...(resolvedDomain ? { domain: resolvedDomain } : {}),
+          ...(accountNo ? { account_no: accountNo } : {}),
+          ...(externalRefId ? { external_reference_id: externalRefId } : {})
+        };
         const controller = new AbortController();
         const data = await requestGraphFetch(apiFetch, payload, controller.signal);
         
@@ -17242,7 +17281,21 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
     onNotice({ id: notificationId, title: "Loading", message: "Checking evidence graph data...", level: "info" });
     
     try {
-      const payload = { id: "evidence", trace_id: traceId };
+      let pObj = {};
+      try {
+        pObj = typeof selectedReport?.payload === "string" ? JSON.parse(selectedReport.payload) : (selectedReport?.payload || {});
+      } catch (_e) {}
+      const resolvedDomain = pObj.resolved_domain || pObj.domain || selectedReport?.domain || undefined;
+      const accountNo = pObj.account_no || pObj.entity_id || undefined;
+      const externalRefId = selectedReport?.external_reference_id || undefined;
+
+      const payload = { 
+        id: "evidence", 
+        trace_id: traceId,
+        ...(resolvedDomain ? { domain: resolvedDomain } : {}),
+        ...(accountNo ? { account_no: accountNo } : {}),
+        ...(externalRefId ? { external_reference_id: externalRefId } : {})
+      };
       const controller = new AbortController();
       const data = await requestGraphFetch(apiFetch, payload, controller.signal, {
         onQueued: () => {
@@ -17266,7 +17319,7 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
         const newGraphId = handleOpenWindows("graph", "");
         if (newGraphId) {
           toggleAction("toggle_menu_new_report_window");
-          graphAction(newGraphId, "get_graph", "evidence", { fetchType: "evidence", traceId: traceId }, { initialData: data });
+          graphAction(newGraphId, "get_graph", "evidence", { fetchType: "evidence", traceId: traceId, domain: resolvedDomain, account_no: accountNo }, { initialData: data });
         }
       } else {
         onNotice({ title: "Error", message: "Graph manager not available.", level: "error" });
