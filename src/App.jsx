@@ -10828,7 +10828,7 @@ const fileInputRef = useRef(null);
     const message = sanitizeNotificationMessage(baseMessage);
     if (!message || !String(message).trim()) return null;
 
-    const id = `notice_${Date.now()}_${noticeSeqRef.current++}`;
+    const id = payload.id || `notice_${Date.now()}_${noticeSeqRef.current++}`;
     const rawTitle = String(payload.title || "").trim();
     const title = rawTitle && !/^(alert|message|message alert)$/i.test(rawTitle)
       ? rawTitle
@@ -10836,10 +10836,18 @@ const fileInputRef = useRef(null);
     const source = payload.source || theme.name;
     const durationMs = Number.isFinite(payload.durationMs) ? Number(payload.durationMs) : 5400;
 
-    setNotifications((prev) => [
-      ...prev,
-      { id, title, message: String(message), source: String(source), level }
-    ]);
+    if (noticeTimersRef.current[id]) {
+      clearTimeout(noticeTimersRef.current[id]);
+      delete noticeTimersRef.current[id];
+    }
+
+    setNotifications((prev) => {
+      const filtered = prev.filter((item) => item.id !== id);
+      return [
+        ...filtered,
+        { id, title, message: String(message), source: String(source), level }
+      ];
+    });
 
     if (durationMs > 0) {
       noticeTimersRef.current[id] = setTimeout(() => removeNotification(id), durationMs);
@@ -12758,7 +12766,13 @@ const fileInputRef = useRef(null);
     });
   }
   const sendGraphMessageToIframe = (iframe, msgAction, msgPayload) => {
-    const windowId = String(msgPayload?.id || "");
+    const windowId = String(
+      msgPayload?.id ||
+      Object.keys(iframeRefs.current || {}).find(
+        (wId) => iframeRefs.current[wId] === iframe || iframeRefs.current[wId]?.current === iframe?.current
+      ) ||
+      ""
+    );
     
     const send = (resolvedIframe) => {
       const targetIframe = resolvedIframe || iframe;
@@ -12769,18 +12783,15 @@ const fileInputRef = useRef(null);
       postMessageToIframe(targetIframe, { action: msgAction, payload: msgPayload });
     };
 
-    // Fast path: if the iframe ref is directly available and already on graphs_basic, send now.
+    // Fast path: for settings, search, physics, etc. on an already-mounted iframe, send now.
     // This handles ALL settings changes, search, physics, etc. on an already-rendered graph.
-    if (iframe?.current && iframeLoadedStatusRef.current[windowId]) {
-      const iframeSrc = iframe.current.src || "";
-      if (iframeSrc.includes("graphs_basic")) {
-        send(iframe);
-        return;
-      }
+    if (msgAction !== "new_graph" && msgAction !== "graph_chunk_update" && iframe?.current) {
+      send(iframe);
+      return;
     }
 
     // For new graph windows: check if the iframe has finished loading via our tracking ref
-    const isLoaded = windowId && iframeLoadedStatusRef.current[windowId];
+    const isLoaded = Boolean(windowId && iframeLoadedStatusRef.current[windowId]);
     if (isLoaded) {
       const resolvedIframe = iframe?.current ? iframe : (windowId && iframeRefs.current[windowId] ? iframeRefs.current[windowId] : null);
       send(resolvedIframe);
@@ -12790,7 +12801,7 @@ const fileInputRef = useRef(null);
     // Last resort: wait for the iframe to finish loading
     if (windowId) {
       const handleIframeReady = (e) => {
-        if (e.type === "linkx_iframe_load_event" && String(e.detail.wId) === windowId) {
+        if (e.type === "linkx_iframe_load_event" && String(e.detail?.wId) === windowId) {
           const resolvedIframe = iframe?.current ? iframe : (iframeRefs.current[windowId] || null);
           send(resolvedIframe);
           window.removeEventListener("linkx_iframe_load_event", handleIframeReady);
@@ -12924,6 +12935,10 @@ const fileInputRef = useRef(null);
             progress: buildGraphProgressPayload(data, true),
           });
           graphProgressRenderedRef.current[graphWindowId] = true;
+          
+          if (options.notificationId) {
+            removeNotification(options.notificationId);
+          }
           
           if (!hasRenderedGraph) {
             setTimeout(() => {
@@ -17499,7 +17514,7 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
             traceId: traceId,
             reportId: selectedReport?.id,
             externalReferenceId: selectedReport?.external_reference_id
-          }, { initialData: payloadData });
+          }, { initialData: payloadData, notificationId });
         }
       } else {
         onNotice({ title: "Error", message: "Graph manager not available.", level: "error" });
