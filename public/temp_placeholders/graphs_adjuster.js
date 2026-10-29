@@ -7463,9 +7463,13 @@ async function downloadGraphReport(report) {
       try {
         dataUri = doc.output("datauristring");
       } catch (_e) {}
-      const savedByBlobPreferred = downloadPdfViaBlobUrl(doc, filename);
-      if (!savedByBlobPreferred && !dataUri) {
-        try { doc.save(filename); } catch (_e) {}
+      const hasParentWindow = window.parent && window.parent !== window;
+      let savedByBlobPreferred = false;
+      if (!hasParentWindow) {
+        savedByBlobPreferred = downloadPdfViaBlobUrl(doc, filename);
+        if (!savedByBlobPreferred && !dataUri) {
+          try { doc.save(filename); } catch (_e) {}
+        }
       }
       try {
         window.parent?.postMessage({
@@ -7906,9 +7910,13 @@ async function downloadGraphReport(report) {
   try {
     dataUri = doc.output("datauristring");
   } catch (_e) {}
-  const savedByBlob = downloadPdfViaBlobUrl(doc, filename);
-  if (!savedByBlob && !dataUri) {
-    try { doc.save(filename); } catch (_e) {}
+  const hasParentWindow = window.parent && window.parent !== window;
+  let savedByBlob = false;
+  if (!hasParentWindow) {
+    savedByBlob = downloadPdfViaBlobUrl(doc, filename);
+    if (!savedByBlob && !dataUri) {
+      try { doc.save(filename); } catch (_e) {}
+    }
   }
   try {
     window.parent?.postMessage({

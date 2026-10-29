@@ -17121,9 +17121,11 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
       pObj = typeof report.payload === "string" ? JSON.parse(report.payload) : (report.payload || {});
     } catch (_e) {}
 
-    // If report payload explicitly claims graph is present or include_graph with flagged anomalies, it is NOT absent
+    // If report payload explicitly claims graph is present or include_graph is true, it is NOT absent
     if (pObj.has_graph === true || pObj.has_graph === "true" || pObj.has_graph === 1) return false;
-    if (pObj.include_graph === true && (pObj.is_flagged === true || (Array.isArray(pObj.flagged_rules) && pObj.flagged_rules.length > 0))) return false;
+    if (pObj.include_graph === true || pObj.include_graph === "true" || pObj.include_graph === 1) return false;
+    if (report.has_graph === true || report.has_graph === "true" || report.has_graph === 1) return false;
+    if (report.include_graph === true || report.include_graph === "true" || report.include_graph === 1) return false;
 
     if (report.has_graph === false || report.has_graph === "false" || report.has_graph === 0) return true;
     if (pObj.has_graph === false || pObj.has_graph === "false" || pObj.has_graph === 0) return true;
@@ -17148,7 +17150,7 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
     } catch (_e) {}
 
     if (pObj.has_graph === true || pObj.has_graph === "true" || pObj.has_graph === 1) return true;
-    if (pObj.include_graph === true && (pObj.is_flagged === true || (Array.isArray(pObj.flagged_rules) && pObj.flagged_rules.length > 0))) return true;
+    if (pObj.include_graph === true || pObj.include_graph === "true" || pObj.include_graph === 1) return true;
     if (report.has_graph === true || report.has_graph === "true" || report.has_graph === 1) return true;
     if (report.graph_available === true || report.graph_available === "true" || report.graph_available === 1) return true;
     if (pObj.graph_available === true || pObj.graph_available === "true" || pObj.graph_available === 1) return true;
