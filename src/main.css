@@ -7374,6 +7374,10 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 	line-height: 1.35;
 	opacity: 0.95;
 }
+@keyframes spin {
+	from { transform: rotate(0deg); }
+	to { transform: rotate(360deg); }
+}
 .token_list {
 	display: flex;
 	flex-wrap: wrap;

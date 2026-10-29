@@ -17049,13 +17049,23 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
   const [highlightWindow, setHighlightWindow] = useState(null);
   const [hiddenRendererState, setHiddenRendererState] = useState(null);
   const [graphAvailability, setGraphAvailability] = useState({});
+  const [probingGraphTraceId, setProbingGraphTraceId] = useState(null);
   const hiddenIframeRef = useRef(null);
 
   const limit = 50;
 
+  const getReportTraceId = (report) => {
+    if (!report) return null;
+    let pObj = {};
+    try {
+      pObj = typeof report.payload === "string" ? JSON.parse(report.payload) : (report.payload || {});
+    } catch (_e) {}
+    return pObj.trace_id || report.external_reference_id || report.trace_id || report.id;
+  };
+
   const isReportGraphAbsent = (report, availabilityMap = {}) => {
     if (!report) return false;
-    const traceId = report.external_reference_id || report.id;
+    const traceId = getReportTraceId(report);
     if (traceId && availabilityMap[traceId] !== undefined) {
       return availabilityMap[traceId] === false;
     }
@@ -17064,16 +17074,20 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
       pObj = typeof report.payload === "string" ? JSON.parse(report.payload) : (report.payload || {});
     } catch (_e) {}
 
-    if (report.has_graph === false || pObj.has_graph === false) return true;
-    if (report.graph_available === false || pObj.graph_available === false) return true;
-    if (report.include_graph === false || pObj.include_graph === false) return true;
+    if (report.has_graph === false || report.has_graph === "false" || report.has_graph === 0) return true;
+    if (pObj.has_graph === false || pObj.has_graph === "false" || pObj.has_graph === 0) return true;
+    if (report.graph_available === false || report.graph_available === "false" || report.graph_available === 0) return true;
+    if (pObj.graph_available === false || pObj.graph_available === "false" || pObj.graph_available === 0) return true;
+    if (report.include_graph === false || report.include_graph === "false" || report.include_graph === 0) return true;
+    if (pObj.include_graph === false || pObj.include_graph === "false" || pObj.include_graph === 0) return true;
     if (pObj.graph === null || pObj.graph === false) return true;
+    if (Array.isArray(pObj.nodes) && pObj.nodes.length === 0) return true;
     return false;
   };
 
   const isReportGraphPresent = (report, availabilityMap = {}) => {
     if (!report) return false;
-    const traceId = report.external_reference_id || report.id;
+    const traceId = getReportTraceId(report);
     if (traceId && availabilityMap[traceId] !== undefined) {
       return availabilityMap[traceId] === true;
     }
@@ -17082,15 +17096,19 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
       pObj = typeof report.payload === "string" ? JSON.parse(report.payload) : (report.payload || {});
     } catch (_e) {}
 
-    if (report.has_graph === true || pObj.has_graph === true) return true;
-    if (report.graph_available === true || pObj.graph_available === true) return true;
-    if (report.include_graph === true || pObj.include_graph === true) return true;
+    if (report.has_graph === true || report.has_graph === "true" || report.has_graph === 1) return true;
+    if (pObj.has_graph === true || pObj.has_graph === "true" || pObj.has_graph === 1) return true;
+    if (report.graph_available === true || report.graph_available === "true" || report.graph_available === 1) return true;
+    if (pObj.graph_available === true || pObj.graph_available === "true" || pObj.graph_available === 1) return true;
+    if (report.include_graph === true || report.include_graph === "true" || report.include_graph === 1) return true;
+    if (pObj.include_graph === true || pObj.include_graph === "true" || pObj.include_graph === 1) return true;
+    if (Array.isArray(pObj.nodes) && pObj.nodes.length > 0) return true;
     return false;
   };
 
   useEffect(() => {
     if (!selectedReport || activeReportsTab !== "evidence") return;
-    const traceId = selectedReport.external_reference_id || selectedReport.id;
+    const traceId = getReportTraceId(selectedReport);
     if (!traceId || graphAvailability[traceId] !== undefined) return;
 
     if (isReportGraphAbsent(selectedReport, graphAvailability)) {
@@ -17104,6 +17122,8 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
 
     let cancelled = false;
     const controller = new AbortController();
+    setProbingGraphTraceId(traceId);
+
     (async () => {
       try {
         const payload = { id: "evidence", trace_id: traceId };
@@ -17117,11 +17137,16 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
         if (!cancelled) {
           setGraphAvailability(prev => ({ ...prev, [traceId]: false }));
         }
+      } finally {
+        if (!cancelled) {
+          setProbingGraphTraceId(null);
+        }
       }
     })();
 
     return () => {
       cancelled = true;
+      setProbingGraphTraceId(null);
       controller.abort();
     };
   }, [selectedReport, activeReportsTab]);
@@ -17159,14 +17184,14 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
   ];
 
   const handleDownloadReport = async (report) => {
-    const traceId = report.external_reference_id || report.id;
+    const traceId = getReportTraceId(report);
     if (!traceId) {
       onNotice({ title: "Error", message: "No trace ID found for this report.", level: "error" });
       return;
     }
 
     const notificationId = `download-report-${traceId}`;
-    const explicitlyNoGraph = isReportGraphAbsent(report, graphAvailability);
+    const explicitlyNoGraph = activeReportsTab !== "evidence" || isReportGraphAbsent(report, graphAvailability);
 
     let nodes = [];
     let edges = [];
@@ -17208,7 +17233,7 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
       return;
     }
 
-    if (graphAvailability[traceId] === false) {
+    if (graphAvailability[traceId] === false || isReportGraphAbsent(selectedReport, graphAvailability)) {
       onNotice({ title: "Unavailable", message: "Graph data is not available for this evidence report.", level: "warning" });
       return;
     }
@@ -18415,16 +18440,33 @@ let processedData = [...reportsData];
               {/* Footer Action */}
               <div style={{ padding: "16px 30px", borderTop: "1px solid rgba(128,128,128,0.15)", background: "rgba(128,128,128,0.02)", display: "flex", flexDirection: "column", gap: "10px" }}>
                 {(() => {
-                  const traceId = selectedReport.external_reference_id || selectedReport.id;
+                  const traceId = getReportTraceId(selectedReport);
                   const isExplicitlyAbsent = isReportGraphAbsent(selectedReport, graphAvailability);
-                  const isGraphDisabled = activeReportsTab === "evidence" && (isExplicitlyAbsent || graphAvailability[traceId] === false);
+                  const isProbing = probingGraphTraceId === traceId && graphAvailability[traceId] === undefined;
+                  const isEvidenceTab = activeReportsTab === "evidence";
+                  const hasKnownNoGraph = isExplicitlyAbsent || graphAvailability[traceId] === false;
+                  const isGraphDisabled = !isEvidenceTab || !traceId || hasKnownNoGraph || isProbing;
+
+                  let buttonText = "Open Graph";
+                  let buttonTitle = "View graph in a new graph window";
+
+                  if (!isEvidenceTab) {
+                    buttonText = "No Graph Available";
+                    buttonTitle = "Graph visualization is only available for service evidence reports";
+                  } else if (isProbing) {
+                    buttonText = "Checking Graph...";
+                    buttonTitle = "Checking graph data availability...";
+                  } else if (!traceId || hasKnownNoGraph) {
+                    buttonText = "No Graph Available";
+                    buttonTitle = "No graph data was included or archived for this service evidence report";
+                  }
 
                   return (
                     <button 
                       type="button"
                       className={`report_tab_btn ${isGraphDisabled ? "" : "active"}`}
                       disabled={isGraphDisabled}
-                      title={isGraphDisabled ? "No graph data available for this evidence report" : "View graph in a new graph window"}
+                      title={buttonTitle}
                       style={{ 
                         width: "100%", 
                         padding: "10px", 
@@ -18433,13 +18475,42 @@ let processedData = [...reportsData];
                         cursor: isGraphDisabled ? "not-allowed" : "pointer",
                         opacity: isGraphDisabled ? 0.45 : 1,
                         filter: isGraphDisabled ? "grayscale(70%)" : "none",
-                        transition: "opacity 0.2s, box-shadow 0.2s"
+                        transition: "opacity 0.2s, box-shadow 0.2s, background 0.2s",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: "8px"
                       }}
-                      onMouseOver={(e) => { if (!isGraphDisabled) e.target.style.opacity = 0.85; }}
-                      onMouseOut={(e) => { if (!isGraphDisabled) e.target.style.opacity = 1; }}
+                      onMouseOver={(e) => { if (!isGraphDisabled) e.currentTarget.style.opacity = "0.85"; }}
+                      onMouseOut={(e) => { if (!isGraphDisabled) e.currentTarget.style.opacity = "1"; }}
                       onClick={() => handleShowGraph(traceId)}
                     >
-                      {isGraphDisabled ? "No Graph Available" : "Show Graph"}
+                      {isProbing ? (
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: "14px", height: "14px", animation: "spin 1s linear infinite" }}>
+                          <line x1="12" y1="2" x2="12" y2="6"></line>
+                          <line x1="12" y1="18" x2="12" y2="22"></line>
+                          <line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line>
+                          <line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line>
+                          <line x1="2" y1="12" x2="6" y2="12"></line>
+                          <line x1="18" y1="12" x2="22" y2="12"></line>
+                          <line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line>
+                          <line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line>
+                        </svg>
+                      ) : isGraphDisabled ? (
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ width: "14px", height: "14px", opacity: 0.7 }}>
+                          <line x1="1" y1="1" x2="23" y2="23"></line>
+                          <circle cx="12" cy="12" r="9"></circle>
+                        </svg>
+                      ) : (
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ width: "14px", height: "14px" }}>
+                          <circle cx="18" cy="5" r="3"></circle>
+                          <circle cx="6" cy="12" r="3"></circle>
+                          <circle cx="18" cy="19" r="3"></circle>
+                          <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+                          <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+                        </svg>
+                      )}
+                      <span>{buttonText}</span>
                     </button>
                   );
                 })()}
