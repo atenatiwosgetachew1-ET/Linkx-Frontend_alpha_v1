@@ -12391,6 +12391,7 @@ const fileInputRef = useRef(null);
             });
         }, 300);
     } else if (type === "graph") {
+      delete iframeLoadedStatusRef.current[id];
       iframeRefs.current[id] = React.createRef();
       setActiveWindowId(id);
       const initialSettings = normalizeGraphIframeSettings(DEFAULT_GRAPH_IFRAME_SETTINGS);
@@ -12656,6 +12657,8 @@ const fileInputRef = useRef(null);
 
     // --- Bring window to front ---
   const handleCloseWindow = (id) => {
+    delete iframeLoadedStatusRef.current[id];
+    delete iframeRefs.current[id];
     const closingWindowSnapshot = windowsRef.current.find(w => w.id === id);
     requestSourceWindowCleanup(closingWindowSnapshot, id);
 
@@ -12768,7 +12771,7 @@ const fileInputRef = useRef(null);
 
     // Fast path: if the iframe ref is directly available and already on graphs_basic, send now.
     // This handles ALL settings changes, search, physics, etc. on an already-rendered graph.
-    if (iframe?.current) {
+    if (iframe?.current && iframeLoadedStatusRef.current[windowId]) {
       const iframeSrc = iframe.current.src || "";
       if (iframeSrc.includes("graphs_basic")) {
         send(iframe);
@@ -17482,12 +17485,21 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
         const newGraphId = handleOpenWindows("graph", "");
         if (newGraphId) {
           toggleAction("toggle_menu_new_report_window");
+          const payloadData = {
+            ...data,
+            message: "success",
+            results: {
+              ...(data?.results || {}),
+              nodes,
+              edges,
+            }
+          };
           graphAction(newGraphId, "get_graph", "evidence", { 
             fetchType: "evidence", 
             traceId: traceId,
             reportId: selectedReport?.id,
             externalReferenceId: selectedReport?.external_reference_id
-          }, { initialData: data });
+          }, { initialData: payloadData });
         }
       } else {
         onNotice({ title: "Error", message: "Graph manager not available.", level: "error" });
