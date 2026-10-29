@@ -7256,6 +7256,9 @@ function ensureJsPdf() {
   }
 
   const sources = [
+    "../temp_placeholders/jspdf.umd.min.js",
+    "./jspdf.umd.min.js",
+    "/temp_placeholders/jspdf.umd.min.js",
     "https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js",
     "https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js"
   ];
@@ -7299,6 +7302,9 @@ function ensureHtml2Canvas() {
   }
 
   const sources = [
+    "../temp_placeholders/html2canvas.min.js",
+    "./html2canvas.min.js",
+    "/temp_placeholders/html2canvas.min.js",
     "https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js",
     "https://unpkg.com/html2canvas@1.4.1/dist/html2canvas.min.js"
   ];
@@ -7419,7 +7425,12 @@ async function downloadGraphReport(report) {
     JsPdfConstructor = await ensureJsPdf();
   } catch (err) {
     console.error("Report PDF generation failed: jsPDF unavailable.", err);
-    alert("Could not generate report PDF. jsPDF library is not available.");
+    try {
+      window.parent?.postMessage({
+        type: "evidence_report_generated",
+        payload: { success: false, error: "jsPDF library is unavailable: " + err.message }
+      }, window.__LINKX_PARENT_ORIGIN__ || "*");
+    } catch (_e) {}
     return;
   }
 
@@ -7450,13 +7461,18 @@ async function downloadGraphReport(report) {
       doc.addImage(imageData, "PNG", drawX, drawY, drawWidth, drawHeight, undefined, "FAST");
       const savedByBlobPreferred = downloadPdfViaBlobUrl(doc, filename);
       if (!savedByBlobPreferred) {
-        doc.save(filename);
+        try { doc.save(filename); } catch (_e) {}
       }
+      try {
+        window.parent?.postMessage({
+          type: "evidence_report_generated",
+          payload: { success: true, filename, downloaded: savedByBlobPreferred }
+        }, window.__LINKX_PARENT_ORIGIN__ || "*");
+      } catch (_e) {}
       return;
     }
   } catch (err) {
     console.warn("HTML template PDF rendering failed. Falling back to manual PDF layout.", err);
-    alert("Warning: Falling back to old report format because template rendering failed: " + err.message);
   }
 
   const margin = 34;
@@ -7884,8 +7900,14 @@ async function downloadGraphReport(report) {
 
   const savedByBlob = downloadPdfViaBlobUrl(doc, filename);
   if (!savedByBlob) {
-    doc.save(filename);
+    try { doc.save(filename); } catch (_e) {}
   }
+  try {
+    window.parent?.postMessage({
+      type: "evidence_report_generated",
+      payload: { success: true, filename, downloaded: savedByBlob }
+    }, window.__LINKX_PARENT_ORIGIN__ || "*");
+  } catch (_e) {}
 }
 
 async function generateEvidenceReport(payload) {

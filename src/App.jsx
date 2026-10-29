@@ -39,7 +39,7 @@ const GRAPH_LIMIT_HARD_MAX = 100000;
 const DEFAULT_GRAPH_IFRAME_SETTINGS = ["", "", { min: 0, max: 25 }, "", "", "", false, false, false, false, "concentric", "UD", "directed", "hop_distance", ""];
 const LINKX_IFRAME_CHANNEL = "linkx:iframe";
 const LINKX_IFRAME_VERSION = 1;
-const TRUSTED_IFRAME_MESSAGE_TYPES = new Set(["app_notification", "notification", "nodeProperties", "all_property_keys_response", "graph_search_results", "graph_render_stats", "network_components", "entity_selection", "graph_alerts", "pinned_evidence_update", "clipboard_get", "clipboard_set"]);
+const TRUSTED_IFRAME_MESSAGE_TYPES = new Set(["app_notification", "notification", "nodeProperties", "all_property_keys_response", "graph_search_results", "graph_render_stats", "network_components", "entity_selection", "graph_alerts", "pinned_evidence_update", "clipboard_get", "clipboard_set", "evidence_report_generated"]);
 const SESSION_POLICY_CACHE_KEY = "linkx_session_policy_cache";
 const AdminLockIcon = () => (
   <span title="Requires Admin privileges" style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "10px", fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.5px", background: "var(--brand-badge-gradient, linear-gradient(90deg, #ac854d, #825825))", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", marginLeft: "8px", verticalAlign: "middle" }}>
@@ -7894,7 +7894,7 @@ function WindowVerticalSplitPanels({id, type, sourceId, initialTopHeight, minTop
     </div>
   );
 }
-function IframeEmbed({wId,id,fileName,title,activeGraph,graphAction,iframeRef,BASE_URL,themeMode = "light"}) {
+function IframeEmbed({wId,id,fileName,title,activeGraph,graphAction,iframeRef,BASE_URL,themeMode = "light", sandboxMode}) {
   const rawBase = String(BASE_URL || "").trim().replace(/\/+$/, "");
   const appBase = String(import.meta.env.BASE_URL || "/");
   const cleanAppBase = appBase.replace(/^\/+|\/+$/g, "");
@@ -7986,11 +7986,12 @@ function IframeEmbed({wId,id,fileName,title,activeGraph,graphAction,iframeRef,BA
   }
   else {
     const iframeFile = fileName || activeGraph;
+    const isRelaxed = sandboxMode === "relaxed" || String(wId || "").startsWith("hidden_");
     return (
       <div className="iframe_graph">
         <iframe
           ref={iframeRef}
-          sandbox={strictSandbox}
+          sandbox={isRelaxed ? relaxedSandbox : strictSandbox}
           src={`${iframeBasePath}/${iframeFile}.html?${iframeQueryParams}`}
           width="100%"
           height="98%"
@@ -12004,6 +12005,13 @@ const fileInputRef = useRef(null);
         return;
       }
 
+      if (event.data?.type === "evidence_report_generated") {
+        window.dispatchEvent(new CustomEvent("evidence_report_generated_event", {
+          detail: event.data?.payload || {}
+        }));
+        return;
+      }
+
       if (
         event.data?.type === "app_notification" ||
         event.data?.type === "notification" ||
@@ -12077,6 +12085,9 @@ const fileInputRef = useRef(null);
       if (event.data?.type === "graph_render_stats") {
         const payload = event.data?.payload || {};
         const targetGraphWindowId = payload.id ?? resolvedSourceWindowId;
+        if (targetGraphWindowId && String(targetGraphWindowId).startsWith("hidden_")) {
+          return;
+        }
         const visibleNodes = Number(payload.visible_nodes ?? payload.nodes ?? payload.total_nodes ?? 0) || 0;
         const visibleEdges = Number(payload.visible_edges ?? payload.edges ?? payload.total_edges ?? 0) || 0;
         const graphIsLarge = visibleNodes >= 300;
@@ -16783,7 +16794,7 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
         <Taskbar windows={windows} isTaskBarOpen={isTaskBarOpen} activeWindowId={activeWindowId} focusWindow={handleFocusWindow} toggleAction={handleToggleMenu} isCtrlHeld={isCtrlHeld}/>
         <Configurations sessionId={sessionId} actions={handleConfigurationActions} loadscreenState={loadscreenState} setloadscreenState={setloadscreenState} toggleAction={handleToggleMenu} configurations={configurations} isConfigurationsOpen={isConfigurationsOpen} apiFetch={apiFetch} canAccess={canAccess} idleSettings={idleSettings} idlePolicyMeta={idlePolicyMeta} onIdleSettingsChange={updateIdleSettings} isAdmin={hasRole("admin")}/>
         <Settings isSettingsOpen={isSettingsOpen} toggleAction={handleToggleMenu} actor={actor || user} roles={roles} permissions={permissions} canAccess={canAccess} apiFetch={apiFetch} sessionId={sessionId} onNotice={pushNotification} requestConfirmation={requestConfirmation} onLogout={() => performLogout("user_logout")} areBackgroundAnimationsEnabled={areBackgroundAnimationsEnabled} onBackgroundAnimationsChange={setBackgroundAnimationsEnabled} />
-        <Reports isReportsOpen={isReportsOpen} toggleAction={handleToggleMenu} handleOpenWindows={handleOpenWindows} graphAction={handleGraphActions} actor={actor || user} roles={roles} permissions={permissions} canAccess={canAccess} apiFetch={apiFetch} sessionId={sessionId} onNotice={pushNotification} removeNotification={removeNotification} onLogout={() => performLogout("user_logout")} areBackgroundAnimationsEnabled={areBackgroundAnimationsEnabled} onBackgroundAnimationsChange={setBackgroundAnimationsEnabled} />
+        <Reports isReportsOpen={isReportsOpen} toggleAction={handleToggleMenu} handleOpenWindows={handleOpenWindows} graphAction={handleGraphActions} actor={actor || user} roles={roles} permissions={permissions} canAccess={canAccess} apiFetch={apiFetch} sessionId={sessionId} onNotice={pushNotification} removeNotification={removeNotification} onLogout={() => performLogout("user_logout")} areBackgroundAnimationsEnabled={areBackgroundAnimationsEnabled} onBackgroundAnimationsChange={setBackgroundAnimationsEnabled} iframeRefs={iframeRefs} />
         <Main userName={userName} setSessionId={setSessionId} API_URL={API_URL} debounceRef={debounceRef} setConfigurations={setConfigurations} configurations={configurations} windows={windows} setWindows={setWindows} openWindows={handleOpenWindows} themeMode={themeMode} areBackgroundAnimationsEnabled={areBackgroundAnimationsEnabled} />
         {isWorkspaceLocked && (
           <WorkspaceLockOverlay
@@ -17065,7 +17076,7 @@ function formatJSON(json) {
   });
 }
 
-function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, actor, roles = [], permissions = [], canAccess, apiFetch, sessionId, onNotice, removeNotification, onLogout, areBackgroundAnimationsEnabled = true, onBackgroundAnimationsChange }) {
+function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, actor, roles = [], permissions = [], canAccess, apiFetch, sessionId, onNotice, removeNotification, onLogout, areBackgroundAnimationsEnabled = true, onBackgroundAnimationsChange, iframeRefs }) {
   const [activeReportsTab, setActiveReportsTab] = useState("parent");
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
@@ -17225,6 +17236,40 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
     if (!hiddenRendererState || !hiddenIframeRef.current) return;
     
     const { windowId, nodes, edges, notificationId, traceId, selectedReport } = hiddenRendererState;
+    if (iframeRefs?.current) {
+      iframeRefs.current[windowId] = hiddenIframeRef;
+    }
+
+    let fallbackTimer = null;
+    let completed = false;
+
+    const cleanup = (success = true, msg = "") => {
+      if (completed) return;
+      completed = true;
+      if (fallbackTimer) clearTimeout(fallbackTimer);
+      window.removeEventListener("evidence_report_generated_event", handleReportGenerated);
+      removeNotification(notificationId);
+      if (iframeRefs?.current && windowId) {
+        delete iframeRefs.current[windowId];
+      }
+      if (success) {
+        onNotice({ title: "Success", message: msg || "Report PDF generated successfully.", level: "success" });
+      } else {
+        onNotice({ title: "Report Notice", message: msg || "Report generation finished.", level: "warning" });
+      }
+      setHiddenRendererState(null);
+    };
+
+    const handleReportGenerated = (e) => {
+      const detail = e.detail || {};
+      if (detail.success) {
+        cleanup(true, detail.filename ? `Downloaded ${detail.filename}` : "Report PDF generated successfully.");
+      } else {
+        cleanup(false, detail.error || "Report generation failed.");
+      }
+    };
+
+    window.addEventListener("evidence_report_generated_event", handleReportGenerated);
     
     const handleReady = (e) => {
       if (String(e.detail.wId) === String(windowId)) {
@@ -17235,16 +17280,21 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
           payload: { id: traceId, nodes, edges, reportInfo: selectedReport }
         });
         
-        setTimeout(() => {
-          removeNotification(notificationId);
-          onNotice({ title: "Success", message: "Report PDF generated successfully.", level: "success" });
-          setHiddenRendererState(null);
-        }, 5000); // Wait enough time for PDF generation to complete before cleanup
+        fallbackTimer = setTimeout(() => {
+          cleanup(true, "Report PDF generated successfully.");
+        }, 6000);
       }
     };
     
     window.addEventListener("linkx_iframe_load_event", handleReady);
-    return () => window.removeEventListener("linkx_iframe_load_event", handleReady);
+    return () => {
+      window.removeEventListener("linkx_iframe_load_event", handleReady);
+      window.removeEventListener("evidence_report_generated_event", handleReportGenerated);
+      if (fallbackTimer) clearTimeout(fallbackTimer);
+      if (iframeRefs?.current && windowId) {
+        delete iframeRefs.current[windowId];
+      }
+    };
   }, [hiddenRendererState]);
 
   const tabs = [
@@ -17315,8 +17365,13 @@ function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, 
 
     onNotice({ id: notificationId, title: "Rendering", message: "Rendering report and building PDF...", level: "info" });
     
+    const winId = `hidden_${traceId}_${Date.now()}`;
+    if (iframeRefs?.current) {
+      iframeRefs.current[winId] = hiddenIframeRef;
+    }
+
     setHiddenRendererState({
-      windowId: `hidden_${traceId}_${Date.now()}`,
+      windowId: winId,
       nodes,
       edges,
       notificationId,
@@ -18679,13 +18734,14 @@ let processedData = [...reportsData];
           <div className="content_container" style={{ width: "100%", height: "100%" }}>
             <IframeEmbed 
               wId={hiddenRendererState.windowId}
-            id="graphs_basic"
-            fileName="graphs_basic"
-            activeGraph="graphs_basic"
-            iframeRef={hiddenIframeRef}
-            BASE_URL={resolveApiUrl(import.meta.env.VITE_API_URL)}
-            themeMode="light"
-          />
+              id="graphs_basic"
+              fileName="graphs_basic"
+              activeGraph="graphs_basic"
+              iframeRef={hiddenIframeRef}
+              BASE_URL={resolveApiUrl(import.meta.env.VITE_API_URL)}
+              themeMode="light"
+              sandboxMode="relaxed"
+            />
           </div>
         </div>
       )}
