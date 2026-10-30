@@ -8029,7 +8029,7 @@ function IframeEmbed({wId,id,fileName,title,activeGraph,graphAction,iframeRef,BA
   }
   else {
     const iframeFile = fileName || activeGraph;
-    const isNoSandbox = sandboxMode === "none" || String(wId || "").startsWith("hidden_");
+    const isNoSandbox = sandboxMode === "none" || String(wId || "").startsWith("hidden_") || String(iframeFile || "").includes("graphs_basic");
     const isRelaxed = sandboxMode === "relaxed";
     const sandboxAttr = isNoSandbox ? undefined : (isRelaxed ? relaxedSandbox : strictSandbox);
     return (
@@ -9729,6 +9729,7 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
                   iframeRef={iframeRef}
                   BASE_URL={BASE_URL}
                   themeMode={themeMode}
+                  sandboxMode={activeGraph === "graphs_basic" ? "none" : undefined}
                 />
               </div>
             )}
@@ -10044,6 +10045,7 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
                     iframeRef={iframeRef}
                     BASE_URL={BASE_URL}
                     themeMode={themeMode}
+                    sandboxMode={activeGraph === "graphs_basic" ? "none" : undefined}
                   />
                 </div>
               )}

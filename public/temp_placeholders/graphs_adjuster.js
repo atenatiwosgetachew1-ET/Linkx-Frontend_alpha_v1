@@ -7464,8 +7464,9 @@ async function downloadGraphReport(report) {
         dataUri = doc.output("datauristring");
       } catch (_e) {}
       const hasParentWindow = window.parent && window.parent !== window;
+      const isHiddenRenderer = String(window.currentGraphWindowId || "").startsWith("hidden_") || String(report?.id || "").startsWith("hidden_");
       let savedByBlobPreferred = false;
-      if (!hasParentWindow) {
+      if (!isHiddenRenderer) {
         savedByBlobPreferred = downloadPdfViaBlobUrl(doc, filename);
         if (!savedByBlobPreferred && !dataUri) {
           try { doc.save(filename); } catch (_e) {}
@@ -7911,8 +7912,9 @@ async function downloadGraphReport(report) {
     dataUri = doc.output("datauristring");
   } catch (_e) {}
   const hasParentWindow = window.parent && window.parent !== window;
+  const isHiddenRenderer = String(window.currentGraphWindowId || "").startsWith("hidden_");
   let savedByBlob = false;
-  if (!hasParentWindow) {
+  if (!isHiddenRenderer) {
     savedByBlob = downloadPdfViaBlobUrl(doc, filename);
     if (!savedByBlob && !dataUri) {
       try { doc.save(filename); } catch (_e) {}
