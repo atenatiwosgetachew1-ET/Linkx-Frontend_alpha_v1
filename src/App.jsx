@@ -1037,7 +1037,88 @@ function Taskbar({ windows, isTaskBarOpen, activeWindowId, focusWindow, toggleAc
     </div>
   );
 }
-function Configurations({sessionId,actions,loadscreenState,setloadscreenState,toggleAction,configurations,isConfigurationsOpen,apiFetch,canAccess,idleSettings,idlePolicyMeta,onIdleSettingsChange,isAdmin}) {
+
+const checkIsBuiltinRule = (ruleItem, ruleName, parsedConfig, knownBuiltinRules) => {
+  const name = String(ruleName || (typeof ruleItem === "string" ? ruleItem : ruleItem?.name || ruleItem?.rule_name || "")).trim();
+  if (!name) return false;
+  const lowerName = name.toLowerCase();
+
+  // If already tagged in knownBuiltinRules
+  if (knownBuiltinRules) {
+    if (knownBuiltinRules instanceof Set) {
+      if (knownBuiltinRules.has(name) || knownBuiltinRules.has(lowerName)) return true;
+    } else if (Array.isArray(knownBuiltinRules)) {
+      if (knownBuiltinRules.some((r) => String(r).trim().toLowerCase() === lowerName)) return true;
+    }
+  }
+
+  // If ruleItem object itself has explicit builtin / default flags
+  if (ruleItem && typeof ruleItem === "object") {
+    if (ruleItem.is_builtin === true || ruleItem.builtin === true || ruleItem.is_default === true || ruleItem.default === true) {
+      return true;
+    }
+    const itemType = String(ruleItem.type || ruleItem.origin || ruleItem.source || ruleItem.category || "").trim().toLowerCase();
+    if (itemType === "builtin" || itemType === "built-in" || itemType === "default" || itemType === "system") {
+      return true;
+    }
+  }
+
+  if (parsedConfig && typeof parsedConfig === "object") {
+    // Check known builtin / default list fields on configuration
+    const builtinCandidates = [
+      parsedConfig.builtin_rules,
+      parsedConfig.default_rules,
+      parsedConfig.builtin_rule_names,
+      parsedConfig.system_rules,
+      parsedConfig.default_rule_names,
+    ];
+    for (const list of builtinCandidates) {
+      if (Array.isArray(list)) {
+        if (list.some((item) => {
+          const itemName = typeof item === "object" && item !== null ? (item.name || item.rule_name || item.id || "") : String(item);
+          return itemName.trim().toLowerCase() === lowerName;
+        })) {
+          return true;
+        }
+      } else if (list && typeof list === "object") {
+        if (Object.keys(list).some((k) => k.trim().toLowerCase() === lowerName)) {
+          return true;
+        }
+      } else if (typeof list === "string" && list.trim()) {
+        const parts = list.split(",").map((s) => s.trim().toLowerCase());
+        if (parts.includes(lowerName)) return true;
+      }
+    }
+
+    // Check parsedConfig.rules dictionary
+    if (parsedConfig.rules && typeof parsedConfig.rules === "object" && !Array.isArray(parsedConfig.rules)) {
+      const meta = parsedConfig.rules[name] || parsedConfig.rules[lowerName];
+      if (meta && typeof meta === "object") {
+        if (meta.is_builtin === true || meta.builtin === true || meta.is_default === true || meta.default === true) {
+          return true;
+        }
+        const metaType = String(meta.type || meta.origin || meta.source || meta.category || "").trim().toLowerCase();
+        if (metaType === "builtin" || metaType === "built-in" || metaType === "default" || metaType === "system") {
+          return true;
+        }
+      }
+    }
+
+    // If custom/uploaded rules are explicitly enumerated, anything else is built-in
+    const customList = parsedConfig.custom_rules || parsedConfig.uploaded_rules || parsedConfig.user_rules;
+    if (Array.isArray(customList) && customList.length > 0) {
+      const isCustom = customList.some((item) => {
+        const itemName = typeof item === "object" && item !== null ? (item.name || item.rule_name || item.id || "") : String(item);
+        return itemName.trim().toLowerCase() === lowerName;
+      });
+      if (!isCustom) return true;
+    }
+  }
+
+  return false;
+};
+
+function Configurations({sessionId,actions,loadscreenState,setloadscreenState,toggleAction,configurations,isConfigurationsOpen,apiFetch,canAccess,idleSettings,idlePolicyMeta,onIdleSettingsChange,isAdmin,onNotice,knownBuiltinRules}) {
   const [remote, setRemote] = useState(false);
   const [automation, setAutomation] = useState(false);
   const [parsedConfig, setParsedConfig] = useState(null);
@@ -1052,7 +1133,18 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
   }, []);
 
   const activeRuleValue = normalizeActiveRuleValue(parsedConfig?.active_rule);
-  const ruleNames = Array.isArray(parsedConfig?.rule_names) ? parsedConfig.rule_names : [];
+  const ruleNames = useMemo(() => {
+    if (Array.isArray(parsedConfig?.rule_names) && parsedConfig.rule_names.length > 0) {
+      return parsedConfig.rule_names;
+    }
+    if (Array.isArray(parsedConfig?.rules) && parsedConfig.rules.length > 0) {
+      return parsedConfig.rules;
+    }
+    if (parsedConfig?.rules && typeof parsedConfig.rules === "object") {
+      return Object.keys(parsedConfig.rules);
+    }
+    return [];
+  }, [parsedConfig]);
   const canRemoveRule = ruleNames.length > 0 && selectedRuleForRemoval !== "";
   const classifiedEntityEntries = normalizeClassifiedEntityEntries(
     parsedConfig?.trusted_entities ?? parsedConfig?.trusted_catalog ?? parsedConfig?.trusted_list ?? parsedConfig?.trustedList ?? parsedConfig?.active_tool_trusted_list,
@@ -1092,7 +1184,10 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
   }, [configurations]);
 
   useEffect(() => {
-    const nextRule = activeRuleValue || (ruleNames[0] || "");
+    const rawNextRule = activeRuleValue || (ruleNames[0] || "");
+    const nextRule = typeof rawNextRule === "object" && rawNextRule !== null
+      ? (rawNextRule.name || rawNextRule.rule_name || rawNextRule.id || "")
+      : String(rawNextRule || "");
     setSelectedRuleForRemoval(nextRule);
     setRemoveRuleArmed(false);
   }, [activeRuleValue, ruleNames]);
@@ -1112,7 +1207,15 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
 
   const handleRemoveRule = () => {
     if (!canRemoveRule) {
-      alert("Select a rule before removing.");
+      if (typeof onNotice === "function") {
+        onNotice({
+          title: "Rule Removal",
+          message: "Select a rule before removing.",
+          level: "warning",
+        });
+      } else {
+        alert("Select a rule before removing.");
+      }
       return;
     }
     if (!removeRuleArmed) {
@@ -1662,9 +1765,18 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
                   value={activeRuleValue}
                   onChange={handleActiveRuleChange}
                 >
-                  {ruleNames.map((rule, idx) => (
-                    <option key={idx} value={rule}>{rule}</option>
-                  ))}
+                  {ruleNames.map((ruleItem, idx) => {
+                    const ruleName = typeof ruleItem === "object" && ruleItem !== null
+                      ? (ruleItem.name || ruleItem.rule_name || ruleItem.id || String(ruleItem))
+                      : String(ruleItem);
+                    const isBuiltin = checkIsBuiltinRule(ruleItem, ruleName, parsedConfig, knownBuiltinRules);
+                    const label = isBuiltin && !/\(built-in\)$/i.test(ruleName.trim())
+                      ? `${ruleName} (Built-in)`
+                      : ruleName;
+                    return (
+                      <option key={idx} value={ruleName}>{label}</option>
+                    );
+                  })}
                 </select>
 
                 <input
@@ -2211,12 +2323,14 @@ const getConfigurationErrorMessage = (input, fallback = "Could not save configur
   const detail = String(payload?.detail || "").trim();
   const field = String(payload?.field || "").trim();
   const resultsText = typeof payload?.results === "string" ? payload.results.trim() : "";
+  if (resultsText) return sanitizeBackendUserMessage(resultsText, resultsText);
   if (status === 400 && message === "validation_error" && detail === "json_object_required") return "Configuration payload must be an object.";
   if (status === 400 && message === "validation_error" && field === "trusted_entities") return "Trusted entities are invalid.";
   if (status === 400 && message === "validation_error" && field === "risk_entities") return "Risk entities are invalid.";
   if (message === "failed!" && String(payload?.error || "") === "rule_upload_failed") return "Rule upload failed.";
   if (status === 404 && resultsText) return resultsText;
   if (status === 500 && message === "failed!" && String(payload?.error || "") === "configuration_load_failed") return "Could not load configuration. Try again.";
+  if (detail && !/^(json_object_required|internal_server_error)$/i.test(detail)) return detail;
   return getSharedApiErrorMessage(input, fallback);
 };
 
@@ -10392,6 +10506,7 @@ const fileInputRef = useRef(null);
   const [userName, setUserName] = useState(null);
   const [notifications, setNotifications] = useState([]);
   const [confirmations, setConfirmations] = useState([]);
+  const [knownBuiltinRules, setKnownBuiltinRules] = useState(() => new Set());
   const noticeSeqRef = useRef(1);
   const confirmSeqRef = useRef(1);
   const noticeTimersRef = useRef({});
@@ -16564,7 +16679,11 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
         const hasRuleUpload =
           uploadedRuleFile instanceof File && !!uploadedRuleFile.name;
         if (!resolvedSessionId) {
-          alert("Session is still initializing. Please try again in a moment.");
+          pushNotification({
+            title: "Session Initializing",
+            message: "Session is still initializing. Please try again in a moment.",
+            level: "warning",
+          });
           return;
         }
         setloadscreenState(true);
@@ -16599,22 +16718,38 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
               if (ruleUploadInput) ruleUploadInput.value = "";
               if (ruleNameInput) ruleNameInput.value = "";
               setConfigurations((prev) => ({ ...prev, rule_name: "" }));
-              alert("Rule uploaded!");
+              pushNotification({
+                title: "Rule Uploaded",
+                message: "Rule uploaded successfully.",
+                level: "success",
+              });
             } else {
-              alert("Configuration saved!");
+              pushNotification({
+                title: "Configuration Saved",
+                message: "Configuration saved successfully.",
+                level: "success",
+              });
             }
           setTimeout(() => {
             fetchConfigurationForSession(resolvedSessionId).then((res) => { if (res.ok) setConfigurations(res.configuration); }).finally(() => setloadscreenState(false));
           }, 1500);
           } 
           else {
-            alert(getConfigurationErrorMessage(data))
+            pushNotification({
+              title: "Configuration Notice",
+              message: getConfigurationErrorMessage(data),
+              level: "warning",
+            });
             setloadscreenState(false);
           }
         })
         .catch((err) => {
-          console.error("err",err);
-          alert(getConfigurationErrorMessage(err));
+          console.error("ConfigSaveErr", err);
+          pushNotification({
+            title: "Configuration Error",
+            message: getConfigurationErrorMessage(err),
+            level: "error",
+          });
           setloadscreenState(false);
         });    
       }, 300);
@@ -16622,13 +16757,21 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
     else if (id === "remove"){
       const activeRuleName = payload?.rule || payload?.rule_name || "";
       if (!activeRuleName) {
-        alert("Select a rule before removing.");
+        pushNotification({
+          title: "Rule Removal",
+          message: "Select a rule before removing.",
+          level: "warning",
+        });
         return;
       }
       const formData = new FormData();
       formData.append("id", "remove_rule");
       if (!resolvedSessionId) {
-        alert("Session is still initializing. Please try again in a moment.");
+        pushNotification({
+          title: "Session Initializing",
+          message: "Session is still initializing. Please try again in a moment.",
+          level: "warning",
+        });
         return;
       }
       formData.append("session_id", resolvedSessionId);
@@ -16640,16 +16783,42 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
       })
       .then((data) => {
         if (isSuccessResponse(data)) {
-          alert("Rule removed!");
+          pushNotification({
+            title: "Rule Removed",
+            message: `Rule "${activeRuleName}" was successfully removed.`,
+            level: "success",
+          });
           setTimeout(() => { fetchConfigurationForSession(resolvedSessionId).then((res) => { if (res.ok) setConfigurations(res.configuration); }).finally(() => setloadscreenState(false)); }, 1500);
         } else {
-          alert(getConfigurationErrorMessage(data, "Could not remove the selected rule. Try again."));
+          const errorMsg = getConfigurationErrorMessage(data, "Could not remove the selected rule. Try again.");
+          const isBuiltinError = /built-?in/i.test(errorMsg);
+          if (isBuiltinError) {
+            const ruleMatch = errorMsg.match(/rule\s+'([^']+)'/i);
+            const matchedRule = ruleMatch ? ruleMatch[1] : activeRuleName;
+            setKnownBuiltinRules((prev) => new Set([...prev, matchedRule.trim().toLowerCase(), activeRuleName.trim().toLowerCase(), matchedRule.trim(), activeRuleName.trim()]));
+          }
+          pushNotification({
+            title: isBuiltinError ? "Built-in Rule" : "Configuration Warning",
+            message: errorMsg,
+            level: "warning",
+          });
           setloadscreenState(false);
         }
       })
       .catch((err) => {
-        console.error("ConfigRemoveErr", err);
-        alert(getConfigurationErrorMessage(err, "Could not remove the selected rule. Try again."));
+        console.warn("ConfigRemoveNotice", err);
+        const errorMsg = getConfigurationErrorMessage(err, "Could not remove the selected rule. Try again.");
+        const isBuiltinError = /built-?in/i.test(errorMsg);
+        if (isBuiltinError) {
+          const ruleMatch = errorMsg.match(/rule\s+'([^']+)'/i);
+          const matchedRule = ruleMatch ? ruleMatch[1] : activeRuleName;
+          setKnownBuiltinRules((prev) => new Set([...prev, matchedRule.trim().toLowerCase(), activeRuleName.trim().toLowerCase(), matchedRule.trim(), activeRuleName.trim()]));
+        }
+        pushNotification({
+          title: isBuiltinError ? "Built-in Rule" : "Configuration Warning",
+          message: errorMsg,
+          level: "warning",
+        });
         setloadscreenState(false);
       });
     }
@@ -16657,11 +16826,19 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
       const importInput = document.getElementById("import_config_file");
       const importFile = importInput?.files?.[0];
       if (!importFile) {
-        alert("Select a configuration file first.");
+        pushNotification({
+          title: "Configuration Upload",
+          message: "Select a configuration file first.",
+          level: "warning",
+        });
         return;
       }
       if (!resolvedSessionId) {
-        alert("Session is still initializing. Please try again in a moment.");
+        pushNotification({
+          title: "Session Initializing",
+          message: "Session is still initializing. Please try again in a moment.",
+          level: "warning",
+        });
         return;
       }
       setloadscreenState(true);
@@ -16694,28 +16871,48 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
           })
           .then((data) => {
             if (isSuccessResponse(data)) {
-              alert("Configuration uploaded!");
+              pushNotification({
+                title: "Configuration Uploaded",
+                message: "Configuration uploaded successfully.",
+                level: "success",
+              });
               setTimeout(() => { fetchConfigurationForSession(resolvedSessionId).then((res) => { if (res.ok) setConfigurations(res.configuration); }).finally(() => setloadscreenState(false)); }, 1500);
             } else {
-              alert(getConfigurationErrorMessage(data));
+              pushNotification({
+                title: "Configuration Notice",
+                message: getConfigurationErrorMessage(data),
+                level: "warning",
+              });
               setloadscreenState(false);
             }
             if (importInput) importInput.value = "";
           })
           .catch((err) => {
             console.error("ConfigUploadErr", err);
-            alert(getConfigurationErrorMessage(err, "Could not upload configuration. Try again."));
+            pushNotification({
+              title: "Configuration Error",
+              message: getConfigurationErrorMessage(err, "Could not upload configuration. Try again."),
+              level: "error",
+            });
             setloadscreenState(false);
             if (importInput) importInput.value = "";
           });
         } catch (err) {
-          alert("Invalid configuration file format. Could not parse JSON.");
+          pushNotification({
+            title: "Configuration Upload",
+            message: "Invalid configuration file format. Could not parse JSON.",
+            level: "error",
+          });
           setloadscreenState(false);
           if (importInput) importInput.value = "";
         }
       };
       reader.onerror = () => {
-        alert("Failed to read the configuration file.");
+        pushNotification({
+          title: "Configuration Upload",
+          message: "Failed to read the configuration file.",
+          level: "error",
+        });
         setloadscreenState(false);
         if (importInput) importInput.value = "";
       };
@@ -16732,7 +16929,11 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
         resetConfigurationForSession(session)
           .then((result) => {
             if (!result.ok) {
-              alert(getConfigurationErrorMessage(result, result.message));
+              pushNotification({
+                title: "Configuration Notice",
+                message: getConfigurationErrorMessage(result, result.message),
+                level: "warning",
+              });
               setloadscreenState(false);
               return;
             }
@@ -16857,7 +17058,23 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
             </div>
           )}
         <Taskbar windows={windows} isTaskBarOpen={isTaskBarOpen} activeWindowId={activeWindowId} focusWindow={handleFocusWindow} toggleAction={handleToggleMenu} isCtrlHeld={isCtrlHeld}/>
-        <Configurations sessionId={sessionId} actions={handleConfigurationActions} loadscreenState={loadscreenState} setloadscreenState={setloadscreenState} toggleAction={handleToggleMenu} configurations={configurations} isConfigurationsOpen={isConfigurationsOpen} apiFetch={apiFetch} canAccess={canAccess} idleSettings={idleSettings} idlePolicyMeta={idlePolicyMeta} onIdleSettingsChange={updateIdleSettings} isAdmin={hasRole("admin")}/>
+        <Configurations
+          sessionId={sessionId}
+          actions={handleConfigurationActions}
+          loadscreenState={loadscreenState}
+          setloadscreenState={setloadscreenState}
+          toggleAction={handleToggleMenu}
+          configurations={configurations}
+          isConfigurationsOpen={isConfigurationsOpen}
+          apiFetch={apiFetch}
+          canAccess={canAccess}
+          idleSettings={idleSettings}
+          idlePolicyMeta={idlePolicyMeta}
+          onIdleSettingsChange={updateIdleSettings}
+          isAdmin={hasRole("admin")}
+          onNotice={pushNotification}
+          knownBuiltinRules={knownBuiltinRules}
+        />
         <Settings isSettingsOpen={isSettingsOpen} toggleAction={handleToggleMenu} actor={actor || user} roles={roles} permissions={permissions} canAccess={canAccess} apiFetch={apiFetch} sessionId={sessionId} onNotice={pushNotification} requestConfirmation={requestConfirmation} onLogout={() => performLogout("user_logout")} areBackgroundAnimationsEnabled={areBackgroundAnimationsEnabled} onBackgroundAnimationsChange={setBackgroundAnimationsEnabled} />
         <Reports isReportsOpen={isReportsOpen} toggleAction={handleToggleMenu} handleOpenWindows={handleOpenWindows} graphAction={handleGraphActions} actor={actor || user} roles={roles} permissions={permissions} canAccess={canAccess} apiFetch={apiFetch} sessionId={sessionId} onNotice={pushNotification} removeNotification={removeNotification} onLogout={() => performLogout("user_logout")} areBackgroundAnimationsEnabled={areBackgroundAnimationsEnabled} onBackgroundAnimationsChange={setBackgroundAnimationsEnabled} iframeRefs={iframeRefs} />
         <Main userName={userName} setSessionId={setSessionId} API_URL={API_URL} debounceRef={debounceRef} setConfigurations={setConfigurations} configurations={configurations} windows={windows} setWindows={setWindows} openWindows={handleOpenWindows} themeMode={themeMode} areBackgroundAnimationsEnabled={areBackgroundAnimationsEnabled} />
