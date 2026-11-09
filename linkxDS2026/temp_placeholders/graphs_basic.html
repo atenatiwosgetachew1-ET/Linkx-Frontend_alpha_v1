@@ -1244,32 +1244,97 @@
 									window.updateGraphDomainTerminology();
 								</script>
 								<!-- Alerts Overlay -->
+								<style>
+									#alerts-list-container { scrollbar-width: thin; scrollbar-color: rgba(128,128,128,0.4) transparent; }
+									#alerts-list-container::-webkit-scrollbar { width: 6px; height: 6px; }
+									#alerts-list-container::-webkit-scrollbar-track { background: transparent; }
+									#alerts-list-container::-webkit-scrollbar-thumb { background: rgba(128,128,128,0.35); border-radius: 6px; }
+									#alerts-list-container::-webkit-scrollbar-thumb:hover { background: rgba(128,128,128,0.6); }
+									#alerts-rescan-btn { transition: background 0.15s ease, border-color 0.15s ease, transform 0.08s ease; }
+									#alerts-rescan-btn:hover { background: rgba(128,128,128,0.12); border-color: rgba(128,128,128,0.45); }
+									#alerts-rescan-btn:active { transform: scale(0.94); background: rgba(128,128,128,0.22); }
+									#alerts-rescan-btn:disabled { opacity: 0.55; cursor: default; transform: none; }
+									.alerts-loading { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 26px 0; opacity: 0.75; font-size: 11.5px; }
+									.alerts-spinner { width: 22px; height: 22px; border: 2.5px solid rgba(128,128,128,0.25); border-top-color: rgba(128,128,128,0.85); border-radius: 50%; animation: alerts-spin 0.7s linear infinite; }
+									@keyframes alerts-spin { to { transform: rotate(360deg); } }
+								</style>
 								<div id="alerts-overlay" style="
 									position: absolute;
 									top: 20px;
 									right: 20px;
+									width: 300px;
+									height: 440px;
+									min-width: 240px;
+									min-height: 160px;
+									max-width: calc(100% - 40px);
+									max-height: 85%;
 									background: var(--bg-primary, rgba(255, 255, 255, 0.95));
 									border: 1px solid var(--border-color, rgba(0,0,0,0.1));
-									padding: 12px;
 									border-radius: 8px;
-									font-family: "Manrope", sans-serif;
+									font-family: system-ui;
 									font-size: 12px;
 									color: var(--text-primary, #333);
-									box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+									box-shadow: 0 4px 10px rgba(0,0,0,0.08);
 									z-index: 1000;
 									display: none;
 									flex-direction: column;
-									max-width: 300px;
-									max-height: 80%;
-									overflow-y: auto;
+									resize: both;
+									overflow: hidden;
 								">
-									<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; border-bottom: 1px solid var(--border-color, #eee); padding-bottom: 6px;">
-										<span style="font-weight: bold; font-size: 13px;">Graph Alerts</span>
-										<button onclick="document.getElementById('alerts-overlay').style.display='none'" style="background: none; border: none; cursor: pointer; color: var(--text-muted, #777); font-size: 16px;">&times;</button>
+									<div id="alerts-overlay-header" style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--border-color, rgba(0,0,0,0.08)); cursor: move; user-select: none; flex-shrink: 0;">
+										<div style="display: flex; flex-direction: column; gap: 2px; min-width: 0;">
+											<span style="font-weight: bold; font-size: 13px; display: flex; align-items: center; gap: 6px;">
+												<svg width="14" height="14" viewBox="0 0 24 24" fill="none" style="flex-shrink: 0;" aria-hidden="true"><path d="M12 3 2 21h20L12 3Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M12 10v5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="12" cy="17.6" r="0.9" fill="currentColor"/></svg>
+												Graph Alerts
+											</span>
+											<span id="alerts-summary" style="font-size: 11px; opacity: 0.7;">Reviewing graph…</span>
+										</div>
+										<button onclick="document.getElementById('alerts-overlay').style.display='none'" title="Close" style="background: none; border: none; cursor: pointer; color: var(--text-muted, #777); font-size: 16px; line-height: 1; padding: 0; margin-top: 1px;">&times;</button>
 									</div>
-									<div id="alerts-list-container" style="display: flex; flex-direction: column; gap: 6px;">
+									<div id="alerts-list-container" style="display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; overflow-y: auto; flex: 1 1 auto; min-height: 0;">
+									</div>
+									<div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 7px 18px 14px 12px; border-top: 1px solid var(--border-color, rgba(0,0,0,0.08)); flex-shrink: 0;">
+										<span style="font-size: 10.5px; opacity: 0.6;">Click an alert to focus it · drag to move</span>
+										<button id="alerts-rescan-btn" onclick="if (typeof triggerAlertRescan === 'function') { triggerAlertRescan(); } else if (typeof runAlertScan === 'function') { runAlertScan(true); }" title="Run the alert scan again" style="display: inline-flex; align-items: center; gap: 4px; background: none; border: 1px solid var(--border-color, rgba(0,0,0,0.18)); border-radius: 6px; cursor: pointer; color: var(--text-primary, #333); font-family: inherit; font-size: 11px; padding: 3px 9px; flex-shrink: 0;">
+											<svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.6" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/><path d="M20 4v6h-6" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
+											Rescan
+										</button>
 									</div>
 								</div>
+								<script>
+									(function () {
+										const overlay = document.getElementById("alerts-overlay");
+										const handle = document.getElementById("alerts-overlay-header");
+										if (!overlay || !handle) return;
+										let dragging = false, startX = 0, startY = 0, startLeft = 0, startTop = 0;
+										handle.addEventListener("mousedown", function (e) {
+											if (e.target.closest("button")) return;
+											const parent = overlay.offsetParent || document.documentElement;
+											const rect = overlay.getBoundingClientRect();
+											const parentRect = parent.getBoundingClientRect();
+											startLeft = rect.left - parentRect.left;
+											startTop = rect.top - parentRect.top;
+											startX = e.clientX;
+											startY = e.clientY;
+											overlay.style.right = "auto";
+											overlay.style.left = startLeft + "px";
+											overlay.style.top = startTop + "px";
+											dragging = true;
+											e.preventDefault();
+										});
+										document.addEventListener("mousemove", function (e) {
+											if (!dragging) return;
+											const parent = overlay.offsetParent || document.documentElement;
+											let nextLeft = startLeft + (e.clientX - startX);
+											let nextTop = startTop + (e.clientY - startY);
+											const maxLeft = Math.max(0, parent.clientWidth - overlay.offsetWidth);
+											const maxTop = Math.max(0, parent.clientHeight - overlay.offsetHeight);
+											overlay.style.left = Math.max(0, Math.min(nextLeft, maxLeft)) + "px";
+											overlay.style.top = Math.max(0, Math.min(nextTop, maxTop)) + "px";
+										});
+										document.addEventListener("mouseup", function () { dragging = false; });
+									})();
+								</script>
 
 							  <script type="text/javascript">
 								var nodesData = new vis.DataSet();

@@ -4580,6 +4580,70 @@ function applyAlertHighlight(alerts) {
   });
 }
 
+function resolveGraphNodeLabel(nodeId) {
+  try {
+    const node = (window.FULL_GRAPH && window.FULL_GRAPH.nodes && window.FULL_GRAPH.nodes.get)
+      ? window.FULL_GRAPH.nodes.get(nodeId)
+      : (typeof nodesData !== "undefined" && nodesData.get ? nodesData.get(nodeId) : null);
+    const raw = node && (node.label || node.title);
+    const text = raw ? String(raw).split("\n")[0].trim() : "";
+    return text || String(nodeId);
+  } catch (_e) {
+    return String(nodeId);
+  }
+}
+
+function escapeAlertHtml(value) {
+  return String(value == null ? "" : value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function escapeAlertJs(value) {
+  return String(value == null ? "" : value).replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+}
+
+// Turns a raw alert into a human-readable card description for the Graph Alerts panel.
+function describeGraphAlert(alert) {
+  const severity = alert.severity === "high" ? "high" : "medium";
+  if (alert.type === "high_degree") {
+    const degreeMatch = /degree\s+(\d+)/i.exec(alert.message || "");
+    const degree = degreeMatch ? degreeMatch[1] : "";
+    return {
+      title: "Highly connected node",
+      severity,
+      subject: resolveGraphNodeLabel(alert.nodeId),
+      detail: degree
+        ? `Links to ${degree} other nodes — a hub that can signal structuring, layering, or a shared intermediary. Review its neighbours.`
+        : "An unusually well-connected hub worth reviewing.",
+    };
+  }
+  if (alert.type === "heavy_edge") {
+    const valueMatch = /weight\s+([\d.,]+)/i.exec(alert.message || "");
+    const value = valueMatch ? valueMatch[1] : "";
+    let subject = "";
+    try {
+      const edge = (window.FULL_GRAPH && window.FULL_GRAPH.edges && window.FULL_GRAPH.edges.get)
+        ? window.FULL_GRAPH.edges.get(alert.edgeId)
+        : (typeof edgesData !== "undefined" && edgesData.get ? edgesData.get(alert.edgeId) : null);
+      if (edge && edge.from != null && edge.to != null) {
+        subject = resolveGraphNodeLabel(edge.from) + " → " + resolveGraphNodeLabel(edge.to);
+      }
+    } catch (_e) { /* fall back to empty subject */ }
+    return {
+      title: "High-value relationship",
+      severity,
+      subject,
+      detail: value
+        ? `Carries an unusually high value (${value}) versus the rest of the graph — a candidate for a significant or anomalous transfer.`
+        : "Carries an unusually high value versus the rest of the graph.",
+    };
+  }
+  return { title: "Alert", severity, subject: "", detail: alert.message || "" };
+}
+
 function generateGraphAlerts() {
   if (!window.ALERT_RULES_ENABLED) return [];
   const rules = normalizeAlertRulesConfig(window.ALERT_RULES_CONFIG);
@@ -4657,24 +4721,46 @@ function runAlertScan(notify = true) {
     
     const overlay = document.getElementById("alerts-overlay");
     const container = document.getElementById("alerts-list-container");
+    const summaryEl = document.getElementById("alerts-summary");
     if (overlay && container) {
+      const highCount = alerts.filter(a => a.severity === "high").length;
+      const mediumCount = alerts.length - highCount;
+
+      if (summaryEl) {
+        if (alerts.length === 0) {
+          summaryEl.textContent = "No alerts — graph looks clean.";
+        } else {
+          const parts = [`${alerts.length} alert${alerts.length === 1 ? "" : "s"}`];
+          if (highCount) parts.push(`${highCount} high`);
+          if (mediumCount) parts.push(`${mediumCount} medium`);
+          summaryEl.textContent = parts.join(" · ");
+        }
+      }
+
       if (alerts.length === 0) {
-        container.innerHTML = `<div style="opacity: 0.7; font-style: italic;">No alerts triggered.</div>`;
+        container.innerHTML = `<div style="opacity: 0.7; font-style: italic; line-height: 1.4;">No alerts triggered. The current view did not match any active alert rule.</div>`;
       } else {
         container.innerHTML = alerts.map(a => {
-           let color = a.severity === "high" ? "#e74c3c" : "#f39c12";
-           let title = a.type === "high_degree" ? "High Degree" : (a.type === "heavy_edge" ? "Heavy Edge" : "Alert");
-           
-           let clickAction = '';
-           if (a.nodeId) {
-               clickAction = `if(window.network) { window.network.focus('${a.nodeId}', {scale: 1.2, animation: true}); window.network.selectNodes(['${a.nodeId}']); }`;
-           } else if (a.edgeId) {
-               clickAction = `if(window.network) { window.network.selectEdges(['${a.edgeId}']); const edge = window.FULL_GRAPH.edges.get('${a.edgeId}'); if(edge) { window.network.focus(edge.from, {scale: 1.2, animation: true}); } }`;
-           }
-           
-           return `<div style="border-left: 3px solid ${color}; padding-left: 8px; background: rgba(0,0,0,0.02); padding-top: 4px; padding-bottom: 4px; border-radius: 0 4px 4px 0; cursor: pointer;" onclick="${clickAction}">
-               <strong style="color: ${color}; display: block; margin-bottom: 2px;">${title}</strong>
-               <span>${a.message}</span>
+          const d = describeGraphAlert(a);
+          const sevColor = d.severity === "high" ? "#e74c3c" : "#f39c12";
+          const sevLabel = d.severity === "high" ? "HIGH" : "MEDIUM";
+
+          let clickAction = '';
+          if (a.nodeId) {
+            const id = escapeAlertJs(a.nodeId);
+            clickAction = `if(window.network){ window.network.focus('${id}', {scale: 1.2, animation: true}); window.network.selectNodes(['${id}']); }`;
+          } else if (a.edgeId) {
+            const id = escapeAlertJs(a.edgeId);
+            clickAction = `if(window.network){ window.network.selectEdges(['${id}']); const edge = window.FULL_GRAPH.edges.get('${id}'); if(edge){ window.network.focus(edge.from, {scale: 1.2, animation: true}); } }`;
+          }
+
+          return `<div style="border-left: 3px solid ${sevColor}; padding: 6px 8px; background: rgba(0,0,0,0.02); border-radius: 0 6px 6px 0; cursor: pointer;" onclick="${clickAction}" title="Focus this alert on the graph">
+               <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 3px;">
+                 <strong style="color: ${sevColor}; font-size: 12px;">${escapeAlertHtml(d.title)}</strong>
+                 <span style="font-size: 9px; font-weight: 700; letter-spacing: 0.4px; color: #fff; background: ${sevColor}; border-radius: 10px; padding: 1px 6px; flex-shrink: 0;">${sevLabel}</span>
+               </div>
+               ${d.subject ? `<div style="font-weight: 600; margin-bottom: 2px; word-break: break-word;">${escapeAlertHtml(d.subject)}</div>` : ""}
+               <div style="opacity: 0.8; line-height: 1.35;">${escapeAlertHtml(d.detail)}</div>
            </div>`;
         }).join("");
       }
@@ -4686,6 +4772,31 @@ function runAlertScan(notify = true) {
   }
   return alerts;
 }
+
+// Rescan entry point for the panel's "Rescan" button: paints a loading state,
+// then runs the scan on the next frame so the spinner is actually visible.
+function triggerAlertRescan() {
+  const overlay = document.getElementById("alerts-overlay");
+  const container = document.getElementById("alerts-list-container");
+  const summaryEl = document.getElementById("alerts-summary");
+  const btn = document.getElementById("alerts-rescan-btn");
+
+  if (overlay) overlay.style.display = "flex";
+  if (summaryEl) summaryEl.textContent = "Scanning…";
+  if (container) {
+    container.innerHTML = '<div class="alerts-loading"><div class="alerts-spinner"></div><span>Scanning graph for alerts…</span></div>';
+  }
+  if (btn) btn.disabled = true;
+
+  setTimeout(() => {
+    try {
+      runAlertScan(true);
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  }, 180);
+}
+window.triggerAlertRescan = triggerAlertRescan;
 
 function scheduleAlertScan() {
   if (!window.ALERT_RULES_ENABLED) return;
@@ -8375,6 +8486,18 @@ function renderVisibleGraphBatch() {
 
     if (window.ALERT_RULES_ENABLED) {
       scheduleAlertScan();
+    }
+
+    // Auto-run the alert scan once, right after the initial node batch is rendered.
+    // Opens the Graph Alerts panel only when something is actually flagged.
+    if (!window.__alertAutoScanDone && window.ALERT_RULES_ENABLED && desiredNodeIds.size > 0) {
+      window.__alertAutoScanDone = true;
+      setTimeout(() => {
+        try {
+          const found = generateGraphAlerts();
+          runAlertScan(Array.isArray(found) && found.length > 0);
+        } catch (_e) { /* ignore auto-scan failures */ }
+      }, 600);
     }
 
     postGraphRenderStats("render_batch");
