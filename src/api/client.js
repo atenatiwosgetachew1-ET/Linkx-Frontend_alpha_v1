@@ -58,8 +58,9 @@ export const createApiClient = ({ baseUrl, getToken, onUnauthorized, onForbidden
       headers,
       body: bodyIsPlainObject ? JSON.stringify(sanitizeJsonPayload(options.body)) : options.body,
     });
-    const data = await parseResponse(response);
-    if (data && typeof data === "object") {
+    const isBlobExpected = options.responseType === "blob";
+    const data = response.ok && isBlobExpected ? await response.blob() : await parseResponse(response);
+    if (data && typeof data === "object" && !(data instanceof Blob) && !(data instanceof ArrayBuffer)) {
       Object.defineProperty(data, "__httpStatus", { value: response.status, enumerable: false });
     }
 

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo, useLayoutEffect } from 'react';
 import { io } from 'socket.io-client';
 import { createPortal } from 'react-dom';
 
@@ -101,6 +101,25 @@ const formatPropertyKeyLabel = (key, isCdr = false) => {
   if (k === "ACCOWNERNAME" || k === "CALLER_NAME") return "Caller / Subscriber Name";
   if (k === "BENFULLNAME" || k === "CALLEE_NAME") return "Called Party Name";
   return key;
+};
+
+const DOMAIN_PILLAR_LABELS = {
+  bank: "Banking",
+  banking: "Banking",
+  microfinance: "Microfinance",
+  cdr: "Call Data Records (CDR)",
+  telecom: "Telecommunications",
+  insurance: "Insurance",
+  social_media: "Social Media",
+  fintech: "Fintech & Digital Wallets",
+  enterprise: "Enterprise & Corporate Ledger",
+};
+
+const formatDomainPillarLabel = (domainKey) => {
+  const cleanKey = String(domainKey || "").trim().toLowerCase();
+  if (DOMAIN_PILLAR_LABELS[cleanKey]) return DOMAIN_PILLAR_LABELS[cleanKey];
+  if (!cleanKey) return "Banking";
+  return cleanKey.charAt(0).toUpperCase() + cleanKey.slice(1).replace(/_/g, " ");
 };
 
 const formatPropertyValue = (key, value, isCdr = false) => {
@@ -219,6 +238,16 @@ const buildSessionPolicyPatchBody = (sessionId, idleSettings) => ({
   },
 });
 
+// Stable-identity callback wrapper: returns a function whose identity never
+// changes across renders but always invokes the latest closure. Used to keep
+// handler props referentially stable so React.memo on heavy panels/windows is
+// not defeated, without introducing stale-closure bugs.
+function useEventCallback(fn) {
+  const ref = useRef(fn);
+  useLayoutEffect(() => { ref.current = fn; });
+  return useCallback((...args) => ref.current?.(...args), []);
+}
+
 function useIdleTimeout({ enabled, warningMs, lockMs, timeoutMs, isLocked = false, resetKey = 0, onWarn, onLock, onTimeout, onActivity }) {
   const lastActivityRef = useRef(Date.now());
   const warnFiredRef = useRef(false);
@@ -234,6 +263,15 @@ function useIdleTimeout({ enabled, warningMs, lockMs, timeoutMs, isLocked = fals
   useEffect(() => { onTimeoutRef.current = onTimeout; }, [onTimeout]);
   useEffect(() => { isLockedRef.current = isLocked; }, [isLocked]);
   useEffect(() => { onActivityRef.current = onActivity; }, [onActivity]);
+
+  // Reset the idle clock whenever resetKey changes (e.g. after a manual unlock).
+  // While locked, real activity is ignored so lastActivityRef stays frozen at
+  // the lock moment; without this reset, unlocking leaves idleTime already past
+  // lockMs and the workspace would immediately re-lock.
+  useEffect(() => {
+    lastActivityRef.current = Date.now();
+    warnFiredRef.current = false;
+  }, [resetKey]);
 
   // Main hardware-clock based ticker
   useEffect(() => {
@@ -276,9 +314,13 @@ function useIdleTimeout({ enabled, warningMs, lockMs, timeoutMs, isLocked = fals
     if (!enabled) return;
 
     const activityEvents = ["pointerdown", "mousemove", "keydown", "wheel", "scroll", "touchstart"];
+    let lastActivityThrottle = 0;
     const handleActivity = () => {
       if (isLockedRef.current) return;
-      lastActivityRef.current = Date.now();
+      const now = Date.now();
+      if (now - lastActivityThrottle < 1000) return;
+      lastActivityThrottle = now;
+      lastActivityRef.current = now;
       warnFiredRef.current = false;
       onActivityRef.current?.();
     };
@@ -1028,7 +1070,7 @@ function Taskbar({ windows, isTaskBarOpen, activeWindowId, focusWindow, toggleAc
           <span
             key={w.id}
             style={{backgroundImage: activeWindowId === w.id ? `url(${thumbnailBaseUrl}/windows_thumbnail_active.png)` : `url(${thumbnailBaseUrl}/windows_thumbnail_passive.png)`}}
-            onMouseEnter={() => focusWindow(w.id)}>
+            onClick={() => focusWindow(w.id)}>
             <label>{`${w.type.charAt(0).toUpperCase()}${w.type.slice(1)} Window`}</label>
             <b>{` ${w.id}`}</b>
           </span>
@@ -1118,13 +1160,282 @@ const checkIsBuiltinRule = (ruleItem, ruleName, parsedConfig, knownBuiltinRules)
   return false;
 };
 
-function Configurations({sessionId,actions,loadscreenState,setloadscreenState,toggleAction,configurations,isConfigurationsOpen,apiFetch,canAccess,idleSettings,idlePolicyMeta,onIdleSettingsChange,isAdmin,onNotice,knownBuiltinRules}) {
-  const [remote, setRemote] = useState(false);
-  const [automation, setAutomation] = useState(false);
-  const [parsedConfig, setParsedConfig] = useState(null);
+const FlatLockIcon = ({ open = false, size = 14, color = "currentColor" }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke={color}
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    style={{ display: "inline-block", verticalAlign: "middle", flexShrink: 0 }}
+    aria-hidden="true"
+  >
+    {open ? (
+      <>
+        <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+        <path d="M7 11V7a5 5 0 0 1 9.9-1" />
+      </>
+    ) : (
+      <>
+        <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+      </>
+    )}
+  </svg>
+);
+
+const FlatFileIcon = ({ size = 13, color = "currentColor" }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke={color}
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    style={{ display: "inline-block", verticalAlign: "middle", flexShrink: 0 }}
+    aria-hidden="true"
+  >
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+    <polyline points="14 2 14 8 20 8" />
+  </svg>
+);
+
+const FlatAlertIcon = ({ size = 14, color = "currentColor" }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke={color}
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    style={{ display: "inline-block", verticalAlign: "middle", flexShrink: 0 }}
+    aria-hidden="true"
+  >
+    <circle cx="12" cy="12" r="10" />
+    <line x1="12" y1="8" x2="12" y2="12" />
+    <line x1="12" y1="16" x2="12.01" y2="16" />
+  </svg>
+);
+
+// Local-state text input for the Configuration form. It keeps its own draft
+// value so keystrokes are never dropped by a slow parent re-render, and only
+// commits to the global configuration state on blur / Enter. This removes the
+// per-keystroke global setConfigurations round-trip that made typing lag and
+// reset the field before the second character registered.
+const ConfigTextInput = React.memo(function ConfigTextInput({ value, onCommit, onBlur, onKeyDown, onFocus, ...rest }) {
+  const [draft, setDraft] = useState(value ?? "");
+  const focusedRef = useRef(false);
+  useEffect(() => {
+    if (!focusedRef.current) setDraft(value ?? "");
+  }, [value]);
+  const commit = (e) => {
+    if (typeof onCommit === "function") onCommit(e.target.name, e.target.value);
+  };
+  return (
+    <input
+      {...rest}
+      value={draft}
+      onFocus={(e) => { focusedRef.current = true; if (onFocus) onFocus(e); }}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={(e) => { focusedRef.current = false; commit(e); if (onBlur) onBlur(e); }}
+      onKeyDown={(e) => { if (e.key === "Enter") commit(e); if (onKeyDown) onKeyDown(e); }}
+    />
+  );
+});
+
+const Configurations = React.memo(function Configurations({sessionId,actions,loadscreenState,setloadscreenState,toggleAction,configurations,isConfigurationsOpen,apiFetch,canAccess,idleSettings,idlePolicyMeta,onIdleSettingsChange,isAdmin,onNotice,knownBuiltinRules}) {
+  const handleConfigFieldCommit = useCallback((name, value) => actions("change", { name, value }), [actions]);
+  const parsedConfig = useMemo(() => {
+    return configurations ? parseConfigurationValue(configurations) : null;
+  }, [configurations]);
+  const remote = Boolean(parsedConfig?.remote === "true" || parsedConfig?.remote === true);
+  const automation = Boolean(parsedConfig?.automation === "true" || parsedConfig?.automation === true);
   const [activeConfigTab, setActiveConfigTab] = useState("system");
   const [removeRuleArmed, setRemoveRuleArmed] = useState(false);
   const [selectedRuleForRemoval, setSelectedRuleForRemoval] = useState("");
+  const [lxacDialog, setLxacDialog] = useState({
+    isOpen: false,
+    mode: "export",
+    file: null,
+    password: "",
+    confirmPassword: "",
+    showPassword: false,
+    error: "",
+    isSubmitting: false,
+  });
+
+  const handleLxacDialogClose = useCallback(() => {
+    if (lxacDialog.isSubmitting) return;
+    setLxacDialog({
+      isOpen: false,
+      mode: "export",
+      file: null,
+      password: "",
+      confirmPassword: "",
+      showPassword: false,
+      error: "",
+      isSubmitting: false,
+    });
+    const importInput = document.getElementById("import_config_file");
+    if (importInput) importInput.value = "";
+  }, [lxacDialog.isSubmitting]);
+
+  useEffect(() => {
+    if (!lxacDialog.isOpen) return;
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape" && !lxacDialog.isSubmitting) {
+        handleLxacDialogClose();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [lxacDialog.isOpen, lxacDialog.isSubmitting, handleLxacDialogClose]);
+
+  const handleImportFileChange = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const lowerName = file.name.toLowerCase();
+    const isLxac = lowerName.endsWith(".lxac");
+
+    if (!isLxac) {
+      const msg = "Only LinkX encrypted configuration files are supported.";
+      if (typeof onNotice === "function") {
+        onNotice({
+          title: "Invalid File Type",
+          message: msg,
+          level: "warning",
+        });
+      } else {
+        alert(msg);
+      }
+      event.target.value = "";
+      return;
+    }
+
+    if (typeof apiFetch === "function") {
+      try {
+        const verifyData = new FormData();
+        verifyData.append("file", file);
+        const verifyRes = await apiFetch("/configuration/lxac/verify", {
+          method: "POST",
+          body: verifyData,
+        });
+        if (verifyRes && verifyRes.valid === false) {
+          const errDetail = verifyRes.error || "The selected file is not a valid LinkX encrypted configuration file.";
+          if (typeof onNotice === "function") {
+            onNotice({
+              title: "Invalid File Format",
+              message: errDetail,
+              level: "error",
+            });
+          } else {
+            alert(errDetail);
+          }
+          event.target.value = "";
+          return;
+        }
+      } catch (err) {
+        if (err?.data?.valid === false || err?.data?.detail === "not_lxac_file") {
+          const errDetail = err.data?.error || "The selected file is not a valid LinkX encrypted configuration file.";
+          if (typeof onNotice === "function") {
+            onNotice({
+              title: "Invalid File Format",
+              message: errDetail,
+              level: "error",
+            });
+          } else {
+            alert(errDetail);
+          }
+          event.target.value = "";
+          return;
+        }
+      }
+    }
+
+    setLxacDialog({
+      isOpen: true,
+      mode: "import",
+      file: file,
+      password: "",
+      confirmPassword: "",
+      showPassword: false,
+      error: "",
+      isSubmitting: false,
+    });
+  };
+
+  const handleLxacExportSubmit = async (e) => {
+    e?.preventDefault?.();
+    const password = String(lxacDialog.password || "").trim();
+    if (!password) {
+      setLxacDialog((prev) => ({ ...prev, error: "Please enter an encryption password." }));
+      return;
+    }
+    if (password !== String(lxacDialog.confirmPassword || "").trim()) {
+      setLxacDialog((prev) => ({ ...prev, error: "Passwords do not match." }));
+      return;
+    }
+
+    setLxacDialog((prev) => ({ ...prev, isSubmitting: true, error: "" }));
+    try {
+      await actions("export_encrypted", { password });
+      setLxacDialog({
+        isOpen: false,
+        mode: "export",
+        file: null,
+        password: "",
+        confirmPassword: "",
+        showPassword: false,
+        error: "",
+        isSubmitting: false,
+      });
+    } catch (err) {
+      const msg = err?.data?.error || err?.message || "Failed to export encrypted configuration.";
+      setLxacDialog((prev) => ({ ...prev, isSubmitting: false, error: msg }));
+    }
+  };
+
+  const handleLxacImportSubmit = async (e) => {
+    e?.preventDefault?.();
+    const password = String(lxacDialog.password || "");
+    if (!password) {
+      setLxacDialog((prev) => ({ ...prev, error: "Please enter the decryption password." }));
+      return;
+    }
+
+    setLxacDialog((prev) => ({ ...prev, isSubmitting: true, error: "" }));
+    try {
+      await actions("import_encrypted", { file: lxacDialog.file, password });
+      setLxacDialog({
+        isOpen: false,
+        mode: "import",
+        file: null,
+        password: "",
+        confirmPassword: "",
+        showPassword: false,
+        error: "",
+        isSubmitting: false,
+      });
+      const importInput = document.getElementById("import_config_file");
+      if (importInput) importInput.value = "";
+    } catch (err) {
+      let msg = err?.data?.error || err?.message || "Decryption failed. Please check your password.";
+      if (err?.data?.detail === "invalid_password") {
+        msg = "Incorrect password. Please verify the password and try again.";
+      } else if (err?.data?.detail === "tampered_file") {
+        msg = "Integrity check failed: File appears to be damaged or modified.";
+      }
+      setLxacDialog((prev) => ({ ...prev, isSubmitting: false, error: msg }));
+    }
+  };
 
   const normalizeActiveRuleValue = useCallback((value) => {
     if (Array.isArray(value)) return String(value[0] || "");
@@ -1146,17 +1457,72 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
     return [];
   }, [parsedConfig]);
   const canRemoveRule = ruleNames.length > 0 && selectedRuleForRemoval !== "";
-  const classifiedEntityEntries = normalizeClassifiedEntityEntries(
+  const classifiedEntityEntries = useMemo(() => normalizeClassifiedEntityEntries(
     parsedConfig?.trusted_entities ?? parsedConfig?.trusted_catalog ?? parsedConfig?.trusted_list ?? parsedConfig?.trustedList ?? parsedConfig?.active_tool_trusted_list,
     parsedConfig?.risk_entities ?? parsedConfig?.riskEntities ?? parsedConfig?.active_risk_entities,
     {
       value: parsedConfig?.classified_entities ?? parsedConfig?.classifiedEntities,
       preserveEmpty: true,
     }
-  );
-  const columnMappingEntries = normalizeColumnMappingEntries(parsedConfig?.column_mapping, { preserveEmpty: true });
+  ), [
+    parsedConfig?.trusted_entities,
+    parsedConfig?.trusted_catalog,
+    parsedConfig?.trusted_list,
+    parsedConfig?.trustedList,
+    parsedConfig?.active_tool_trusted_list,
+    parsedConfig?.risk_entities,
+    parsedConfig?.riskEntities,
+    parsedConfig?.active_risk_entities,
+    parsedConfig?.classified_entities,
+    parsedConfig?.classifiedEntities,
+  ]);
+  const columnMappingEntries = useMemo(() => normalizeColumnMappingEntries(parsedConfig?.column_mapping, { preserveEmpty: true }), [parsedConfig?.column_mapping]);
   const largeSearchBackend = normalizeLargeSearchBackend(parsedConfig?.large_search_backend);
   const elasticScrollLimit = normalizeElasticScrollLimit(parsedConfig?.elastic_scroll_limit);
+  const activeDomain = String(parsedConfig?.active_domain || parsedConfig?.domain || "bank").trim().toLowerCase();
+  const registeredDomains = useMemo(() => {
+    if (Array.isArray(parsedConfig?.registered_domains) && parsedConfig.registered_domains.length > 0) {
+      return parsedConfig.registered_domains;
+    }
+    if (parsedConfig?.domain_connections && typeof parsedConfig.domain_connections === "object") {
+      const keys = Object.keys(parsedConfig.domain_connections);
+      if (keys.length > 0) return keys;
+    }
+    return ["bank", "microfinance", "cdr", "insurance", "social_media"];
+  }, [parsedConfig]);
+
+  const domainConnections = useMemo(() => {
+    if (parsedConfig?.domain_connections && typeof parsedConfig.domain_connections === "object") {
+      return parsedConfig.domain_connections;
+    }
+    return {};
+  }, [parsedConfig]);
+
+  const [isSwitchingDomain, setIsSwitchingDomain] = useState(false);
+
+  useEffect(() => {
+    setIsSwitchingDomain(false);
+  }, [configurations]);
+
+  const handleDomainPillarChange = (event) => {
+    const nextDomain = event.target.value;
+    if (!nextDomain || nextDomain === activeDomain) return;
+    setIsSwitchingDomain(true);
+    actions("switch_domain", { domain: nextDomain });
+  };
+
+  const activeConn = domainConnections[activeDomain] || {};
+  const activeConnConfigured = activeConn.configured !== false;
+  const activeDatabase = activeConn.storage_database || parsedConfig?.active_storage_database || "";
+  const activePort = activeConn.storage_port || parsedConfig?.api_port || "5000";
+  const activeDateColumn = activeConn.date_column || parsedConfig?.date_column || "";
+  const defaultSourceCol = activeConn.default_source_col || parsedConfig?.default_source_col || "";
+  const defaultTargetCol = activeConn.default_target_col || parsedConfig?.default_target_col || "";
+  const activeTables = Array.isArray(activeConn.storage_tables)
+    ? activeConn.storage_tables
+    : Array.isArray(parsedConfig?.storage_tables)
+      ? parsedConfig.storage_tables
+      : [];
   const idleTimeoutMinutes = Math.max(1, Math.round((idleSettings?.timeoutMs || DEFAULT_IDLE_TIMEOUT_MS) / 60000));
   const idleLockMinutes = Math.max(1, Math.round((idleSettings?.lockMs || DEFAULT_IDLE_LOCK_MS) / 60000));
   const idleWarningMinutes = Math.max(0, Math.round((idleSettings?.warningMs || DEFAULT_IDLE_WARNING_MS) / 60000));
@@ -1171,17 +1537,6 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
       [key]: minutes * 60 * 1000,
     }, getDefaultIdleSettings()));
   };
-
-  useEffect(() => {
-    if (configurations) {
-      // configurations may be a {value: string} object or already parsed
-      let cfg = parseConfigurationValue(configurations);
-      setParsedConfig(cfg);      
-      setRemote(cfg.remote === "true" || cfg.remote === true);
-      setAutomation(cfg.automation === "true" || cfg.automation === true);
-      setloadscreenState(false);
-    }
-  }, [configurations]);
 
   useEffect(() => {
     const rawNextRule = activeRuleValue || (ruleNames[0] || "");
@@ -1298,20 +1653,22 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
       id="configurations_container"
       style={{ display: isConfigurationsOpen ? "block" : "none" }}
     >
-      <div className="configurations_options_container">
-        <div className="configurations_options_container_bar">
-          <span onClick={() => toggleAction("configurations")}>x</span>
-          <label>Configurations</label>
-        </div>
+      {isConfigurationsOpen && (
+        <div className="configurations_options_container">
+          <div className="configurations_options_container_bar">
+            <span onClick={() => toggleAction("configurations")}>x</span>
+            <label>Configurations</label>
+          </div>
 
         <div className="configurations_options">
-          <div
-            id="configurations_loadscreen"
-            className="windows_loadscreen"
-            style={{ display: loadscreenState ? "block" : "none" }}
-          >
-            <Loadscreen loadingText="Loading" />
-          </div>
+          {loadscreenState && (
+            <div
+              id="configurations_loadscreen"
+              className="windows_loadscreen"
+            >
+              <Loadscreen loadingText="Loading" />
+            </div>
+          )}
 
           <div className="configurations_tabs">
             <button type="button" className={activeConfigTab === "system" ? "active" : ""} onClick={() => setActiveConfigTab("system")}>System</button>
@@ -1357,13 +1714,13 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
                   ))}
                 </select>
 
-                <input
+                <ConfigTextInput
                   type="text"
                   name="kafka_custom_address"
                   className="input_text"
                   placeholder="Kafka / API address"
                   value={parsedConfig?.kafka_custom_address || ""}
-                  onChange={(e) => actions("change", { name: e.target.name, value: e.target.value })}
+                  onCommit={handleConfigFieldCommit}
                 />
 
                 <label>Topics</label>
@@ -1378,13 +1735,13 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
                   ))}
                 </select>
 
-                <input
+                <ConfigTextInput
                   type="text"
                   name="kafka_custom_topic"
                   className="input_text"
                   placeholder="Kafka topic"
                   value={parsedConfig?.kafka_custom_topic || ""}
-                  onChange={(e) => actions("change", { name: e.target.name, value: e.target.value })}
+                  onCommit={handleConfigFieldCommit}
                 />
               </fieldset>
 
@@ -1404,13 +1761,13 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
                   ))}
                 </select>
 
-                <input
+                <ConfigTextInput
                   type="text"
                   name="storage_custom_address"
                   className="input_text"
                   placeholder="HDFS address"
                   value={parsedConfig?.storage_custom_address || ""}
-                  onChange={(e) => actions("change", { name: e.target.name, value: e.target.value })}
+                  onCommit={handleConfigFieldCommit}
                 />
 
                 <label>Ports</label>
@@ -1419,61 +1776,61 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
                     <tr>
                       <td>
                         Hadoop RPC
-                        <input
+                        <ConfigTextInput
                           type="text"
                           className="subinput"
                           name="hadoop_rcp_port"
                           placeholder="Hadoop port"
                           value={parsedConfig?.hadoop_rcp_port || ""}
-                          onChange={(e) => actions("change", { name: e.target.name, value: e.target.value })}
+                          onCommit={handleConfigFieldCommit}
                         />
                       </td>
                       <td>
                         Hadoop Web
-                        <input
+                        <ConfigTextInput
                           type="text"
                           className="subinput"
                           name="hadoop_web_port"
                           placeholder="UI port"
                           value={parsedConfig?.hadoop_web_port || ""}
-                          onChange={(e) => actions("change", { name: e.target.name, value: e.target.value })}
+                          onCommit={handleConfigFieldCommit}
                         />
                       </td>
                     </tr>
                     <tr>
                       <td>
                         Spark port
-                        <input
+                        <ConfigTextInput
                           type="text"
                           className="subinput"
                           name="spark_port"
                           placeholder="Spark port"
                           value={parsedConfig?.spark_port || ""}
-                          onChange={(e) => actions("change", { name: e.target.name, value: e.target.value })}
+                          onCommit={handleConfigFieldCommit}
                         />
                       </td>
                       <td>
                         Hive port
-                        <input
+                        <ConfigTextInput
                           type="text"
                           className="subinput"
                           name="hive_port"
                           placeholder="Hive port"
                           value={parsedConfig?.hive_port || ""}
-                          onChange={(e) => actions("change", { name: e.target.name, value: e.target.value })}
+                          onCommit={handleConfigFieldCommit}
                         />
                       </td>
                     </tr>
                     <tr>
                       <td>
                         API port
-                        <input
+                        <ConfigTextInput
                           type="text"
                           className="subinput"
                           name="api_port"
                           placeholder="API port"
                           value={parsedConfig?.api_port || ""}
-                          onChange={(e) => actions("change", { name: e.target.name, value: e.target.value })}
+                          onCommit={handleConfigFieldCommit}
                         />
                       </td>
                     </tr>
@@ -1483,61 +1840,61 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
                 <div className="config_endpoint_grid">
                   <div className="config_endpoint_field config_endpoint_field--wide">
                     <label>API search Endpoint</label>
-                    <input
+                    <ConfigTextInput
                       type="text"
                       name="search_api_endpoint"
                       className="input_text"
                       placeholder="API search Endpoint"
                       value={parsedConfig?.search_api_endpoint || ""}
-                      onChange={(e) => actions("change", { name: e.target.name, value: e.target.value })}
+                      onCommit={handleConfigFieldCommit}
                     />
                   </div>
 
                   <div className="config_endpoint_field">
                     <label>Elasticsearch fuzzy search endpoint</label>
-                    <input
+                    <ConfigTextInput
                       type="text"
                       name="search_api_endpoint_es_fuzzy"
                       className="input_text"
                       placeholder="Elasticsearch fuzzy endpoint"
                       value={parsedConfig?.search_api_endpoint_es_fuzzy || ""}
-                      onChange={(e) => actions("change", { name: e.target.name, value: e.target.value })}
+                      onCommit={handleConfigFieldCommit}
                     />
                   </div>
 
                   <div className="config_endpoint_field">
                     <label>Elasticsearch strict search endpoint</label>
-                    <input
+                    <ConfigTextInput
                       type="text"
                       name="search_api_endpoint_es_strict"
                       className="input_text"
                       placeholder="Elasticsearch strict endpoint"
                       value={parsedConfig?.search_api_endpoint_es_strict || ""}
-                      onChange={(e) => actions("change", { name: e.target.name, value: e.target.value })}
+                      onCommit={handleConfigFieldCommit}
                     />
                   </div>
 
                   <div className="config_endpoint_field">
                     <label>Hive fuzzy search endpoint</label>
-                    <input
+                    <ConfigTextInput
                       type="text"
                       name="search_api_endpoint_hive_fuzzy"
                       className="input_text"
                       placeholder="Hive fuzzy endpoint"
                       value={parsedConfig?.search_api_endpoint_hive_fuzzy || ""}
-                      onChange={(e) => actions("change", { name: e.target.name, value: e.target.value })}
+                      onCommit={handleConfigFieldCommit}
                     />
                   </div>
 
                   <div className="config_endpoint_field">
                     <label>Hive strict search endpoint</label>
-                    <input
+                    <ConfigTextInput
                       type="text"
                       name="search_api_endpoint_hive_strict"
                       className="input_text"
                       placeholder="Hive strict endpoint"
                       value={parsedConfig?.search_api_endpoint_hive_strict || ""}
-                      onChange={(e) => actions("change", { name: e.target.name, value: e.target.value })}
+                      onCommit={handleConfigFieldCommit}
                     />
                   </div>
                 </div>
@@ -1581,7 +1938,7 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
                 </select>
 
                 <label>Elasticsearch scroll limit</label>
-                <input
+                <ConfigTextInput
                   type="number"
                   min="1"
                   step="1000"
@@ -1589,7 +1946,7 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
                   className="input_text"
                   value={elasticScrollLimit}
                   disabled={largeSearchBackend !== "elastic_scroll"}
-                  onChange={(e) => actions("change", { name: e.target.name, value: e.target.value })}
+                  onCommit={handleConfigFieldCommit}
                 />
                 <label className="idle_timeout_hint">Used by the backend when large fuzzy search results are converted into a dataframe.</label>
 
@@ -1605,13 +1962,13 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
                   ))}
                 </select>
 
-                <input
+                <ConfigTextInput
                   type="text"
                   name="storage_database_custom"
                   className="input_text"
                   placeholder="Database name"
                   value={parsedConfig?.storage_database_custom || ""}
-                  onChange={(e) => actions("change", { name: e.target.name, value: e.target.value })}
+                  onCommit={handleConfigFieldCommit}
                 />
 
                 <label>Storage path</label>
@@ -1632,6 +1989,92 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
                   onChange={(e) => actions("change", { name: e.target.name, value: e.target.value })}
                 />
 
+              </fieldset>
+
+              {/* Domain Pillar Switching (User Session) */}
+              <fieldset style={{ display: activeConfigTab === "system" ? "block" : "none" }}>
+                <legend>Domain Pillar (Session) <AdminLockIcon /></legend>
+                <label className="sublabel">
+                  Active investigative pillar for this session. Switching pillars automatically reprojects database catalogs, ports, and schema mappings.
+                </label>
+
+                <div className="domain_pillar_control_wrap">
+                  <label htmlFor="config_active_domain">Active Domain Pillar</label>
+                  <select
+                    id="config_active_domain"
+                    name="active_domain"
+                    className="domain_pillar_select"
+                    value={activeDomain}
+                    onChange={handleDomainPillarChange}
+                    disabled={isSwitchingDomain}
+                  >
+                    {registeredDomains.map((domKey) => {
+                      const conn = domainConnections[domKey];
+                      const isConfigured = conn ? conn.configured !== false : true;
+                      const label = formatDomainPillarLabel(domKey);
+                      const statusSuffix = isConfigured ? "Ready" : "Unconfigured";
+                      return (
+                        <option key={domKey} value={domKey}>
+                          {label} ({statusSuffix})
+                        </option>
+                      );
+                    })}
+                  </select>
+                  <input type="hidden" name="domain" value={activeDomain} />
+                </div>
+
+                {/* Active Pillar Details Card */}
+                <div className={`domain_pillar_card ${activeConnConfigured ? "is-configured" : "is-unconfigured"}`}>
+                  <div className="domain_pillar_card_header">
+                    <span className="domain_pillar_badge">
+                      <span className={`domain_status_dot ${activeConnConfigured ? "ready" : "unconfigured"}`} />
+                      {formatDomainPillarLabel(activeDomain)}
+                    </span>
+                    <span className={`domain_pillar_status_pill ${activeConnConfigured ? "ready" : "unconfigured"}`}>
+                      {activeConnConfigured ? "● Configured" : "○ Unconfigured"}
+                    </span>
+                  </div>
+
+                  <div className="domain_pillar_meta_grid">
+                    <div className="domain_pillar_meta_item">
+                      <span className="domain_pillar_meta_key">Target DB</span>
+                      <b className="domain_pillar_meta_val" title={activeDatabase}>
+                        {activeDatabase || "—"}
+                      </b>
+                    </div>
+                    <div className="domain_pillar_meta_item">
+                      <span className="domain_pillar_meta_key">Storage Port</span>
+                      <b className="domain_pillar_meta_val">
+                        {activePort || "5000"}
+                      </b>
+                    </div>
+                    <div className="domain_pillar_meta_item">
+                      <span className="domain_pillar_meta_key">Date Field</span>
+                      <b className="domain_pillar_meta_val" title={activeDateColumn}>
+                        {activeDateColumn || "—"}
+                      </b>
+                    </div>
+                    <div className="domain_pillar_meta_item">
+                      <span className="domain_pillar_meta_key">Source / Target</span>
+                      <b className="domain_pillar_meta_val" title={`${defaultSourceCol} → ${defaultTargetCol}`}>
+                        {defaultSourceCol && defaultTargetCol ? `${defaultSourceCol} → ${defaultTargetCol}` : "Auto"}
+                      </b>
+                    </div>
+                  </div>
+
+                  {activeTables.length > 0 && (
+                    <div className="domain_pillar_tables_row">
+                      <span className="domain_pillar_meta_key">Tables:</span>
+                      <span className="domain_pillar_tables_list" title={activeTables.join(", ")}>
+                        {activeTables.join(", ")}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                <label className="idle_timeout_hint" style={{ marginTop: "6px" }}>
+                  {isSwitchingDomain ? "Switching pillar and projecting configuration..." : "Pillar switching immediately reconfigures backend targets and source dataframes."}
+                </label>
               </fieldset>
 
               {/* Notes */}
@@ -1663,13 +2106,13 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
                   ))}
                 </select>
 
-                <input
+                <ConfigTextInput
                   type="text"
                   name="active_tool_url"
                   className="input_text"
                   placeholder="Url address"
                   value={parsedConfig?.active_tool_url || ""}
-                  onChange={(e) => actions("change", { name: e.target.name, value: e.target.value })}
+                  onCommit={handleConfigFieldCommit}
                 />
 
                 <label>Ports</label>
@@ -1678,24 +2121,24 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
                     <tr>
                       <td>
                         Protocol Port
-                        <input
+                        <ConfigTextInput
                           type="text"
                           className="subinput"
                           name="tool_protocol_port"
                           placeholder="Tool port"
                           value={parsedConfig?.tool_protocol_port || ""}
-                          onChange={(e) => actions("change", { name: e.target.name, value: e.target.value })}
+                          onCommit={handleConfigFieldCommit}
                         />
                       </td>
                       <td>
                         Web UI Port
-                        <input
+                        <ConfigTextInput
                           type="text"
                           className="subinput"
                           name="tool_web_port"
                           placeholder="UI port"
                           value={parsedConfig?.tool_web_port || ""}
-                          onChange={(e) => actions("change", { name: e.target.name, value: e.target.value })}
+                          onCommit={handleConfigFieldCommit}
                         />
                       </td>
                     </tr>
@@ -1704,22 +2147,22 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
 
                 <label>Credentials</label>
                 <label>Username and Password</label>
-                <input
+                <ConfigTextInput
                   type="text"
                   name="active_tool_username"
                   className="input_text"
                   placeholder="Username"
                   value={parsedConfig?.active_tool_username || ""}
-                  onChange={(e) => actions("change", { name: e.target.name, value: e.target.value })}
+                  onCommit={handleConfigFieldCommit}
                 />
-                <input
+                <ConfigTextInput
                   type="password"
                   autoComplete="new-password"
                   name="active_tool_password"
                   className="input_text"
                   placeholder="Leave masked value unchanged to keep current password"
                   value={parsedConfig?.active_tool_password || ""}
-                  onChange={(e) => actions("change", { name: e.target.name, value: e.target.value })}
+                  onCommit={handleConfigFieldCommit}
                 />
 
                 <label>Database</label>
@@ -1735,13 +2178,13 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
                   )}
                 </select>
 
-                <input
+                <ConfigTextInput
                   type="text"
                   name="custom_tool_database"
                   className="input_text"
                   placeholder="Database name"
                   value={parsedConfig?.custom_tool_database || ""}
-                  onChange={(e) => actions("change", { name: e.target.name, value: e.target.value })}
+                  onCommit={handleConfigFieldCommit}
                 />
 
                 <label>Tables (Separate with comma)</label>
@@ -1801,12 +2244,12 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
                   name="rule_file"
                 />
 
-                <input
+                <ConfigTextInput
                   type="text"
                   name="rule_name"
                   className="input_text"
                   placeholder="Rule name"
-                  onChange={(e) => actions("change", { name: e.target.name, value: e.target.value })}
+                  onCommit={handleConfigFieldCommit}
                 />
 
                 <label>
@@ -2027,32 +2470,32 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
                 <label className="sublabel">Backend source: {idlePolicyMeta?.source || "session"}</label>
                 <div className="idle_timeout_grid">
                   <label>Warn after
-                    <input
+                    <ConfigTextInput
                       type="number"
                       min="0"
                       max="1439"
                       value={idleWarningMinutes}
-                      onChange={(event) => updateIdleMinutes("warningMs", event.target.value)}
+                      onCommit={(_name, value) => updateIdleMinutes("warningMs", value)}
                       disabled={!isIdlePolicyFieldEditable("idle_warning_ms") || idlePolicyMeta?.isLoading || idlePolicyMeta?.isSaving}
                     />
                   </label>
                   <label>Lock after
-                    <input
+                    <ConfigTextInput
                       type="number"
                       min="1"
                       max="1440"
                       value={idleLockMinutes}
-                      onChange={(event) => updateIdleMinutes("lockMs", event.target.value)}
+                      onCommit={(_name, value) => updateIdleMinutes("lockMs", value)}
                       disabled={!isIdlePolicyFieldEditable("idle_lock_ms") || idlePolicyMeta?.isLoading || idlePolicyMeta?.isSaving}
                     />
                   </label>
                   <label>Logout after
-                    <input
+                    <ConfigTextInput
                       type="number"
                       min="1"
                       max="1440"
                       value={idleTimeoutMinutes}
-                      onChange={(event) => updateIdleMinutes("timeoutMs", event.target.value)}
+                      onCommit={(_name, value) => updateIdleMinutes("timeoutMs", value)}
                       disabled={!isIdlePolicyFieldEditable("max_idle_timeout_ms") || idlePolicyMeta?.isLoading || idlePolicyMeta?.isSaving}
                     />
                   </label>
@@ -2118,25 +2561,19 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
             <button
               className="action_btns"
               type="button"
-              onClick={async () => {
-                let exportData = { ...(parsedConfig || {}) };
-                try {
-                  const res = await apiFetch("/rule-thresholds", { suppressForbiddenHandler: true });
-                  if (res && res.results && res.results.config) {
-                    exportData.rule_thresholds = res.results.config;
-                  }
-                } catch(e) {
-                  console.warn("Could not fetch rule thresholds for export", e);
-                }
-                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportData, null, 2));
-                const downloadAnchorNode = document.createElement('a');
-                downloadAnchorNode.setAttribute("href", dataStr);
-                downloadAnchorNode.setAttribute("download", `${sessionId}_temp_config.JSON`);
-                document.body.appendChild(downloadAnchorNode); // required for firefox
-                downloadAnchorNode.click();
-                downloadAnchorNode.remove();
+              onClick={() => {
+                setLxacDialog({
+                  isOpen: true,
+                  mode: "export",
+                  file: null,
+                  password: "",
+                  confirmPassword: "",
+                  showPassword: false,
+                  error: "",
+                  isSubmitting: false,
+                });
               }}
-              title="Download"
+              title="Export Configuration"
             >⭳ Export</button>
             <button
               className="action_btns"
@@ -2153,21 +2590,184 @@ function Configurations({sessionId,actions,loadscreenState,setloadscreenState,to
               id="import_config_file"
               name="import_config_file"
               style={{ display: "none" }}
-              onChange={() => actions("upload")}
-              accept=".json"
+              onChange={handleImportFileChange}
+              accept=".lxac,.Lxac"
             />
             <button
               className="action_btns"
               type="button"
               onClick={() => document.getElementById("import_config_file").click()}
-              title="Upload Configuration file"
+              title="Import Configuration"
             >&#128448; Import</button>
           </div>
         </div>
+
+        {lxacDialog.isOpen && (
+          <div
+            className="lxac_modal_overlay"
+            onClick={(e) => {
+              if (e.target === e.currentTarget && !lxacDialog.isSubmitting) {
+                handleLxacDialogClose();
+              }
+            }}
+          >
+            <div className="lxac_modal_window" role="dialog" aria-modal="true" aria-labelledby="lxac_dialog_title">
+              <div className="lxac_modal_bar">
+                <label id="lxac_dialog_title" className="lxac_modal_title">
+                  <FlatLockIcon open={lxacDialog.mode === "import"} size={14} color="#FFFFFF" />
+                  <span>
+                    {lxacDialog.mode === "export" ? "Export Configuration" : "Import Configuration"}
+                  </span>
+                </label>
+                <span
+                  className="lxac_modal_close_btn"
+                  onClick={handleLxacDialogClose}
+                  title="Close"
+                >
+                  ✕
+                </span>
+              </div>
+
+              <div className="lxac_modal_content">
+                <form onSubmit={lxacDialog.mode === "export" ? handleLxacExportSubmit : handleLxacImportSubmit} className="configurations_tab_form">
+                  <fieldset>
+                    <legend>
+                      {lxacDialog.mode === "export" ? "Encryption Password" : "Decryption Password"}
+                    </legend>
+
+                    <label className="sublabel">
+                      {lxacDialog.mode === "export"
+                        ? "Enter a password to encrypt this configuration. You will need this password to import into another session."
+                        : "Enter the decryption password to import and merge this multi-domain configuration into your active session."}
+                    </label>
+
+                    {lxacDialog.file && (
+                      <div className="lxac_file_badge">
+                        <div className="lxac_file_info">
+                          <span className="lxac_file_name">
+                            <FlatFileIcon size={13} color="currentColor" /> {lxacDialog.file.name}
+                          </span>
+                          <span className="lxac_file_size">
+                            ({Math.max(1, Math.round(lxacDialog.file.size / 1024))} KB)
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          className="lxac_drop_file_btn"
+                          onClick={() => {
+                            setLxacDialog((prev) => ({ ...prev, file: null, error: "" }));
+                            const importInput = document.getElementById("import_config_file");
+                            if (importInput) importInput.value = "";
+                          }}
+                          title="Drop selected file"
+                          aria-label="Drop selected file"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    )}
+
+                    {!lxacDialog.file && lxacDialog.mode === "import" && (
+                      <div style={{ margin: "0.6vh 0" }}>
+                        <button
+                          type="button"
+                          className="action_btns"
+                          onClick={() => document.getElementById("import_config_file")?.click()}
+                          style={{ minWidth: "110px", height: "28px", minHeight: "28px", fontSize: "calc(0.38vh + 0.45vw)" }}
+                        >
+                          Select File...
+                        </button>
+                      </div>
+                    )}
+
+                    {lxacDialog.error && (
+                      <div className="lxac_modal_error_banner" role="alert">
+                        <FlatAlertIcon size={14} color="#d9534f" />
+                        <span>{lxacDialog.error}</span>
+                      </div>
+                    )}
+
+                    <div className="lxac_field_row">
+                      <label htmlFor="lxac_password_input">
+                        {lxacDialog.mode === "export" ? "Encryption Password" : "Decryption Password"}
+                      </label>
+                      <input
+                        id="lxac_password_input"
+                        type={lxacDialog.showPassword ? "text" : "password"}
+                        className="subinput"
+                        value={lxacDialog.password}
+                        onChange={(e) => setLxacDialog((prev) => ({ ...prev, password: e.target.value, error: "" }))}
+                        placeholder={lxacDialog.mode === "export" ? "Enter encryption password" : "Enter decryption password"}
+                        autoFocus
+                        disabled={lxacDialog.isSubmitting}
+                        autoComplete={lxacDialog.mode === "export" ? "new-password" : "current-password"}
+                      />
+                    </div>
+
+                    {lxacDialog.mode === "export" && (
+                      <div className="lxac_field_row">
+                        <label htmlFor="lxac_confirm_password_input">Confirm Encryption Password</label>
+                        <input
+                          id="lxac_confirm_password_input"
+                          type={lxacDialog.showPassword ? "text" : "password"}
+                          className="subinput"
+                          value={lxacDialog.confirmPassword}
+                          onChange={(e) => setLxacDialog((prev) => ({ ...prev, confirmPassword: e.target.value, error: "" }))}
+                          placeholder="Re-enter password"
+                          disabled={lxacDialog.isSubmitting}
+                          autoComplete="new-password"
+                        />
+                      </div>
+                    )}
+
+                    <div className="lxac_show_password_row">
+                      <label className="lxac_checkbox_label">
+                        <input
+                          type="checkbox"
+                          className="input_checkbox"
+                          checked={lxacDialog.showPassword}
+                          onChange={(e) => setLxacDialog((prev) => ({ ...prev, showPassword: e.target.checked }))}
+                          disabled={lxacDialog.isSubmitting}
+                        />
+                        <span>Show password characters</span>
+                      </label>
+                    </div>
+                  </fieldset>
+
+                  <div className="configurations_actions_bar" style={{ marginTop: "10px", borderTop: "1px solid #d9e7ef" }}>
+                    <button
+                      type="button"
+                      className="action_btns lxac_cancel_btn"
+                      onClick={handleLxacDialogClose}
+                      disabled={lxacDialog.isSubmitting}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="action_btns"
+                      disabled={lxacDialog.isSubmitting || !lxacDialog.password || (lxacDialog.mode === "import" && !lxacDialog.file)}
+                    >
+                      {lxacDialog.isSubmitting ? (
+                        <span>{lxacDialog.mode === "export" ? "Exporting..." : "Importing..."}</span>
+                      ) : (
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                          <FlatLockIcon open={lxacDialog.mode === "import"} size={13} color="#FFFFFF" />
+                          <span>{lxacDialog.mode === "export" ? "Export" : "Import"}</span>
+                        </span>
+                      )}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
+      )}
     </div>
   );
-}
+});
 const formatAuditDate = (value) => {
   if (!value) return "-";
   const date = new Date(value);
@@ -2177,7 +2777,7 @@ const formatAuditDate = (value) => {
 
 const isSuccessResponse = (data) => {
   const message = String(data?.message || "").trim().toLowerCase();
-  return message === "success" || message === "success!";
+  return message === "success" || message === "success!" || data?.status === "success" || data?.success === true || (Boolean(data?.results) && !data?.error);
 };
 
 const JOB_POLL_DEFAULT_INTERVAL_MS = 1000;
@@ -2722,7 +3322,9 @@ const normalizeSearchResponse = (data) => {
     ? data.results.result
     : data?.result && typeof data.result === "object" && Array.isArray(data.result.results)
       ? data.result
-      : data;
+      : data?.data && typeof data.data === "object" && Array.isArray(data.data.results)
+        ? data.data
+        : data;
 
   const results = Array.isArray(response?.results) ? response.results : [];
   const hasMore = response?.has_more === true || response?.has_more === 1 || response?.has_more === "1";
@@ -3397,6 +3999,14 @@ const normalizeConfigurationStatePatch = (previous, name, value) => {
     nextConfig.active_tool_protocol = normalizedValue;
   }
 
+  if (name === "active_domain") {
+    nextConfig.domain = normalizedValue;
+  }
+
+  if (name === "domain") {
+    nextConfig.active_domain = normalizedValue;
+  }
+
   if (name === "large_search_backend") {
     nextConfig.elastic_scroll_enabled = normalizedValue === "elastic_scroll";
   }
@@ -3655,8 +4265,38 @@ const normalizeLoadedConfiguration = (payload) => {
     if (parsed.auto_fill_fields === undefined || parsed.auto_fill_fields === null || parsed.auto_fill_fields === "") {
       parsed.auto_fill_fields = true;
     }
+
+    if (parsed.domain && !parsed.active_domain) {
+      parsed.active_domain = parsed.domain;
+    }
+    if (parsed.active_domain && !parsed.domain) {
+      parsed.domain = parsed.active_domain;
+    }
   }
   return parsed;
+};
+
+// The save payload intentionally strips the domain registry (registered_domains /
+// domain_connections / domains) since the backend owns it and does not echo it back
+// on the save response. Without this merge the dropdown would collapse to the single
+// active domain after every save. We re-attach the previously known registry whenever
+// the incoming (post-save / post-switch) config omits it.
+const DOMAIN_REGISTRY_KEYS = ["registered_domains", "domain_connections", "domains"];
+const hasMeaningfulValue = (value) => {
+  if (Array.isArray(value)) return value.length > 0;
+  if (value && typeof value === "object") return Object.keys(value).length > 0;
+  return false;
+};
+const preserveDomainRegistry = (prev, next) => {
+  if (!next || typeof next !== "object") return next;
+  if (!prev || typeof prev !== "object") return next;
+  const merged = { ...next };
+  DOMAIN_REGISTRY_KEYS.forEach((key) => {
+    if (!hasMeaningfulValue(next[key]) && hasMeaningfulValue(prev[key])) {
+      merged[key] = prev[key];
+    }
+  });
+  return merged;
 };
 
 const buildConfigurationSavePayload = (configuration) => {
@@ -3673,6 +4313,8 @@ const buildConfigurationSavePayload = (configuration) => {
     delete rest[key];
   });
   delete rest.tool_credentials;
+  delete rest.domain_connections;
+  delete rest.registered_domains;
   const largeSearchBackend = normalizeLargeSearchBackend(rest.large_search_backend);
   const classifiedEntities = normalizeClassifiedEntityEntries(
     rest.trusted_entities ?? rest.trusted_catalog ?? rest.trusted_list ?? rest.trustedList ?? rest.active_tool_trusted_list,
@@ -4115,8 +4757,10 @@ function PermissionEditor({ value = [], onChange, idPrefix = "permissions", disa
   );
 }
 
+const DEFAULT_STORAGE_HOST = import.meta.env.VITE_DEFAULT_STORAGE_HOST || "";
+
 const defaultDomainConfig = (domainKey = "banking") => ({
-  storage_host: "172.27.23.43",
+  storage_host: DEFAULT_STORAGE_HOST,
   storage_port: domainKey === "microfinance" ? "5007" : "5000",
   storage_endpoint: "api/search/uii",
   auth_token: "",
@@ -4954,7 +5598,7 @@ function StorageTargetEditor({
                     id={`${idPrefix}_${activeDomainTab}_host`}
                     type="text"
                     className="input_text"
-                    placeholder="e.g. 172.27.23.43"
+                    placeholder="e.g. 10.0.0.10"
                     value={activeDomainConfig.storage_host || ""}
                     maxLength={160}
                     onChange={(e) => updateDomainField("storage_host", sanitizeConnectionValue(e.target.value, { maxLength: 160 }))}
@@ -5210,12 +5854,12 @@ const generateClientSecret = () => {
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
 };
 
-function CurrentActorPanel({ actor, roles = [], permissions = [], sessionId, onLogout }) {
+function CurrentActorPanel({ actor, roles = [], permissions = [], sessionId, onLogout, activeDomain }) {
   const actorType = actor?.actor_type || (actor?.client_id ? "service" : "user");
   const actorName = actorType === "service" ? actor?.client_id : actor?.username;
   return (
     <div className="settings_admin_panel">
-      <fieldset><legend>Current Actor</legend><div className="profile_grid"><span>Actor type</span><b>{actorType || "unknown"}</b><span>Identifier</span><b>{actorName || "unknown"}</b><span>Display name</span><b>{actor?.display_name || actorName || "unknown"}</b><span>Linkx session</span><b>{sessionId || "not initialized"}</b></div><div className="settings_action_row"><button type="button" className="profile_logout_btn" onClick={onLogout}>Logout</button></div></fieldset>
+      <fieldset><legend>Current Actor</legend><div className="profile_grid"><span>Actor type</span><b>{actorType || "unknown"}</b><span>Identifier</span><b>{actorName || "unknown"}</b><span>Display name</span><b>{actor?.display_name || actorName || "unknown"}</b><span>Linkx session</span><b>{sessionId || "not initialized"}</b><span>Domain pillar</span><b>{formatDomainPillarLabel(activeDomain || actor?.domain || "bank")}</b></div><div className="settings_action_row"><button type="button" className="profile_logout_btn" onClick={onLogout}>Logout</button></div></fieldset>
       <fieldset><legend>Roles</legend><div className="token_list">{(roles.length ? roles : ["none"]).map((role) => <span key={role}>{role}</span>)}</div></fieldset>
       <fieldset><legend>Permissions</legend><div className="token_list">{(permissions.length ? permissions : ["none"]).map((permission) => <span key={permission}>{permission}</span>)}</div></fieldset>
     </div>
@@ -6571,7 +7215,7 @@ function ServiceAccountsPanel({ apiFetch, canManageUsers, onNotice, requestConfi
                               <span
                                 key={dom}
                                 className="service_storage_chip"
-                                title={`Domain [${dom}]: ${dCfg.storage_host || "172.27.23.43"}:${dCfg.storage_port || (dom === "microfinance" ? "5007" : "5000")}/${dCfg.storage_endpoint || "api/search/uii"}`}
+                                title={`Domain [${dom}]: ${dCfg.storage_host || DEFAULT_STORAGE_HOST || "storage"}:${dCfg.storage_port || (dom === "microfinance" ? "5007" : "5000")}/${dCfg.storage_endpoint || "api/search/uii"}`}
                               >
                                 🗄 {dom}: {dCfg.storage_port || (dom === "microfinance" ? "5007" : "5000")}
                               </span>
@@ -7333,7 +7977,7 @@ function SmartVigilancePanel({ apiFetch, toggleAction, onNotice, canAccess }) {
     </div>
   );
 }
-function Settings({ isSettingsOpen, toggleAction, actor, roles = [], permissions = [], canAccess, apiFetch, sessionId, onNotice, requestConfirmation, onLogout, areBackgroundAnimationsEnabled = true, onBackgroundAnimationsChange }) {
+const Settings = React.memo(function Settings({ isSettingsOpen, toggleAction, actor, roles = [], permissions = [], canAccess, apiFetch, sessionId, onNotice, requestConfirmation, onLogout, areBackgroundAnimationsEnabled = true, onBackgroundAnimationsChange, activeDomain }) {
   const [activeSettingsTab, setActiveSettingsTab] = useState("profile");
   const [rememberLayout, setRememberLayout] = useState(true);
   const [enableNotifications, setEnableNotifications] = useState(true);
@@ -7356,11 +8000,12 @@ function Settings({ isSettingsOpen, toggleAction, actor, roles = [], permissions
 
   return (
     <div id="configurations_container" style={{ display: isSettingsOpen ? "block" : "none" }}>
-      <div className="configurations_options_container settings_options_container">
-        <div className="configurations_options_container_bar">
-          <span onClick={() => toggleAction("settings")}>x</span>
-          <label>Settings</label>
-        </div>
+      {isSettingsOpen && (
+        <div className="configurations_options_container settings_options_container">
+          <div className="configurations_options_container_bar">
+            <span onClick={() => toggleAction("settings")}>x</span>
+            <label>Settings</label>
+          </div>
         <div className="configurations_options">
           <div className="configurations_tabs">
             {tabs.filter((tab) => !tab.permission || canAccess(tab.permission)).map((tab) => (
@@ -7371,7 +8016,7 @@ function Settings({ isSettingsOpen, toggleAction, actor, roles = [], permissions
           </div>
           <form className="configurations_tab_form" onSubmit={(event) => event.preventDefault()}>
             <div className="configurations_options_panel" style={{ display: activeSettingsTab === "profile" ? "block" : "none" }}>
-              <CurrentActorPanel actor={actor} roles={roles} permissions={permissions} sessionId={sessionId} onLogout={onLogout} />
+              <CurrentActorPanel actor={actor} roles={roles} permissions={permissions} sessionId={sessionId} onLogout={onLogout} activeDomain={activeDomain} />
             </div>
             <div className="configurations_options_panel" style={{ display: activeSettingsTab === "preferences" ? "block" : "none" }}>
               <fieldset>
@@ -7404,9 +8049,10 @@ function Settings({ isSettingsOpen, toggleAction, actor, roles = [], permissions
           </form>
         </div>
       </div>
+      )}
     </div>
   );
-}
+});
 function WindowVerticalSplitPanels({id, type, sourceId, initialTopHeight, minTopHeight, maxTopHeight, graphStatus, graphStatusBySession, graphRenderStats, activeGraph, graphAction, iframeRef, iframeSearch, iframeSettings, performanceMood, selectedPropertyTab, nodeProperties, filterPropertyKeys, filterResults}) {
   const containerRef = useRef(null);
   const [containerHeight, setContainerHeight] = useState(0);
@@ -7497,15 +8143,13 @@ function WindowVerticalSplitPanels({id, type, sourceId, initialTopHeight, minTop
     }
   }, [containerHeight, initialTopHeight, minTopHeight, maxTopHeight]);
 
-  // when slider (separator) is grabed
-  const handleMouseDown = () => {
-    isDragging.current = true;
-  };
-  // when slider (separator) is released
+  // when slider (separator) is grabbed
   const handleMouseUp = () => {
     isDragging.current = false;
+    document.removeEventListener('mouseup', handleMouseUp);
+    document.removeEventListener('mousemove', handleMouseMove);
   };
-  // when slider (separator) is dragged
+
   const handleMouseMove = (e) => {
     if (!isDragging.current) return;
     const containerTop = containerRef.current.getBoundingClientRect().top;
@@ -7518,15 +8162,17 @@ function WindowVerticalSplitPanels({id, type, sourceId, initialTopHeight, minTop
       setTopHeightPx(newHeight);
     }
   };
-  // Attaching global listeners to call the above event functions (grabing,releasing,dragginf)
+
+  const handleMouseDown = () => {
+    isDragging.current = true;
+    document.addEventListener('mouseup', handleMouseUp);
+    document.addEventListener('mousemove', handleMouseMove);
+  };
+
   useEffect(() => {
-    const handleMouseUpGlobal = () => handleMouseUp();
-    const handleMouseMoveGlobal = (e) => handleMouseMove(e);
-    document.addEventListener('mouseup', handleMouseUpGlobal);
-    document.addEventListener('mousemove', handleMouseMoveGlobal);
     return () => {
-      document.removeEventListener('mouseup', handleMouseUpGlobal);
-      document.removeEventListener('mousemove', handleMouseMoveGlobal);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.removeEventListener('mousemove', handleMouseMove);
     };
   }, []);
   useEffect(() => {
@@ -8006,7 +8652,7 @@ function WindowVerticalSplitPanels({id, type, sourceId, initialTopHeight, minTop
       <div className="bottom_panel">
         <label className="bottom_panel_title">Graph Relationships</label>
         <ul>
-          <li>
+          <li className="rel_all">
             <input
               id={`window_${id}_all_relationships`}
               name={`window_${id}_relationship`}
@@ -8024,7 +8670,7 @@ function WindowVerticalSplitPanels({id, type, sourceId, initialTopHeight, minTop
             <label htmlFor={`window_${id}_all_relationships`}>*</label>
           </li>
           {relationships.map((rel, index) => (
-            <li key={`${rel.type}-${index}`}>
+            <li key={`${rel.type}-${index}`} className="rel_item">
               <input
                 id={`window_${id}_${rel.type}_relationship_${index}`}
                 name={`window_${id}_relationship`}
@@ -8175,6 +8821,28 @@ function DraggableWindow({ children, initialPos = { top: 0, left: 0 }, orientati
   const windowRef = useRef(null);
   const dragging = useRef(false);
   const offset = useRef({ x: 0, y: 0 });
+
+  const onMouseMove = useCallback((e) => {
+    if (!dragging.current) return;
+    setPos({
+      left: e.clientX - offset.current.x,
+      top: e.clientY - offset.current.y,
+    });
+  }, []);
+
+  const onMouseUp = useCallback(() => {
+    dragging.current = false;
+    setIsDragging(false); // reset dragging state
+    if (windowRef.current) {
+      windowRef.current.classList.remove("dragging");
+      windowRef.current.style.cursor = "grab";
+    }
+    document.body.style.userSelect = "auto";
+    window.removeEventListener("mousemove", onMouseMove);
+    window.removeEventListener("mouseup", onMouseUp);
+    if (onDragStart) onDragStart(false);
+  }, [onDragStart, onMouseMove]);
+
   const onMouseDown = (e) => {
     dragging.current = true;
     setIsDragging(true); // set dragging state
@@ -8189,40 +8857,24 @@ function DraggableWindow({ children, initialPos = { top: 0, left: 0 }, orientati
     };
 
     document.body.style.userSelect = "none";
-    windowRef.current.style.cursor = "grabbing";
+    if (windowRef.current) {
+      windowRef.current.style.cursor = "grabbing";
+    }
+
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
 
     if (onFocus) onFocus();
     if (onDragStart) onDragStart(true);
   };
 
-  const onMouseMove = (e) => {
-    if (!dragging.current) return;
-    setPos({
-      left: e.clientX - offset.current.x,
-      top: e.clientY - offset.current.y,
-    });
-  };
-
-  const onMouseUp = () => {
-    dragging.current = false;
-    setIsDragging(false); // reset dragging state
-    if (windowRef.current) {
-      windowRef.current.classList.remove("dragging");
-      windowRef.current.style.cursor = "grab";
-    }
-    document.body.style.userSelect = "auto";
-    if (onDragStart) onDragStart(false);
-  };
-
   useEffect(() => {
-    window.addEventListener("mousemove", onMouseMove);
-    window.addEventListener("mouseup", onMouseUp);
     return () => {
       window.removeEventListener("mousemove", onMouseMove);
       window.removeEventListener("mouseup", onMouseUp);
       document.body.style.userSelect = "auto";
     };
-  }, []);
+  }, [onMouseMove, onMouseUp]);
   return (    
     <div
       ref={windowRef}
@@ -8241,7 +8893,7 @@ function DraggableWindow({ children, initialPos = { top: 0, left: 0 }, orientati
     </div>
   );
 }
-function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText, loadscreenState, isSideBarMenuOpen, orientation, configurations, windowAction, handleOpenWindows, graphAction, chartAction, selectedContent, selectedSubContent, selectedNodes, selectedEdges,windowResponseI,windowResponseII,windowRealtimeResponseI,formToolResponse,formRealtimeToolResponse,sourceAddressType,sourceAddressText,sourceStorageText,sourceTopicText,sourceKind,sourceStatus,toolStatus,dataframeStatus,streamStatus,sourceStep,sourceRealtimeAddressType,sourceRealtimeAddressText,sourceRealtimeTopicText,toolUrl,toolUsername,toolPassword,toolDatabase,realtimeToolUrl,realtimeToolUsername,realtimeToolPassword,realtimeToolDatabase,realtimeNeo4jConnectedSessionId,realtimeConfigPersistStatus,realtimeConfigPersistedSessionId,realtimeConfigPersistMessage,realtimeStartGuardMessage,batchFilesSearchHybrid,batchFilesSearchHybridQuery,batchFilesSearchStrict,searchText,batchFilesSearchLimit,batchFilesSearchResults,batchFilesSearchMoreFiles,searchResultsVisible,searchPlaceholder,batchFilesCollection, batchFilesDataframeInfoI, batchFilesDataframeInfoII, batchFilesDataframeActionValue, batchFilesDataframeSourceValue, batchFilesDataframeTargetValue, batchFilesDataframeRelationshipValue, batchFilesDataframeRuleValue, sourceSessionLog, sourceStreams , sourceStreamListener, fileInputRef, textareaRefs, onClose, onMove, zIndex, onFocus, covered, graphLink, graphLinkId, graphLinkSource, graphStatus, graphStatusBySession, graphRenderStats, activeGraph, chartLink, chartLinkId, activechart, iframeRef, iframeFilters, iframeSettings, iframeSearch, iframePerformanceMood, selectedPropertyTab, filterPropertyKeys, filterResults, nodeProperties, BASE_URL, searchButtonRef, resultContainerRef, requestConfirmation, themeMode, isWorkspaceLocked }) {
+function WindowsImpl({ id, type, isMaximized, isDragging, sessionId, loadscreenText, loadscreenState, isSideBarMenuOpen, orientation, configurations, windowAction, handleOpenWindows, graphAction, chartAction, selectedContent, selectedSubContent, selectedNodes, selectedEdges,windowResponseI,windowResponseII,windowRealtimeResponseI,formToolResponse,formRealtimeToolResponse,sourceAddressType,sourceAddressText,sourceStorageText,sourceTopicText,sourceKind,sourceStatus,toolStatus,dataframeStatus,streamStatus,sourceStep,sourceRealtimeAddressType,sourceRealtimeAddressText,sourceRealtimeTopicText,toolUrl,toolUsername,toolPassword,toolDatabase,realtimeToolUrl,realtimeToolUsername,realtimeToolPassword,realtimeToolDatabase,realtimeNeo4jConnectedSessionId,realtimeConfigPersistStatus,realtimeConfigPersistedSessionId,realtimeConfigPersistMessage,realtimeStartGuardMessage,batchFilesSearchHybrid,batchFilesSearchHybridQuery,batchFilesSearchStrict,searchText,batchFilesSearchLimit,batchFilesSearchResults,batchFilesSearchMoreFiles,searchResultsVisible,searchPlaceholder,batchFilesCollection, batchFilesDataframeInfoI, batchFilesDataframeInfoII, batchFilesDataframeActionValue, batchFilesDataframeSourceValue, batchFilesDataframeTargetValue, batchFilesDataframeRelationshipValue, batchFilesDataframeRuleValue, sourceSessionLog, sourceStreams , sourceStreamListener, fileInputRef, textareaRefs, onClose, onMove, zIndex, onFocus, covered, graphLink, graphLinkId, graphLinkSource, graphStatus, graphStatusBySession, graphRenderStats, activeGraph, chartLink, chartLinkId, activechart, iframeRef, iframeFilters, iframeSettings, iframeSearch, iframePerformanceMood, selectedPropertyTab, filterPropertyKeys, filterResults, nodeProperties, BASE_URL, searchButtonRef, resultContainerRef, requestConfirmation, themeMode, isWorkspaceLocked }) {
   const canCancelGraphStaging = type === "graph" && typeof loadscreenText === "string" && (
     loadscreenText.toLowerCase().startsWith("staging graph") ||
     loadscreenText.toLowerCase().startsWith("fetching graph")
@@ -8288,9 +8940,11 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
                 : `window ${covered ? '' : 'focused'} ${dragProps.isDragging ? 'dragging' : ''}`
             }
             onMouseDown={() => onFocus(id)}>
-            <div id={`window_loadscreen_${type}_${id}`} className="windows_loadscreen" style={{ display: loadscreenState ? "block" : "none" }}>
-              <Loadscreen loadingText={loadscreenText} />
-            </div>
+            {loadscreenState && (
+              <div id={`window_loadscreen_${type}_${id}`} className="windows_loadscreen">
+                <Loadscreen loadingText={loadscreenText} />
+              </div>
+            )}
             {(covered || dragProps.isDragging) && <div className="window_cover" />}  
             <div id={`window_bar_${type}_${id}`} className="window_bar"
               onMouseDown={isMaximized ? undefined : dragProps.onBarMouseDown} onDoubleClick={() => windowAction(id,"window_change_view", "",iframeRef)}>
@@ -8926,30 +9580,23 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
                                     ) : (
                                       <>
                                         {Array.isArray(batchFilesSearchResults) &&
-                                        batchFilesSearchResults.length > 0 ? (                                          
-                                          batchFilesSearchHybrid ? (
+                                        batchFilesSearchResults.length > 0 ? (() => {
+                                          const selectedFileNames = new Set((batchFilesCollection || []).map((f) => f.name || f.response));
+                                          const selectedFilesKeySet = new Set((batchFilesCollection || []).map((f) => `${f.name || f.response}__${f.size || ""}`));
+                                          return batchFilesSearchHybrid ? (
                                             // =============================
                                             // ===== Hybrid RESULTS LIST =====
                                             // =============================
                                             <>
                                               {batchFilesSearchResults.map((file, index) => {
                                                 const name = file?.name || "";
-                                                const size = file?.size || "";
-                                                console.log("batchFilesSearchResults:",batchFilesSearchResults)
+                                                const isSelected = selectedFileNames.has(name);
                                                 return (
                                                   <li
                                                     key={`hive-${name}-${index}`}
                                                     style={{
-                                                      backgroundColor: batchFilesCollection.some(
-                                                        (selectedFile) => selectedFile.name === name
-                                                      )
-                                                        ? "var(--disabled-bg)"
-                                                        : "",
-                                                      color: batchFilesCollection.some(
-                                                        (selectedFile) => selectedFile.name === name
-                                                      )
-                                                        ? "var(--muted-text)"
-                                                        : "",
+                                                      backgroundColor: isSelected ? "var(--disabled-bg)" : "",
+                                                      color: isSelected ? "var(--muted-text)" : "",
                                                     }}
                                                     onClick={() => {
                                                       windowAction(id, "batch_files_select_file", "toggle_select", {
@@ -8976,20 +9623,13 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
                                               {batchFilesSearchResults.map((file, index) => {
                                                 const name = file?.name || "";
                                                 const size = file?.size || "";
+                                                const isSelected = selectedFilesKeySet.has(`${name}__${size}`);
                                                 return (
                                                   <li
                                                     key={`nonhive-${name}-${index}`}
                                                     style={{
-                                                      backgroundColor: batchFilesCollection.some(
-                                                        (selectedFile) => selectedFile.name === name && selectedFile.size === size
-                                                      )
-                                                        ? "var(--disabled-bg)"
-                                                        : "",
-                                                      color: batchFilesCollection.some(
-                                                        (selectedFile) => selectedFile.name === name && selectedFile.size === size
-                                                      )
-                                                        ? "var(--muted-text)"
-                                                        : "",
+                                                      backgroundColor: isSelected ? "var(--disabled-bg)" : "",
+                                                      color: isSelected ? "var(--muted-text)" : "",
                                                     }}
                                                     onClick={() => {
                                                       windowAction(id, "batch_files_select_file", "toggle_select", {
@@ -9039,8 +9679,8 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
                                                 </li>
                                               )}
                                             </>
-                                          )
-                                        ) : (
+                                          );
+                                        })() : (
                                           // No results
                                           <li style={{ backgroundColor: "var(--disabled-bg)", color: "var(--muted-text)" }}>
                                             No results Found!
@@ -9066,7 +9706,6 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
                                 </thead>
                                 <tbody>
                                     {batchFilesCollection.length > 0 ? (
-                                      console.log("hey:",batchFilesCollection),
                                         batchFilesCollection.map((file, index) => (
                                           <tr key={index}>
                                             <td>{index + 1}</td>
@@ -9509,9 +10148,11 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
                 : `window ${covered ? '' : 'focused'} ${dragProps.isDragging ? 'dragging' : ''}`
             }
             onMouseDown={() => onFocus(id)}>
-            <div id={`window_loadscreen_${type}_${id}`} className="windows_loadscreen" style={{ display: loadscreenState ? "block" : "none" }}>
-              <Loadscreen loadingText={loadscreenText} showCancel={canCancelGraphStaging} onCancel={() => windowAction(id, "cancel_graph_staging")} />
-            </div>
+            {loadscreenState && (
+              <div id={`window_loadscreen_${type}_${id}`} className="windows_loadscreen">
+                <Loadscreen loadingText={loadscreenText} showCancel={canCancelGraphStaging} onCancel={() => windowAction(id, "cancel_graph_staging")} />
+              </div>
+            )}
             {(covered || dragProps.isDragging) && <div className="window_cover" />}  
             <div id={`window_bar_${type}_${id}`} className="window_bar"
               onMouseDown={isMaximized ? undefined : dragProps.onBarMouseDown} onDoubleClick={() => windowAction(id,"window_change_view", "",iframeRef)}>
@@ -9900,9 +10541,11 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
                 : `window ${covered ? '' : 'focused'} ${dragProps.isDragging ? 'dragging' : ''}`
             }
             onMouseDown={() => onFocus(id)}>
-            <div id={`window_loadscreen_${type}_${id}`} className="windows_loadscreen" style={{ display: loadscreenState ? "block" : "none" }}>
-              <Loadscreen loadingText={loadscreenText} />
-            </div>
+            {loadscreenState && (
+              <div id={`window_loadscreen_${type}_${id}`} className="windows_loadscreen">
+                <Loadscreen loadingText={loadscreenText} />
+              </div>
+            )}
             {(covered || dragProps.isDragging) && <div className="window_cover" />}  
             <div id={`window_bar_${type}_${id}`} className="window_bar"
               onMouseDown={isMaximized ? undefined : dragProps.onBarMouseDown} onDoubleClick={() => windowAction(id,"window_change_view", "",iframeRef)}>
@@ -10185,6 +10828,7 @@ function Windows({ id, type, isMaximized, isDragging, sessionId, loadscreenText,
     )
   }
 }
+const Windows = React.memo(WindowsImpl);
 const workspaceBackgroundVideo = import.meta.env.BASE_URL + theme.backgroundVideo;
 const fallbackWorkspaceBackgroundVideo = "/" + theme.backgroundVideo;
 const workspaceBackgroundImage = import.meta.env.BASE_URL + theme.backgroundImage;
@@ -10417,6 +11061,7 @@ function LinkxWorkspace() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isReportsOpen, setIsReportsOpen] = useState(false);
   const [isWorkspaceLocked, setIsWorkspaceLocked] = useState(false);
+  const isWorkspaceLockedRef = useRef(false);
   const [isUnlockingWorkspace, setIsUnlockingWorkspace] = useState(false);
   const [idleResetSeq, setIdleResetSeq] = useState(0);
   const [loadscreenState, setloadscreenState] = useState(false);
@@ -10460,6 +11105,8 @@ const fileInputRef = useRef(null);
   const openStrReportGraphAndBindRef = useRef(null);
   const pushNotificationRef = useRef(null);
   const sessionIdRef = useRef(null);
+  const bootstrappedTokenRef = useRef("");
+  const sessionInitInFlightRef = useRef(false);
   const lockedSessionIdRef = useRef("");
   const terminalUnlockFailureRef = useRef(false);
   const logRef = useRef(''); // for accumulating logs
@@ -10622,7 +11269,7 @@ const fileInputRef = useRef(null);
 
     return apiFetch("/configuration", {
       method: "POST",
-      body: { id: "reset", session_id: sessionKey },
+      body: { id: "load_default", session_id: sessionKey },
     }).then((data) => {
       if (!isSuccessResponse(data)) {
         return {
@@ -11281,7 +11928,13 @@ const fileInputRef = useRef(null);
         });
         if (isSuccessResponse(initData)) {
           const nextSession = extractMainSessionId(initData) || previousSessionId;
-          setConfigurations(normalizeLoadedConfiguration(extractInitConfiguration(initData)));
+          const initConfigs = normalizeLoadedConfiguration(extractInitConfiguration(initData));
+          setConfigurations(initConfigs);
+          if (initConfigs.active_domain || initConfigs.domain) {
+            try {
+              localStorage.setItem("linkx_active_domain", initConfigs.active_domain || initConfigs.domain);
+            } catch (_e) {}
+          }
           setSessionId(nextSession);
           sessionIdRef.current = nextSession;
           if (nextSession) {
@@ -11389,52 +12042,88 @@ const fileInputRef = useRef(null);
   }, []);
   // ---------------------------------------------------------------------------- Basic useEffects ---
   // ---------------------------------------------------------------------------- Main session initializer ---
+  const runSessionInit = useCallback((existingSession, { suppressLockedHandler = false } = {}) => {
+    sessionInitInFlightRef.current = true;
+    const payload = {
+      id: "init",
+      existing_session: existingSession,
+      socket_id: socketRef.current?.id || null,
+    };
+    return apiFetch("/init", {
+      method: "POST",
+      body: payload,
+      suppressLockedHandler,
+    })
+      .then(data => {
+        if (isSuccessResponse(data)) {
+          const session = extractMainSessionId(data) || existingSession || "";
+          const configs = normalizeLoadedConfiguration(extractInitConfiguration(data));
+          setConfigurations(configs);
+          if (configs.active_domain || configs.domain) {
+            try {
+              localStorage.setItem("linkx_active_domain", configs.active_domain || configs.domain);
+            } catch (_e) {}
+          }
+          setSessionId(session || null);
+          sessionIdRef.current = session || null;
+          const sourceAutofillPatch = buildSourceWindowAutofillPatch(configs || {});
+          setWindows((prev) => prev.map((windowState) => (
+            windowState.type === "source"
+              ? { ...windowState, ...sourceAutofillPatch }
+              : windowState
+          )));
+          if (session) {
+            localStorage.setItem('session', session);
+          }
+          const registerAfterInit = () => registerStrReportSocketReceiver(session);
+          const socket = socketRef.current;
+          if (socket?.connected) {
+            registerAfterInit();
+          } else if (socket) {
+            socket.once("connect", registerAfterInit);
+          }
+        } else {
+          alert("Could not initialize!");
+        }
+      })
+      .catch(console.error)
+      .finally(() => {
+        sessionInitInFlightRef.current = false;
+      });
+  }, [apiFetch]);
+
   useEffect(() => {
     const oldSession = readStoredSessionId() || null;
     if (oldSession) {
       sessionIdRef.current = oldSession;
       setSessionId(oldSession);
     }
+    bootstrappedTokenRef.current = token;
+    sessionInitInFlightRef.current = true;
     debounceRef.current = setTimeout(() => {
-        const payload = {
-          id: "init",
-          existing_session: oldSession,
-          socket_id: socketRef.current?.id || null,
-        };
-        apiFetch("/init", {
-          method: "POST",
-          body: payload,
-        })
-          .then(data => {
-            if (isSuccessResponse(data)) {
-              const session = extractMainSessionId(data) || oldSession || "";
-              const configs = normalizeLoadedConfiguration(extractInitConfiguration(data));
-              setConfigurations(configs);
-              setSessionId(session || null);
-              sessionIdRef.current = session || null;
-              const sourceAutofillPatch = buildSourceWindowAutofillPatch(configs || {});
-              setWindows((prev) => prev.map((windowState) => (
-                windowState.type === "source"
-                  ? { ...windowState, ...sourceAutofillPatch }
-                  : windowState
-              )));
-              if (session) {
-                localStorage.setItem('session', session);
-              }
-              const registerAfterInit = () => registerStrReportSocketReceiver(session);
-              const socket = socketRef.current;
-              if (socket?.connected) {
-                registerAfterInit();
-              } else if (socket) {
-                socket.once("connect", registerAfterInit);
-              }
-            } else {
-              alert("Could not initialize!");
-            }
-          })
-          .catch(console.error);
-      }, 300);
+      runSessionInit(oldSession);
+    }, 300);
   }, []);
+
+  // Remember which token the live session belongs to, so a logout-driven token
+  // swap can be distinguished from the current authenticated session.
+  useEffect(() => {
+    if (token && sessionId) bootstrappedTokenRef.current = token;
+  }, [token, sessionId]);
+
+  // Re-bootstrap a fresh session after a logout-triggered auto re-login.
+  // Logout clears sessionId and swaps in a new token; without this, /init never
+  // runs again, so activeParentSessionId stays empty, the session policy never
+  // reloads, and the idle lock/timeout is silently disabled for good. Guards
+  // avoid racing the initial mount bootstrap and re-running with a stale token.
+  useEffect(() => {
+    if (!token) return;
+    if (sessionId) return;
+    if (sessionInitInFlightRef.current) return;
+    if (bootstrappedTokenRef.current === token) return;
+    bootstrappedTokenRef.current = token;
+    runSessionInit(null, { suppressLockedHandler: true });
+  }, [token, sessionId, runSessionInit]);
   useEffect(() => {
     const nativeAlert = window.alert;
     window.alert = (message) => {
@@ -11658,6 +12347,32 @@ const fileInputRef = useRef(null);
     const socket = socketRef.current;
     if (!socket) return;
 
+    // Batch high-frequency log lines: accumulate into logBuffersRef and flush to
+    // React state at most ~5x/sec instead of re-rendering on every single line.
+    // Streaming logs previously called setWindows per line, re-rendering the
+    // whole workspace continuously and making the entire UI feel laggy.
+    const dirtyLogSessions = new Set();
+    let logFlushTimer = null;
+    const flushLogs = () => {
+      logFlushTimer = null;
+      if (dirtyLogSessions.size === 0) return;
+      const ids = new Set([...dirtyLogSessions].map(String));
+      dirtyLogSessions.clear();
+      setWindows(prev =>
+        prev.map(w =>
+          ids.has(String(w.id))
+            ? { ...w, sourceSessionLog: logBuffersRef.current[String(w.id)] }
+            : w
+        )
+      );
+      requestAnimationFrame(() => {
+        ids.forEach((id) => {
+          const textarea = textareaRefs.current[id];
+          if (textarea) textarea.scrollTop = textarea.scrollHeight;
+        });
+      });
+    };
+
     const handleLogs = (payload = {}) => {
       const id = String(payload.session_id ?? "").trim();
       if (!id || !activeLogStreamsRef.current[id]) return;
@@ -11669,24 +12384,14 @@ const fileInputRef = useRef(null);
 
       const line = payload.data == null ? "" : String(payload.data);
       logBuffersRef.current[id] = (logBuffersRef.current[id] || "") + "\n" + line;
-      setWindows(prev =>
-        prev.map(w =>
-          String(w.id) === id
-            ? { ...w, sourceSessionLog: logBuffersRef.current[id] }
-            : w
-        )
-      );
-      requestAnimationFrame(() => {
-        const textarea = textareaRefs.current[id];
-        if (textarea) {
-          textarea.scrollTop = textarea.scrollHeight;
-        }
-      });
+      dirtyLogSessions.add(id);
+      if (!logFlushTimer) logFlushTimer = setTimeout(flushLogs, 200);
     };
 
     socket.on("stream_logs", handleLogs);
     return () => {
       socket.off("stream_logs", handleLogs);
+      if (logFlushTimer) { clearTimeout(logFlushTimer); logFlushTimer = null; }
     };
   }, [token]);
 
@@ -12387,7 +13092,7 @@ const fileInputRef = useRef(null);
     return { ok: true };
   }, [countOpenWindowsByType, pushNotification]);
 
-  const handleFocusWindow = (id) => {
+  const handleFocusWindowImpl = (id) => {
     console.log("focused_on:", id, "type:", typeof id);
     setWindows((prev) => {
       const maxZ = Math.max(...prev.map((w) => w.zIndex), 0);
@@ -12605,7 +13310,7 @@ const fileInputRef = useRef(null);
       setZIndexCounter(prev => prev + 1);
     }    
   };
-  const handleOpenWindows = (type, link, iframeRef, initialContent = null) => {
+  const handleOpenWindowsImpl = (type, link, iframeRef, initialContent = null) => {
     const sessionId=localStorage.getItem('session'); //Already stored session
     if (type==="source"){
       if (link===""){
@@ -12781,7 +13486,7 @@ const fileInputRef = useRef(null);
   };
 
     // --- Bring window to front ---
-  const handleCloseWindow = (id) => {
+  const handleCloseWindowImpl = (id) => {
     delete iframeLoadedStatusRef.current[id];
     delete iframeRefs.current[id];
     const closingWindowSnapshot = windowsRef.current.find(w => w.id === id);
@@ -12863,7 +13568,7 @@ const fileInputRef = useRef(null);
       return next;
     });
   };
-  const handleMoveWindow = (id, newPos) => {
+  const handleMoveWindowImpl = (id, newPos) => {
     setWindows(prev =>
       prev.map(w => (w.id === id ? { ...w, position: newPos } : w))
     );
@@ -13442,7 +14147,7 @@ const fileInputRef = useRef(null);
         }
       });
   };
-  const handleChartActions = (id, menuId, action, payload) => {
+  const handleChartActionsImpl = (id, menuId, action, payload) => {
     console.log(6,id, menuId, action, payload)
     setWindows(prev =>
     prev.map(w => {
@@ -13573,7 +14278,7 @@ const fileInputRef = useRef(null);
     console.log("[graph status cleared for terminated source]", { session_id: sessionKey, reason });
   };
 
-  const handleGraphActions = (id, menuId, action, payload, options = {}) => {
+  const handleGraphActionsImpl = (id, menuId, action, payload, options = {}) => {
     console.log("GraphAction:", id, menuId, action, payload);
     if (isWorkspaceLocked) {
       notifyLockedSensitiveAction("graph actions");
@@ -13766,7 +14471,7 @@ const fileInputRef = useRef(null);
   };
 
   // --- Basic Windows actions ---
-  const handleWindowActions = (id, menuId, action, payload, options = {}) => {
+  const handleWindowActionsImpl = (id, menuId, action, payload, options = {}) => {
     const requiredPermission = getWindowActionPermission(menuId, action);
     if (requiredPermission && !requirePermission(requiredPermission, menuId)) return;
     //console.log("id:",id," Menuid:", menuId," action:", action," payload:", payload)
@@ -16498,6 +17203,10 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
     sessionIdRef.current = null;
     lockedSessionIdRef.current = "";
     terminalUnlockFailureRef.current = false;
+    // Logout re-authenticates (auto-login) and bootstraps a fresh session, so
+    // restart the idle clock. Without this, the idle timer for the new session
+    // is still "idle since the previous lock" and immediately re-locks.
+    setIdleResetSeq((value) => value + 1);
     localStorage.removeItem("session");
     logout();
   }, [logout]);
@@ -16520,10 +17229,32 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
     }
   }, [apiFetch]);
 
+  const clearBackendWorkspaceLock = useCallback(async (reason = "logout_unlock") => {
+    try {
+      await apiFetch("/auth/unlock", {
+        method: "POST",
+        body: { id: "unlock_session", reason },
+        suppressUnauthorizedHandler: true,
+        suppressLockedHandler: true,
+      });
+    } catch (err) {
+      if (![404, 405].includes(Number(err?.status))) {
+        console.warn("Pre-logout unlock failed", err);
+      }
+    }
+  }, [apiFetch]);
+
   const performLogout = useCallback(async (reason = "user_logout") => {
+    // If the workspace is locked, release the backend lock first. Logout
+    // re-authenticates (auto-login) and bootstraps a fresh session; if the
+    // backend actor stays locked, every follow-up request (/init, policy, ...)
+    // returns 423 and immediately re-locks the new workspace.
+    if (isWorkspaceLockedRef.current) {
+      await clearBackendWorkspaceLock("logout_unlock");
+    }
     await notifyBackendLogout(reason);
     finalizeFrontendLogout();
-  }, [finalizeFrontendLogout, notifyBackendLogout]);
+  }, [clearBackendWorkspaceLock, finalizeFrontendLogout, notifyBackendLogout]);
 
   const handleNavAction = (action) => {
     if (action !== "logout") return;
@@ -16562,6 +17293,10 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
   };
 
   useEffect(() => {
+    isWorkspaceLockedRef.current = isWorkspaceLocked;
+  }, [isWorkspaceLocked]);
+
+  useEffect(() => {
     if (!token) setIsWorkspaceLocked(false);
   }, [token]);
 
@@ -16586,7 +17321,9 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
       if (now - lastPing < 150000) return;
       
       localStorage.setItem("linkx_last_heartbeat", now.toString());
-      verifyToken().catch(() => {
+      // Keep-alive only: preserve the session if verify succeeds without a full
+      // actor payload so the heartbeat never disconnects auth or drops the lock.
+      verifyToken(undefined, { preserveSessionOnIncomplete: true }).catch(() => {
         // If it fails, remove the lock so another tab can try
         localStorage.removeItem("linkx_last_heartbeat");
       });
@@ -16657,17 +17394,92 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
     },
   });
     // --- Configuration Actions ---
-  const handleConfigurationActions = (id,payload) => {
+  const handleConfigurationActionsImpl = (id,payload) => {
     const resolvedSessionId = resolveConfigurationSessionId();
     if (isWorkspaceLocked) {
       notifyLockedSensitiveAction("configuration controls");
       return;
     }
-    if (["save", "remove", "upload"].includes(id) && !requirePermission(PERMISSIONS.CONFIG_WRITE, "configuration changes")) return;
-    if (id === "load_default" && !requirePermission(PERMISSIONS.CONFIG_READ, "configuration loading")) return;
+    if (["save", "remove", "upload", "switch_domain", "import_encrypted"].includes(id) && !requirePermission(PERMISSIONS.CONFIG_WRITE, "configuration changes")) return Promise.reject(new Error("Permission denied: config:write required."));
+    if (["load_default", "export", "export_encrypted"].includes(id) && !requirePermission(PERMISSIONS.CONFIG_READ, "configuration loading")) return Promise.reject(new Error("Permission denied: config:read required."));
     if (id === "change"){
       const { name, value } = payload;
       setConfigurations(prev => normalizeConfigurationStatePatch(prev, name, value));
+    }
+    else if (id === "switch_domain") {
+      const nextDomain = payload?.domain;
+      if (!nextDomain) return;
+      if (!resolvedSessionId) {
+        pushNotification({
+          title: "Session Initializing",
+          message: "Session is still initializing. Please try again in a moment.",
+          level: "warning",
+        });
+        return;
+      }
+      setloadscreenText(`Switching domain to ${formatDomainPillarLabel(nextDomain)}...`);
+      setloadscreenState(true);
+
+      const switchBody = {
+        id: "save",
+        session_id: resolvedSessionId,
+        domain: nextDomain,
+      };
+
+      console.info("[switch_domain request]", switchBody);
+
+      apiFetch("/configuration", {
+        method: "POST",
+        body: switchBody,
+      })
+      .then((data) => {
+        if (isSuccessResponse(data)) {
+          const nextConfigPayload = extractConfigurationPayload(data);
+          const normalized = normalizeLoadedConfiguration(nextConfigPayload || {});
+          if (!normalized.active_domain) normalized.active_domain = nextDomain;
+          if (!normalized.domain) normalized.domain = nextDomain;
+
+          setConfigurations((prev) => preserveDomainRegistry(prev, normalized));
+          try {
+            localStorage.setItem("linkx_active_domain", nextDomain);
+          } catch (_e) {}
+
+          const sourceAutofillPatch = buildSourceWindowAutofillPatch(normalized);
+          setWindows((prev) => prev.map((windowState) => (
+            windowState.type === "source"
+              ? { ...windowState, ...sourceAutofillPatch }
+              : windowState
+          )));
+
+          pushNotification({
+            title: "Domain Pillar Switched",
+            message: `Active session domain switched to ${formatDomainPillarLabel(nextDomain)}. Storage targets and connection settings re-projected.`,
+            level: "success",
+            source: "Configuration",
+            durationMs: 4000,
+          });
+        } else {
+          pushNotification({
+            title: "Domain Switch Failed",
+            message: getConfigurationErrorMessage(data, `Could not switch to ${formatDomainPillarLabel(nextDomain)}.`),
+            level: "warning",
+            source: "Configuration",
+          });
+        }
+      })
+      .catch((err) => {
+        console.error("DomainSwitchErr", err);
+        pushNotification({
+          title: "Domain Switch Error",
+          message: getConfigurationErrorMessage(err, "Failed to switch domain pillar."),
+          level: "error",
+          source: "Configuration",
+        });
+      })
+      .finally(() => {
+        setloadscreenState(false);
+        setloadscreenText("");
+      });
     }
     else if (id === "save"){
       if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -16730,9 +17542,22 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
                 level: "success",
               });
             }
-          setTimeout(() => {
-            fetchConfigurationForSession(resolvedSessionId).then((res) => { if (res.ok) setConfigurations(res.configuration); }).finally(() => setloadscreenState(false));
-          }, 1500);
+            const returnedConfig = extractConfigurationPayload(data);
+            if (returnedConfig) {
+              const normalized = normalizeLoadedConfiguration(returnedConfig);
+              setConfigurations((prev) => preserveDomainRegistry(prev, normalized));
+              const sourceAutofillPatch = buildSourceWindowAutofillPatch(normalized);
+              setWindows((prev) => prev.map((windowState) => (
+                windowState.type === "source"
+                  ? { ...windowState, ...sourceAutofillPatch }
+                  : windowState
+              )));
+              setloadscreenState(false);
+            } else {
+              setTimeout(() => {
+                fetchConfigurationForSession(resolvedSessionId).then((res) => { if (res.ok) setConfigurations(res.configuration); }).finally(() => setloadscreenState(false));
+              }, 1000);
+            }
           } 
           else {
             pushNotification({
@@ -16822,9 +17647,177 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
         setloadscreenState(false);
       });
     }
+    else if (id === "export" || id === "export_encrypted") {
+      if (!resolvedSessionId) {
+        pushNotification({
+          title: "Session Initializing",
+          message: "Session is still initializing. Please try again in a moment.",
+          level: "warning",
+        });
+        return Promise.reject(new Error("Session is still initializing."));
+      }
+      const password = String(payload?.password || "").trim();
+      if (!password) {
+        pushNotification({
+          title: "Password Required",
+          message: "A password is required to encrypt the configuration file.",
+          level: "warning",
+        });
+        return Promise.reject(new Error("A password is required to encrypt the configuration file."));
+      }
+
+      setloadscreenText("Encrypting configuration...");
+      setloadscreenState(true);
+
+      const exportBody = {
+        session_id: resolvedSessionId,
+        password: password,
+      };
+
+      console.info("[export encrypted configuration request]", { session_id: resolvedSessionId });
+
+      return apiFetch("/configuration/export/encrypted", {
+        method: "POST",
+        body: exportBody,
+        responseType: "blob",
+      })
+      .then((blob) => {
+        const now = new Date();
+        const pad = (n) => String(n).padStart(2, "0");
+        const dateSuffix = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+        const filename = `Linkx_config_${dateSuffix}.Lxac`;
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+
+        pushNotification({
+          title: "Configuration Exported",
+          message: `Encrypted configuration exported successfully as ${filename}. Keep your password safe.`,
+          level: "success",
+          durationMs: 4000,
+        });
+        return { success: true, filename };
+      })
+      .catch((err) => {
+        console.error("LxacExportErr", err);
+        const errorMsg = getConfigurationErrorMessage(err, "Failed to export encrypted configuration. Try again.");
+        pushNotification({
+          title: "Export Error",
+          message: errorMsg,
+          level: "error",
+        });
+        throw err;
+      })
+      .finally(() => {
+        setloadscreenState(false);
+        setloadscreenText("");
+      });
+    }
+    else if (id === "import_encrypted") {
+      const file = payload?.file;
+      const password = String(payload?.password || "");
+      if (!file) {
+        pushNotification({
+          title: "File Required",
+          message: "Please select an encrypted configuration file to import.",
+          level: "warning",
+        });
+        return Promise.reject(new Error("Please select an encrypted configuration file to import."));
+      }
+      if (!password) {
+        pushNotification({
+          title: "Password Required",
+          message: "A password is required to decrypt this configuration file.",
+          level: "warning",
+        });
+        return Promise.reject(new Error("A password is required to decrypt this configuration file."));
+      }
+      if (!resolvedSessionId) {
+        pushNotification({
+          title: "Session Initializing",
+          message: "Session is still initializing. Please try again in a moment.",
+          level: "warning",
+        });
+        return Promise.reject(new Error("Session is still initializing."));
+      }
+
+      setloadscreenText("Decrypting configuration...");
+      setloadscreenState(true);
+
+      const formData = new FormData();
+      formData.append("session_id", resolvedSessionId);
+      formData.append("password", password);
+      formData.append("file", file);
+
+      console.info("[import encrypted configuration request]", { file: file.name, session_id: resolvedSessionId });
+
+      return apiFetch("/configuration/import/encrypted", {
+        method: "POST",
+        body: formData,
+      })
+      .then((data) => {
+        if (isSuccessResponse(data)) {
+          const nextConfigPayload = extractConfigurationPayload(data) || data?.results?.configuration;
+          const normalized = normalizeLoadedConfiguration(nextConfigPayload || {});
+          setConfigurations((prev) => preserveDomainRegistry(prev, normalized));
+          if (normalized.active_domain || normalized.domain) {
+            try {
+              localStorage.setItem("linkx_active_domain", normalized.active_domain || normalized.domain);
+            } catch (_e) {}
+          }
+
+          const sourceAutofillPatch = buildSourceWindowAutofillPatch(normalized);
+          setWindows((prev) => prev.map((windowState) => (
+            windowState.type === "source"
+              ? { ...windowState, ...sourceAutofillPatch }
+              : windowState
+          )));
+
+          pushNotification({
+            title: "Configuration Imported",
+            message: "Configuration decrypted and imported successfully. Multi-domain settings applied.",
+            level: "success",
+            durationMs: 4000,
+          });
+          return { success: true, configuration: normalized };
+        } else {
+          const errorMsg = getConfigurationErrorMessage(data, "Could not decrypt configuration file.");
+          pushNotification({
+            title: "Import Notice",
+            message: errorMsg,
+            level: "warning",
+          });
+          throw new Error(errorMsg);
+        }
+      })
+      .catch((err) => {
+        console.error("LxacImportErr", err);
+        let errorMsg = getConfigurationErrorMessage(err, "Could not decrypt configuration file. Try again.");
+        if (err?.data?.detail === "invalid_password") {
+          errorMsg = "Decryption failed: Incorrect password. Please check your password.";
+        } else if (err?.data?.detail === "tampered_file") {
+          errorMsg = "Integrity check failed: File appears to be damaged or modified.";
+        }
+        pushNotification({
+          title: "Import Error",
+          message: errorMsg,
+          level: "error",
+        });
+        throw err;
+      })
+      .finally(() => {
+        setloadscreenState(false);
+        setloadscreenText("");
+      });
+    }
     else if (id === "upload"){
       const importInput = document.getElementById("import_config_file");
-      const importFile = importInput?.files?.[0];
+      const importFile = payload?.file || importInput?.files?.[0];
       if (!importFile) {
         pushNotification({
           title: "Configuration Upload",
@@ -16841,82 +17834,65 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
         });
         return;
       }
+      setloadscreenText("Importing configuration file...");
       setloadscreenState(true);
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        try {
-          const content = e.target.result;
-          const parsed = JSON.parse(content);
-          
-          if (parsed.rule_thresholds) {
-            apiFetch("/rule-thresholds", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(parsed.rule_thresholds)
-            }).then(() => {
-              window.dispatchEvent(new Event('rule_thresholds_updated'));
-            }).catch(err => console.error("Failed to restore rule thresholds from import", err));
-            delete parsed.rule_thresholds;
+
+      const formData = new FormData();
+      formData.append("id", "save");
+      formData.append("session_id", resolvedSessionId);
+      formData.append("file", importFile);
+
+      console.info("[import configuration request]", { file: importFile.name, session_id: resolvedSessionId });
+
+      apiFetch("/configuration", {
+        method: "POST",
+        body: formData,
+      })
+      .then((data) => {
+        if (isSuccessResponse(data)) {
+          const nextConfigPayload = extractConfigurationPayload(data) || data?.results?.configuration;
+          const normalized = normalizeLoadedConfiguration(nextConfigPayload || {});
+          setConfigurations((prev) => preserveDomainRegistry(prev, normalized));
+          if (normalized.active_domain || normalized.domain) {
+            try {
+              localStorage.setItem("linkx_active_domain", normalized.active_domain || normalized.domain);
+            } catch (_e) {}
           }
-          
-          const saveBody = {
-            id: "save",
-            session_id: resolvedSessionId,
-            configuration: buildConfigurationSavePayload({ value: JSON.stringify(parsed) }),
-          };
-          
-          apiFetch("/configuration", {
-            method: "POST",
-            body: saveBody,
-          })
-          .then((data) => {
-            if (isSuccessResponse(data)) {
-              pushNotification({
-                title: "Configuration Uploaded",
-                message: "Configuration uploaded successfully.",
-                level: "success",
-              });
-              setTimeout(() => { fetchConfigurationForSession(resolvedSessionId).then((res) => { if (res.ok) setConfigurations(res.configuration); }).finally(() => setloadscreenState(false)); }, 1500);
-            } else {
-              pushNotification({
-                title: "Configuration Notice",
-                message: getConfigurationErrorMessage(data),
-                level: "warning",
-              });
-              setloadscreenState(false);
-            }
-            if (importInput) importInput.value = "";
-          })
-          .catch((err) => {
-            console.error("ConfigUploadErr", err);
-            pushNotification({
-              title: "Configuration Error",
-              message: getConfigurationErrorMessage(err, "Could not upload configuration. Try again."),
-              level: "error",
-            });
-            setloadscreenState(false);
-            if (importInput) importInput.value = "";
-          });
-        } catch (err) {
+
+          const sourceAutofillPatch = buildSourceWindowAutofillPatch(normalized);
+          setWindows((prev) => prev.map((windowState) => (
+            windowState.type === "source"
+              ? { ...windowState, ...sourceAutofillPatch }
+              : windowState
+          )));
+
           pushNotification({
-            title: "Configuration Upload",
-            message: "Invalid configuration file format. Could not parse JSON.",
-            level: "error",
+            title: "Configuration Imported",
+            message: "Configuration file imported successfully. Multi-domain settings updated.",
+            level: "success",
+            durationMs: 4000,
           });
-          setloadscreenState(false);
-          if (importInput) importInput.value = "";
+        } else {
+          pushNotification({
+            title: "Import Notice",
+            message: getConfigurationErrorMessage(data, "Could not import configuration file."),
+            level: "warning",
+          });
         }
-      };
-      reader.onerror = () => {
+      })
+      .catch((err) => {
+        console.error("ConfigUploadErr", err);
         pushNotification({
-          title: "Configuration Upload",
-          message: "Failed to read the configuration file.",
+          title: "Import Error",
+          message: getConfigurationErrorMessage(err, "Could not upload configuration file. Try again."),
           level: "error",
         });
+      })
+      .finally(() => {
         setloadscreenState(false);
+        setloadscreenText("");
         if (importInput) importInput.value = "";
-      };
-      reader.readAsText(importFile);
+      });
     }
     else if (id === "load_default"){
       const session = resolveConfigurationSessionId();
@@ -16956,7 +17932,7 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
     }
   };
   // --- Toggle Menu Actions ---
-  const handleToggleMenu = (id) => {
+  const handleToggleMenuImpl = (id) => {
     if (["toggle_menu_new_source_window", "toggle_menu_upload_source_window"].includes(id) && !requirePermission(PERMISSIONS.SOURCE_CREATE, "source windows")) return;
     if (id === "toggle_menu_new_graph_window" && !requirePermission(PERMISSIONS.GRAPH_CREATE, "graph windows")) return;
     if (id === "configurations" && !requirePermission(PERMISSIONS.CONFIG_READ, "configurations")) return;
@@ -17017,6 +17993,23 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
       setIsToggleMenuOpen(prev => !prev);
     }
   };
+
+  // Stable-identity aliases for the window/panel handlers above. Their raw
+  // implementations are recreated every render (they close over many state
+  // values), which previously defeated React.memo on the Windows list and the
+  // Configurations/Settings/Reports panels, forcing the whole workspace subtree
+  // to re-render on every keystroke, hover, and scroll. useEventCallback keeps a
+  // constant identity while always invoking the latest closure.
+  const handleFocusWindow = useEventCallback(handleFocusWindowImpl);
+  const handleOpenWindows = useEventCallback(handleOpenWindowsImpl);
+  const handleCloseWindow = useEventCallback(handleCloseWindowImpl);
+  const handleMoveWindow = useEventCallback(handleMoveWindowImpl);
+  const handleChartActions = useEventCallback(handleChartActionsImpl);
+  const handleGraphActions = useEventCallback(handleGraphActionsImpl);
+  const handleWindowActions = useEventCallback(handleWindowActionsImpl);
+  const handleConfigurationActions = useEventCallback(handleConfigurationActionsImpl);
+  const handleToggleMenu = useEventCallback(handleToggleMenuImpl);
+  const handleUserLogout = useEventCallback(() => performLogout("user_logout"));
   // --- Root Return ---
   // ------------------------
   // Rendering
@@ -17075,8 +18068,8 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
           onNotice={pushNotification}
           knownBuiltinRules={knownBuiltinRules}
         />
-        <Settings isSettingsOpen={isSettingsOpen} toggleAction={handleToggleMenu} actor={actor || user} roles={roles} permissions={permissions} canAccess={canAccess} apiFetch={apiFetch} sessionId={sessionId} onNotice={pushNotification} requestConfirmation={requestConfirmation} onLogout={() => performLogout("user_logout")} areBackgroundAnimationsEnabled={areBackgroundAnimationsEnabled} onBackgroundAnimationsChange={setBackgroundAnimationsEnabled} />
-        <Reports isReportsOpen={isReportsOpen} toggleAction={handleToggleMenu} handleOpenWindows={handleOpenWindows} graphAction={handleGraphActions} actor={actor || user} roles={roles} permissions={permissions} canAccess={canAccess} apiFetch={apiFetch} sessionId={sessionId} onNotice={pushNotification} removeNotification={removeNotification} onLogout={() => performLogout("user_logout")} areBackgroundAnimationsEnabled={areBackgroundAnimationsEnabled} onBackgroundAnimationsChange={setBackgroundAnimationsEnabled} iframeRefs={iframeRefs} />
+        <Settings isSettingsOpen={isSettingsOpen} toggleAction={handleToggleMenu} actor={actor || user} roles={roles} permissions={permissions} canAccess={canAccess} apiFetch={apiFetch} sessionId={sessionId} onNotice={pushNotification} requestConfirmation={requestConfirmation} onLogout={handleUserLogout} areBackgroundAnimationsEnabled={areBackgroundAnimationsEnabled} onBackgroundAnimationsChange={setBackgroundAnimationsEnabled} activeDomain={configurations?.active_domain || configurations?.domain} />
+        <Reports isReportsOpen={isReportsOpen} toggleAction={handleToggleMenu} handleOpenWindows={handleOpenWindows} graphAction={handleGraphActions} actor={actor || user} roles={roles} permissions={permissions} canAccess={canAccess} apiFetch={apiFetch} sessionId={sessionId} onNotice={pushNotification} removeNotification={removeNotification} onLogout={handleUserLogout} areBackgroundAnimationsEnabled={areBackgroundAnimationsEnabled} onBackgroundAnimationsChange={setBackgroundAnimationsEnabled} iframeRefs={iframeRefs} />
         <Main userName={userName} setSessionId={setSessionId} API_URL={API_URL} debounceRef={debounceRef} setConfigurations={setConfigurations} configurations={configurations} windows={windows} setWindows={setWindows} openWindows={handleOpenWindows} themeMode={themeMode} areBackgroundAnimationsEnabled={areBackgroundAnimationsEnabled} />
         {isWorkspaceLocked && (
           <WorkspaceLockOverlay
@@ -17088,7 +18081,7 @@ if (menuId === "batch_input_form_swap" && action === "page_IV") {
             themeMode={themeMode}
             areBackgroundAnimationsEnabled={areBackgroundAnimationsEnabled}
             onUnlock={handleUnlockWorkspace}
-            onLogout={() => performLogout("user_logout")}
+            onLogout={handleUserLogout}
           />
         )}
         {showHomeOverlay && (
@@ -17358,7 +18351,7 @@ function formatJSON(json) {
   });
 }
 
-function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, actor, roles = [], permissions = [], canAccess, apiFetch, sessionId, onNotice, removeNotification, onLogout, areBackgroundAnimationsEnabled = true, onBackgroundAnimationsChange, iframeRefs }) {
+const Reports = React.memo(function Reports({ isReportsOpen, toggleAction, handleOpenWindows, graphAction, actor, roles = [], permissions = [], canAccess, apiFetch, sessionId, onNotice, removeNotification, onLogout, areBackgroundAnimationsEnabled = true, onBackgroundAnimationsChange, iframeRefs }) {
   const [activeReportsTab, setActiveReportsTab] = useState("parent");
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
@@ -18089,13 +19082,27 @@ const loadReports = async () => {
 
 
 
-let processedData = [...reportsData];
+  const parsedReportsData = useMemo(() => {
+    return (reportsData || []).map(r => {
+      let pObj = {};
+      try {
+        pObj = typeof r.payload === "string" ? JSON.parse(r.payload) : (r.payload || {});
+      } catch (_e) {}
+      return {
+        ...r,
+        _parsedPayload: pObj,
+        _createdAtTs: r.created_at ? new Date(r.created_at).getTime() : 0,
+      };
+    });
+  }, [reportsData]);
 
-    if (searchQuery.trim() !== "") {
-      const q = searchQuery.toLowerCase();
-      processedData = processedData.filter(r => {
-        let pObj = {};
-        try { pObj = typeof r.payload === "string" ? JSON.parse(r.payload) : (r.payload || {}); } catch(e) {}
+  const processedData = useMemo(() => {
+    let list = parsedReportsData;
+    const q = searchQuery.trim().toLowerCase();
+
+    if (q) {
+      list = list.filter(r => {
+        const pObj = r._parsedPayload;
         return (
           String(r.id || "").toLowerCase().includes(q) ||
           String(r.external_reference_id || "").toLowerCase().includes(q) ||
@@ -18108,7 +19115,7 @@ let processedData = [...reportsData];
     }
 
     if (filterStatus !== "all") {
-      processedData = processedData.filter(r => {
+      list = list.filter(r => {
         const s = (r.status || "").toLowerCase();
         if (filterStatus === "success") return s === "success" || s === "completed" || s === "succeeded";
         if (filterStatus === "error") return s === "error" || s === "failed";
@@ -18117,10 +19124,8 @@ let processedData = [...reportsData];
     }
 
     if (filterBand !== "all" && (activeReportsTab === "xvigilance" || activeReportsTab === "evidence")) {
-      processedData = processedData.filter(r => {
-        let pObj = {};
-        try { pObj = typeof r.payload === "string" ? JSON.parse(r.payload) : (r.payload || {}); } catch(e) {}
-        
+      list = list.filter(r => {
+        const pObj = r._parsedPayload;
         if (filterBand === "fatal") {
           let score = 0;
           if (pObj.fraud_score !== undefined) score = parseFloat(pObj.fraud_score);
@@ -18130,36 +19135,33 @@ let processedData = [...reportsData];
           const sb = (pObj.score_band || pObj.scoreBand || "").toLowerCase();
           return score >= 90 || sb === "fatal";
         }
-        
         const sb = (pObj.score_band || "").toLowerCase();
         return sb === filterBand;
       });
     }
+
     if (filterFromDate) {
-      const fromD = new Date(filterFromDate);
-      processedData = processedData.filter(r => new Date(r.created_at) >= fromD);
+      const fromTs = new Date(filterFromDate).getTime();
+      list = list.filter(r => r._createdAtTs >= fromTs);
     }
     if (filterToDate) {
-      const toD = new Date(filterToDate);
-      processedData = processedData.filter(r => new Date(r.created_at) <= toD);
+      const toTs = new Date(filterToDate).getTime();
+      list = list.filter(r => r._createdAtTs <= toTs);
     }
 
-    processedData.sort((a, b) => {
-      let pObjA = {}, pObjB = {};
-      try { pObjA = typeof a.payload === "string" ? JSON.parse(a.payload) : (a.payload || {}); } catch(e) {}
-      try { pObjB = typeof b.payload === "string" ? JSON.parse(b.payload) : (b.payload || {}); } catch(e) {}
-
+    return [...list].sort((a, b) => {
       if (sortBy === "date_desc") {
-        return new Date(b.created_at) - new Date(a.created_at);
+        return b._createdAtTs - a._createdAtTs;
       } else if (sortBy === "date_asc") {
-        return new Date(a.created_at) - new Date(b.created_at);
+        return a._createdAtTs - b._createdAtTs;
       } else if (sortBy === "score_desc") {
-        return (pObjB.fraud_score || 0) - (pObjA.fraud_score || 0);
+        return (b._parsedPayload.fraud_score || 0) - (a._parsedPayload.fraud_score || 0);
       } else if (sortBy === "score_asc") {
-        return (pObjA.fraud_score || 0) - (pObjB.fraud_score || 0);
+        return (a._parsedPayload.fraud_score || 0) - (b._parsedPayload.fraud_score || 0);
       }
       return 0;
     });
+  }, [parsedReportsData, searchQuery, filterStatus, filterBand, activeReportsTab, filterFromDate, filterToDate, sortBy]);
 
   const renderContent = () => {
     if (error && error.status === 403) {
@@ -18336,12 +19338,9 @@ let processedData = [...reportsData];
                 else if (s === "failed" || s === "error") statusStyle = { background: "rgba(231, 76, 60, 0.15)", color: "#c0392b", border: "1px solid rgba(231, 76, 60, 0.4)" };
                 else if (s === "resolved") statusStyle = { background: "rgba(149, 165, 166, 0.15)", color: "#7f8c8d", border: "1px solid rgba(149, 165, 166, 0.4)" };
                 
-                const isArchived = (new Date() - new Date(report.created_at)) > 180 * 24 * 60 * 60 * 1000;
+                const isArchived = (Date.now() - (report._createdAtTs || 0)) > 180 * 24 * 60 * 60 * 1000;
 
-                let pObj = {};
-                try {
-                  pObj = typeof report.payload === "string" ? JSON.parse(report.payload) : (report.payload || {});
-                } catch(e) {}
+                const pObj = report._parsedPayload || {};
 
                 const scoreBand = pObj.score_band || "";
                 const sbLower = scoreBand.toLowerCase();
@@ -18354,11 +19353,7 @@ let processedData = [...reportsData];
 
                 let isHighlighted = false;
                 if (highlightWindow && highlightWindow.run_id && activeReportsTab === "xvigilance") {
-                  let rObj = {};
-                  try { rObj = typeof report.payload === "string" ? JSON.parse(report.payload) : (report.payload || {}); } catch(e) {}
-                  
-                  // Mathematically perfect exact correlation!
-                  if (String(rObj.run_id) === String(highlightWindow.run_id)) {
+                  if (String(pObj.run_id) === String(highlightWindow.run_id)) {
                     isHighlighted = true;
                   }
                 }
@@ -18381,7 +19376,6 @@ let processedData = [...reportsData];
                     title={isArchived ? "Archived (Older than 180 days)" : (isHighlighted ? "Flagged from Audit Log selection" : "")}
                     style={{ 
                       cursor: "pointer", 
-                      transition: "background 0.2s, border-left 0.2s",
                       opacity: isArchived ? 0.5 : 1,
                       filter: isArchived ? "grayscale(80%)" : "none",
                       backgroundColor: rowBg || undefined,
@@ -18487,13 +19481,15 @@ let processedData = [...reportsData];
 
   return (
     <div id="configurations_container" style={{ display: isReportsOpen ? "block" : "none" }}>
-      <div className="configurations_options_container settings_options_container" style={{ display: "flex", flexDirection: "row" }}>
-        
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
-          <div className="configurations_options_container_bar">
-            <span onClick={() => toggleAction("toggle_menu_new_report_window")}>x</span>
-            <label>Reports</label>
-          </div>
+      {isReportsOpen && (
+        <>
+          <div className="configurations_options_container settings_options_container" style={{ display: "flex", flexDirection: "row" }}>
+            
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
+              <div className="configurations_options_container_bar">
+                <span onClick={() => toggleAction("toggle_menu_new_report_window")}>x</span>
+                <label>Reports</label>
+              </div>
           <div className="configurations_options" style={{ display: "flex", flexDirection: "column", height: "calc(100% - 30px)" }}>
             <div className="configurations_tabs">
               {tabs.map((tab) => (
@@ -19033,9 +20029,11 @@ let processedData = [...reportsData];
           </div>
         </div>
       )}
+        </>
+      )}
     </div>
   );
-}
+});
 
 function AuthenticatedApp() {
   const auth = useAuth();

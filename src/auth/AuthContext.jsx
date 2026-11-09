@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 
 const AUTH_TOKEN_KEY = "linkx_auth_token";
 const PARENT_PROJECT_PKCE_KEY = "linkx_parent_project_pkce";
@@ -132,6 +132,7 @@ const authRequest = async (apiUrl, path, options = {}) => {
 export function AuthProvider({ apiUrl, children }) {
   const [token, setToken] = useState(() => localStorage.getItem(AUTH_TOKEN_KEY) || "");
   const [user, setUser] = useState(null);
+  const userRef = useRef(user);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [isSsoAuthenticating, setIsSsoAuthenticating] = useState(false);
   const [ssoError, setSsoError] = useState("");
@@ -150,6 +151,8 @@ export function AuthProvider({ apiUrl, children }) {
     setUser(normalizedUser);
     setSsoError("");
   }, []);
+
+  useEffect(() => { userRef.current = user; }, [user]);
 
   useEffect(() => {
     const handleStorageChange = (e) => {
@@ -284,7 +287,7 @@ export function AuthProvider({ apiUrl, children }) {
     }
   }, [apiUrl, applyAuth]);
 
-  const verifyToken = useCallback(async (incomingToken) => {
+  const verifyToken = useCallback(async (incomingToken, { preserveSessionOnIncomplete = false } = {}) => {
     const candidateToken = incomingToken || token;
     if (!candidateToken) return null;
 
@@ -297,6 +300,20 @@ export function AuthProvider({ apiUrl, children }) {
       body: JSON.stringify({ token: candidateToken }),
     });
     const auth = parseAuthResponse(data, candidateToken);
+
+    // Keep-alive heartbeat path: a successful verify that omits the actor
+    // payload must NOT tear down the session. Clearing auth here would drop the
+    // workspace lock and cancel the idle->logout timer, disconnecting the
+    // analyst on an otherwise-valid session. Preserve the existing user and
+    // only adopt a rotated token when one is returned.
+    if (preserveSessionOnIncomplete && !auth.user) {
+      if (auth.token && auth.token !== token) {
+        localStorage.setItem(AUTH_TOKEN_KEY, auth.token);
+        setToken(auth.token);
+      }
+      return userRef.current;
+    }
+
     applyAuth(auth.token, auth.user);
     return auth.user;
   }, [apiUrl, applyAuth, token]);

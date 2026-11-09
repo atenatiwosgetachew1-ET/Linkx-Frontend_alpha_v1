@@ -26,6 +26,12 @@ export default defineConfig(({ mode }) => {
       react(),
       //basicSsl(),
     ],
+    esbuild: {
+      // Strip verbose client logging from production bundles. These calls log
+      // large graph/response objects on hot paths; with DevTools open they cause
+      // severe frame drops. console.warn/error are kept for real diagnostics.
+      pure: ["console.log", "console.info", "console.debug"],
+    },
     build: {
       outDir: buildPath,
       emptyOutDir: false,
