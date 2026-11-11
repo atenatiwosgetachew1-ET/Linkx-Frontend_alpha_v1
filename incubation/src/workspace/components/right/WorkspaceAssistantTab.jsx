@@ -119,7 +119,7 @@ function ChevronDownIcon() {
   );
 }
 
-export default function WorkspaceAssistantTab({ displayName, workspace, logoSrc }) {
+export default function WorkspaceAssistantTab({ displayName, logoSrc }) {
   const [message, setMessage] = useState('');
   const [chatMessages, setChatMessages] = useState(defaultMessages);
   const [isAssistantResponding, setIsAssistantResponding] = useState(false);

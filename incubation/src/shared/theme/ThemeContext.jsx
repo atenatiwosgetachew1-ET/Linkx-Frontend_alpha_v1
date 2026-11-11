@@ -1,136 +1,153 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { THEME_COMPONENT_CATEGORIES } from './themeCategories.js';
+import { THEME_PRESETS } from './presets/index.js';
+import {
+  DEFAULT_THEME_ID,
+  OVERRIDES_STORAGE_KEY,
+  THEME_STORAGE_KEY,
+  THEMES,
+  isKnownTheme,
+  readStoredOverrides,
+} from './themeRegistry.js';
 
-export const THEMES = [
-  { id: 'nbe-daylight', name: 'NBE Daylight', description: 'Bright golden & dark blue master skin (#f6efea / #131e2a / #FCC676)', previewColor: '#FCC676' },
-  { id: 'dark', name: 'Deep Space', description: 'Classic dark sci-fi HUD with cyan accents (#131e2a)', previewColor: '#1c98a5' },
-  { id: 'emerald-dark', name: 'Emerald Dark', description: 'Deep forest dark slate with emerald accents (#0a1c17)', previewColor: '#10b981' },
-  { id: 'cyberpunk', name: 'Cyberpunk Neon', description: 'Neon dark violet with magenta accents (#0b071a)', previewColor: '#ff007f' },
-  { id: 'solarized-dark', name: 'Solarized Dark', description: 'Deep solarized teal with amber accents (#002b36)', previewColor: '#b58900' },
-  { id: 'light-clean', name: 'Daylight Clean', description: 'Bright slate layout with crisp teal accents (#f4f7fa)', previewColor: '#0d9488' },
-  { id: 'solarized-light', name: 'Solarized Light', description: 'Warm solarized cream with blue & amber accents (#fdf6e3)', previewColor: '#268bd2' },
-  { id: 'nbe-darknight', name: 'NBE Darknight', description: 'Midnight enterprise dark layout with sky blue & gold accents (#0f172a)', previewColor: '#38bdf8' },
-];
 
 const ThemeContext = createContext();
+const EMPTY_OVERRIDES = Object.freeze({});
 
 export function ThemeProvider({ children }) {
   const [theme, setThemeState] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const savedTheme = localStorage.getItem('linkx_theme_mode');
-      if (savedTheme && THEMES.some((t) => t.id === savedTheme)) {
-        return savedTheme;
-      }
-    }
-    return 'nbe-daylight';
+    const savedTheme = localStorage.getItem(THEME_STORAGE_KEY);
+    return isKnownTheme(savedTheme) ? savedTheme : DEFAULT_THEME_ID;
   });
 
-  const [customOverrides, setCustomOverrides] = useState(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const savedOverrides = localStorage.getItem('linkx_theme_custom_overrides');
-        return savedOverrides ? JSON.parse(savedOverrides) : {};
-      } catch {
-        return {};
-      }
-    }
-    return {};
-  });
+  // Overrides are scoped per theme so tuning one theme never leaks into another.
+  const [overridesByTheme, setOverridesByTheme] = useState(() => readStoredOverrides(
+    isKnownTheme(localStorage.getItem(THEME_STORAGE_KEY)) ? localStorage.getItem(THEME_STORAGE_KEY) : DEFAULT_THEME_ID
+  ));
+  const customOverrides = useMemo(() => overridesByTheme[theme] || EMPTY_OVERRIDES, [overridesByTheme, theme]);
+
+  const setThemeOverrides = useCallback((themeId, updater) => {
+    setOverridesByTheme((prev) => {
+      const current = prev[themeId] || EMPTY_OVERRIDES;
+      const next = typeof updater === 'function' ? updater(current) : updater;
+      if (next === current) return prev;
+      const result = { ...prev };
+      if (!next || Object.keys(next).length === 0) delete result[themeId];
+      else result[themeId] = next;
+      return result;
+    });
+  }, []);
 
   const [inspectorActive, setInspectorActive] = useState(false);
 
-  const setTheme = (newTheme) => {
-    if (THEMES.some((t) => t.id === newTheme)) {
-      setThemeState(newTheme);
-    }
-  };
+  const setTheme = useCallback((newTheme) => {
+    if (isKnownTheme(newTheme)) setThemeState(newTheme);
+  }, []);
 
-  const setCustomVariable = (varName, value) => {
-    setCustomOverrides((prev) => {
+  const themeRef = useRef(theme);
+  themeRef.current = theme;
+
+  const setCustomVariable = useCallback((varName, value) => {
+    setThemeOverrides(themeRef.current, (prev) => {
       const updated = { ...prev };
-      if (value === undefined || value === null) {
-        delete updated[varName];
-      } else {
-        updated[varName] = value;
-      }
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('linkx_theme_custom_overrides', JSON.stringify(updated));
-      }
+      if (value === undefined || value === null) delete updated[varName];
+      else updated[varName] = value;
       return updated;
     });
-  };
+  }, [setThemeOverrides]);
 
-  const resetCustomOverrides = () => {
-    setCustomOverrides({});
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('linkx_theme_custom_overrides');
-      // Remove inline style properties from root element
-      Object.keys(customOverrides).forEach((key) => {
-        document.documentElement.style.removeProperty(key);
-      });
-    }
-  };
+  const applyPreset = useCallback((preset) => {
+    if (!preset) return;
+    const targetTheme = isKnownTheme(preset.baseTheme) ? preset.baseTheme : themeRef.current;
+    setThemeState(targetTheme);
+    setThemeOverrides(targetTheme, { ...(preset.overrides || {}) });
+  }, [setThemeOverrides]);
 
-  const exportThemeConfig = () => {
-    return JSON.stringify({ theme, customOverrides }, null, 2);
-  };
+  const resetCustomOverrides = useCallback(() => setThemeOverrides(themeRef.current, {}), [setThemeOverrides]);
 
-  const importThemeConfig = (jsonString) => {
+  const overridesRef = useRef(overridesByTheme);
+  overridesRef.current = overridesByTheme;
+
+  const exportThemeConfig = useCallback(
+    () => JSON.stringify({ theme: themeRef.current, customOverrides: overridesRef.current[themeRef.current] || {} }, null, 2),
+    []
+  );
+
+  const importThemeConfig = useCallback((jsonString) => {
     try {
       const parsed = JSON.parse(jsonString);
-      if (parsed.theme && THEMES.some((t) => t.id === parsed.theme)) {
-        setTheme(parsed.theme);
-      }
+      const targetTheme = isKnownTheme(parsed.theme) ? parsed.theme : themeRef.current;
+      setThemeState(targetTheme);
       if (parsed.customOverrides && typeof parsed.customOverrides === 'object') {
-        setCustomOverrides(parsed.customOverrides);
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('linkx_theme_custom_overrides', JSON.stringify(parsed.customOverrides));
-        }
+        setThemeOverrides(targetTheme, { ...parsed.customOverrides });
       }
       return true;
     } catch (e) {
       console.error('Failed to import theme configuration:', e);
       return false;
     }
-  };
+  }, [setThemeOverrides]);
 
-  const toggleInspector = () => setInspectorActive((prev) => !prev);
+  const toggleInspector = useCallback(() => setInspectorActive((prev) => !prev), []);
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      document.documentElement.setAttribute('data-theme', theme);
-      localStorage.setItem('linkx_theme_mode', theme);
+    const root = document.documentElement;
+    root.setAttribute('data-theme', theme);
+    localStorage.setItem(THEME_STORAGE_KEY, theme);
+  }, [theme]);
 
-      // Apply custom variable overrides directly to documentElement style
-      Object.entries(customOverrides).forEach(([key, val]) => {
-        if (val) {
-          document.documentElement.style.setProperty(key, val);
-        } else {
-          document.documentElement.style.removeProperty(key);
-        }
-      });
-    }
-  }, [theme, customOverrides]);
+  // Apply only the CSS variables that changed since the previous render.
+  const appliedOverridesRef = useRef({});
+  useEffect(() => {
+    const rootStyle = document.documentElement.style;
+    const previous = appliedOverridesRef.current;
+    Object.keys(previous).forEach((key) => {
+      if (!customOverrides[key]) rootStyle.removeProperty(key);
+    });
+    Object.entries(customOverrides).forEach(([key, val]) => {
+      if (val && previous[key] !== val) rootStyle.setProperty(key, val);
+    });
+    appliedOverridesRef.current = customOverrides;
+  }, [customOverrides]);
 
-  return (
-    <ThemeContext.Provider
-      value={{
-        theme,
-        setTheme,
-        themes: THEMES,
-        categories: THEME_COMPONENT_CATEGORIES,
-        customOverrides,
-        setCustomVariable,
-        resetCustomOverrides,
-        exportThemeConfig,
-        importThemeConfig,
-        inspectorActive,
-        toggleInspector,
-      }}
-    >
-      {children}
-    </ThemeContext.Provider>
-  );
+  // Debounced persistence: color pickers fire many changes per second.
+  const persistOverrides = useCallback(() => {
+    localStorage.setItem(OVERRIDES_STORAGE_KEY, JSON.stringify(overridesRef.current));
+  }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(persistOverrides, 300);
+    return () => clearTimeout(timer);
+  }, [overridesByTheme, persistOverrides]);
+
+  useEffect(() => {
+    window.addEventListener('pagehide', persistOverrides);
+    return () => {
+      window.removeEventListener('pagehide', persistOverrides);
+      persistOverrides();
+    };
+  }, [persistOverrides]);
+
+  const value = useMemo(() => ({
+    theme,
+    setTheme,
+    themes: THEMES,
+    categories: THEME_COMPONENT_CATEGORIES,
+    customOverrides,
+    setCustomVariable,
+    resetCustomOverrides,
+    presets: THEME_PRESETS,
+    applyPreset,
+    exportThemeConfig,
+    importThemeConfig,
+    inspectorActive,
+    toggleInspector,
+  }), [
+    theme, setTheme, customOverrides, setCustomVariable, resetCustomOverrides, applyPreset,
+    exportThemeConfig, importThemeConfig, inspectorActive, toggleInspector,
+  ]);
+
+  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }
 
 export function useTheme() {

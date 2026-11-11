@@ -18,7 +18,7 @@ import {
   validateConnectionValue,
   validateKafkaTopic,
 } from '../../../utils/inputSecurity.js';
-import { useWorkspace } from '../../../workspace/hooks/useWorkspace.js';
+import { useWorkspaceActions } from '../../../workspace/hooks/useWorkspace.js';
 import { WORKSPACE_WINDOW_TYPES } from '../../../workspace/state/workspaceTypes.js';
 import { useNotifications } from '../../../shared/notifications/useNotifications.js';
 
@@ -452,7 +452,6 @@ function WorkflowTimeline({ activeStep, steps, accessibleSteps, onStepChange }) 
         const isLocked = !accessibleSteps.has(step.id);
         const isActive = activeStep === step.id;
         const isFulfilled = accessibleSteps.has(step.id) && index < activeIndex;
-        const isInactive = !isActive && !isFulfilled;
 
         const stateClass = isActive
           ? 'is-active'
@@ -1503,7 +1502,7 @@ function WorkflowBody({ mode, modeState, windowId, validationMessage, handlers, 
 }
 
 export default function SourceWindowBody({ windowItem }) {
-  const workspace = useWorkspace();
+  const workspace = useWorkspaceActions();
   const { notify } = useNotifications();
   const { token } = useAuth();
   const [validationMessage, setValidationMessage] = useState('');

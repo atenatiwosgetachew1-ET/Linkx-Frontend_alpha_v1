@@ -1,0 +1,516 @@
+/* 1. Replica: Deep Space (#131e2a) */
+[data-theme="dark"], [data-theme="deep-space"] {
+  color-scheme: dark;
+  --app-bg: #131e2a;
+  --app-text: #d6e3ee;
+  --panel-bg: rgba(19, 30, 42, 0.95);
+  --panel-border: #26384a;
+  --panel-shadow: rgba(0, 0, 0, 0.65);
+  --muted-text: #96adbf;
+  --input-bg: #1b2938;
+  --input-border: #2e445a;
+  --accent: #1c98a5;
+  --accent-strong: #38b4c2;
+  --disabled-bg: #1f2f40;
+  --disabled-border: #2b3e52;
+  --workspace-bg: #131e2a;
+  --workspace-scene-bg: #131e2a;
+  --workspace-scene-overlay: linear-gradient(180deg, #131e2a 0%, rgba(19, 30, 42, 0.88) 50%, #0d151e 100%);
+  --window-bg: rgba(19, 30, 42, 0.88);
+  --window-page-bg: rgba(19, 30, 42, 0.78);
+  --window-chrome-bg: rgba(27, 41, 56, 0.94);
+  --window-glass-border: rgba(86, 128, 160, 0.45);
+  --primary-action-bg: rgba(27, 41, 56, 0.85);
+  --primary-action-bg-hover: rgba(36, 54, 74, 0.92);
+  --primary-action-bg-active: rgba(28, 152, 165, 0.75);
+  --primary-action-text: #d6e9f2;
+  --primary-action-border: rgba(46, 67, 89, 0.6);
+  --on-scene-text: #ffffff;
+  --on-scene-text-muted: #d6e9f2;
+  --on-scene-text-subtle: #9ab1c4;
+  --scene-divider: rgba(46, 67, 89, 0.55);
+  --scene-control-hover-bg: rgba(28, 152, 165, 0.25);
+  --scene-drag-bg: radial-gradient(rgba(28, 152, 165, 0.25), rgba(19, 30, 42, 0.15));
+  --scene-drag-border: rgba(28, 152, 165, 0.5);
+
+  --linkx-bg-root: #131e2a;
+  --linkx-text-primary: #ffffff;
+  --linkx-text-secondary: #d6e9f2;
+  --linkx-text-muted: #9ab1c4;
+  --linkx-text-subtle: rgba(154, 177, 196, 0.75);
+  --linkx-accent: #1c98a5;
+  --linkx-accent-strong: #147a86;
+  --linkx-shell-bg: #131e2a;
+  --linkx-workspace-bg: #131e2a;
+  --linkx-workspace-overlay: linear-gradient(180deg, #131e2a 0%, rgba(19, 30, 42, 0.88) 50%, #0d151e 100%);
+  --linkx-launcher-bg: rgba(19, 30, 42, 0.88);
+  --linkx-launcher-border: rgba(46, 67, 89, 0.6);
+  --linkx-launcher-item-bg: rgba(27, 41, 56, 0.75);
+  --linkx-launcher-item-hover: rgba(36, 54, 74, 0.9);
+  --linkx-launcher-item-active: rgba(28, 152, 165, 0.75);
+  --linkx-window-bg: rgba(19, 30, 42, 0.88);
+  --linkx-window-border: rgba(46, 67, 89, 0.6);
+  --linkx-window-border-active: rgba(28, 152, 165, 0.65);
+  --linkx-window-shadow: 0 10px 32px rgba(0, 0, 0, 0.5);
+  --linkx-window-header-bg: rgba(27, 41, 56, 0.94);
+  --linkx-window-header-active-bg: rgba(32, 48, 66, 0.96);
+  --linkx-window-header-drag-bg: rgba(42, 62, 84, 0.88);
+  --linkx-window-body-bg: rgba(19, 30, 42, 0.78);
+  --linkx-card-bg: rgba(23, 36, 50, 0.78);
+  --linkx-card-border: rgba(46, 67, 89, 0.6);
+  --linkx-card-hover-border: rgba(28, 152, 165, 0.6);
+  --linkx-card-surface-bg: rgba(19, 30, 42, 0.8);
+  --linkx-input-bg: rgba(27, 41, 56, 0.8);
+  --linkx-input-border: rgba(46, 67, 89, 0.65);
+  --linkx-input-text: #d6e9f2;
+  --linkx-input-placeholder: rgba(154, 177, 196, 0.75);
+  --linkx-button-bg: rgba(27, 41, 56, 0.85);
+  --linkx-button-border: rgba(46, 67, 89, 0.6);
+  --linkx-button-hover-bg: rgba(36, 54, 74, 0.92);
+  --linkx-button-text: #d6e9f2;
+  --linkx-tab-bg: rgba(19, 30, 42, 0.78);
+  --linkx-tab-border: rgba(46, 67, 89, 0.55);
+  --linkx-tab-active-bg: rgba(28, 152, 165, 0.75);
+  --linkx-tab-active-border: rgba(28, 152, 165, 0.75);
+  --linkx-tab-active-text: #ffffff;
+  --linkx-shell-bg-solid: #131e2a;
+  --linkx-highlight-bg: rgba(143, 208, 223, 0.1);
+  --linkx-highlight-bg-strong: rgba(143, 208, 223, 0.15);
+  --linkx-overlay-bg: rgba(0, 0, 0, 0.46);
+  --linkx-danger-bg: rgba(127, 29, 29, 0.32);
+  --linkx-danger-text: #fecaca;
+  --linkx-danger-border: rgba(248, 113, 113, 0.5);
+  --linkx-success-bg: rgba(34, 197, 94, 0.15);
+  --linkx-success-text: #bbf7d0;
+  --linkx-success-border: rgba(134, 239, 172, 0.28);
+  --linkx-cta-bg: #d7eef4;
+  --linkx-cta-text: #123241;
+  --linkx-cta-bg-hover: #e4f6fb;
+  --linkx-cta-border: #83bdca;
+  --linkx-link-text: #9ddde8;
+  --linkx-separator: rgba(143, 208, 223, 0.2);
+  --linkx-form-label: rgba(234, 245, 251, 0.9);
+  --linkx-dock-tab-bg: #121c27;
+  --linkx-dock-tab-active-bg: rgba(197, 223, 237, 0.1);
+  --linkx-dock-header-bg: rgba(20, 32, 48, 0.83);
+
+  /* === Region-scoped variables (Dark) === */
+  --launcher-text: var(--linkx-text-primary);
+  --launcher-text-secondary: var(--linkx-text-secondary);
+  --launcher-accent: var(--linkx-accent);
+  --launcher-separator: var(--linkx-separator);
+  --launcher-highlight: var(--linkx-highlight-bg);
+  --central-text: var(--linkx-text-primary);
+  --central-text-secondary: var(--linkx-text-secondary);
+  --central-text-muted: var(--linkx-text-muted);
+  --central-accent: var(--linkx-accent);
+  --central-card-bg: var(--linkx-card-bg);
+  --central-card-border: var(--linkx-card-border);
+  --central-separator: var(--linkx-separator);
+
+  /* Central workspace interactive states */
+  --central-hover-bg: rgba(174, 135, 79, 0.06);
+  --central-hover-border: var(--central-card-border);
+  --central-hover-text: var(--central-text);
+  --central-focus-ring: rgba(252, 198, 118, 0.5);
+  --central-disabled-opacity: 0.62;
+  --central-panel-shadow: rgba(0, 0, 0, 0.15);
+  --central-avatar-bg: #131e2a;
+  --central-avatar-text: #FCC676;
+  --central-avatar-border: #ae874f;
+  --central-upload-border: var(--linkx-card-hover-border);
+
+  /* Central Workspace Decoupled Variables */
+  --central-identity-text: #131e2a;
+  --central-home-title-color: #131e2a;
+  --central-home-subtitle-color: #ae874f;
+  --central-upload-mark-bg: #FCC676;
+  --central-upload-mark-icon: #131e2a;
+  --central-upload-icon-color: #131e2a;
+  --central-option-text-color: #7f5523;
+  --central-footer-text-color: #7f5523;
+  --central-panel-gradient-top: rgba(255, 255, 255, 0.96);
+  --central-panel-gradient-bottom: rgba(246, 239, 234, 0.96);
+  --central-panel-gradient-angle: 180deg;
+  /* File Upload Dropzone Identity Variables */
+  --central-upload-bg: #FFFFFF;
+  --central-upload-border: #FCC676;
+  --central-upload-hover-bg: rgba(252, 198, 118, 0.08);
+  --central-upload-hover-border: #FCC676;
+
+  /* Option Buttons Identity Variables */
+  --central-option-card-bg: #FFFFFF;
+  --central-option-card-border: rgba(174, 135, 79, 0.45);
+  --central-option-hover-bg: rgba(174, 135, 79, 0.08);
+  --central-option-hover-border: rgba(174, 135, 79, 0.45);
+  --central-option-hover-text: #131e2a;
+
+  /* Quick Analysis Badge Identity Variables */
+  --central-badge-text-color: #FCC676;
+  --central-badge-bg: transparent;
+  --central-badge-border: transparent;
+
+  /* Attached File List Identity Variables */
+  --central-file-item-bg: #FFFFFF;
+  --central-file-item-border: rgba(174, 135, 79, 0.3);
+  --central-file-item-name-color: #131e2a;
+  --central-file-item-size-color: #ae874f;
+  --central-file-item-remove-color: #ae874f;
+  /* Analyze Button & Config Review Identity Variables */
+  --central-analyze-btn-bg: #FCC676;
+  --central-analyze-btn-text: #131e2a;
+  --central-analyze-icon-color: #ffffff;
+  --central-analyze-btn-border: #FCC676;
+  --central-analyze-btn-hover-bg: #fdb84d;
+  --central-analyze-btn-hover-text: #131e2a;
+  --central-config-review-bg: rgba(0, 0, 0, 0.03);
+  --central-config-review-border: rgba(174, 135, 79, 0.3);
+  /* Run in Background & Cancel Buttons Identity Variables */
+  --central-bg-btn-bg: rgba(174, 135, 79, 0.08);
+  --central-bg-btn-text: #131e2a;
+  --central-bg-btn-border: rgba(174, 135, 79, 0.45);
+  --central-bg-btn-hover-bg: rgba(174, 135, 79, 0.18);
+  --central-cancel-btn-bg: rgba(220, 38, 38, 0.08);
+  --central-cancel-btn-text: #dc2626;
+  --central-cancel-btn-border: rgba(220, 38, 38, 0.4);
+  --central-cancel-btn-hover-bg: rgba(220, 38, 38, 0.18);
+  /* Expanded Panel Identity Variables */
+  --central-expanded-panel-gradient-top: rgba(255, 255, 255, 0.98);
+  --central-expanded-panel-gradient-bottom: rgba(246, 239, 234, 0.98);
+  --central-expanded-panel-gradient-angle: 180deg;
+  --central-expanded-panel-border: rgba(174, 135, 79, 0.55);
+
+  /* Analyze Button Label & Gradient Identity Variables */
+  --central-analyze-btn-label: Analyze;
+  --central-analyze-btn-gradient-top: #FCC676;
+  --central-analyze-btn-gradient-bottom: #fdb84d;
+  --central-analyze-btn-gradient-angle: 135deg;
+  /* Analyzing Active Button Identity Variables */
+  --central-analyze-btn-hover-opacity: 0.85;
+  /* Analyze CTA Button Disabled State Variables */
+  --central-analyze-btn-disabled-opacity: 0.45;
+  --central-analyze-btn-disabled-bg: rgba(0, 0, 0, 0.12);
+  --central-analyze-btn-disabled-border: rgba(0, 0, 0, 0.15);
+  --central-analyze-btn-disabled-text: rgba(148, 163, 184, 0.9);
+  /* 👉 Right Workspace Board Identity Tokens */
+  --right-workspace-gradient-top: rgba(255, 255, 255, 0.98);
+  --right-workspace-gradient-bottom: rgba(246, 239, 234, 0.92);
+  --right-workspace-gradient-angle: 180deg;
+  --right-workspace-bg: linear-gradient(var(--right-workspace-gradient-angle, 180deg), var(--right-workspace-gradient-top, rgba(255, 255, 255, 0.98)), var(--right-workspace-gradient-bottom, rgba(246, 239, 234, 0.92)));
+  --right-workspace-border: rgba(174, 135, 79, 0.35);
+  --right-tabs-bg: rgba(0, 0, 0, 0.04);
+  --right-tabs-border: rgba(174, 135, 79, 0.3);
+  --right-tab-text: #8896a6;
+  --right-tab-hover-bg: rgba(174, 135, 79, 0.08);
+  --right-tab-hover-text: #131e2a;
+  --right-tab-active-bg: rgba(252, 198, 118, 0.18);
+  --right-tab-active-text: #131e2a;
+  --right-tab-active-border: #FCC676;
+  --right-section-title-color: #ae874f;
+  --right-card-bg: #FFFFFF;
+  --right-card-border: rgba(174, 135, 79, 0.25);
+  --right-label-color: #7f5523;
+  --right-value-color: #131e2a;
+  --right-status-badge-bg: rgba(16, 185, 129, 0.15);
+  --right-status-badge-text: #059669;
+  --right-chat-body-bg: rgba(0, 0, 0, 0.03);
+  --right-chat-body-border: rgba(174, 135, 79, 0.2);
+  --right-chat-body-text: #4a5568;
+  --right-chat-input-bg: #FFFFFF;
+  --right-chat-input-border: rgba(174, 135, 79, 0.4);
+  --right-chat-input-text: #131e2a;
+  --right-chat-submit-bg: #FCC676;
+  --right-chat-submit-icon: #131e2a;
+  --right-filter-input-bg: #FFFFFF;
+  --right-filter-input-border: rgba(174, 135, 79, 0.35);
+  --right-filter-btn-bg: #FCC676;
+  --right-filter-btn-text: #131e2a;
+  --right-form-label-color: #4a5568;
+  --right-form-input-text: #131e2a;
+  --right-theme-card-name-color: #131e2a;
+  --right-theme-card-badge-text: #059669;
+  --right-theme-card-desc-color: #4a5568;
+  --right-theme-option-bg: #FFFFFF;
+  --right-theme-option-border: rgba(174, 135, 79, 0.3);
+  --right-theme-option-active-bg: rgba(252, 198, 118, 0.15);
+  --right-theme-option-active-border: #FCC676;
+  --central-analyzing-active-label: Analyzing;
+  --central-analyzing-active-gradient-top: #FCC676;
+  --central-analyzing-active-gradient-bottom: #e5a845;
+  --central-analyzing-active-gradient-angle: 135deg;
+  --central-analyzing-active-text-color: #131e2a;
+  --central-analyzing-active-border-color: #FCC676;
+  /* Overlay Layer & Controls Identity Variables */
+  --central-analysis-overlay-bg: rgba(19, 30, 42, 0.88);
+  --central-analysis-overlay-blur: 10px;
+  --central-analysis-overlay-title-color: #FCC676;
+  --central-analysis-overlay-status-color: #f6efea;
+  --central-analysis-overlay-track-bg: rgba(255, 255, 255, 0.15);
+  --central-analysis-overlay-btn-bg: rgba(255, 255, 255, 0.12);
+  --central-analysis-overlay-btn-text: #ffffff;
+  --central-analysis-overlay-btn-border: rgba(255, 255, 255, 0.2);
+  --central-analysis-overlay-btn-hover-bg: rgba(255, 255, 255, 0.28);
+  /* Cover Overlay Action Buttons Identity Variables */
+  --central-overlay-min-btn-bg: rgba(255, 255, 255, 0.12);
+  --central-overlay-min-btn-text: #ffffff;
+  --central-overlay-min-btn-border: rgba(255, 255, 255, 0.2);
+  --central-overlay-min-btn-hover-bg: rgba(255, 255, 255, 0.28);
+  --central-overlay-close-btn-bg: rgba(255, 255, 255, 0.12);
+  --central-overlay-close-btn-text: #ffffff;
+  --central-overlay-close-btn-border: rgba(255, 255, 255, 0.2);
+  --central-overlay-close-btn-hover-bg: rgba(220, 38, 38, 0.7);
+
+  /* Tasks Option Badge Identity Variables */
+  --central-tasks-badge-bg: #FCC676;
+  --central-tasks-badge-text: #131e2a;
+  --central-tasks-badge-border: transparent;
+  /* Reports Option Badge Identity Variables */
+  --central-reports-badge-bg: #FCC676;
+  --central-reports-badge-text: #131e2a;
+  --central-reports-badge-border: transparent;
+  /* Analysis Findings Identity Variables */
+  --central-findings-bg: rgba(0, 0, 0, 0.03);
+  --central-findings-border: rgba(174, 135, 79, 0.35);
+  --central-findings-status-bg: rgba(220, 38, 38, 0.12);
+  --central-findings-status-text: #dc2626;
+  --central-findings-status-border: rgba(220, 38, 38, 0.3);
+  --central-findings-anomaly-bg: rgba(252, 198, 118, 0.12);
+  --central-findings-anomaly-text: #7f5523;
+  --central-findings-anomaly-border: rgba(252, 198, 118, 0.35);
+  --central-gds-card-bg: #FFFFFF;
+  --central-gds-card-border: rgba(174, 135, 79, 0.3);
+  --central-influencer-btn-bg: #FFFFFF;
+  --central-influencer-btn-text: #131e2a;
+  --central-influencer-btn-border: rgba(174, 135, 79, 0.4);
+  --central-influencer-btn-hover-bg: rgba(252, 198, 118, 0.15);
+  /* Flat SVG Icons & Action Buttons Identity Variables */
+  --central-file-item-icon-color: #ae874f;
+  --central-findings-net-btn-bg: #FFFFFF;
+  --central-findings-net-btn-text: #7f5523;
+  --central-findings-net-btn-border: rgba(174, 135, 79, 0.45);
+  --central-findings-net-btn-hover-bg: rgba(174, 135, 79, 0.08);
+  --central-findings-chart-btn-bg: #FFFFFF;
+  --central-findings-chart-btn-text: #7f5523;
+  --central-findings-chart-btn-border: rgba(174, 135, 79, 0.45);
+  --central-findings-chart-btn-hover-bg: rgba(174, 135, 79, 0.08);
+  --central-findings-drop-btn-bg: rgba(220, 38, 38, 0.08);
+  --central-findings-drop-btn-text: #dc2626;
+  --central-findings-drop-btn-border: rgba(220, 38, 38, 0.4);
+  --central-findings-drop-btn-hover-bg: rgba(220, 38, 38, 0.18);
+  /* Central Panel Scrollbar Identity Variables */
+  --central-scrollbar-track-bg: transparent;
+  --central-scrollbar-thumb-bg: rgba(174, 135, 79, 0.4);
+  --central-scrollbar-thumb-hover-bg: rgba(174, 135, 79, 0.65);
+  --central-scrollbar-thumb-border: transparent;
+  /* Drop Confirmation Modal Identity Variables */
+  --central-drop-modal-overlay-bg: rgba(0, 0, 0, 0.55);
+  --central-drop-modal-bg: #FFFFFF;
+  --central-drop-modal-border: rgba(220, 38, 38, 0.35);
+  --central-drop-modal-title-color: #131e2a;
+  --central-drop-modal-body-color: #4a5568;
+  --central-drop-modal-cancel-bg: rgba(0, 0, 0, 0.05);
+  --central-drop-modal-cancel-text: #4a5568;
+  --central-drop-modal-cancel-border: rgba(0, 0, 0, 0.15);
+  --central-drop-modal-confirm-bg: #dc2626;
+  --central-drop-modal-confirm-text: #ffffff;
+  --central-drop-modal-confirm-border: #b91c1c;
+  /* Real-time Source Container Identity Variables */
+  --central-realtime-container-bg: rgba(0, 0, 0, 0.03);
+  --central-realtime-container-border: rgba(174, 135, 79, 0.35);
+  --central-realtime-card-bg: #FFFFFF;
+  --central-realtime-card-border: rgba(174, 135, 79, 0.4);
+  --central-realtime-card-hover-bg: rgba(252, 198, 118, 0.12);
+  --central-realtime-card-title-color: #131e2a;
+  --central-realtime-card-body-color: #4a5568;
+  /* Real-time Sub Buttons Full Customization Identity Variables */
+  --central-realtime-card-active-bg: rgba(252, 198, 118, 0.25);
+  --central-realtime-card-hover-border: #FCC676;
+  --central-realtime-card-active-border: #fdb84d;
+  --central-realtime-card-icon-bg: rgba(174, 135, 79, 0.12);
+  --central-realtime-card-icon-color: #ae874f;
+  --central-realtime-card-icon-active-bg: rgba(174, 135, 79, 0.25);
+  --central-realtime-card-icon-active-color: #131e2a;
+  /* File Item Remove Button Identity Variables */
+  --central-file-remove-bg: transparent;
+  --central-file-remove-text: var(--central-home-subtitle-color, #ae874f);
+  --central-file-remove-hover-bg: rgba(220, 38, 38, 0.12);
+  --central-file-remove-hover-text: #dc2626;
+
+  /* Findings View Action Buttons Identity Variables */
+  --central-findings-net-btn-bg: #FFFFFF;
+  --central-findings-net-btn-border: rgba(174, 135, 79, 0.45);
+  --central-findings-net-btn-text: #7f5523;
+  --central-findings-net-btn-hover-bg: rgba(174, 135, 79, 0.08);
+
+  --central-findings-chart-btn-bg: #FFFFFF;
+  --central-findings-chart-btn-border: rgba(174, 135, 79, 0.45);
+  --central-findings-chart-btn-text: #7f5523;
+  --central-findings-chart-btn-hover-bg: rgba(174, 135, 79, 0.08);
+
+  --central-findings-drop-btn-bg: rgba(220, 38, 38, 0.08);
+  --central-findings-drop-btn-border: rgba(220, 38, 38, 0.3);
+  --central-findings-drop-btn-text: #dc2626;
+  --central-findings-drop-btn-hover-bg: rgba(220, 38, 38, 0.16);
+  /* Inactive vs Active Text & Icon Color Identity Variables */
+  --central-option-radio-color: #ae874f;
+
+  --central-realtime-card-active-title-color: #0d1520;
+  --central-realtime-card-active-body-color: #1a2634;
+  /* Real-time & Batch Sub-Menu Buttons Granular State Variables */
+  --central-realtime-card-hover-title-color: #131e2a;
+  --central-realtime-card-hover-body-color: #131e2a;
+  --central-realtime-card-icon-hover-bg: rgba(174, 135, 79, 0.2);
+  --central-realtime-card-icon-hover-color: #131e2a;
+  /* Sub-Menu Disabled State Variables */
+  --central-realtime-card-disabled-opacity: 0.55;
+  --central-realtime-card-disabled-bg: rgba(0, 0, 0, 0.04);
+  --central-realtime-card-disabled-border: rgba(0, 0, 0, 0.15);
+  --central-realtime-card-disabled-text: #8896a6;
+  --central-realtime-card-disabled-icon-bg: rgba(0, 0, 0, 0.06);
+  --central-realtime-card-disabled-icon-color: #8896a6;
+
+  --central-influencer-btn-icon-color: #ae874f;
+  --central-influencer-btn-hover-text: #131e2a;
+  --central-influencer-btn-hover-icon-color: #131e2a;
+
+  --central-findings-net-btn-icon-color: #ae874f;
+  --central-findings-net-btn-hover-text: #131e2a;
+  --central-findings-net-btn-hover-icon-color: #131e2a;
+
+  --central-findings-chart-btn-icon-color: #ae874f;
+  --central-findings-chart-btn-hover-text: #131e2a;
+  --central-findings-chart-btn-hover-icon-color: #131e2a;
+
+  --central-findings-drop-btn-icon-color: #dc2626;
+  --central-findings-drop-btn-hover-text: #b91c1c;
+  --central-findings-drop-btn-hover-icon-color: #b91c1c;
+  /* Source Options Active & Hover Identity Variables */
+  --central-option-card-bg: #FFFFFF;
+  --central-option-text-color: #7f5523;
+  --central-option-card-border: rgba(174, 135, 79, 0.45);
+  --central-option-hover-bg: rgba(174, 135, 79, 0.08);
+  --central-option-hover-text: #131e2a;
+  --central-option-hover-border: rgba(174, 135, 79, 0.6);
+  --central-option-active-bg: rgba(252, 198, 118, 0.18);
+  --central-option-active-text: #131e2a;
+  --central-option-active-border: #FCC676;
+  --central-option-active-radio-color: #131e2a;
+  --window-text: var(--linkx-text-primary);
+  --window-text-secondary: var(--linkx-text-secondary);
+
+  /* Window scoped additions */
+  --window-header-text: #f6efea;
+  --window-text-muted: #ae874f;
+  --window-accent: #FCC676;
+  --window-resize-hover-tint: rgba(207, 229, 235, 0.08);
+  --window-resize-corner: currentColor;
+  --dock-dragging-opacity: 0.55;
+  --window-card-border: var(--linkx-card-border);
+  --context-text: var(--linkx-text-primary);
+  --context-text-secondary: var(--linkx-text-secondary);
+  --context-text-muted: var(--linkx-text-muted);
+  --context-accent: var(--linkx-accent);
+  --context-highlight: var(--linkx-highlight-bg);
+  --context-cta-bg: var(--linkx-cta-bg);
+  --context-cta-text: var(--linkx-cta-text);
+  --context-cta-border: var(--linkx-cta-border);
+  --dock-text: var(--linkx-text-primary);
+  --dock-text-secondary: var(--linkx-text-secondary);
+  --dock-text-muted: var(--linkx-text-muted);
+  --dock-text-subtle: var(--linkx-text-subtle);
+  --dock-accent: var(--linkx-accent);
+  --dock-highlight: var(--linkx-highlight-bg);
+  --dock-separator: var(--linkx-separator);
+  --dock-card-bg: var(--linkx-card-bg);
+  --source-text: var(--linkx-text-primary);
+  --source-text-secondary: var(--linkx-text-secondary);
+  --source-text-muted: var(--linkx-text-muted);
+  --source-text-subtle: var(--linkx-text-subtle);
+  --source-accent: var(--linkx-accent);
+  --source-card-bg: var(--linkx-card-bg);
+  --source-card-border: var(--linkx-card-border);
+  --source-highlight: var(--linkx-highlight-bg);
+  --source-highlight-strong: var(--linkx-highlight-bg-strong);
+  --source-separator: var(--linkx-separator);
+  --settings-text: var(--linkx-text-primary);
+  --settings-text-secondary: var(--linkx-text-secondary);
+  --settings-text-muted: var(--linkx-text-muted);
+  --settings-text-subtle: var(--linkx-text-subtle);
+  --settings-accent: var(--linkx-accent);
+  --settings-card-bg: var(--linkx-card-bg);
+  --settings-card-border: var(--linkx-card-border);
+
+  /* === Additional scoped isolation (Dark) === */
+  --launcher-cta-bg: var(--linkx-cta-bg);
+  --launcher-cta-text: var(--linkx-cta-text);
+  --launcher-cta-bg-hover: var(--linkx-cta-bg-hover);
+  --launcher-cta-border: var(--linkx-cta-border);
+  --launcher-danger-bg: var(--linkx-danger-bg);
+  --launcher-danger-text: var(--linkx-danger-text);
+  --launcher-danger-border: var(--linkx-danger-border);
+  --launcher-border: var(--panel-border);
+
+  /* Launcher interactive states */
+  --launcher-hover-bg: rgba(174, 135, 79, 0.08);
+  --launcher-hover-border: var(--launcher-separator);
+  --launcher-hover-text: var(--launcher-text);
+  --launcher-active-bg: var(--launcher-highlight);
+  --launcher-active-border: var(--launcher-separator);
+  --launcher-active-text: var(--launcher-text);
+  --launcher-focus-ring: rgba(252, 198, 118, 0.5);
+  --launcher-disabled-opacity: 0.35;
+  --launcher-item-idle-border: transparent;
+  --launcher-item-idle-bg: transparent;
+  --launcher-overview-hover-bg: rgba(174, 135, 79, 0.1);
+  --launcher-shell-bg: var(--linkx-shell-bg-solid);
+  --launcher-dock-active: var(--linkx-dock-tab-active-bg);
+  --central-overlay-bg: var(--linkx-overlay-bg);
+  --central-overlay-top: var(--linkx-shell-bg-solid);
+  --central-overlay-mid: rgba(19, 30, 42, 0.88);
+  --central-overlay-bottom: var(--linkx-shell-bg-solid);
+  --central-overlay-opacity: 1;
+  --central-overlay-angle: 180deg;
+
+  /* Network background animation */
+  --network-node-color: rgba(252, 198, 118, 0.55);
+  --network-edge-color: rgba(174, 135, 79, 0.12);
+  --network-glow-color: rgba(252, 198, 118, 0.08);
+  --network-opacity: 0.65;
+  --central-panel-bg: var(--panel-bg);
+  --central-panel-border: var(--panel-border);
+  --context-overlay-bg: var(--linkx-overlay-bg);
+  --context-cta-bg-hover: var(--linkx-cta-bg-hover);
+  --context-success-bg: var(--linkx-success-bg);
+  --context-success-text: var(--linkx-success-text);
+  --context-success-border: var(--linkx-success-border);
+  --window-danger-bg: var(--linkx-danger-bg);
+  --dock-danger-bg: var(--linkx-danger-bg);
+  --dock-border: var(--panel-border);
+  --dock-shell-bg: var(--linkx-shell-bg-solid);
+  --dock-dock-active: var(--linkx-dock-tab-active-bg);
+  --source-cta-bg: var(--linkx-cta-bg);
+  --source-cta-text: var(--linkx-cta-text);
+  --source-dock-active: var(--linkx-dock-tab-active-bg);
+  --source-border: var(--panel-border);
+  --source-app-text: var(--app-text);
+  --settings-danger-bg: var(--linkx-danger-bg);
+  --settings-danger-text: var(--linkx-danger-text);
+  --settings-success-bg: var(--linkx-success-bg);
+  --settings-cta-bg: var(--linkx-cta-bg);
+  --settings-border: var(--panel-border);
+  --settings-app-text: var(--app-text);
+  --notice-card-bg: var(--linkx-card-bg);
+  --notice-card-border: var(--linkx-card-border);
+  --notice-text-secondary: var(--linkx-text-secondary);
+  --notice-highlight: var(--linkx-highlight-bg);
+  --notice-highlight-strong: var(--linkx-highlight-bg-strong);
+  --notice-separator: var(--linkx-separator);
+  --notice-danger-bg: var(--linkx-danger-bg);
+  --notice-success-bg: var(--linkx-success-bg);
+  --notice-app-text: var(--app-text);
+  --notice-panel-bg: var(--panel-bg);
+  --notice-panel-border: var(--panel-border);
+  --notice-text: var(--linkx-text-primary);
+  --notice-text-muted: var(--linkx-text-muted);
+  --notice-accent: var(--linkx-accent);
+}

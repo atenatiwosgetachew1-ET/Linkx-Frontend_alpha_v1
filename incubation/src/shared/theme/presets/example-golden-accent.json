@@ -1,0 +1,10 @@
+{
+  "id": "example-golden-accent",
+  "name": "Example — Golden Accent",
+  "description": "Sample preset demonstrating the format. Safe to delete.",
+  "baseTheme": "nbe-daylight",
+  "overrides": {
+    "--accent": "#FFCF7A",
+    "--accent-strong": "#B5823F"
+  }
+}

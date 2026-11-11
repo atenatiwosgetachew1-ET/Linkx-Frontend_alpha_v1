@@ -14,13 +14,13 @@ export const THEME_COMPONENT_CATEGORIES = [
     description: 'The main page background, overlay, home panel, upload dropzone, user identity, footer — everything behind the windows. Isolated from sidebar, windows, dock, and right panel.',
     tokens: [
       // === Page Background ===
-      { key: '--app-bg', label: 'Page Background', type: 'color', default: '#f6efea' },
-      { key: '--linkx-shell-bg-solid', label: 'Shell Solid Fill', type: 'color', default: '#f6efea' },
+      { key: '--app-bg', label: 'Page Background', type: 'color', default: '#F4F7FA' },
+      { key: '--linkx-shell-bg-solid', label: 'Shell Solid Fill', type: 'color', default: '#F4F7FA' },
       { key: '--central-overlay-bg', label: 'Overlay Backdrop (expanded launcher)', type: 'color', default: 'rgba(0, 0, 0, 0.35)' },
       // === Background Overlay Gradient ===
-      { key: '--central-overlay-top', label: '🎨 Overlay — Top Color', type: 'color', default: '#f6efea' },
+      { key: '--central-overlay-top', label: '🎨 Overlay — Top Color', type: 'color', default: '#E8EFF7' },
       { key: '--central-overlay-mid', label: '🎨 Overlay — Middle Color', type: 'color', default: 'rgba(19, 30, 42, 0.88)' },
-      { key: '--central-overlay-bottom', label: '🎨 Overlay — Bottom Color', type: 'color', default: '#f6efea' },
+      { key: '--central-overlay-bottom', label: '🎨 Overlay — Bottom Color', type: 'color', default: '#E8EFF7' },
       { key: '--central-overlay-angle', label: '📐 Overlay — Gradient Angle/Direction', type: 'text', default: '180deg' },
       { key: '--central-overlay-opacity', label: '🎨 Overlay — Opacity', type: 'range', default: '1' },
 
@@ -129,7 +129,8 @@ export const THEME_COMPONENT_CATEGORIES = [
       { key: '--central-analysis-overlay-bg', label: '🛡️ Analysis Overlay — Background Fill', type: 'color', default: 'rgba(19, 30, 42, 0.88)' },
       { key: '--central-analysis-overlay-blur', label: '🛡️ Analysis Overlay — Backdrop Blur', type: 'text', default: '10px' },
       { key: '--central-analysis-overlay-title-color', label: '🛡️ Analysis Overlay — Title Text Color', type: 'color', default: '#FCC676' },
-      { key: '--central-analysis-overlay-status-color', label: '🛡️ Analysis Overlay — Status Text Color', type: 'color', default: '#f6efea' },
+      { key: '--central-analysis-overlay-status-color', label: '🛡️ Analysis Overlay — Status Text Color', type: 'color', default: '#54595F' },
+      { key: '--central-analysis-overlay-track-bg', label: '🛡️ Analysis Overlay — Progress Track Color', type: 'color', default: 'rgba(19, 30, 42, 0.12)' },
       { key: '--central-overlay-min-btn-bg', label: '➖ Minimize Button — Background', type: 'color', default: 'rgba(255, 255, 255, 0.12)' },
       { key: '--central-overlay-min-btn-text', label: '➖ Minimize Button — Text Color', type: 'color', default: '#ffffff' },
       { key: '--central-overlay-min-btn-border', label: '➖ Minimize Button — Border', type: 'color', default: 'rgba(255, 255, 255, 0.2)' },
@@ -434,7 +435,7 @@ export const THEME_COMPONENT_CATEGORIES = [
       // === Backgrounds ===
       { key: '--linkx-launcher-bg', label: 'Rail Background', type: 'color', default: 'rgba(255, 255, 255, 0.95)' },
       { key: '--linkx-launcher-border', label: 'Rail Outer Border', type: 'color', default: 'rgba(174, 135, 79, 0.45)' },
-      { key: '--launcher-shell-bg', label: 'Dropdown Menu Background', type: 'color', default: '#f6efea' },
+      { key: '--launcher-shell-bg', label: 'Dropdown Menu Background', type: 'color', default: '#FFFFFF' },
       { key: '--launcher-border', label: 'Dropdown Menu Border', type: 'color', default: 'rgba(174, 135, 79, 0.45)' },
       // === Idle Text ===
       { key: '--launcher-text', label: 'Primary Text (icons, active labels)', type: 'color', default: '#131e2a' },
@@ -467,11 +468,15 @@ export const THEME_COMPONENT_CATEGORIES = [
       // === Window Frame & Elevation ===
       { key: '--linkx-window-bg', label: 'Window Outer Frame Fill (Idle)', type: 'color', default: 'rgba(255, 255, 255, 0.96)' },
       { key: '--linkx-window-bg-active', label: 'Window Outer Frame Fill (Active / Focused)', type: 'color', default: 'rgba(255, 255, 255, 0.99)' },
-      { key: '--linkx-window-border', label: 'Window Outer Border (Idle)', type: 'color', default: 'rgba(174, 135, 79, 0.35)' },
-      { key: '--linkx-window-border-active', label: 'Window Outer Border (Active / Focused)', type: 'color', default: '#FCC676' },
+      { key: '--linkx-window-border', label: 'Window Border, Header + Body (Idle)', type: 'color', default: 'rgba(174, 135, 79, 0.35)' },
+      { key: '--linkx-window-border-active', label: 'Window Border, Header + Body (Active / Focused)', type: 'color', default: '#FCC676' },
+      { key: '--window-header-border', label: 'Window Header Border (Idle)', type: 'color', default: '#D5DEE8' },
+      { key: '--window-header-border-active', label: 'Window Header Border (Active / Focused)', type: 'color', default: '#AE874F' },
+      { key: '--window-body-border', label: 'Window Body Border (Idle)', type: 'color', default: '#D5DEE8' },
+      { key: '--window-body-border-active', label: 'Window Body Border (Active / Focused)', type: 'color', default: '#AE874F' },
       { key: '--linkx-window-radius', label: 'Window Corner Radius', type: 'text', default: '6px' },
       { key: '--linkx-window-shadow', label: 'Window Elevation Shadow (Focused)', type: 'text', default: '0 14px 48px rgba(19, 30, 42, 0.16)' },
-      { key: '--linkx-window-backdrop-blur', label: 'Window Backdrop Glass Blur', type: 'text', default: '20px' },
+      { key: '--linkx-window-backdrop-blur', label: 'Window Backdrop Glass Blur', type: 'text', default: '8px' },
 
       // === Window Header Bar & Drag Handle ===
       { key: '--linkx-window-header-bg', label: 'Header Bar Fill (Idle)', type: 'color', default: '#131e2a' },
@@ -732,7 +737,7 @@ export const THEME_COMPONENT_CATEGORIES = [
       { key: '--context-accent', label: 'Accent Color', type: 'color', default: '#FCC676' },
       { key: '--context-highlight', label: 'Highlight Fill', type: 'color', default: 'rgba(174, 135, 79, 0.12)' },
       { key: '--context-cta-bg', label: 'Button Background', type: 'color', default: '#131e2a' },
-      { key: '--context-cta-text', label: 'Button Text', type: 'color', default: '#f6efea' },
+      { key: '--context-cta-text', label: 'Button Text', type: 'color', default: '#FFFFFF' },
       { key: '--context-cta-border', label: 'Button Border', type: 'color', default: '#ae874f' },
     ],
   },
@@ -770,7 +775,7 @@ export const THEME_COMPONENT_CATEGORIES = [
       { key: '--source-highlight', label: 'Highlight Fill', type: 'color', default: 'rgba(174, 135, 79, 0.12)' },
       { key: '--source-separator', label: 'Separator Line', type: 'color', default: 'rgba(174, 135, 79, 0.3)' },
       { key: '--source-cta-bg', label: 'Button Background', type: 'color', default: '#131e2a' },
-      { key: '--source-cta-text', label: 'Button Text', type: 'color', default: '#f6efea' },
+      { key: '--source-cta-text', label: 'Button Text', type: 'color', default: '#FFFFFF' },
 
       // === 📁 Sub-Page 1: File Upload Page Tokens ===
       { key: '--upload-page-title-color', label: '📁 Upload Page — Header Title Color', type: 'color', default: '#131e2a' },
@@ -873,7 +878,7 @@ export const THEME_COMPONENT_CATEGORIES = [
       { key: '--dataframe-input-border', label: '📊 Dataframe Control — Input/Select Border', type: 'color', default: 'rgba(174, 135, 79, 0.45)' },
       { key: '--dataframe-input-text', label: '📊 Dataframe Control — Input/Select Text Color', type: 'color', default: '#131e2a' },
       { key: '--dataframe-manage-rules-btn-bg', label: '📊 Manage Rules Button — Background Fill', type: 'color', default: '#131e2a' },
-      { key: '--dataframe-manage-rules-btn-text', label: '📊 Manage Rules Button — Text Color', type: 'color', default: '#f6efea' },
+      { key: '--dataframe-manage-rules-btn-text', label: '📊 Manage Rules Button — Text Color', type: 'color', default: '#FFFFFF' },
       { key: '--dataframe-manage-rules-btn-border', label: '📊 Manage Rules Button — Border Color', type: 'color', default: 'rgba(174, 135, 79, 0.45)' },
 
       // === 📡 Sub-Page 4: Streaming Page Tokens ===
@@ -913,7 +918,7 @@ export const THEME_COMPONENT_CATEGORIES = [
       { key: '--storage-input-border', label: '💾 Storage Toolbar — Field Input Border', type: 'color', default: 'rgba(174, 135, 79, 0.45)' },
       { key: '--storage-input-text', label: '💾 Storage Toolbar — Field Input Text Color', type: 'color', default: '#131e2a' },
       { key: '--storage-connect-btn-bg', label: '💾 Storage Toolbar — Connect Button Background', type: 'color', default: '#131e2a' },
-      { key: '--storage-connect-btn-text', label: '💾 Storage Toolbar — Connect Button Text Color', type: 'color', default: '#f6efea' },
+      { key: '--storage-connect-btn-text', label: '💾 Storage Toolbar — Connect Button Text Color', type: 'color', default: '#FFFFFF' },
       { key: '--storage-connect-btn-border', label: '💾 Storage Toolbar — Connect Button Border', type: 'color', default: 'rgba(174, 135, 79, 0.45)' },
       { key: '--storage-browser-bg', label: '💾 File Browser — Container Background Fill', type: 'color', default: '#FFFFFF' },
       { key: '--storage-browser-border', label: '💾 File Browser — Container Border Color', type: 'color', default: 'rgba(174, 135, 79, 0.45)' },
@@ -985,12 +990,12 @@ export const THEME_COMPONENT_CATEGORIES = [
   {
     id: 'global_tooltips',
     name: '💬 Global Tooltips & Badges',
-    description: 'Unified high-contrast group styling for all hover tooltips across all windows, headers, and cards.',
+    description: 'Unified styling (bright, semi-transparent by default) for all hover tooltips across all windows, headers, and cards.',
     tokens: [
-      { key: '--tooltip-bg', label: '💬 Tooltip Background Color', type: 'color', default: '#131e2a' },
-      { key: '--tooltip-text', label: '💬 Tooltip Text Color', type: 'color', default: '#FFFFFF' },
-      { key: '--tooltip-border', label: '💬 Tooltip Border Color', type: 'color', default: '#FCC676' },
-      { key: '--tooltip-shadow', label: '💬 Tooltip Box Shadow', type: 'text', default: '0 8px 24px rgba(0, 0, 0, 0.4)' },
+      { key: '--tooltip-bg', label: '💬 Tooltip Background Color', type: 'color', default: 'rgba(250, 250, 247, 0.92)' },
+      { key: '--tooltip-text', label: '💬 Tooltip Text Color', type: 'color', default: '#131E2A' },
+      { key: '--tooltip-border', label: '💬 Tooltip Border Color', type: 'color', default: 'rgba(19, 30, 42, 0.12)' },
+      { key: '--tooltip-shadow', label: '💬 Tooltip Box Shadow', type: 'text', default: '0 6px 20px rgba(19, 30, 42, 0.18)' },
       { key: '--tooltip-font-size', label: '💬 Tooltip Font Size', type: 'text', default: '11px' },
       { key: '--tooltip-font-weight', label: '💬 Tooltip Font Weight', type: 'text', default: '600' },
     ],

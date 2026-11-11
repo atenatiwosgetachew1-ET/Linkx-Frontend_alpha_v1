@@ -1,168 +1,219 @@
-import React, { useRef, useEffect, useCallback } from 'react';
+import React, { useEffect, useRef } from 'react';
+
+import { useBackgroundAnimations } from '../../utils/backgroundAnimations.js';
+
+const NODE_COUNT = 65;
+const CONNECTION_DIST = 160;
+const CONNECTION_DIST_SQ = CONNECTION_DIST * CONNECTION_DIST;
+const NODE_MIN_R = 1.2;
+const NODE_MAX_R = 2.8;
+const SPEED_FACTOR = 0.18;
+const FRAME_INTERVAL_MS = 1000 / 30;
+const ALPHA_BUCKETS = 8;
+const TWO_PI = Math.PI * 2;
+
+function readColors() {
+  const styles = getComputedStyle(document.documentElement);
+  const read = (name, fallback) => styles.getPropertyValue(name).trim() || fallback;
+  return {
+    node: read('--network-node-color', 'rgba(252, 198, 118, 0.55)'),
+    edge: read('--network-edge-color', 'rgba(174, 135, 79, 0.12)'),
+    glow: read('--network-glow-color', 'rgba(252, 198, 118, 0.08)'),
+  };
+}
+
+function usePrefersReducedMotion() {
+  const [reduced, setReduced] = React.useState(
+    () => typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+  );
+  useEffect(() => {
+    const query = window.matchMedia?.('(prefers-reduced-motion: reduce)');
+    if (!query) return undefined;
+    const onChange = (event) => setReduced(event.matches);
+    query.addEventListener('change', onChange);
+    return () => query.removeEventListener('change', onChange);
+  }, []);
+  return reduced;
+}
 
 /**
- * NetworkBackground — Animated node & edge graph overlay.
- * Renders on a <canvas> at the lowest z-index behind all workspace content.
- * All colors are driven by CSS variables so the Theme Studio can control them.
+ * NetworkBackground — node & edge graph behind the workspace.
+ * Colors come from CSS variables so the Theme Studio can control them.
+ * Animates only when background animations are enabled, motion is allowed
+ * and the tab is visible; otherwise a single static frame is drawn.
  */
-export default function NetworkBackground() {
+function NetworkBackground() {
   const canvasRef = useRef(null);
-  const animRef = useRef(null);
-  const nodesRef = useRef([]);
-  const resizeRef = useRef(null);
-
-  const getColor = useCallback((varName, fallback) => {
-    const val = getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
-    return val || fallback;
-  }, []);
+  const { areBackgroundAnimationsEnabled } = useBackgroundAnimations();
+  const prefersReducedMotion = usePrefersReducedMotion();
+  const shouldAnimate = areBackgroundAnimationsEnabled && !prefersReducedMotion;
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas) return undefined;
     const ctx = canvas.getContext('2d');
 
-    // --- Configuration ---
-    const NODE_COUNT = 65;
-    const CONNECTION_DIST = 160;
-    const NODE_MIN_R = 1.2;
-    const NODE_MAX_R = 2.8;
-    const SPEED_FACTOR = 0.18;
+    let width = canvas.offsetWidth;
+    let height = canvas.offsetHeight;
+    let colors = readColors();
+    let frameId = null;
+    let lastFrameTime = 0;
+    const buckets = Array.from({ length: ALPHA_BUCKETS }, () => []);
 
-    // --- Resize handler ---
-    const resize = () => {
-      const dpr = window.devicePixelRatio || 1;
-      canvas.width = canvas.offsetWidth * dpr;
-      canvas.height = canvas.offsetHeight * dpr;
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    };
+    const nodes = Array.from({ length: NODE_COUNT }, () => ({
+      x: Math.random() * width,
+      y: Math.random() * height,
+      vx: (Math.random() - 0.5) * SPEED_FACTOR,
+      vy: (Math.random() - 0.5) * SPEED_FACTOR,
+      r: NODE_MIN_R + Math.random() * (NODE_MAX_R - NODE_MIN_R),
+      pulse: Math.random() * TWO_PI,
+      pulseSpeed: 0.008 + Math.random() * 0.012,
+    }));
 
-    // --- Initialize nodes ---
-    const initNodes = () => {
-      const w = canvas.offsetWidth;
-      const h = canvas.offsetHeight;
-      const nodes = [];
-      for (let i = 0; i < NODE_COUNT; i++) {
-        nodes.push({
-          x: Math.random() * w,
-          y: Math.random() * h,
-          vx: (Math.random() - 0.5) * SPEED_FACTOR,
-          vy: (Math.random() - 0.5) * SPEED_FACTOR,
-          r: NODE_MIN_R + Math.random() * (NODE_MAX_R - NODE_MIN_R),
-          pulse: Math.random() * Math.PI * 2,
-          pulseSpeed: 0.008 + Math.random() * 0.012,
-        });
-      }
-      nodesRef.current = nodes;
-    };
-
-    resize();
-    initNodes();
-
-    const handleResize = () => {
-      resize();
-      const w = canvas.offsetWidth;
-      const h = canvas.offsetHeight;
-      nodesRef.current.forEach((n) => {
-        if (n.x > w) n.x = Math.random() * w;
-        if (n.y > h) n.y = Math.random() * h;
-      });
-    };
-
-    resizeRef.current = handleResize;
-    window.addEventListener('resize', handleResize);
-
-    // --- Animation loop ---
-    let frameCount = 0;
-    const draw = () => {
-      const w = canvas.offsetWidth;
-      const h = canvas.offsetHeight;
-      const nodes = nodesRef.current;
-
-      // Read colors from CSS vars every 60 frames (~1 second) for perf
-      let nodeColor, edgeColor, glowColor;
-      if (frameCount % 60 === 0 || frameCount === 0) {
-        nodeColor = getColor('--network-node-color', 'rgba(252, 198, 118, 0.55)');
-        edgeColor = getColor('--network-edge-color', 'rgba(174, 135, 79, 0.12)');
-        glowColor = getColor('--network-glow-color', 'rgba(252, 198, 118, 0.08)');
-        canvas._nodeColor = nodeColor;
-        canvas._edgeColor = edgeColor;
-        canvas._glowColor = glowColor;
-      } else {
-        nodeColor = canvas._nodeColor;
-        edgeColor = canvas._edgeColor;
-        glowColor = canvas._glowColor;
-      }
-      frameCount++;
-
-      ctx.clearRect(0, 0, w, h);
-
-      // Update positions
+    const step = (delta) => {
       for (const node of nodes) {
-        node.x += node.vx;
-        node.y += node.vy;
-        node.pulse += node.pulseSpeed;
-
-        // Bounce off edges
-        if (node.x < 0 || node.x > w) node.vx *= -1;
-        if (node.y < 0 || node.y > h) node.vy *= -1;
-        node.x = Math.max(0, Math.min(w, node.x));
-        node.y = Math.max(0, Math.min(h, node.y));
+        node.x += node.vx * delta;
+        node.y += node.vy * delta;
+        node.pulse += node.pulseSpeed * delta;
+        if (node.x < 0 || node.x > width) node.vx *= -1;
+        if (node.y < 0 || node.y > height) node.vy *= -1;
+        node.x = Math.max(0, Math.min(width, node.x));
+        node.y = Math.max(0, Math.min(height, node.y));
       }
+    };
 
-      // Draw edges
-      ctx.lineWidth = 0.6;
-      for (let i = 0; i < nodes.length; i++) {
-        for (let j = i + 1; j < nodes.length; j++) {
-          const dx = nodes[i].x - nodes[j].x;
-          const dy = nodes[i].y - nodes[j].y;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          if (dist < CONNECTION_DIST) {
-            const opacity = 1 - dist / CONNECTION_DIST;
-            ctx.globalAlpha = opacity;
-            ctx.strokeStyle = edgeColor;
-            ctx.beginPath();
-            ctx.moveTo(nodes[i].x, nodes[i].y);
-            ctx.lineTo(nodes[j].x, nodes[j].y);
-            ctx.stroke();
+    const render = () => {
+      ctx.clearRect(0, 0, width, height);
+
+      for (const bucket of buckets) bucket.length = 0;
+      for (let i = 0; i < NODE_COUNT; i++) {
+        const a = nodes[i];
+        for (let j = i + 1; j < NODE_COUNT; j++) {
+          const b = nodes[j];
+          const dx = a.x - b.x;
+          const dy = a.y - b.y;
+          const distSq = dx * dx + dy * dy;
+          if (distSq < CONNECTION_DIST_SQ) {
+            const opacity = 1 - Math.sqrt(distSq) / CONNECTION_DIST;
+            const index = Math.min(ALPHA_BUCKETS - 1, Math.floor(opacity * ALPHA_BUCKETS));
+            buckets[index].push(a.x, a.y, b.x, b.y);
           }
         }
       }
 
-      // Draw nodes
-      ctx.globalAlpha = 1;
-      for (const node of nodes) {
-        const pulseScale = 1 + 0.25 * Math.sin(node.pulse);
-        const r = node.r * pulseScale;
-
-        // Glow
+      ctx.lineWidth = 0.6;
+      ctx.strokeStyle = colors.edge;
+      for (let k = 0; k < ALPHA_BUCKETS; k++) {
+        const segments = buckets[k];
+        if (segments.length === 0) continue;
+        ctx.globalAlpha = (k + 0.5) / ALPHA_BUCKETS;
         ctx.beginPath();
-        ctx.arc(node.x, node.y, r * 3, 0, Math.PI * 2);
-        ctx.fillStyle = glowColor;
-        ctx.fill();
-
-        // Core dot
-        ctx.beginPath();
-        ctx.arc(node.x, node.y, r, 0, Math.PI * 2);
-        ctx.fillStyle = nodeColor;
-        ctx.fill();
+        for (let s = 0; s < segments.length; s += 4) {
+          ctx.moveTo(segments[s], segments[s + 1]);
+          ctx.lineTo(segments[s + 2], segments[s + 3]);
+        }
+        ctx.stroke();
       }
 
-      animRef.current = requestAnimationFrame(draw);
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = colors.glow;
+      ctx.beginPath();
+      for (const node of nodes) {
+        const r = node.r * (1 + 0.25 * Math.sin(node.pulse)) * 3;
+        ctx.moveTo(node.x + r, node.y);
+        ctx.arc(node.x, node.y, r, 0, TWO_PI);
+      }
+      ctx.fill();
+
+      ctx.fillStyle = colors.node;
+      ctx.beginPath();
+      for (const node of nodes) {
+        const r = node.r * (1 + 0.25 * Math.sin(node.pulse));
+        ctx.moveTo(node.x + r, node.y);
+        ctx.arc(node.x, node.y, r, 0, TWO_PI);
+      }
+      ctx.fill();
     };
 
-    animRef.current = requestAnimationFrame(draw);
+    const stop = () => {
+      if (frameId !== null) cancelAnimationFrame(frameId);
+      frameId = null;
+    };
+
+    const tick = (time) => {
+      frameId = requestAnimationFrame(tick);
+      const elapsed = time - lastFrameTime;
+      if (elapsed < FRAME_INTERVAL_MS) return;
+      // Normalize to the original 60fps tuning; clamp to avoid jumps after stalls.
+      step(Math.min(elapsed, 100) / (1000 / 60));
+      lastFrameTime = time;
+      render();
+    };
+
+    const start = () => {
+      if (!shouldAnimate || document.hidden || frameId !== null) return;
+      lastFrameTime = performance.now();
+      frameId = requestAnimationFrame(tick);
+    };
+
+    const resize = () => {
+      const dpr = window.devicePixelRatio || 1;
+      width = canvas.offsetWidth;
+      height = canvas.offsetHeight;
+      canvas.width = Math.round(width * dpr);
+      canvas.height = Math.round(height * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      for (const node of nodes) {
+        if (node.x > width) node.x = Math.random() * width;
+        if (node.y > height) node.y = Math.random() * height;
+      }
+      render();
+    };
+
+    const handleVisibility = () => (document.hidden ? stop() : start());
+
+    // Panel collapse/expand animates the canvas size every frame; CSS stretches the
+    // old bitmap meanwhile and the backing store is reallocated once it settles.
+    let resizeTimer = null;
+    const scheduleResize = () => {
+      if (canvas.offsetWidth === width && canvas.offsetHeight === height) return;
+      clearTimeout(resizeTimer);
+      cancelAnimationFrame(colorsFrame);
+      resizeTimer = setTimeout(resize, width === 0 ? 0 : 150);
+    };
+    const resizeObserver = new ResizeObserver(scheduleResize);
+    resizeObserver.observe(canvas);
+
+    // Theme switches / Theme Studio overrides change CSS vars on <html>.
+    let colorsFrame = null;
+    const themeObserver = new MutationObserver(() => {
+      if (colorsFrame !== null) return;
+      colorsFrame = requestAnimationFrame(() => {
+        colorsFrame = null;
+        colors = readColors();
+        if (frameId === null) render();
+      });
+    });
+    themeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['style', 'data-theme', 'class'],
+    });
+
+    document.addEventListener('visibilitychange', handleVisibility);
+    resize();
+    start();
 
     return () => {
-      if (animRef.current) cancelAnimationFrame(animRef.current);
-      window.removeEventListener('resize', handleResize);
+      stop();
+      clearTimeout(resizeTimer);
+      cancelAnimationFrame(colorsFrame);
+      resizeObserver.disconnect();
+      themeObserver.disconnect();
+      document.removeEventListener('visibilitychange', handleVisibility);
     };
-  }, [getColor]);
+  }, [shouldAnimate]);
 
-  return (
-    <canvas
-      ref={canvasRef}
-      className="workspace_network_bg"
-      aria-hidden="true"
-    />
-  );
+  return <canvas ref={canvasRef} className="workspace_network_bg" aria-hidden="true" />;
 }
+
+export default React.memo(NetworkBackground);

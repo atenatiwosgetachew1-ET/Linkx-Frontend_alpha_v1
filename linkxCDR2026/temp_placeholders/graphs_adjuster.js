@@ -4593,6 +4593,85 @@ function resolveGraphNodeLabel(nodeId) {
   }
 }
 
+// Visual/structural keys that are never useful as a node "name" in the alerts panel.
+const ALERT_NAME_EXCLUDE_KEYS = new Set([
+  "size", "x", "y", "vx", "vy", "rel_type", "session_id", "index", "edges",
+  "neighbors", "colorBehavior", "baseColor", "color", "shape", "borderWidth",
+  "borderWidthSelected", "borderWidth1", "image", "imagePadding", "iconPath",
+  "title", "font", "group", "level", "mass", "hidden", "fixed", "physics",
+  "shapeProperties", "widthConstraint", "heightConstraint", "margin", "icon",
+  "annotationType", "note"
+]);
+
+function getAlertNodeRaw(nodeId) {
+  const base = (window.FULL_GRAPH && window.FULL_GRAPH.nodes && window.FULL_GRAPH.nodes.get)
+    ? window.FULL_GRAPH.nodes.get(nodeId)
+    : (typeof nodesData !== "undefined" && nodesData.get ? nodesData.get(nodeId) : null);
+  if (!base) return null;
+  const mod = (typeof MODIFIED_NODES !== "undefined" && MODIFIED_NODES && MODIFIED_NODES.get)
+    ? (MODIFIED_NODES.get(nodeId) || {})
+    : {};
+  return { ...base, ...mod };
+}
+
+// Ordered list of a node's meaningful property keys (as the Info tab would show).
+function getAlertNodePropertyKeys(node) {
+  if (!node || typeof node !== "object") return [];
+  return Object.keys(node).filter(key => !ALERT_NAME_EXCLUDE_KEYS.has(key) && key !== "id");
+}
+
+function cleanAlertNameValue(value) {
+  if (value == null) return "";
+  const text = String(value).split("\n")[0].trim();
+  return text;
+}
+
+// Resolve the display name for an alerted node as "<key> : <value>", using the
+// user-selected property key (or the first property key for Auto).
+function resolveAlertNodeName(nodeId) {
+  try {
+    const node = getAlertNodeRaw(nodeId);
+    if (!node) return String(nodeId);
+    const activeKey = window.__ALERT_NAME_KEY || "";
+    if (activeKey) {
+      const picked = cleanAlertNameValue(node[activeKey]);
+      if (picked) return `${activeKey} : ${picked}`;
+    }
+    const keys = getAlertNodePropertyKeys(node);
+    for (const key of keys) {
+      const candidate = cleanAlertNameValue(node[key]);
+      if (candidate) return `${key} : ${candidate}`;
+    }
+    const fallback = cleanAlertNameValue(node.label);
+    return fallback || String(nodeId);
+  } catch (_e) {
+    return String(nodeId);
+  }
+}
+
+// Collect the union of property keys across the nodes referenced by the alerts.
+function collectAlertPropertyKeys(alerts) {
+  const seen = new Set();
+  const ordered = [];
+  const addFromNode = (nodeId) => {
+    const node = getAlertNodeRaw(nodeId);
+    if (!node) return;
+    getAlertNodePropertyKeys(node).forEach(key => {
+      if (!seen.has(key)) { seen.add(key); ordered.push(key); }
+    });
+  };
+  (alerts || []).forEach(a => {
+    if (a.nodeId != null) addFromNode(a.nodeId);
+    else if (a.edgeId != null) {
+      const edge = window.FULL_GRAPH && window.FULL_GRAPH.edges && window.FULL_GRAPH.edges.get
+        ? window.FULL_GRAPH.edges.get(a.edgeId)
+        : null;
+      if (edge) { addFromNode(edge.from); addFromNode(edge.to); }
+    }
+  });
+  return ordered;
+}
+
 function escapeAlertHtml(value) {
   return String(value == null ? "" : value)
     .replace(/&/g, "&amp;")
@@ -4606,43 +4685,93 @@ function escapeAlertJs(value) {
 }
 
 // Turns a raw alert into a human-readable card description for the Graph Alerts panel.
+// The "name" is data-driven (the node's real identity), not a static label.
 function describeGraphAlert(alert) {
   const severity = alert.severity === "high" ? "high" : "medium";
   if (alert.type === "high_degree") {
     const degreeMatch = /degree\s+(\d+)/i.exec(alert.message || "");
     const degree = degreeMatch ? degreeMatch[1] : "";
+    const label = resolveAlertNodeName(alert.nodeId);
     return {
-      title: "Highly connected node",
+      name: label,
+      category: "Highly connected",
       severity,
-      subject: resolveGraphNodeLabel(alert.nodeId),
       detail: degree
-        ? `Links to ${degree} other nodes — a hub that can signal structuring, layering, or a shared intermediary. Review its neighbours.`
+        ? `Connected to ${degree} other nodes — a hub that can signal structuring, layering, or a shared intermediary. Review its neighbours.`
         : "An unusually well-connected hub worth reviewing.",
     };
   }
   if (alert.type === "heavy_edge") {
     const valueMatch = /weight\s+([\d.,]+)/i.exec(alert.message || "");
     const value = valueMatch ? valueMatch[1] : "";
-    let subject = "";
+    let name = "High-value relationship";
     try {
       const edge = (window.FULL_GRAPH && window.FULL_GRAPH.edges && window.FULL_GRAPH.edges.get)
         ? window.FULL_GRAPH.edges.get(alert.edgeId)
         : (typeof edgesData !== "undefined" && edgesData.get ? edgesData.get(alert.edgeId) : null);
-      if (edge && edge.from != null && edge.to != null) {
-        subject = resolveGraphNodeLabel(edge.from) + " → " + resolveGraphNodeLabel(edge.to);
+      if (edge && edge.from != null) {
+        name = resolveAlertNodeName(edge.from);
       }
-    } catch (_e) { /* fall back to empty subject */ }
+    } catch (_e) { /* fall back to generic name */ }
     return {
-      title: "High-value relationship",
+      name,
+      category: "High-value link",
       severity,
-      subject,
       detail: value
         ? `Carries an unusually high value (${value}) versus the rest of the graph — a candidate for a significant or anomalous transfer.`
         : "Carries an unusually high value versus the rest of the graph.",
     };
   }
-  return { title: "Alert", severity, subject: "", detail: alert.message || "" };
+  return { name: alert.message || "Alert", category: "Alert", severity, detail: "" };
 }
+
+// Push a node's properties into the parent "Info" tab, mirroring a node click,
+// and activate the Info tab so the user sees where the details appear.
+function showAlertNodeInfo(nodeId) {
+  try {
+    const base = (window.FULL_GRAPH && window.FULL_GRAPH.nodes && window.FULL_GRAPH.nodes.get)
+      ? window.FULL_GRAPH.nodes.get(nodeId)
+      : null;
+    if (!base) return;
+    const mod = (typeof MODIFIED_NODES !== "undefined" && MODIFIED_NODES && MODIFIED_NODES.get)
+      ? (MODIFIED_NODES.get(nodeId) || {})
+      : {};
+    if (typeof showNodeInfos === "function") showNodeInfos({ ...base, ...mod }, "state");
+    try {
+      window.parent.postMessage(
+        { type: "activate_graph_tab", payload: { tab: "graph_infos" } },
+        window.__LINKX_PARENT_ORIGIN__ || "*"
+      );
+    } catch (_e) { /* ignore */ }
+  } catch (_e) { /* ignore */ }
+}
+
+// Focus an alerted node and populate the Info tab, as clicking the node does.
+function focusAlertNode(nodeId) {
+  if (!window.network || nodeId == null) return;
+  try {
+    window.network.focus(nodeId, { scale: 1.2, animation: true });
+    window.network.selectNodes([nodeId]);
+  } catch (_e) { /* ignore */ }
+  showAlertNodeInfo(nodeId);
+}
+window.focusAlertNode = focusAlertNode;
+
+// Focus an alerted edge and show its source node's info in the Info tab.
+function focusAlertEdge(edgeId) {
+  if (!window.network || edgeId == null) return;
+  try {
+    window.network.selectEdges([edgeId]);
+    const edge = window.FULL_GRAPH && window.FULL_GRAPH.edges && window.FULL_GRAPH.edges.get
+      ? window.FULL_GRAPH.edges.get(edgeId)
+      : null;
+    if (edge && edge.from != null) {
+      window.network.focus(edge.from, { scale: 1.2, animation: true });
+      showAlertNodeInfo(edge.from);
+    }
+  } catch (_e) { /* ignore */ }
+}
+window.focusAlertEdge = focusAlertEdge;
 
 function generateGraphAlerts() {
   if (!window.ALERT_RULES_ENABLED) return [];
@@ -4718,52 +4847,13 @@ function runAlertScan(notify = true) {
   publishGraphAlerts(alerts);
   if (notify) {
     renderVisibleGraphBatch();
-    
+
     const overlay = document.getElementById("alerts-overlay");
     const container = document.getElementById("alerts-list-container");
-    const summaryEl = document.getElementById("alerts-summary");
     if (overlay && container) {
-      const highCount = alerts.filter(a => a.severity === "high").length;
-      const mediumCount = alerts.length - highCount;
-
-      if (summaryEl) {
-        if (alerts.length === 0) {
-          summaryEl.textContent = "No alerts — graph looks clean.";
-        } else {
-          const parts = [`${alerts.length} alert${alerts.length === 1 ? "" : "s"}`];
-          if (highCount) parts.push(`${highCount} high`);
-          if (mediumCount) parts.push(`${mediumCount} medium`);
-          summaryEl.textContent = parts.join(" · ");
-        }
-      }
-
-      if (alerts.length === 0) {
-        container.innerHTML = `<div style="opacity: 0.7; font-style: italic; line-height: 1.4;">No alerts triggered. The current view did not match any active alert rule.</div>`;
-      } else {
-        container.innerHTML = alerts.map(a => {
-          const d = describeGraphAlert(a);
-          const sevColor = d.severity === "high" ? "#e74c3c" : "#f39c12";
-          const sevLabel = d.severity === "high" ? "HIGH" : "MEDIUM";
-
-          let clickAction = '';
-          if (a.nodeId) {
-            const id = escapeAlertJs(a.nodeId);
-            clickAction = `if(window.network){ window.network.focus('${id}', {scale: 1.2, animation: true}); window.network.selectNodes(['${id}']); }`;
-          } else if (a.edgeId) {
-            const id = escapeAlertJs(a.edgeId);
-            clickAction = `if(window.network){ window.network.selectEdges(['${id}']); const edge = window.FULL_GRAPH.edges.get('${id}'); if(edge){ window.network.focus(edge.from, {scale: 1.2, animation: true}); } }`;
-          }
-
-          return `<div style="border-left: 3px solid ${sevColor}; padding: 6px 8px; background: rgba(0,0,0,0.02); border-radius: 0 6px 6px 0; cursor: pointer;" onclick="${clickAction}" title="Focus this alert on the graph">
-               <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 3px;">
-                 <strong style="color: ${sevColor}; font-size: 12px;">${escapeAlertHtml(d.title)}</strong>
-                 <span style="font-size: 9px; font-weight: 700; letter-spacing: 0.4px; color: #fff; background: ${sevColor}; border-radius: 10px; padding: 1px 6px; flex-shrink: 0;">${sevLabel}</span>
-               </div>
-               ${d.subject ? `<div style="font-weight: 600; margin-bottom: 2px; word-break: break-word;">${escapeAlertHtml(d.subject)}</div>` : ""}
-               <div style="opacity: 0.8; line-height: 1.35;">${escapeAlertHtml(d.detail)}</div>
-           </div>`;
-        }).join("");
-      }
+      window.__LAST_ALERTS = alerts;
+      populateAlertNameKeySelect(alerts);
+      renderAlertCards(alerts);
       overlay.style.display = "flex";
     } else {
       if (alerts.length === 0) alert("Alert scan complete. No alerts triggered.");
@@ -4772,6 +4862,75 @@ function runAlertScan(notify = true) {
   }
   return alerts;
 }
+
+// Fill the "Name by" select with every property key seen across the alerted nodes.
+function populateAlertNameKeySelect(alerts) {
+  const select = document.getElementById("alerts-name-key");
+  if (!select) return;
+  const keys = collectAlertPropertyKeys(alerts);
+  const current = window.__ALERT_NAME_KEY || "";
+  const options = ['<option value="">Auto (first property)</option>']
+    .concat(keys.map(key => `<option value="${escapeAlertHtml(key)}">${escapeAlertHtml(key)}</option>`));
+  select.innerHTML = options.join("");
+  // Keep the user's choice if it still exists; otherwise fall back to Auto.
+  if (current && keys.indexOf(current) !== -1) select.value = current;
+  else { select.value = ""; window.__ALERT_NAME_KEY = ""; }
+}
+
+// Re-render the alert cards (no rescan) using the current naming key.
+function renderAlertCards(alerts) {
+  const container = document.getElementById("alerts-list-container");
+  const summaryEl = document.getElementById("alerts-summary");
+  if (!container) return;
+  alerts = alerts || [];
+
+  const highCount = alerts.filter(a => a.severity === "high").length;
+  const mediumCount = alerts.length - highCount;
+  if (summaryEl) {
+    if (alerts.length === 0) {
+      summaryEl.textContent = "No alerts — graph looks clean.";
+    } else {
+      const parts = [`${alerts.length} alert${alerts.length === 1 ? "" : "s"}`];
+      if (highCount) parts.push(`${highCount} high`);
+      if (mediumCount) parts.push(`${mediumCount} medium`);
+      summaryEl.textContent = parts.join(" · ");
+    }
+  }
+
+  if (alerts.length === 0) {
+    container.innerHTML = `<div style="opacity: 0.7; font-style: italic; line-height: 1.4;">No alerts triggered. The current view did not match any active alert rule.</div>`;
+    return;
+  }
+
+  container.innerHTML = alerts.map(a => {
+    const d = describeGraphAlert(a);
+    const sevColor = d.severity === "high" ? "#e74c3c" : "#f39c12";
+    const sevLabel = d.severity === "high" ? "HIGH" : "MEDIUM";
+
+    let clickAction = '';
+    if (a.nodeId != null) {
+      clickAction = `if(window.focusAlertNode){ window.focusAlertNode('${escapeAlertJs(a.nodeId)}'); }`;
+    } else if (a.edgeId != null) {
+      clickAction = `if(window.focusAlertEdge){ window.focusAlertEdge('${escapeAlertJs(a.edgeId)}'); }`;
+    }
+
+    return `<div style="border-left: 3px solid ${sevColor}; padding: 6px 8px; background: rgba(0,0,0,0.02); border-radius: 0 6px 6px 0; cursor: pointer;" onclick="${clickAction}" title="Focus this alert and open its details in the Info tab">
+         <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 3px;">
+           <strong style="color: ${sevColor}; font-size: 12px; word-break: break-word;">${escapeAlertHtml(d.name)}</strong>
+           <span style="font-size: 9px; font-weight: 700; letter-spacing: 0.4px; color: #fff; background: ${sevColor}; border-radius: 10px; padding: 1px 6px; flex-shrink: 0;">${sevLabel}</span>
+         </div>
+         <div style="font-size: 10px; font-weight: 600; letter-spacing: 0.3px; text-transform: uppercase; opacity: 0.55; margin-bottom: 3px;">${escapeAlertHtml(d.category)}</div>
+         <div style="opacity: 0.8; line-height: 1.35;">${escapeAlertHtml(d.detail)}</div>
+     </div>`;
+  }).join("");
+}
+
+// Fired when the user picks a different naming property; re-render without rescan.
+function onAlertNameKeyChange(value) {
+  window.__ALERT_NAME_KEY = value || "";
+  renderAlertCards(window.__LAST_ALERTS || []);
+}
+window.onAlertNameKeyChange = onAlertNameKeyChange;
 
 // Rescan entry point for the panel's "Rescan" button: paints a loading state,
 // then runs the scan on the next frame so the spinner is actually visible.

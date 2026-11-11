@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { useTheme } from '../../shared/theme/ThemeContext.jsx';
+import ThemePicker from '../../shared/theme/ThemePicker.jsx';
 import { useBackgroundAnimations } from '../../utils/backgroundAnimations.js';
+import { useGlassEffects } from '../../utils/glassEffects.js';
 
 const contextTabs = [
   { id: 'overview', label: 'Overview', panelId: 'workspace-context-overview' },
@@ -53,30 +54,14 @@ function GraphFilterPanel() {
 }
 
 function WorkspaceSettingsPanel() {
-  const { theme, setTheme, themes } = useTheme();
   const { areBackgroundAnimationsEnabled, setBackgroundAnimationsEnabled } = useBackgroundAnimations();
+  const { areGlassEffectsEnabled, setGlassEffectsEnabled } = useGlassEffects();
 
   return (
     <div className="workspace_context_settings_wrapper">
       <section className="workspace_context_section" aria-label="Theme settings">
         <h2>Appearance & Theme</h2>
-        <div className="workspace_theme_picker_grid">
-          {themes.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              className={`workspace_theme_option ${theme === t.id ? 'is-selected' : ''}`}
-              onClick={() => setTheme(t.id)}
-            >
-              <div className="workspace_theme_preview_header">
-                <span className="workspace_theme_color_badge" style={{ backgroundColor: t.previewColor }} />
-                <span className="workspace_theme_name">{t.name}</span>
-                {theme === t.id && <span className="workspace_theme_active_badge">Active</span>}
-              </div>
-              <small className="workspace_theme_desc">{t.description}</small>
-            </button>
-          ))}
-        </div>
+        <ThemePicker />
       </section>
 
       <section className="workspace_context_section" aria-label="Visual effects settings">
@@ -89,6 +74,14 @@ function WorkspaceSettingsPanel() {
               onChange={(e) => setBackgroundAnimationsEnabled(e.target.checked)}
             />
             <span>Background Motion Effects</span>
+          </label>
+          <label className="workspace_context_switch">
+            <input
+              type="checkbox"
+              checked={areGlassEffectsEnabled}
+              onChange={(e) => setGlassEffectsEnabled(e.target.checked)}
+            />
+            <span>Glass Blur Effects</span>
           </label>
         </div>
       </section>

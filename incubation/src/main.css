@@ -16,2072 +16,9 @@ select,
   user-select: text;
 }
 
-:root, [data-theme="nbe-daylight"] {
-  color-scheme: light;
-  --app-bg: #f6efea;
-  --app-text: #131e2a;
-  --panel-bg: rgba(255, 255, 255, 0.96);
-  --panel-border: rgba(174, 135, 79, 0.45);
-  --panel-shadow: rgba(19, 30, 42, 0.12);
-  --muted-text: #7f5523;
-  --input-bg: #FFFFFF;
-  --input-border: #ae874f;
-  --accent: #FCC676;
-  --accent-strong: #ae874f;
-  --disabled-bg: #F6F7F885;
-  --disabled-border: rgba(174, 135, 79, 0.3);
-  --workspace-bg: #f6efea;
-  --workspace-scene-bg: #f6efea;
-  --workspace-scene-overlay: linear-gradient(180deg, #f6efea 0%, rgba(255, 255, 255, 0.92) 50%, #eae1d7 100%);
-  --window-bg: rgba(255, 255, 255, 0.96);
-  --window-page-bg: rgba(246, 247, 248, 0.85);
-  --window-chrome-bg: #131e2a;
-  --window-glass-border: rgba(252, 198, 118, 0.6);
-  --primary-action-bg: #131e2a;
-  --primary-action-bg-hover: #1f2d3d;
-  --primary-action-bg-active: #ae874f;
-  --primary-action-text: #FCC676;
-  --primary-action-border: #ae874f;
-  --on-scene-text: #131e2a;
-  --on-scene-text-muted: #7f5523;
-  --on-scene-text-subtle: #ae874f;
-  --scene-divider: rgba(174, 135, 79, 0.4);
-  --scene-control-hover-bg: rgba(252, 198, 118, 0.25);
-  --scene-drag-bg: radial-gradient(rgba(252, 198, 118, 0.3), rgba(246, 239, 234, 0.5));
-  --scene-drag-border: #ae874f;
-  --status-pending-text: #7f5523;
-  --status-pending-bg: rgba(252, 198, 118, 0.3);
-  --status-info-text: #131e2a;
-  --status-info-bg: rgba(19, 30, 42, 0.15);
-  --status-success-text: #15803d;
-  --status-success-bg: rgba(34, 197, 94, 0.18);
-  --status-error-text: #b91c1c;
-  --status-error-bg: rgba(239, 68, 68, 0.18);
-  --status-default-text: #7f5523;
-  --status-default-bg: rgba(174, 135, 79, 0.2);
 
-  /* Component Specific Registered Tokens (Master Reference: NBE Daylight) */
-  --linkx-bg-root: #f6efea;
-  --linkx-text-primary: #131e2a;
-  --linkx-text-secondary: #7f5523;
-  --linkx-text-muted: #ae874f;
-  --linkx-text-subtle: rgba(127, 85, 35, 0.8);
-  --linkx-accent: #FCC676;
-  --linkx-accent-strong: #ae874f;
-  --linkx-shell-bg: #f6efea;
-  --linkx-workspace-bg: #f6efea;
-  --linkx-workspace-overlay: linear-gradient(180deg, #f6efea 0%, rgba(255, 255, 255, 0.92) 50%, #eae1d7 100%);
-  --linkx-launcher-bg: rgba(255, 255, 255, 0.95);
-  --linkx-launcher-border: rgba(174, 135, 79, 0.45);
-  --linkx-launcher-item-bg: rgba(246, 247, 248, 0.85);
-  --linkx-launcher-item-hover: rgba(252, 198, 118, 0.25);
-  --linkx-launcher-item-active: #131e2a;
-  --linkx-window-bg: rgba(255, 255, 255, 0.96);
-  --linkx-window-bg-active: rgba(255, 255, 255, 0.99);
-  --linkx-window-border: rgba(174, 135, 79, 0.35);
-  --linkx-window-border-active: #FCC676;
-  --linkx-window-radius: 6px;
-  --linkx-window-shadow: 0 14px 48px rgba(19, 30, 42, 0.16);
-  --linkx-window-backdrop-blur: 20px;
-  --linkx-window-header-bg: #131e2a;
-  --linkx-window-header-active-bg: #1f2d3d;
-  --linkx-window-header-drag-bg: #2b3d52;
-  --linkx-window-header-border-bottom: rgba(174, 135, 79, 0.3);
-  --window-header-text: #FCC676;
-  --window-header-title-size: 14px;
-  --window-header-title-weight: 700;
-  --window-subtitle-text: #8896a6;
-  --window-subtitle-hover-text: #FCC676;
-  --window-subtitle-border: #FCC676;
-  --window-action-btn-bg: rgba(255, 255, 255, 0.08);
-  --window-action-btn-border: rgba(255, 255, 255, 0.15);
-  --window-action-btn-icon: #8896a6;
-  --window-action-btn-hover-bg: rgba(252, 198, 118, 0.25);
-  --window-action-btn-hover-border: #FCC676;
-  --window-action-btn-hover-icon: #131e2a;
-  --window-danger-bg: rgba(239, 68, 68, 0.15);
-  --window-danger-border: rgba(239, 68, 68, 0.35);
-  --window-danger-icon: #ef4444;
-  --window-danger-hover-bg: rgba(239, 68, 68, 0.35);
-  --window-danger-hover-border: #ef4444;
-  --window-danger-hover-icon: #ffffff;
-  --linkx-window-body-bg: rgba(255, 255, 255, 0.96);
-  --window-text: #131e2a;
-  --window-text-secondary: #4a5568;
-  --window-text-muted: #8896a6;
-  --window-card-bg: #FFFFFF;
-  --window-card-border: rgba(174, 135, 79, 0.35);
-  --window-accent: #FCC676;
-  --window-resize-handle-color: rgba(174, 135, 79, 0.25);
-  --window-resize-handle-hover-color: #FCC676;
-  --window-resize-corner-bg: rgba(174, 135, 79, 0.4);
-  --window-resize-corner-hover-bg: #FCC676;
-  --session-chip-bg: rgba(255, 255, 255, 0.95);
-  --session-chip-border: rgba(174, 135, 79, 0.35);
-  --session-chip-radius: 4px;
-  --session-chip-label-color: #8896a6;
-  --session-chip-value-color: #131e2a;
-  --session-chip-btn-bg: transparent;
-  --session-chip-btn-border: rgba(174, 135, 79, 0.35);
-  --session-chip-btn-icon: #8896a6;
-  --session-chip-btn-hover-bg: rgba(252, 198, 118, 0.25);
-  --session-chip-btn-hover-border: #FCC676;
-  --session-chip-btn-hover-icon: #131e2a;
-  --step-label-number-bg: linear-gradient(180deg, #FCC676 0%, #e5a845 100%);
-  --step-label-number-border: #FCC676;
-  --step-label-number-text: #131e2a;
-  --step-label-title-color: #131e2a;
-  --step-label-desc-color: #4a5568;
-  --mode-grid-btn-bg: #FFFFFF;
-  --mode-grid-btn-border: rgba(174, 135, 79, 0.35);
-  --mode-grid-btn-shadow: none;
-  --mode-grid-btn-icon: #8896a6;
-  --mode-grid-btn-title-color: #131e2a;
-  --mode-grid-btn-desc-color: #4a5568;
-  --mode-grid-btn-hover-bg: rgba(252, 198, 118, 0.12);
-  --mode-grid-btn-hover-border: rgba(174, 135, 79, 0.55);
-  --mode-grid-btn-hover-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  --mode-grid-btn-hover-icon: #131e2a;
-  --mode-grid-btn-hover-title-color: #131e2a;
-  --mode-grid-btn-hover-desc-color: #131e2a;
-  --mode-grid-btn-active-bg: rgba(252, 198, 118, 0.22);
-  --mode-grid-btn-active-border: #FCC676;
-  --mode-grid-btn-active-shadow: 0 0 0 1px #FCC676, 0 6px 16px rgba(252, 198, 118, 0.25);
-  --mode-grid-btn-active-icon: #131e2a;
-  --mode-grid-btn-active-title-color: #131e2a;
-  --mode-grid-btn-active-desc-color: #131e2a;
-  --mode-grid-btn-pressed-bg: rgba(252, 198, 118, 0.32);
-  --mode-grid-btn-pressed-border: #e5a845;
-  --mode-grid-btn-pressed-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
-  --mode-grid-btn-pressed-icon: #131e2a;
-  --mode-grid-btn-pressed-title-color: #131e2a;
-  --mode-grid-btn-pressed-desc-color: #131e2a;
-  --mode-grid-btn-disabled-bg: rgba(235, 235, 235, 0.6);
-  --mode-grid-btn-disabled-border: rgba(174, 135, 79, 0.18);
-  --mode-grid-btn-disabled-shadow: none;
-  --mode-grid-btn-disabled-opacity: 0.45;
-  --mode-grid-btn-disabled-icon: #a0aec0;
-  --mode-grid-btn-disabled-title-color: #a0aec0;
-  --mode-grid-btn-disabled-desc-color: #a0aec0;
-  --connection-grid-btn-bg: #FFFFFF;
-  --connection-grid-btn-border: rgba(174, 135, 79, 0.35);
-  --connection-grid-btn-shadow: none;
-  --connection-grid-btn-icon: #8896a6;
-  --connection-grid-btn-title-color: #131e2a;
-  --connection-grid-btn-badge-color: #8896a6;
-  --connection-grid-btn-hover-bg: rgba(252, 198, 118, 0.12);
-  --connection-grid-btn-hover-border: rgba(174, 135, 79, 0.55);
-  --connection-grid-btn-hover-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  --connection-grid-btn-hover-icon: #131e2a;
-  --connection-grid-btn-hover-title-color: #131e2a;
-  --connection-grid-btn-hover-badge-color: #131e2a;
-  --connection-grid-btn-pressed-bg: rgba(252, 198, 118, 0.32);
-  --connection-grid-btn-pressed-border: #e5a845;
-  --connection-grid-btn-pressed-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
-  --connection-grid-btn-pressed-icon: #131e2a;
-  --connection-grid-btn-pressed-title-color: #131e2a;
-  --connection-grid-btn-pressed-badge-color: #131e2a;
-  --connection-grid-btn-active-bg: rgba(252, 198, 118, 0.22);
-  --connection-grid-btn-active-border: #FCC676;
-  --connection-grid-btn-active-shadow: 0 0 0 1px #FCC676, 0 6px 16px rgba(252, 198, 118, 0.25);
-  --connection-grid-btn-active-icon: #131e2a;
-  --connection-grid-btn-active-title-color: #131e2a;
-  --connection-grid-btn-active-badge-color: #131e2a;
-  --connection-grid-btn-disabled-bg: rgba(235, 235, 235, 0.6);
-  --connection-grid-btn-disabled-border: rgba(174, 135, 79, 0.18);
-  --connection-grid-btn-disabled-shadow: none;
-  --connection-grid-btn-disabled-opacity: 0.45;
-  --connection-grid-btn-disabled-icon: #a0aec0;
-  --connection-grid-btn-disabled-title-color: #a0aec0;
-  --connection-grid-btn-disabled-badge-color: #a0aec0;
-  --config-preview-btn-bg: #FFFFFF;
-  --config-preview-btn-border: rgba(174, 135, 79, 0.35);
-  --config-preview-btn-shadow: none;
-  --config-preview-btn-icon: #8896a6;
-  --config-preview-btn-title-color: #131e2a;
-  --config-preview-btn-desc-color: #4a5568;
-  --config-preview-btn-hover-bg: rgba(252, 198, 118, 0.12);
-  --config-preview-btn-hover-border: rgba(174, 135, 79, 0.55);
-  --config-preview-btn-hover-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  --config-preview-btn-hover-icon: #131e2a;
-  --config-preview-btn-hover-title-color: #131e2a;
-  --config-preview-btn-hover-desc-color: #131e2a;
-  --config-preview-btn-pressed-bg: rgba(252, 198, 118, 0.32);
-  --config-preview-btn-pressed-border: #e5a845;
-  --config-preview-btn-pressed-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
-  --config-preview-btn-pressed-icon: #131e2a;
-  --config-preview-btn-pressed-title-color: #131e2a;
-  --config-preview-btn-pressed-desc-color: #131e2a;
-  --config-preview-btn-active-bg: rgba(252, 198, 118, 0.22);
-  --config-preview-btn-active-border: #FCC676;
-  --config-preview-btn-active-shadow: 0 0 0 1px #FCC676, 0 6px 16px rgba(252, 198, 118, 0.25);
-  --config-preview-btn-active-icon: #131e2a;
-  --config-preview-btn-active-title-color: #131e2a;
-  --config-preview-btn-active-desc-color: #131e2a;
-  --config-preview-btn-disabled-bg: rgba(235, 235, 235, 0.6);
-  --config-preview-btn-disabled-border: rgba(174, 135, 79, 0.18);
-  --config-preview-btn-disabled-shadow: none;
-  --config-preview-btn-disabled-opacity: 0.45;
-  --config-preview-btn-disabled-icon: #a0aec0;
-  --config-preview-btn-disabled-title-color: #a0aec0;
-  --config-preview-btn-disabled-desc-color: #a0aec0;
-  --source-choose-step-label-bg: transparent;
-  --source-choose-step-label-border: #e2dbd0;
-  --source-choose-step-gradient-top: rgba(255, 255, 255, 0.98);
-  --source-choose-step-gradient-bottom: rgba(246, 239, 234, 0.92);
-  --source-choose-step-gradient-angle: 180deg;
-  --source-choose-step-bg: linear-gradient(var(--source-choose-step-gradient-angle, 180deg), var(--source-choose-step-gradient-top, rgba(255, 255, 255, 0.98)), var(--source-choose-step-gradient-bottom, rgba(246, 239, 234, 0.92)));
-  --window-card-subtext-color: #4a5568;
-  --window-card-hover-subtext-color: #131e2a;
-  --window-card-active-subtext-color: #131e2a;
-  --window-scrollbar-track-bg: transparent;
-  --window-scrollbar-thumb-bg: rgba(174, 135, 79, 0.4);
-  --window-scrollbar-thumb-hover-bg: rgba(174, 135, 79, 0.65);
-  --window-scrollbar-thumb-active-bg: rgba(174, 135, 79, 0.9);
-  --window-scrollbar-thumb-border: transparent;
-  --window-scrollbar-width: 6px;
-  --window-footer-text-color: #7f5523;
-  --window-footer-info-icon-color: #7f5523;
-  --window-footer-btn-bg-top: #FFFFFF;
-  --window-footer-btn-bg-bottom: rgba(246, 239, 234, 0.92);
-  --window-footer-btn-bg-angle: 180deg;
-  --window-footer-btn-text: #131e2a;
-  --window-footer-btn-border: rgba(174, 135, 79, 0.45);
-  --window-footer-btn-hover-bg-top: rgba(252, 198, 118, 0.25);
-  --window-footer-btn-hover-bg-bottom: rgba(252, 198, 118, 0.12);
-  --window-footer-btn-hover-bg-angle: 180deg;
-  --window-footer-btn-hover-text: #131e2a;
-  --window-footer-btn-hover-border: #FCC676;
-  --window-footer-btn-hover-opacity: 1;
-  --window-footer-btn-pressed-bg-top: rgba(252, 198, 118, 0.4);
-  --window-footer-btn-pressed-bg-bottom: rgba(252, 198, 118, 0.25);
-  --window-footer-btn-pressed-bg-angle: 180deg;
-  --window-footer-btn-pressed-text: #131e2a;
-  --window-footer-btn-pressed-border: #e5a845;
-  --window-footer-btn-disabled-bg: rgba(235, 235, 235, 0.6);
-  --window-footer-btn-disabled-text: #a0aec0;
-  --window-footer-btn-disabled-border: rgba(174, 135, 79, 0.18);
-  --window-footer-btn-disabled-opacity: 0.5;
-  --tooltip-bg: #131e2a;
-  --tooltip-text: #FFFFFF;
-  --tooltip-border: #FCC676;
-  --tooltip-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-  --tooltip-font-size: 11px;
-  --tooltip-font-weight: 600;
-  --upload-page-title-color: #131e2a;
-  --upload-page-hint-color: #7f5523;
-  --central-footer-round-btn-bg: #FFFFFF;
-  --central-footer-round-btn-border: rgba(174, 135, 79, 0.45);
-  --central-footer-round-btn-icon-color: #a6814b;
-  --central-footer-round-btn-hover-bg: rgba(174, 135, 79, 0.12);
-  --central-footer-round-btn-hover-border: #FCC676;
-  --central-footer-round-btn-hover-icon-color: #131e2a;
-  --central-secondary-box-bg: rgba(255, 255, 255, 0.96);
-  --central-secondary-box-border: rgba(174, 135, 79, 0.45);
-  --central-secondary-box-title: #131e2a;
-  --central-secondary-box-text: #4a5568;
-  --central-secondary-card-bg: #FFFFFF;
-  --central-secondary-card-border: rgba(174, 135, 79, 0.35);
-  --central-secondary-card-title: #131e2a;
-  --central-secondary-pill-bg: rgba(174, 135, 79, 0.12);
-  --central-secondary-pill-text: #7f5523;
-  --central-graph-stroke: #FCC676;
-  --central-graph-fill: rgba(174, 135, 79, 0.35);
-  --central-graph-grid: rgba(174, 135, 79, 0.25);
-  --central-graph-node: #213447;
-  --central-page-dots-container-bg: rgba(255, 255, 255, 0.6);
-  --central-page-dots-container-border: rgba(174, 135, 79, 0.25);
-  --central-page-dot-bg: rgba(174, 135, 79, 0.35);
-  --central-page-dot-border: rgba(174, 135, 79, 0.45);
-  --central-page-dot-active-bg: #FCC676;
-  --central-page-dot-active-border: #FCC676;
-  --upload-dropzone-bg: #FFFFFF;
-  --upload-dropzone-hover-bg: rgba(174, 135, 79, 0.08);
-  --upload-dropzone-border: rgba(174, 135, 79, 0.45);
-  --upload-dropzone-hover-border: #FCC676;
-  --upload-dropzone-drag-bg: rgba(252, 198, 118, 0.16);
-  --upload-dropzone-drag-border: #FCC676;
-  --upload-icon-badge-bg: rgba(174, 135, 79, 0.12);
-  --upload-icon-badge-drag-bg: #FCC676;
-  --upload-icon-badge-border: rgba(174, 135, 79, 0.45);
-  --upload-icon-color: #FCC676;
-  --upload-icon-drag-color: #131e2a;
-  --upload-dropzone-title-color: #131e2a;
-  --upload-dropzone-desc-color: #7f5523;
-  --upload-summary-bg: #FFFFFF;
-  --upload-summary-border: rgba(174, 135, 79, 0.45);
-  --upload-summary-title-color: #131e2a;
-  --upload-summary-clear-btn-bg: transparent;
-  --upload-summary-clear-btn-text: #7f5523;
-  --upload-summary-clear-btn-hover-bg: rgba(185, 28, 28, 0.15);
-  --upload-summary-clear-btn-hover-text: #b91c1c;
-  --upload-file-item-color: #7f5523;
-  --upload-error-text-color: #b91c1c;
-  --upload-error-bg: rgba(185, 28, 28, 0.12);
-  --upload-error-border: rgba(185, 28, 28, 0.3);
-  --timeline-step-circle-inactive-bg: rgba(174, 135, 79, 0.12);
-  --timeline-step-circle-inactive-border: rgba(174, 135, 79, 0.45);
-  --timeline-step-circle-inactive-text: #7f5523;
-  --timeline-step-circle-active-bg: #FCC676;
-  --timeline-step-circle-active-border: #FCC676;
-  --timeline-step-circle-fulfilled-bg-angle: 135deg;
-  --timeline-step-circle-fulfilled-bg-top: #d9a65d;
-  --timeline-step-circle-fulfilled-bg-bottom: #8e652a;
-  --timeline-step-circle-fulfilled-border: #bfa06d;
-  --timeline-step-circle-fulfilled-text: #ffffff;
-  --timeline-step-title-color: #131e2a;
-  --timeline-step-active-title-color: #131e2a;
-  --timeline-step-line-color: #FCC676;
-  --source-status-pill-bg: rgba(174, 135, 79, 0.12);
-  --source-status-pill-border: rgba(174, 135, 79, 0.45);
-  --source-status-pill-text: #7f5523;
-  --source-status-pill-status-text: #131e2a;
-  --source-status-pill-idle-bg: rgba(174, 135, 79, 0.12);
-  --source-status-pill-idle-border: rgba(174, 135, 79, 0.45);
-  --source-status-pill-idle-text: #7f5523;
-  --source-status-pill-idle-status-text: #7f5523;
-  --source-status-pill-active-bg: rgba(22, 163, 74, 0.12);
-  --source-status-pill-active-border: rgba(22, 163, 74, 0.45);
-  --source-status-pill-active-text: #15803d;
-  --source-status-pill-active-status-text: #16a34a;
-  --source-status-pill-error-bg: rgba(220, 38, 38, 0.12);
-  --source-status-pill-error-border: rgba(220, 38, 38, 0.45);
-  --source-status-pill-error-text: #b91c1c;
-  --source-status-pill-error-status-text: #dc2626;
-  --dataframe-card-bg: #FFFFFF;
-  --dataframe-card-border: rgba(174, 135, 79, 0.45);
-  --dataframe-actions-card-bg: #FFFFFF;
-  --dataframe-actions-card-border: rgba(174, 135, 79, 0.45);
-  --dataframe-action-group-container-bg: #FFFFFF;
-  --dataframe-action-group-container-border: rgba(174, 135, 79, 0.45);
-  --dataframe-card-title-color: #131e2a;
-  --dataframe-card-subtitle-color: #7f5523;
-  --dataframe-card-icon-color: #FCC676;
-  --dataframe-pill-bg: rgba(174, 135, 79, 0.12);
-  --dataframe-pill-border: rgba(174, 135, 79, 0.45);
-  --dataframe-pill-text: #7f5523;
-  --dataframe-pill-icon-color: #FCC676;
-  --dataframe-metric-card-bg: rgba(174, 135, 79, 0.08);
-  --dataframe-metric-card-border: rgba(174, 135, 79, 0.45);
-  --dataframe-metric-label-color: #7f5523;
-  --dataframe-metric-value-color: #131e2a;
-  --dataframe-metric-icon-color: #FCC676;
-  --dataframe-action-btn-bg: #FFFFFF;
-  --dataframe-action-btn-border: #dfcfb9;
-  --dataframe-action-btn-text: #131e2a;
-  --dataframe-action-btn-icon-color: #a6814b;
-  --dataframe-action-btn-selected-bg: #213447;
-  --dataframe-action-btn-selected-border: #a6814c;
-  --dataframe-action-btn-selected-text: #FFFFFF;
-  --dataframe-action-btn-selected-icon-color: #ae874f;
-  --dataframe-desc-banner-bg: rgba(174, 135, 79, 0.08);
-  --dataframe-desc-banner-border: rgba(174, 135, 79, 0.3);
-  --dataframe-desc-banner-text: #131e2a;
-  --dataframe-desc-banner-subtext: #7f5523;
-  --dataframe-desc-info-icon-bg: #FCC676;
-  --dataframe-desc-info-icon-text: #131e2a;
-  --dataframe-field-label-color: #7f5523;
-  --dataframe-field-icon-color: #FCC676;
-  --dataframe-input-bg: #FFFFFF;
-  --dataframe-input-border: rgba(174, 135, 79, 0.45);
-  --dataframe-input-text: #131e2a;
-  --dataframe-manage-rules-btn-bg: #131e2a;
-  --dataframe-manage-rules-btn-text: #f6efea;
-  --dataframe-manage-rules-btn-border: rgba(174, 135, 79, 0.45);
-  --stream-card-bg: #FFFFFF;
-  --stream-card-border: rgba(174, 135, 79, 0.45);
-  --stream-header-title-color: #131e2a;
-  --stream-header-icon-color: #FCC676;
-  --stream-status-pill-bg: rgba(174, 135, 79, 0.12);
-  --stream-status-pill-border: rgba(174, 135, 79, 0.45);
-  --stream-status-pill-text: #7f5523;
-  --stream-log-bg: #0d1520;
-  --stream-log-border: rgba(174, 135, 79, 0.35);
-  --stream-log-text: #38bdf8;
-  --storage-card-bg: #FFFFFF;
-  --storage-card-border: rgba(174, 135, 79, 0.45);
-  --storage-header-title-color: #131e2a;
-  --storage-header-icon-color: #FCC676;
-  --storage-type-btn-bg: #FFFFFF;
-  --storage-type-btn-border: #dfcfb9;
-  --storage-type-btn-text: #131e2a;
-  --storage-type-btn-icon-color: #a6814b;
-  --storage-type-btn-selected-bg: #213447;
-  --storage-type-btn-selected-border: #a6814c;
-  --storage-type-btn-selected-text: #FFFFFF;
-  --storage-type-btn-selected-icon-color: #ae874f;
-  --storage-toolbar-bg: transparent;
-  --storage-toolbar-border: rgba(174, 135, 79, 0.45);
-  --storage-field-label-color: #7f5523;
-  --storage-toggle-bg: #FFFFFF;
-  --storage-toggle-border: rgba(174, 135, 79, 0.45);
-  --storage-toggle-label-color: #7f5523;
-  --storage-toggle-hover-bg: rgba(174, 135, 79, 0.12);
-  --storage-toggle-hover-border: #FCC676;
-  --storage-input-bg: #FFFFFF;
-  --storage-input-border: rgba(174, 135, 79, 0.45);
-  --storage-input-text: #131e2a;
-  --storage-connect-btn-bg: #131e2a;
-  --storage-connect-btn-text: #f6efea;
-  --storage-connect-btn-border: rgba(174, 135, 79, 0.45);
-  --storage-browser-bg: #FFFFFF;
-  --storage-browser-border: rgba(174, 135, 79, 0.45);
-  --storage-toolbar-bar-bg: #FFFFFF;
-  --storage-toolbar-bar-border: rgba(174, 135, 79, 0.2);
-  --storage-parent-row-bg: #FFFFFF;
-  --storage-parent-row-border: rgba(174, 135, 79, 0.25);
-  --storage-parent-btn-bg: #FFFFFF;
-  --storage-parent-btn-border: rgba(174, 135, 79, 0.45);
-  --storage-parent-btn-text: #7f5523;
-  --storage-parent-btn-hover-bg: rgba(174, 135, 79, 0.12);
-  --storage-parent-btn-hover-border: #FCC676;
-  --storage-parent-btn-hover-text: #131e2a;
-  --storage-parent-search-bg: #FFFFFF;
-  --storage-parent-search-border: rgba(174, 135, 79, 0.45);
-  --storage-parent-search-text: #131e2a;
-  --storage-parent-search-placeholder: #8896a6;
-  --storage-search-input-bg: #FFFFFF;
-  --storage-search-input-border: rgba(174, 135, 79, 0.45);
-  --storage-search-input-text: #131e2a;
-  --storage-search-btn-bg: rgba(174, 135, 79, 0.08);
-  --storage-search-btn-border: rgba(174, 135, 79, 0.45);
-  --storage-search-btn-icon-color: #a6814b;
-  --storage-search-btn-hover-bg: rgba(174, 135, 79, 0.18);
-  --storage-search-btn-hover-border: #FCC676;
-  --storage-search-btn-hover-icon-color: #131e2a;
-  --storage-date-input-bg: #FFFFFF;
-  --storage-date-input-border: rgba(174, 135, 79, 0.45);
-  --storage-date-input-text: #131e2a;
-  --storage-date-hyphen-color: #7f5523;
-  --storage-selection-tools-bg: transparent;
-  --storage-selection-tools-border: transparent;
-  --storage-selected-count-bg: transparent;
-  --storage-selected-count-border: transparent;
-  --storage-selected-count-text: #7f5523;
-  --storage-discard-btn-bg: transparent;
-  --storage-discard-btn-border: rgba(174, 135, 79, 0.45);
-  --storage-discard-btn-text: #7f5523;
-  --storage-discard-btn-hover-bg: rgba(185, 28, 28, 0.15);
-  --storage-discard-btn-hover-border: rgba(185, 28, 28, 0.45);
-  --storage-discard-btn-hover-text: #b91c1c;
-  --storage-table-header-bg: rgba(174, 135, 79, 0.08);
-  --storage-table-header-border: rgba(174, 135, 79, 0.3);
-  --storage-table-header-text: #7f5523;
-  --storage-table-row-bg: transparent;
-  --storage-table-row-text: #131e2a;
-  --storage-table-row-border: rgba(174, 135, 79, 0.15);
-  --storage-table-row-hover-bg: rgba(174, 135, 79, 0.08);
-  --storage-table-row-selected-bg: rgba(174, 135, 79, 0.16);
-  --storage-placeholder-text-color: #7f5523;
-  --linkx-card-bg: #FFFFFF;
-  --linkx-card-border: rgba(174, 135, 79, 0.45);
-  --linkx-card-hover-border: #FCC676;
-  --linkx-card-surface-bg: rgba(255, 255, 255, 0.96);
-  --linkx-input-bg: #FFFFFF;
-  --linkx-input-border: rgba(174, 135, 79, 0.6);
-  --linkx-input-text: #131e2a;
-  --linkx-input-placeholder: rgba(127, 85, 35, 0.75);
-  --linkx-button-bg: #131e2a;
-  --linkx-button-border: #ae874f;
-  --linkx-button-hover-bg: #1f2d3d;
-  --linkx-button-text: #FCC676;
-  --linkx-tab-bg: rgba(246, 247, 248, 0.92);
-  --linkx-tab-border: rgba(174, 135, 79, 0.45);
-  --linkx-tab-active-bg: #131e2a;
-  --linkx-tab-active-border: #ae874f;
-  --linkx-tab-active-text: #FCC676;
-  --linkx-shell-bg-solid: #f6efea;
-  --linkx-highlight-bg: rgba(174, 135, 79, 0.12);
-  --linkx-highlight-bg-strong: rgba(174, 135, 79, 0.2);
-  --linkx-overlay-bg: rgba(0, 0, 0, 0.35);
-  --linkx-danger-bg: rgba(185, 28, 28, 0.18);
-  --linkx-danger-text: #b91c1c;
-  --linkx-danger-border: rgba(185, 28, 28, 0.35);
-  --linkx-success-bg: rgba(34, 197, 94, 0.15);
-  --linkx-success-text: #15803d;
-  --linkx-success-border: rgba(34, 197, 94, 0.3);
-  --linkx-cta-bg: #131e2a;
-  --linkx-cta-text: #f6efea;
-  --linkx-cta-bg-hover: #1f2d3d;
-  --linkx-cta-border: #ae874f;
-  --linkx-link-text: #ae874f;
-  --linkx-separator: rgba(174, 135, 79, 0.3);
-  --linkx-form-label: #7f5523;
-  --linkx-dock-tab-bg: #131e2a;
-  --linkx-dock-tab-active-bg: rgba(252, 198, 118, 0.15);
-  --linkx-dock-header-bg: rgba(19, 30, 42, 0.9);
+/* Theme tokens live in src/styles/themes/ (imported before this file). */
 
-  /* === Region-scoped variables (NBE Daylight) === */
-  /* Launcher (Left Rail) */
-  --launcher-text: var(--linkx-text-primary);
-  --launcher-text-secondary: var(--linkx-text-secondary);
-  --launcher-accent: var(--linkx-accent);
-  --launcher-separator: var(--linkx-separator);
-  --launcher-highlight: var(--linkx-highlight-bg);
-
-  /* Central Workspace */
-  --central-text: var(--linkx-text-primary);
-  --central-text-secondary: var(--linkx-text-secondary);
-  --central-text-muted: var(--linkx-text-muted);
-  --central-accent: var(--linkx-accent);
-  --central-card-bg: var(--linkx-card-bg);
-  --central-card-border: var(--linkx-card-border);
-  --central-separator: var(--linkx-separator);
-
-  /* Central workspace interactive states */
-  --central-hover-bg: rgba(174, 135, 79, 0.06);
-  --central-hover-border: var(--central-card-border);
-  --central-hover-text: var(--central-text);
-  --central-focus-ring: rgba(252, 198, 118, 0.5);
-  --central-disabled-opacity: 0.62;
-  --central-panel-shadow: rgba(0, 0, 0, 0.15);
-  --central-avatar-bg: #131e2a;
-  --central-avatar-text: #FCC676;
-  --central-avatar-border: #ae874f;
-  --central-upload-border: var(--linkx-card-hover-border);
-
-  /* Central Workspace Decoupled Variables */
-  --central-identity-text: #131e2a;
-  --central-home-title-color: #131e2a;
-  --central-home-subtitle-color: #ae874f;
-  --central-upload-mark-bg: #FCC676;
-  --central-upload-mark-icon: #131e2a;
-  --central-upload-icon-color: #131e2a;
-  --central-option-text-color: #7f5523;
-  --central-footer-text-color: #7f5523;
-  --central-panel-gradient-top: rgba(255, 255, 255, 0.96);
-  --central-panel-gradient-bottom: rgba(246, 239, 234, 0.96);
-  --central-panel-gradient-angle: 180deg;
-  /* File Upload Dropzone Identity Variables */
-  --central-upload-bg: #FFFFFF;
-  --central-upload-border: #FCC676;
-  --central-upload-hover-bg: rgba(252, 198, 118, 0.08);
-  --central-upload-hover-border: #FCC676;
-
-  /* Option Buttons Identity Variables */
-  --central-option-card-bg: #FFFFFF;
-  --central-option-card-border: rgba(174, 135, 79, 0.45);
-  --central-option-hover-bg: rgba(174, 135, 79, 0.08);
-  --central-option-hover-border: rgba(174, 135, 79, 0.45);
-  --central-option-hover-text: #131e2a;
-
-  /* Quick Analysis Badge Identity Variables */
-  --central-badge-text-color: #FCC676;
-  --central-badge-bg: transparent;
-  --central-badge-border: transparent;
-
-  /* Attached File List Identity Variables */
-  --central-file-item-bg: #FFFFFF;
-  --central-file-item-border: rgba(174, 135, 79, 0.3);
-  --central-file-item-name-color: #131e2a;
-  --central-file-item-size-color: #ae874f;
-  --central-file-item-remove-color: #ae874f;
-  /* Analyze Button & Config Review Identity Variables */
-  --central-analyze-btn-bg: #FCC676;
-  --central-analyze-btn-text: #131e2a;
-  --central-analyze-icon-color: #ffffff;
-  --central-analyze-btn-border: #FCC676;
-  --central-analyze-btn-hover-bg: #fdb84d;
-  --central-analyze-btn-hover-text: #131e2a;
-  --central-config-review-bg: rgba(0, 0, 0, 0.03);
-  --central-config-review-border: rgba(174, 135, 79, 0.3);
-  /* Run in Background & Cancel Buttons Identity Variables */
-  --central-bg-btn-bg: rgba(174, 135, 79, 0.08);
-  --central-bg-btn-text: #131e2a;
-  --central-bg-btn-border: rgba(174, 135, 79, 0.45);
-  --central-bg-btn-hover-bg: rgba(174, 135, 79, 0.18);
-  --central-cancel-btn-bg: rgba(220, 38, 38, 0.08);
-  --central-cancel-btn-text: #dc2626;
-  --central-cancel-btn-border: rgba(220, 38, 38, 0.4);
-  --central-cancel-btn-hover-bg: rgba(220, 38, 38, 0.18);
-  /* Expanded Panel Identity Variables */
-  --central-expanded-panel-gradient-top: rgba(255, 255, 255, 0.98);
-  --central-expanded-panel-gradient-bottom: rgba(246, 239, 234, 0.98);
-  --central-expanded-panel-gradient-angle: 180deg;
-  --central-expanded-panel-border: rgba(174, 135, 79, 0.55);
-
-  /* Analyze Button Label & Gradient Identity Variables */
-  --central-analyze-btn-label: Analyze;
-  --central-analyze-btn-gradient-top: #FCC676;
-  --central-analyze-btn-gradient-bottom: #fdb84d;
-  --central-analyze-btn-gradient-angle: 135deg;
-  /* Analyzing Active Button Identity Variables */
-  --central-analyze-btn-hover-opacity: 0.85;
-  /* Analyze CTA Button Disabled State Variables */
-  --central-analyze-btn-disabled-opacity: 0.45;
-  --central-analyze-btn-disabled-bg: rgba(0, 0, 0, 0.12);
-  --central-analyze-btn-disabled-border: rgba(0, 0, 0, 0.15);
-  --central-analyze-btn-disabled-text: rgba(148, 163, 184, 0.9);
-  /* 👉 Right Workspace Board Identity Tokens */
-  --right-workspace-gradient-top: rgba(255, 255, 255, 0.98);
-  --right-workspace-gradient-bottom: rgba(246, 239, 234, 0.92);
-  --right-workspace-gradient-angle: 180deg;
-  --right-workspace-bg: linear-gradient(var(--right-workspace-gradient-angle, 180deg), var(--right-workspace-gradient-top, rgba(255, 255, 255, 0.98)), var(--right-workspace-gradient-bottom, rgba(246, 239, 234, 0.92)));
-  --right-workspace-border: rgba(174, 135, 79, 0.35);
-  --right-tabs-wrapper-bg: transparent;
-  --right-collapse-btn-bg: #FFFFFF;
-  --right-collapse-btn-border: rgba(174, 135, 79, 0.3);
-  --right-collapse-btn-icon: #8896a6;
-  --right-collapse-btn-hover-bg: rgba(174, 135, 79, 0.12);
-  --right-collapse-btn-hover-border: rgba(174, 135, 79, 0.45);
-  --right-collapse-btn-hover-icon: #131e2a;
-  --right-tabs-bg: rgba(0, 0, 0, 0.04);
-  --right-tabs-border: rgba(174, 135, 79, 0.3);
-  --right-tab-text: #8896a6;
-  --right-tab-hover-bg: rgba(174, 135, 79, 0.08);
-  --right-tab-hover-text: #131e2a;
-  --right-tab-active-bg: rgba(252, 198, 118, 0.18);
-  --right-tab-active-text: #131e2a;
-  --right-tab-active-border: #FCC676;
-  --right-card-title-color: #ae874f;
-  --right-section-title-color: #ae874f;
-  --right-card-toggle-btn-bg: transparent;
-  --right-card-toggle-btn-color: #ae874f;
-  --right-card-toggle-btn-hover-bg: rgba(174, 135, 79, 0.12);
-  --right-card-toggle-btn-hover-color: #ae874f;
-  --right-card-bg: #FFFFFF;
-  --right-card-bg-opacity: 0.85;
-  --right-card-border: rgba(174, 135, 79, 0.25);
-  --right-label-color: #7f5523;
-  --right-value-color: #131e2a;
-  --right-status-badge-bg: rgba(16, 185, 129, 0.15);
-  --right-status-badge-text: #059669;
-  --right-chat-bg: #FFFFFF;
-  --right-chat-border: rgba(174, 135, 79, 0.25);
-  --right-assistant-action-btn-bg: transparent;
-  --right-assistant-action-btn-color: #ae874f;
-  --right-assistant-action-btn-hover-bg: rgba(174, 135, 79, 0.12);
-  --right-assistant-action-btn-hover-color: #ae874f;
-  --right-chat-avatar-bg: rgba(174, 135, 79, 0.15);
-  --right-chat-avatar-text: #ae874f;
-  --right-chat-user-msg-bg: rgba(252, 198, 118, 0.22);
-  --right-chat-user-msg-border: rgba(174, 135, 79, 0.35);
-  --right-chat-user-msg-text: #131e2a;
-  --right-chat-user-msg-time: #8896a6;
-  --right-chat-assistant-msg-bg: rgba(0, 0, 0, 0.04);
-  --right-chat-assistant-msg-border: rgba(174, 135, 79, 0.22);
-  --right-chat-assistant-msg-text: #131e2a;
-  --right-chat-assistant-msg-time: #8896a6;
-  --right-chat-thinking-bg: rgba(0, 0, 0, 0.04);
-  --right-chat-thinking-border: rgba(174, 135, 79, 0.22);
-  --right-chat-thinking-dot-color: #ae874f;
-  --right-chat-prompt-bg: rgba(252, 198, 118, 0.15);
-  --right-chat-prompt-border: rgba(174, 135, 79, 0.35);
-  --right-chat-prompt-text: #7f5523;
-  --right-chat-prompt-hover-bg: rgba(252, 198, 118, 0.35);
-  --right-chat-prompt-hover-border: rgba(174, 135, 79, 0.6);
-  --right-chat-prompt-hover-text: #131e2a;
-  --right-chat-bubble-action-color: #ae874f;
-  --right-chat-bubble-action-hover-bg: rgba(174, 135, 79, 0.14);
-  --right-chat-bubble-action-hover-color: #ae874f;
-  --right-chat-input-bg: #FFFFFF;
-  --right-chat-input-focus-bg: #FFFFFF;
-  --right-chat-input-border: rgba(174, 135, 79, 0.35);
-  --right-chat-input-text: #131e2a;
-  --right-chat-input-placeholder: #8896a6;
-  --right-chat-word-counter-color: #8896a6;
-  --right-chat-input-focus-border: #FCC676;
-  --right-chat-input-focus-ring: rgba(252, 198, 118, 0.25);
-  --right-chat-send-btn-bg: rgba(252, 198, 118, 0.35);
-  --right-chat-send-btn-border: rgba(174, 135, 79, 0.4);
-  --right-chat-send-btn-icon: #131e2a;
-  --right-chat-send-btn-hover-bg: rgba(252, 198, 118, 0.65);
-  --right-chat-send-btn-hover-border: rgba(174, 135, 79, 0.6);
-  --right-chat-send-btn-hover-icon: #0d1520;
-  --right-chat-send-btn-disabled-bg: rgba(0, 0, 0, 0.05);
-  --right-chat-send-btn-disabled-border: rgba(0, 0, 0, 0.1);
-  --right-chat-send-btn-disabled-icon: #a0aec0;
-  --right-chat-stop-btn-bg: rgba(239, 68, 68, 0.15);
-  --right-chat-stop-btn-border: rgba(239, 68, 68, 0.4);
-  --right-chat-stop-btn-color: #ef4444;
-  --right-chat-stop-btn-hover-bg: rgba(239, 68, 68, 0.28);
-  --right-chat-stop-btn-hover-border: rgba(239, 68, 68, 0.6);
-  --right-chat-stop-btn-hover-color: #dc2626;
-  --right-chat-scroll-btn-bg: rgba(255, 255, 255, 0.85);
-  --right-chat-scroll-btn-border: rgba(174, 135, 79, 0.4);
-  --right-chat-scroll-btn-color: #ae874f;
-  --right-chat-scroll-btn-hover-bg: rgba(252, 198, 118, 0.45);
-  --right-chat-scroll-btn-hover-border: rgba(174, 135, 79, 0.6);
-  --right-chat-scroll-btn-hover-color: #131e2a;
-  --right-chat-scroll-btn-opacity: 0.55;
-  --right-chat-scroll-btn-hover-opacity: 1;
-  --right-collapsed-bg: var(--linkx-launcher-bg, rgba(0, 0, 0, 0.04));
-  --right-collapsed-border: var(--linkx-launcher-border, rgba(174, 135, 79, 0.35));
-  --right-collapsed-btn-bg: transparent;
-  --right-collapsed-btn-border: transparent;
-  --right-collapsed-btn-icon: var(--launcher-text-secondary, #8896a6);
-  --right-collapsed-btn-hover-bg: var(--launcher-hover-bg, rgba(174, 135, 79, 0.12));
-  --right-collapsed-btn-hover-border: var(--launcher-hover-border, rgba(174, 135, 79, 0.4));
-  --right-collapsed-btn-hover-icon: var(--launcher-hover-text, #131e2a);
-  --right-collapsed-btn-active-bg: var(--launcher-active-bg, rgba(252, 198, 118, 0.35));
-  --right-collapsed-btn-active-border: var(--launcher-active-border, #FCC676);
-  --right-collapsed-btn-active-icon: var(--launcher-active-text, #131e2a);
-  --right-disabled-bg: rgba(0, 0, 0, 0.03);
-  --right-disabled-border: rgba(0, 0, 0, 0.12);
-  --right-disabled-opacity: 0.45;
-  --right-disabled-icon-color: #94a3b8;
-  --right-disabled-icon-opacity: 0.7;
-  --right-disabled-tab-bg: transparent;
-  --right-disabled-tab-border: transparent;
-  --right-filter-input-bg: #FFFFFF;
-  --right-filter-input-border: rgba(174, 135, 79, 0.35);
-  --right-filter-btn-bg: #FCC676;
-  --right-filter-btn-text: #131e2a;
-  --right-form-label-color: #4a5568;
-  --right-form-input-text: #131e2a;
-  --right-theme-card-name-color: #131e2a;
-  --right-theme-card-badge-text: #059669;
-  --right-theme-card-desc-color: #4a5568;
-  --right-theme-option-bg: #FFFFFF;
-  --right-theme-option-border: rgba(174, 135, 79, 0.3);
-  --right-theme-option-active-bg: rgba(252, 198, 118, 0.15);
-  --right-theme-option-active-border: #FCC676;
-  --central-analyzing-active-label: Analyzing;
-  --central-analyzing-active-gradient-top: #FCC676;
-  --central-analyzing-active-gradient-bottom: #e5a845;
-  --central-analyzing-active-gradient-angle: 135deg;
-  --central-analyzing-active-text-color: #131e2a;
-  --central-analyzing-active-border-color: #FCC676;
-  /* Overlay Layer & Controls Identity Variables */
-  --central-analysis-overlay-bg: rgba(19, 30, 42, 0.88);
-  --central-analysis-overlay-blur: 10px;
-  --central-analysis-overlay-title-color: #FCC676;
-  --central-analysis-overlay-status-color: #f6efea;
-  --central-analysis-overlay-btn-bg: rgba(255, 255, 255, 0.12);
-  --central-analysis-overlay-btn-text: #ffffff;
-  --central-analysis-overlay-btn-border: rgba(255, 255, 255, 0.2);
-  --central-analysis-overlay-btn-hover-bg: rgba(255, 255, 255, 0.28);
-  /* Cover Overlay Action Buttons Identity Variables */
-  --central-overlay-min-btn-bg: rgba(255, 255, 255, 0.12);
-  --central-overlay-min-btn-text: #ffffff;
-  --central-overlay-min-btn-border: rgba(255, 255, 255, 0.2);
-  --central-overlay-min-btn-hover-bg: rgba(255, 255, 255, 0.28);
-  --central-overlay-close-btn-bg: rgba(255, 255, 255, 0.12);
-  --central-overlay-close-btn-text: #ffffff;
-  --central-overlay-close-btn-border: rgba(255, 255, 255, 0.2);
-  --central-overlay-close-btn-hover-bg: rgba(220, 38, 38, 0.7);
-
-  /* Tasks Option Badge Identity Variables */
-  --central-tasks-badge-bg: #FCC676;
-  --central-tasks-badge-text: #131e2a;
-  --central-tasks-badge-border: transparent;
-  /* Reports Option Badge Identity Variables */
-  --central-reports-badge-bg: #FCC676;
-  --central-reports-badge-text: #131e2a;
-  --central-reports-badge-border: transparent;
-  /* Analysis Findings Identity Variables */
-  --central-findings-bg: rgba(0, 0, 0, 0.03);
-  --central-findings-border: rgba(174, 135, 79, 0.35);
-  --central-findings-status-bg: rgba(220, 38, 38, 0.12);
-  --central-findings-status-text: #dc2626;
-  --central-findings-status-border: rgba(220, 38, 38, 0.3);
-  --central-findings-anomaly-bg: rgba(252, 198, 118, 0.12);
-  --central-findings-anomaly-text: #7f5523;
-  --central-findings-anomaly-border: rgba(252, 198, 118, 0.35);
-  --central-gds-card-bg: #FFFFFF;
-  --central-gds-card-border: rgba(174, 135, 79, 0.3);
-  --central-influencer-btn-bg: #FFFFFF;
-  --central-influencer-btn-text: #131e2a;
-  --central-influencer-btn-border: rgba(174, 135, 79, 0.4);
-  --central-influencer-btn-hover-bg: rgba(252, 198, 118, 0.15);
-  /* Flat SVG Icons & Action Buttons Identity Variables */
-  --central-file-item-icon-color: #ae874f;
-  --central-findings-net-btn-bg: #FFFFFF;
-  --central-findings-net-btn-text: #7f5523;
-  --central-findings-net-btn-border: rgba(174, 135, 79, 0.45);
-  --central-findings-net-btn-hover-bg: rgba(174, 135, 79, 0.08);
-  --central-findings-chart-btn-bg: #FFFFFF;
-  --central-findings-chart-btn-text: #7f5523;
-  --central-findings-chart-btn-border: rgba(174, 135, 79, 0.45);
-  --central-findings-chart-btn-hover-bg: rgba(174, 135, 79, 0.08);
-  --central-findings-drop-btn-bg: rgba(220, 38, 38, 0.08);
-  --central-findings-drop-btn-text: #dc2626;
-  --central-findings-drop-btn-border: rgba(220, 38, 38, 0.4);
-  --central-findings-drop-btn-hover-bg: rgba(220, 38, 38, 0.18);
-  /* Central Panel Scrollbar Identity Variables */
-  --central-scrollbar-track-bg: transparent;
-  --central-scrollbar-thumb-bg: rgba(174, 135, 79, 0.4);
-  --central-scrollbar-thumb-hover-bg: rgba(174, 135, 79, 0.65);
-  --central-scrollbar-thumb-active-bg: rgba(174, 135, 79, 0.9);
-  --central-scrollbar-thumb-border: transparent;
-  /* Drop Confirmation Modal Identity Variables */
-  --central-drop-modal-overlay-bg: rgba(0, 0, 0, 0.55);
-  --central-drop-modal-bg: #FFFFFF;
-  --central-drop-modal-border: rgba(220, 38, 38, 0.35);
-  --central-drop-modal-title-color: #131e2a;
-  --central-drop-modal-body-color: #4a5568;
-  --central-drop-modal-cancel-bg: rgba(0, 0, 0, 0.05);
-  --central-drop-modal-cancel-text: #4a5568;
-  --central-drop-modal-cancel-border: rgba(0, 0, 0, 0.15);
-  --central-drop-modal-confirm-bg: #dc2626;
-  --central-drop-modal-confirm-text: #ffffff;
-  --central-drop-modal-confirm-border: #b91c1c;
-  /* Real-time Source Container Identity Variables */
-  --central-realtime-container-bg: rgba(0, 0, 0, 0.03);
-  --central-realtime-container-border: rgba(174, 135, 79, 0.35);
-  --central-realtime-card-bg: #FFFFFF;
-  --central-realtime-card-border: rgba(174, 135, 79, 0.4);
-  --central-realtime-card-hover-bg: rgba(252, 198, 118, 0.12);
-  --central-realtime-card-title-color: #131e2a;
-  --central-realtime-card-body-color: #4a5568;
-  /* Real-time Sub Buttons Full Customization Identity Variables */
-  --central-realtime-card-active-bg: rgba(252, 198, 118, 0.25);
-  --central-realtime-card-hover-border: #FCC676;
-  --central-realtime-card-active-border: #fdb84d;
-  --central-realtime-card-icon-bg: rgba(174, 135, 79, 0.12);
-  --central-realtime-card-icon-color: #ae874f;
-  --central-realtime-card-icon-active-bg: rgba(174, 135, 79, 0.25);
-  --central-realtime-card-icon-active-color: #131e2a;
-  /* File Item Remove Button Identity Variables */
-  --central-file-remove-bg: transparent;
-  --central-file-remove-text: var(--central-home-subtitle-color, #ae874f);
-  --central-file-remove-hover-bg: rgba(220, 38, 38, 0.12);
-  --central-file-remove-hover-text: #dc2626;
-
-  /* Findings View Action Buttons Identity Variables */
-  --central-findings-net-btn-bg: #FFFFFF;
-  --central-findings-net-btn-border: rgba(174, 135, 79, 0.45);
-  --central-findings-net-btn-text: #7f5523;
-  --central-findings-net-btn-hover-bg: rgba(174, 135, 79, 0.08);
-
-  --central-findings-chart-btn-bg: #FFFFFF;
-  --central-findings-chart-btn-border: rgba(174, 135, 79, 0.45);
-  --central-findings-chart-btn-text: #7f5523;
-  --central-findings-chart-btn-hover-bg: rgba(174, 135, 79, 0.08);
-
-  --central-findings-drop-btn-bg: rgba(220, 38, 38, 0.08);
-  --central-findings-drop-btn-border: rgba(220, 38, 38, 0.3);
-  --central-findings-drop-btn-text: #dc2626;
-  --central-findings-drop-btn-hover-bg: rgba(220, 38, 38, 0.16);
-  /* Inactive vs Active Text & Icon Color Identity Variables */
-  --central-option-radio-color: #ae874f;
-
-  --central-realtime-card-active-title-color: #0d1520;
-  --central-realtime-card-active-body-color: #1a2634;
-  /* Real-time & Batch Sub-Menu Buttons Granular State Variables */
-  --central-realtime-card-hover-title-color: #131e2a;
-  --central-realtime-card-hover-body-color: #131e2a;
-  --central-realtime-card-icon-hover-bg: rgba(174, 135, 79, 0.2);
-  --central-realtime-card-icon-hover-color: #131e2a;
-  /* Sub-Menu Disabled State Variables */
-  --central-realtime-card-disabled-opacity: 0.55;
-  --central-realtime-card-disabled-bg: rgba(0, 0, 0, 0.04);
-  --central-realtime-card-disabled-border: rgba(0, 0, 0, 0.15);
-  --central-realtime-card-disabled-text: #8896a6;
-  --central-realtime-card-disabled-icon-bg: rgba(0, 0, 0, 0.06);
-  --central-realtime-card-disabled-icon-color: #8896a6;
-
-  --central-influencer-btn-icon-color: #ae874f;
-  --central-influencer-btn-hover-text: #131e2a;
-  --central-influencer-btn-hover-icon-color: #131e2a;
-
-  --central-findings-net-btn-icon-color: #ae874f;
-  --central-findings-net-btn-hover-text: #131e2a;
-  --central-findings-net-btn-hover-icon-color: #131e2a;
-
-  --central-findings-chart-btn-icon-color: #ae874f;
-  --central-findings-chart-btn-hover-text: #131e2a;
-  --central-findings-chart-btn-hover-icon-color: #131e2a;
-
-  --central-findings-drop-btn-icon-color: #dc2626;
-  --central-findings-drop-btn-hover-text: #b91c1c;
-  --central-findings-drop-btn-hover-icon-color: #b91c1c;
-  /* Source Options Active & Hover Identity Variables */
-  --central-option-card-bg: #FFFFFF;
-  --central-option-text-color: #7f5523;
-  --central-option-card-border: rgba(174, 135, 79, 0.45);
-  --central-option-hover-bg: rgba(174, 135, 79, 0.08);
-  --central-option-hover-text: #131e2a;
-  --central-option-hover-border: rgba(174, 135, 79, 0.6);
-  --central-option-active-bg: rgba(252, 198, 118, 0.18);
-  --central-option-active-text: #131e2a;
-  --central-option-active-border: #FCC676;
-  --central-option-active-radio-color: #131e2a;
-
-  /* Floating Windows */
-  --window-text: var(--linkx-text-primary);
-  --window-text-secondary: var(--linkx-text-secondary);
-
-  /* Window scoped additions */
-  --window-header-text: #f6efea;
-  --window-text-muted: #ae874f;
-  --window-accent: #FCC676;
-  --window-resize-hover-tint: rgba(207, 229, 235, 0.08);
-  --window-resize-corner: currentColor;
-  --dock-dragging-opacity: 0.55;
-  --window-card-border: var(--linkx-card-border);
-
-  /* Right Context Panel */
-  --context-text: var(--linkx-text-primary);
-  --context-text-secondary: var(--linkx-text-secondary);
-  --context-text-muted: var(--linkx-text-muted);
-  --context-accent: var(--linkx-accent);
-  --context-highlight: var(--linkx-highlight-bg);
-  --context-cta-bg: var(--linkx-cta-bg);
-  --context-cta-text: var(--linkx-cta-text);
-  --context-cta-border: var(--linkx-cta-border);
-
-  /* Bottom Dock */
-  --dock-text: var(--linkx-text-primary);
-  --dock-text-secondary: var(--linkx-text-secondary);
-  --dock-text-muted: var(--linkx-text-muted);
-  --dock-text-subtle: var(--linkx-text-subtle);
-  --dock-accent: var(--linkx-accent);
-  --dock-highlight: var(--linkx-highlight-bg);
-  --dock-separator: var(--linkx-separator);
-  --dock-card-bg: var(--linkx-card-bg);
-
-  /* Source Window */
-  --source-text: var(--linkx-text-primary);
-  --source-text-secondary: var(--linkx-text-secondary);
-  --source-text-muted: var(--linkx-text-muted);
-  --source-text-subtle: var(--linkx-text-subtle);
-  --source-accent: var(--linkx-accent);
-  --source-card-bg: var(--linkx-card-bg);
-  --source-card-border: var(--linkx-card-border);
-  --source-highlight: var(--linkx-highlight-bg);
-  --source-highlight-strong: var(--linkx-highlight-bg-strong);
-  --source-separator: var(--linkx-separator);
-
-  /* Settings Window */
-  --settings-text: var(--linkx-text-primary);
-  --settings-text-secondary: var(--linkx-text-secondary);
-  --settings-text-muted: var(--linkx-text-muted);
-  --settings-text-subtle: var(--linkx-text-subtle);
-  --settings-accent: var(--linkx-accent);
-  --settings-card-bg: var(--linkx-card-bg);
-  --settings-card-border: var(--linkx-card-border);
-
-  /* === Additional scoped isolation === */
-  --launcher-cta-bg: var(--linkx-cta-bg);
-  --launcher-cta-text: var(--linkx-cta-text);
-  --launcher-cta-bg-hover: var(--linkx-cta-bg-hover);
-  --launcher-cta-border: var(--linkx-cta-border);
-  --launcher-danger-bg: var(--linkx-danger-bg);
-  --launcher-danger-text: var(--linkx-danger-text);
-  --launcher-danger-border: var(--linkx-danger-border);
-  --launcher-border: var(--panel-border);
-
-  /* Launcher interactive states */
-  --launcher-hover-bg: rgba(174, 135, 79, 0.08);
-  --launcher-hover-border: var(--launcher-separator);
-  --launcher-hover-text: var(--launcher-text);
-  --launcher-active-bg: var(--launcher-highlight);
-  --launcher-active-border: var(--launcher-separator);
-  --launcher-active-text: var(--launcher-text);
-  --launcher-focus-ring: rgba(252, 198, 118, 0.5);
-  --launcher-disabled-opacity: 0.35;
-  --launcher-item-idle-border: transparent;
-  --launcher-item-idle-bg: transparent;
-  --launcher-overview-hover-bg: rgba(174, 135, 79, 0.1);
-  --launcher-shell-bg: var(--linkx-shell-bg-solid);
-  --launcher-dock-active: var(--linkx-dock-tab-active-bg);
-  --central-overlay-bg: var(--linkx-overlay-bg);
-  --central-overlay-top: #f0ede8;
-  --central-overlay-mid: rgba(240, 237, 232, 0.88);
-  --central-overlay-bottom: #f0ede8;
-  --central-overlay-opacity: 1;
-  --central-overlay-angle: 180deg;
-
-  /* Network background animation */
-  --network-node-color: rgba(252, 198, 118, 0.55);
-  --network-edge-color: rgba(174, 135, 79, 0.12);
-  --network-glow-color: rgba(252, 198, 118, 0.08);
-  --network-opacity: 0.65;
-  --central-panel-bg: var(--panel-bg);
-  --central-panel-border: var(--panel-border);
-  --context-overlay-bg: var(--linkx-overlay-bg);
-  --context-cta-bg-hover: var(--linkx-cta-bg-hover);
-  --context-success-bg: var(--linkx-success-bg);
-  --context-success-text: var(--linkx-success-text);
-  --context-success-border: var(--linkx-success-border);
-  --window-danger-bg: var(--linkx-danger-bg);
-  --dock-danger-bg: var(--linkx-danger-bg);
-  --dock-border: var(--panel-border);
-  --dock-shell-bg: var(--linkx-shell-bg-solid);
-  --dock-dock-active: var(--linkx-dock-tab-active-bg);
-  --source-cta-bg: var(--linkx-cta-bg);
-  --source-cta-text: var(--linkx-cta-text);
-  --source-dock-active: var(--linkx-dock-tab-active-bg);
-  --source-border: var(--panel-border);
-  --source-app-text: var(--app-text);
-  --settings-danger-bg: var(--linkx-danger-bg);
-  --settings-danger-text: var(--linkx-danger-text);
-  --settings-success-bg: var(--linkx-success-bg);
-  --settings-cta-bg: var(--linkx-cta-bg);
-  --settings-border: var(--panel-border);
-  --settings-app-text: var(--app-text);
-  --notice-card-bg: var(--linkx-card-bg);
-  --notice-card-border: var(--linkx-card-border);
-  --notice-text-secondary: var(--linkx-text-secondary);
-  --notice-highlight: var(--linkx-highlight-bg);
-  --notice-highlight-strong: var(--linkx-highlight-bg-strong);
-  --notice-separator: var(--linkx-separator);
-  --notice-danger-bg: var(--linkx-danger-bg);
-  --notice-success-bg: var(--linkx-success-bg);
-  --notice-app-text: var(--app-text);
-  --notice-panel-bg: var(--panel-bg);
-  --notice-panel-border: var(--panel-border);
-  --notice-text: var(--linkx-text-primary);
-  --notice-text-muted: var(--linkx-text-muted);
-  --notice-accent: var(--linkx-accent);
-}
-
-/* 1. Replica: Deep Space (#131e2a) */
-[data-theme="dark"], [data-theme="deep-space"] {
-  color-scheme: dark;
-  --app-bg: #131e2a;
-  --app-text: #d6e3ee;
-  --panel-bg: rgba(19, 30, 42, 0.95);
-  --panel-border: #26384a;
-  --panel-shadow: rgba(0, 0, 0, 0.65);
-  --muted-text: #96adbf;
-  --input-bg: #1b2938;
-  --input-border: #2e445a;
-  --accent: #1c98a5;
-  --accent-strong: #38b4c2;
-  --disabled-bg: #1f2f40;
-  --disabled-border: #2b3e52;
-  --workspace-bg: #131e2a;
-  --workspace-scene-bg: #131e2a;
-  --workspace-scene-overlay: linear-gradient(180deg, #131e2a 0%, rgba(19, 30, 42, 0.88) 50%, #0d151e 100%);
-  --window-bg: rgba(19, 30, 42, 0.88);
-  --window-page-bg: rgba(19, 30, 42, 0.78);
-  --window-chrome-bg: rgba(27, 41, 56, 0.94);
-  --window-glass-border: rgba(86, 128, 160, 0.45);
-  --primary-action-bg: rgba(27, 41, 56, 0.85);
-  --primary-action-bg-hover: rgba(36, 54, 74, 0.92);
-  --primary-action-bg-active: rgba(28, 152, 165, 0.75);
-  --primary-action-text: #d6e9f2;
-  --primary-action-border: rgba(46, 67, 89, 0.6);
-  --on-scene-text: #ffffff;
-  --on-scene-text-muted: #d6e9f2;
-  --on-scene-text-subtle: #9ab1c4;
-  --scene-divider: rgba(46, 67, 89, 0.55);
-  --scene-control-hover-bg: rgba(28, 152, 165, 0.25);
-  --scene-drag-bg: radial-gradient(rgba(28, 152, 165, 0.25), rgba(19, 30, 42, 0.15));
-  --scene-drag-border: rgba(28, 152, 165, 0.5);
-
-  --linkx-bg-root: #131e2a;
-  --linkx-text-primary: #ffffff;
-  --linkx-text-secondary: #d6e9f2;
-  --linkx-text-muted: #9ab1c4;
-  --linkx-text-subtle: rgba(154, 177, 196, 0.75);
-  --linkx-accent: #1c98a5;
-  --linkx-accent-strong: #147a86;
-  --linkx-shell-bg: #131e2a;
-  --linkx-workspace-bg: #131e2a;
-  --linkx-workspace-overlay: linear-gradient(180deg, #131e2a 0%, rgba(19, 30, 42, 0.88) 50%, #0d151e 100%);
-  --linkx-launcher-bg: rgba(19, 30, 42, 0.88);
-  --linkx-launcher-border: rgba(46, 67, 89, 0.6);
-  --linkx-launcher-item-bg: rgba(27, 41, 56, 0.75);
-  --linkx-launcher-item-hover: rgba(36, 54, 74, 0.9);
-  --linkx-launcher-item-active: rgba(28, 152, 165, 0.75);
-  --linkx-window-bg: rgba(19, 30, 42, 0.88);
-  --linkx-window-border: rgba(46, 67, 89, 0.6);
-  --linkx-window-border-active: rgba(28, 152, 165, 0.65);
-  --linkx-window-shadow: 0 1px 80px rgba(0, 0, 0, 0.65);
-  --linkx-window-header-bg: rgba(27, 41, 56, 0.94);
-  --linkx-window-header-active-bg: rgba(32, 48, 66, 0.96);
-  --linkx-window-header-drag-bg: rgba(42, 62, 84, 0.88);
-  --linkx-window-body-bg: rgba(19, 30, 42, 0.78);
-  --linkx-card-bg: rgba(23, 36, 50, 0.78);
-  --linkx-card-border: rgba(46, 67, 89, 0.6);
-  --linkx-card-hover-border: rgba(28, 152, 165, 0.6);
-  --linkx-card-surface-bg: rgba(19, 30, 42, 0.8);
-  --linkx-input-bg: rgba(27, 41, 56, 0.8);
-  --linkx-input-border: rgba(46, 67, 89, 0.65);
-  --linkx-input-text: #d6e9f2;
-  --linkx-input-placeholder: rgba(154, 177, 196, 0.75);
-  --linkx-button-bg: rgba(27, 41, 56, 0.85);
-  --linkx-button-border: rgba(46, 67, 89, 0.6);
-  --linkx-button-hover-bg: rgba(36, 54, 74, 0.92);
-  --linkx-button-text: #d6e9f2;
-  --linkx-tab-bg: rgba(19, 30, 42, 0.78);
-  --linkx-tab-border: rgba(46, 67, 89, 0.55);
-  --linkx-tab-active-bg: rgba(28, 152, 165, 0.75);
-  --linkx-tab-active-border: rgba(28, 152, 165, 0.75);
-  --linkx-tab-active-text: #ffffff;
-  --linkx-shell-bg-solid: #131e2a;
-  --linkx-highlight-bg: rgba(143, 208, 223, 0.1);
-  --linkx-highlight-bg-strong: rgba(143, 208, 223, 0.15);
-  --linkx-overlay-bg: rgba(0, 0, 0, 0.46);
-  --linkx-danger-bg: rgba(127, 29, 29, 0.32);
-  --linkx-danger-text: #fecaca;
-  --linkx-danger-border: rgba(248, 113, 113, 0.5);
-  --linkx-success-bg: rgba(34, 197, 94, 0.15);
-  --linkx-success-text: #bbf7d0;
-  --linkx-success-border: rgba(134, 239, 172, 0.28);
-  --linkx-cta-bg: #d7eef4;
-  --linkx-cta-text: #123241;
-  --linkx-cta-bg-hover: #e4f6fb;
-  --linkx-cta-border: #83bdca;
-  --linkx-link-text: #9ddde8;
-  --linkx-separator: rgba(143, 208, 223, 0.2);
-  --linkx-form-label: rgba(234, 245, 251, 0.9);
-  --linkx-dock-tab-bg: #121c27;
-  --linkx-dock-tab-active-bg: rgba(197, 223, 237, 0.1);
-  --linkx-dock-header-bg: rgba(20, 32, 48, 0.83);
-
-  /* === Region-scoped variables (Dark) === */
-  --launcher-text: var(--linkx-text-primary);
-  --launcher-text-secondary: var(--linkx-text-secondary);
-  --launcher-accent: var(--linkx-accent);
-  --launcher-separator: var(--linkx-separator);
-  --launcher-highlight: var(--linkx-highlight-bg);
-  --central-text: var(--linkx-text-primary);
-  --central-text-secondary: var(--linkx-text-secondary);
-  --central-text-muted: var(--linkx-text-muted);
-  --central-accent: var(--linkx-accent);
-  --central-card-bg: var(--linkx-card-bg);
-  --central-card-border: var(--linkx-card-border);
-  --central-separator: var(--linkx-separator);
-
-  /* Central workspace interactive states */
-  --central-hover-bg: rgba(174, 135, 79, 0.06);
-  --central-hover-border: var(--central-card-border);
-  --central-hover-text: var(--central-text);
-  --central-focus-ring: rgba(252, 198, 118, 0.5);
-  --central-disabled-opacity: 0.62;
-  --central-panel-shadow: rgba(0, 0, 0, 0.15);
-  --central-avatar-bg: #131e2a;
-  --central-avatar-text: #FCC676;
-  --central-avatar-border: #ae874f;
-  --central-upload-border: var(--linkx-card-hover-border);
-
-  /* Central Workspace Decoupled Variables */
-  --central-identity-text: #131e2a;
-  --central-home-title-color: #131e2a;
-  --central-home-subtitle-color: #ae874f;
-  --central-upload-mark-bg: #FCC676;
-  --central-upload-mark-icon: #131e2a;
-  --central-upload-icon-color: #131e2a;
-  --central-option-text-color: #7f5523;
-  --central-footer-text-color: #7f5523;
-  --central-panel-gradient-top: rgba(255, 255, 255, 0.96);
-  --central-panel-gradient-bottom: rgba(246, 239, 234, 0.96);
-  --central-panel-gradient-angle: 180deg;
-  /* File Upload Dropzone Identity Variables */
-  --central-upload-bg: #FFFFFF;
-  --central-upload-border: #FCC676;
-  --central-upload-hover-bg: rgba(252, 198, 118, 0.08);
-  --central-upload-hover-border: #FCC676;
-
-  /* Option Buttons Identity Variables */
-  --central-option-card-bg: #FFFFFF;
-  --central-option-card-border: rgba(174, 135, 79, 0.45);
-  --central-option-hover-bg: rgba(174, 135, 79, 0.08);
-  --central-option-hover-border: rgba(174, 135, 79, 0.45);
-  --central-option-hover-text: #131e2a;
-
-  /* Quick Analysis Badge Identity Variables */
-  --central-badge-text-color: #FCC676;
-  --central-badge-bg: transparent;
-  --central-badge-border: transparent;
-
-  /* Attached File List Identity Variables */
-  --central-file-item-bg: #FFFFFF;
-  --central-file-item-border: rgba(174, 135, 79, 0.3);
-  --central-file-item-name-color: #131e2a;
-  --central-file-item-size-color: #ae874f;
-  --central-file-item-remove-color: #ae874f;
-  /* Analyze Button & Config Review Identity Variables */
-  --central-analyze-btn-bg: #FCC676;
-  --central-analyze-btn-text: #131e2a;
-  --central-analyze-icon-color: #ffffff;
-  --central-analyze-btn-border: #FCC676;
-  --central-analyze-btn-hover-bg: #fdb84d;
-  --central-analyze-btn-hover-text: #131e2a;
-  --central-config-review-bg: rgba(0, 0, 0, 0.03);
-  --central-config-review-border: rgba(174, 135, 79, 0.3);
-  /* Run in Background & Cancel Buttons Identity Variables */
-  --central-bg-btn-bg: rgba(174, 135, 79, 0.08);
-  --central-bg-btn-text: #131e2a;
-  --central-bg-btn-border: rgba(174, 135, 79, 0.45);
-  --central-bg-btn-hover-bg: rgba(174, 135, 79, 0.18);
-  --central-cancel-btn-bg: rgba(220, 38, 38, 0.08);
-  --central-cancel-btn-text: #dc2626;
-  --central-cancel-btn-border: rgba(220, 38, 38, 0.4);
-  --central-cancel-btn-hover-bg: rgba(220, 38, 38, 0.18);
-  /* Expanded Panel Identity Variables */
-  --central-expanded-panel-gradient-top: rgba(255, 255, 255, 0.98);
-  --central-expanded-panel-gradient-bottom: rgba(246, 239, 234, 0.98);
-  --central-expanded-panel-gradient-angle: 180deg;
-  --central-expanded-panel-border: rgba(174, 135, 79, 0.55);
-
-  /* Analyze Button Label & Gradient Identity Variables */
-  --central-analyze-btn-label: Analyze;
-  --central-analyze-btn-gradient-top: #FCC676;
-  --central-analyze-btn-gradient-bottom: #fdb84d;
-  --central-analyze-btn-gradient-angle: 135deg;
-  /* Analyzing Active Button Identity Variables */
-  --central-analyze-btn-hover-opacity: 0.85;
-  /* Analyze CTA Button Disabled State Variables */
-  --central-analyze-btn-disabled-opacity: 0.45;
-  --central-analyze-btn-disabled-bg: rgba(0, 0, 0, 0.12);
-  --central-analyze-btn-disabled-border: rgba(0, 0, 0, 0.15);
-  --central-analyze-btn-disabled-text: rgba(148, 163, 184, 0.9);
-  /* 👉 Right Workspace Board Identity Tokens */
-  --right-workspace-gradient-top: rgba(255, 255, 255, 0.98);
-  --right-workspace-gradient-bottom: rgba(246, 239, 234, 0.92);
-  --right-workspace-gradient-angle: 180deg;
-  --right-workspace-bg: linear-gradient(var(--right-workspace-gradient-angle, 180deg), var(--right-workspace-gradient-top, rgba(255, 255, 255, 0.98)), var(--right-workspace-gradient-bottom, rgba(246, 239, 234, 0.92)));
-  --right-workspace-border: rgba(174, 135, 79, 0.35);
-  --right-tabs-bg: rgba(0, 0, 0, 0.04);
-  --right-tabs-border: rgba(174, 135, 79, 0.3);
-  --right-tab-text: #8896a6;
-  --right-tab-hover-bg: rgba(174, 135, 79, 0.08);
-  --right-tab-hover-text: #131e2a;
-  --right-tab-active-bg: rgba(252, 198, 118, 0.18);
-  --right-tab-active-text: #131e2a;
-  --right-tab-active-border: #FCC676;
-  --right-section-title-color: #ae874f;
-  --right-card-bg: #FFFFFF;
-  --right-card-border: rgba(174, 135, 79, 0.25);
-  --right-label-color: #7f5523;
-  --right-value-color: #131e2a;
-  --right-status-badge-bg: rgba(16, 185, 129, 0.15);
-  --right-status-badge-text: #059669;
-  --right-chat-body-bg: rgba(0, 0, 0, 0.03);
-  --right-chat-body-border: rgba(174, 135, 79, 0.2);
-  --right-chat-body-text: #4a5568;
-  --right-chat-input-bg: #FFFFFF;
-  --right-chat-input-border: rgba(174, 135, 79, 0.4);
-  --right-chat-input-text: #131e2a;
-  --right-chat-submit-bg: #FCC676;
-  --right-chat-submit-icon: #131e2a;
-  --right-filter-input-bg: #FFFFFF;
-  --right-filter-input-border: rgba(174, 135, 79, 0.35);
-  --right-filter-btn-bg: #FCC676;
-  --right-filter-btn-text: #131e2a;
-  --right-form-label-color: #4a5568;
-  --right-form-input-text: #131e2a;
-  --right-theme-card-name-color: #131e2a;
-  --right-theme-card-badge-text: #059669;
-  --right-theme-card-desc-color: #4a5568;
-  --right-theme-option-bg: #FFFFFF;
-  --right-theme-option-border: rgba(174, 135, 79, 0.3);
-  --right-theme-option-active-bg: rgba(252, 198, 118, 0.15);
-  --right-theme-option-active-border: #FCC676;
-  --central-analyzing-active-label: Analyzing;
-  --central-analyzing-active-gradient-top: #FCC676;
-  --central-analyzing-active-gradient-bottom: #e5a845;
-  --central-analyzing-active-gradient-angle: 135deg;
-  --central-analyzing-active-text-color: #131e2a;
-  --central-analyzing-active-border-color: #FCC676;
-  /* Overlay Layer & Controls Identity Variables */
-  --central-analysis-overlay-bg: rgba(19, 30, 42, 0.88);
-  --central-analysis-overlay-blur: 10px;
-  --central-analysis-overlay-title-color: #FCC676;
-  --central-analysis-overlay-status-color: #f6efea;
-  --central-analysis-overlay-btn-bg: rgba(255, 255, 255, 0.12);
-  --central-analysis-overlay-btn-text: #ffffff;
-  --central-analysis-overlay-btn-border: rgba(255, 255, 255, 0.2);
-  --central-analysis-overlay-btn-hover-bg: rgba(255, 255, 255, 0.28);
-  /* Cover Overlay Action Buttons Identity Variables */
-  --central-overlay-min-btn-bg: rgba(255, 255, 255, 0.12);
-  --central-overlay-min-btn-text: #ffffff;
-  --central-overlay-min-btn-border: rgba(255, 255, 255, 0.2);
-  --central-overlay-min-btn-hover-bg: rgba(255, 255, 255, 0.28);
-  --central-overlay-close-btn-bg: rgba(255, 255, 255, 0.12);
-  --central-overlay-close-btn-text: #ffffff;
-  --central-overlay-close-btn-border: rgba(255, 255, 255, 0.2);
-  --central-overlay-close-btn-hover-bg: rgba(220, 38, 38, 0.7);
-
-  /* Tasks Option Badge Identity Variables */
-  --central-tasks-badge-bg: #FCC676;
-  --central-tasks-badge-text: #131e2a;
-  --central-tasks-badge-border: transparent;
-  /* Reports Option Badge Identity Variables */
-  --central-reports-badge-bg: #FCC676;
-  --central-reports-badge-text: #131e2a;
-  --central-reports-badge-border: transparent;
-  /* Analysis Findings Identity Variables */
-  --central-findings-bg: rgba(0, 0, 0, 0.03);
-  --central-findings-border: rgba(174, 135, 79, 0.35);
-  --central-findings-status-bg: rgba(220, 38, 38, 0.12);
-  --central-findings-status-text: #dc2626;
-  --central-findings-status-border: rgba(220, 38, 38, 0.3);
-  --central-findings-anomaly-bg: rgba(252, 198, 118, 0.12);
-  --central-findings-anomaly-text: #7f5523;
-  --central-findings-anomaly-border: rgba(252, 198, 118, 0.35);
-  --central-gds-card-bg: #FFFFFF;
-  --central-gds-card-border: rgba(174, 135, 79, 0.3);
-  --central-influencer-btn-bg: #FFFFFF;
-  --central-influencer-btn-text: #131e2a;
-  --central-influencer-btn-border: rgba(174, 135, 79, 0.4);
-  --central-influencer-btn-hover-bg: rgba(252, 198, 118, 0.15);
-  /* Flat SVG Icons & Action Buttons Identity Variables */
-  --central-file-item-icon-color: #ae874f;
-  --central-findings-net-btn-bg: #FFFFFF;
-  --central-findings-net-btn-text: #7f5523;
-  --central-findings-net-btn-border: rgba(174, 135, 79, 0.45);
-  --central-findings-net-btn-hover-bg: rgba(174, 135, 79, 0.08);
-  --central-findings-chart-btn-bg: #FFFFFF;
-  --central-findings-chart-btn-text: #7f5523;
-  --central-findings-chart-btn-border: rgba(174, 135, 79, 0.45);
-  --central-findings-chart-btn-hover-bg: rgba(174, 135, 79, 0.08);
-  --central-findings-drop-btn-bg: rgba(220, 38, 38, 0.08);
-  --central-findings-drop-btn-text: #dc2626;
-  --central-findings-drop-btn-border: rgba(220, 38, 38, 0.4);
-  --central-findings-drop-btn-hover-bg: rgba(220, 38, 38, 0.18);
-  /* Central Panel Scrollbar Identity Variables */
-  --central-scrollbar-track-bg: transparent;
-  --central-scrollbar-thumb-bg: rgba(174, 135, 79, 0.4);
-  --central-scrollbar-thumb-hover-bg: rgba(174, 135, 79, 0.65);
-  --central-scrollbar-thumb-border: transparent;
-  /* Drop Confirmation Modal Identity Variables */
-  --central-drop-modal-overlay-bg: rgba(0, 0, 0, 0.55);
-  --central-drop-modal-bg: #FFFFFF;
-  --central-drop-modal-border: rgba(220, 38, 38, 0.35);
-  --central-drop-modal-title-color: #131e2a;
-  --central-drop-modal-body-color: #4a5568;
-  --central-drop-modal-cancel-bg: rgba(0, 0, 0, 0.05);
-  --central-drop-modal-cancel-text: #4a5568;
-  --central-drop-modal-cancel-border: rgba(0, 0, 0, 0.15);
-  --central-drop-modal-confirm-bg: #dc2626;
-  --central-drop-modal-confirm-text: #ffffff;
-  --central-drop-modal-confirm-border: #b91c1c;
-  /* Real-time Source Container Identity Variables */
-  --central-realtime-container-bg: rgba(0, 0, 0, 0.03);
-  --central-realtime-container-border: rgba(174, 135, 79, 0.35);
-  --central-realtime-card-bg: #FFFFFF;
-  --central-realtime-card-border: rgba(174, 135, 79, 0.4);
-  --central-realtime-card-hover-bg: rgba(252, 198, 118, 0.12);
-  --central-realtime-card-title-color: #131e2a;
-  --central-realtime-card-body-color: #4a5568;
-  /* Real-time Sub Buttons Full Customization Identity Variables */
-  --central-realtime-card-active-bg: rgba(252, 198, 118, 0.25);
-  --central-realtime-card-hover-border: #FCC676;
-  --central-realtime-card-active-border: #fdb84d;
-  --central-realtime-card-icon-bg: rgba(174, 135, 79, 0.12);
-  --central-realtime-card-icon-color: #ae874f;
-  --central-realtime-card-icon-active-bg: rgba(174, 135, 79, 0.25);
-  --central-realtime-card-icon-active-color: #131e2a;
-  /* File Item Remove Button Identity Variables */
-  --central-file-remove-bg: transparent;
-  --central-file-remove-text: var(--central-home-subtitle-color, #ae874f);
-  --central-file-remove-hover-bg: rgba(220, 38, 38, 0.12);
-  --central-file-remove-hover-text: #dc2626;
-
-  /* Findings View Action Buttons Identity Variables */
-  --central-findings-net-btn-bg: #FFFFFF;
-  --central-findings-net-btn-border: rgba(174, 135, 79, 0.45);
-  --central-findings-net-btn-text: #7f5523;
-  --central-findings-net-btn-hover-bg: rgba(174, 135, 79, 0.08);
-
-  --central-findings-chart-btn-bg: #FFFFFF;
-  --central-findings-chart-btn-border: rgba(174, 135, 79, 0.45);
-  --central-findings-chart-btn-text: #7f5523;
-  --central-findings-chart-btn-hover-bg: rgba(174, 135, 79, 0.08);
-
-  --central-findings-drop-btn-bg: rgba(220, 38, 38, 0.08);
-  --central-findings-drop-btn-border: rgba(220, 38, 38, 0.3);
-  --central-findings-drop-btn-text: #dc2626;
-  --central-findings-drop-btn-hover-bg: rgba(220, 38, 38, 0.16);
-  /* Inactive vs Active Text & Icon Color Identity Variables */
-  --central-option-radio-color: #ae874f;
-
-  --central-realtime-card-active-title-color: #0d1520;
-  --central-realtime-card-active-body-color: #1a2634;
-  /* Real-time & Batch Sub-Menu Buttons Granular State Variables */
-  --central-realtime-card-hover-title-color: #131e2a;
-  --central-realtime-card-hover-body-color: #131e2a;
-  --central-realtime-card-icon-hover-bg: rgba(174, 135, 79, 0.2);
-  --central-realtime-card-icon-hover-color: #131e2a;
-  /* Sub-Menu Disabled State Variables */
-  --central-realtime-card-disabled-opacity: 0.55;
-  --central-realtime-card-disabled-bg: rgba(0, 0, 0, 0.04);
-  --central-realtime-card-disabled-border: rgba(0, 0, 0, 0.15);
-  --central-realtime-card-disabled-text: #8896a6;
-  --central-realtime-card-disabled-icon-bg: rgba(0, 0, 0, 0.06);
-  --central-realtime-card-disabled-icon-color: #8896a6;
-
-  --central-influencer-btn-icon-color: #ae874f;
-  --central-influencer-btn-hover-text: #131e2a;
-  --central-influencer-btn-hover-icon-color: #131e2a;
-
-  --central-findings-net-btn-icon-color: #ae874f;
-  --central-findings-net-btn-hover-text: #131e2a;
-  --central-findings-net-btn-hover-icon-color: #131e2a;
-
-  --central-findings-chart-btn-icon-color: #ae874f;
-  --central-findings-chart-btn-hover-text: #131e2a;
-  --central-findings-chart-btn-hover-icon-color: #131e2a;
-
-  --central-findings-drop-btn-icon-color: #dc2626;
-  --central-findings-drop-btn-hover-text: #b91c1c;
-  --central-findings-drop-btn-hover-icon-color: #b91c1c;
-  /* Source Options Active & Hover Identity Variables */
-  --central-option-card-bg: #FFFFFF;
-  --central-option-text-color: #7f5523;
-  --central-option-card-border: rgba(174, 135, 79, 0.45);
-  --central-option-hover-bg: rgba(174, 135, 79, 0.08);
-  --central-option-hover-text: #131e2a;
-  --central-option-hover-border: rgba(174, 135, 79, 0.6);
-  --central-option-active-bg: rgba(252, 198, 118, 0.18);
-  --central-option-active-text: #131e2a;
-  --central-option-active-border: #FCC676;
-  --central-option-active-radio-color: #131e2a;
-  --window-text: var(--linkx-text-primary);
-  --window-text-secondary: var(--linkx-text-secondary);
-
-  /* Window scoped additions */
-  --window-header-text: #f6efea;
-  --window-text-muted: #ae874f;
-  --window-accent: #FCC676;
-  --window-resize-hover-tint: rgba(207, 229, 235, 0.08);
-  --window-resize-corner: currentColor;
-  --dock-dragging-opacity: 0.55;
-  --window-card-border: var(--linkx-card-border);
-  --context-text: var(--linkx-text-primary);
-  --context-text-secondary: var(--linkx-text-secondary);
-  --context-text-muted: var(--linkx-text-muted);
-  --context-accent: var(--linkx-accent);
-  --context-highlight: var(--linkx-highlight-bg);
-  --context-cta-bg: var(--linkx-cta-bg);
-  --context-cta-text: var(--linkx-cta-text);
-  --context-cta-border: var(--linkx-cta-border);
-  --dock-text: var(--linkx-text-primary);
-  --dock-text-secondary: var(--linkx-text-secondary);
-  --dock-text-muted: var(--linkx-text-muted);
-  --dock-text-subtle: var(--linkx-text-subtle);
-  --dock-accent: var(--linkx-accent);
-  --dock-highlight: var(--linkx-highlight-bg);
-  --dock-separator: var(--linkx-separator);
-  --dock-card-bg: var(--linkx-card-bg);
-  --source-text: var(--linkx-text-primary);
-  --source-text-secondary: var(--linkx-text-secondary);
-  --source-text-muted: var(--linkx-text-muted);
-  --source-text-subtle: var(--linkx-text-subtle);
-  --source-accent: var(--linkx-accent);
-  --source-card-bg: var(--linkx-card-bg);
-  --source-card-border: var(--linkx-card-border);
-  --source-highlight: var(--linkx-highlight-bg);
-  --source-highlight-strong: var(--linkx-highlight-bg-strong);
-  --source-separator: var(--linkx-separator);
-  --settings-text: var(--linkx-text-primary);
-  --settings-text-secondary: var(--linkx-text-secondary);
-  --settings-text-muted: var(--linkx-text-muted);
-  --settings-text-subtle: var(--linkx-text-subtle);
-  --settings-accent: var(--linkx-accent);
-  --settings-card-bg: var(--linkx-card-bg);
-  --settings-card-border: var(--linkx-card-border);
-
-  /* === Additional scoped isolation (Dark) === */
-  --launcher-cta-bg: var(--linkx-cta-bg);
-  --launcher-cta-text: var(--linkx-cta-text);
-  --launcher-cta-bg-hover: var(--linkx-cta-bg-hover);
-  --launcher-cta-border: var(--linkx-cta-border);
-  --launcher-danger-bg: var(--linkx-danger-bg);
-  --launcher-danger-text: var(--linkx-danger-text);
-  --launcher-danger-border: var(--linkx-danger-border);
-  --launcher-border: var(--panel-border);
-
-  /* Launcher interactive states */
-  --launcher-hover-bg: rgba(174, 135, 79, 0.08);
-  --launcher-hover-border: var(--launcher-separator);
-  --launcher-hover-text: var(--launcher-text);
-  --launcher-active-bg: var(--launcher-highlight);
-  --launcher-active-border: var(--launcher-separator);
-  --launcher-active-text: var(--launcher-text);
-  --launcher-focus-ring: rgba(252, 198, 118, 0.5);
-  --launcher-disabled-opacity: 0.35;
-  --launcher-item-idle-border: transparent;
-  --launcher-item-idle-bg: transparent;
-  --launcher-overview-hover-bg: rgba(174, 135, 79, 0.1);
-  --launcher-shell-bg: var(--linkx-shell-bg-solid);
-  --launcher-dock-active: var(--linkx-dock-tab-active-bg);
-  --central-overlay-bg: var(--linkx-overlay-bg);
-  --central-overlay-top: var(--linkx-shell-bg-solid);
-  --central-overlay-mid: rgba(19, 30, 42, 0.88);
-  --central-overlay-bottom: var(--linkx-shell-bg-solid);
-  --central-overlay-opacity: 1;
-  --central-overlay-angle: 180deg;
-
-  /* Network background animation */
-  --network-node-color: rgba(252, 198, 118, 0.55);
-  --network-edge-color: rgba(174, 135, 79, 0.12);
-  --network-glow-color: rgba(252, 198, 118, 0.08);
-  --network-opacity: 0.65;
-  --central-panel-bg: var(--panel-bg);
-  --central-panel-border: var(--panel-border);
-  --context-overlay-bg: var(--linkx-overlay-bg);
-  --context-cta-bg-hover: var(--linkx-cta-bg-hover);
-  --context-success-bg: var(--linkx-success-bg);
-  --context-success-text: var(--linkx-success-text);
-  --context-success-border: var(--linkx-success-border);
-  --window-danger-bg: var(--linkx-danger-bg);
-  --dock-danger-bg: var(--linkx-danger-bg);
-  --dock-border: var(--panel-border);
-  --dock-shell-bg: var(--linkx-shell-bg-solid);
-  --dock-dock-active: var(--linkx-dock-tab-active-bg);
-  --source-cta-bg: var(--linkx-cta-bg);
-  --source-cta-text: var(--linkx-cta-text);
-  --source-dock-active: var(--linkx-dock-tab-active-bg);
-  --source-border: var(--panel-border);
-  --source-app-text: var(--app-text);
-  --settings-danger-bg: var(--linkx-danger-bg);
-  --settings-danger-text: var(--linkx-danger-text);
-  --settings-success-bg: var(--linkx-success-bg);
-  --settings-cta-bg: var(--linkx-cta-bg);
-  --settings-border: var(--panel-border);
-  --settings-app-text: var(--app-text);
-  --notice-card-bg: var(--linkx-card-bg);
-  --notice-card-border: var(--linkx-card-border);
-  --notice-text-secondary: var(--linkx-text-secondary);
-  --notice-highlight: var(--linkx-highlight-bg);
-  --notice-highlight-strong: var(--linkx-highlight-bg-strong);
-  --notice-separator: var(--linkx-separator);
-  --notice-danger-bg: var(--linkx-danger-bg);
-  --notice-success-bg: var(--linkx-success-bg);
-  --notice-app-text: var(--app-text);
-  --notice-panel-bg: var(--panel-bg);
-  --notice-panel-border: var(--panel-border);
-  --notice-text: var(--linkx-text-primary);
-  --notice-text-muted: var(--linkx-text-muted);
-  --notice-accent: var(--linkx-accent);
-}
-
-/* 2. Replica: Emerald Dark (#0a1c17) */
-[data-theme="emerald-dark"] {
-  color-scheme: dark;
-  --app-bg: #0a1c17;
-  --app-text: #d1fae5;
-  --panel-bg: rgba(14, 34, 28, 0.95);
-  --panel-border: #1d463a;
-  --panel-shadow: rgba(0, 0, 0, 0.65);
-  --muted-text: #6ee7b7;
-  --input-bg: #112b23;
-  --input-border: #225748;
-  --accent: #10b981;
-  --accent-strong: #34d399;
-  --disabled-bg: #143329;
-  --disabled-border: #1f4a3c;
-  --workspace-bg: #0a1c17;
-  --workspace-scene-bg: #0a1c17;
-  --workspace-scene-overlay: linear-gradient(180deg, #0a1c17 0%, rgba(14, 34, 28, 0.88) 50%, #06120e 100%);
-  --window-bg: rgba(14, 34, 28, 0.88);
-  --window-page-bg: rgba(14, 34, 28, 0.78);
-  --window-chrome-bg: rgba(20, 48, 39, 0.94);
-  --window-glass-border: rgba(52, 211, 153, 0.45);
-  --primary-action-bg: rgba(20, 48, 39, 0.85);
-  --primary-action-bg-hover: rgba(28, 66, 54, 0.92);
-  --primary-action-bg-active: rgba(16, 185, 129, 0.75);
-  --primary-action-text: #d1fae5;
-  --primary-action-border: rgba(38, 77, 65, 0.6);
-  --on-scene-text: #ffffff;
-  --on-scene-text-muted: #d1fae5;
-  --on-scene-text-subtle: #6ee7b7;
-  --scene-divider: rgba(38, 77, 65, 0.55);
-  --scene-control-hover-bg: rgba(16, 185, 129, 0.25);
-  --scene-drag-bg: radial-gradient(rgba(16, 185, 129, 0.25), rgba(14, 34, 28, 0.15));
-  --scene-drag-border: rgba(16, 185, 129, 0.5);
-
-  --linkx-bg-root: #0a1c17;
-  --linkx-text-primary: #ffffff;
-  --linkx-text-secondary: #d1fae5;
-  --linkx-text-muted: #6ee7b7;
-  --linkx-text-subtle: rgba(110, 231, 183, 0.75);
-  --linkx-accent: #10b981;
-  --linkx-accent-strong: #059669;
-  --linkx-shell-bg: #0a1c17;
-  --linkx-workspace-bg: #0a1c17;
-  --linkx-workspace-overlay: linear-gradient(180deg, #0a1c17 0%, rgba(14, 34, 28, 0.88) 50%, #06120e 100%);
-  --linkx-launcher-bg: rgba(14, 34, 28, 0.88);
-  --linkx-launcher-border: rgba(38, 77, 65, 0.6);
-  --linkx-launcher-item-bg: rgba(20, 48, 39, 0.75);
-  --linkx-launcher-item-hover: rgba(28, 66, 54, 0.9);
-  --linkx-launcher-item-active: rgba(16, 185, 129, 0.75);
-  --linkx-window-bg: rgba(14, 34, 28, 0.88);
-  --linkx-window-border: rgba(38, 77, 65, 0.6);
-  --linkx-window-border-active: rgba(16, 185, 129, 0.65);
-  --linkx-window-shadow: 0 1px 80px rgba(0, 0, 0, 0.65);
-  --linkx-window-header-bg: rgba(20, 48, 39, 0.94);
-  --linkx-window-header-active-bg: rgba(26, 60, 49, 0.96);
-  --linkx-window-header-drag-bg: rgba(34, 76, 62, 0.88);
-  --linkx-window-body-bg: rgba(14, 34, 28, 0.78);
-  --linkx-card-bg: rgba(18, 42, 34, 0.78);
-  --linkx-card-border: rgba(38, 77, 65, 0.6);
-  --linkx-card-hover-border: rgba(16, 185, 129, 0.6);
-  --linkx-card-surface-bg: rgba(14, 34, 28, 0.8);
-  --linkx-input-bg: rgba(20, 48, 39, 0.8);
-  --linkx-input-border: rgba(38, 77, 65, 0.65);
-  --linkx-input-text: #d1fae5;
-  --linkx-input-placeholder: rgba(110, 231, 183, 0.75);
-  --linkx-button-bg: rgba(20, 48, 39, 0.85);
-  --linkx-button-border: rgba(38, 77, 65, 0.6);
-  --linkx-button-hover-bg: rgba(28, 66, 54, 0.92);
-  --linkx-button-text: #d1fae5;
-  --linkx-tab-bg: rgba(14, 34, 28, 0.78);
-  --linkx-tab-border: rgba(38, 77, 65, 0.55);
-  --linkx-tab-active-bg: rgba(16, 185, 129, 0.75);
-  --linkx-tab-active-border: rgba(16, 185, 129, 0.75);
-  --linkx-tab-active-text: #ffffff;
-}
-
-/* 3. Replica: Cyberpunk Neon (#0b071a) */
-[data-theme="cyberpunk"] {
-  color-scheme: dark;
-  --app-bg: #0b071a;
-  --app-text: #e0d7ff;
-  --panel-bg: rgba(18, 12, 38, 0.95);
-  --panel-border: #3b226e;
-  --panel-shadow: rgba(0, 0, 0, 0.65);
-  --muted-text: #a78bfa;
-  --input-bg: #1c1138;
-  --input-border: #4c288d;
-  --accent: #ff007f;
-  --accent-strong: #ff3399;
-  --disabled-bg: #211442;
-  --disabled-border: #38206d;
-  --workspace-bg: #0b071a;
-  --workspace-scene-bg: #0b071a;
-  --workspace-scene-overlay: linear-gradient(180deg, #0b071a 0%, rgba(18, 12, 38, 0.88) 50%, #06030d 100%);
-  --window-bg: rgba(18, 12, 38, 0.88);
-  --window-page-bg: rgba(18, 12, 38, 0.78);
-  --window-chrome-bg: rgba(28, 19, 56, 0.94);
-  --window-glass-border: rgba(255, 0, 127, 0.45);
-  --primary-action-bg: rgba(28, 19, 56, 0.85);
-  --primary-action-bg-hover: rgba(42, 26, 82, 0.92);
-  --primary-action-bg-active: rgba(255, 0, 127, 0.75);
-  --primary-action-text: #e0d7ff;
-  --primary-action-border: rgba(120, 40, 180, 0.6);
-  --on-scene-text: #ffffff;
-  --on-scene-text-muted: #e0d7ff;
-  --on-scene-text-subtle: #a78bfa;
-  --scene-divider: rgba(120, 40, 180, 0.55);
-  --scene-control-hover-bg: rgba(255, 0, 127, 0.25);
-  --scene-drag-bg: radial-gradient(rgba(255, 0, 127, 0.25), rgba(18, 12, 38, 0.15));
-  --scene-drag-border: rgba(255, 0, 127, 0.5);
-
-  --linkx-bg-root: #0b071a;
-  --linkx-text-primary: #ffffff;
-  --linkx-text-secondary: #e0d7ff;
-  --linkx-text-muted: #a78bfa;
-  --linkx-text-subtle: rgba(167, 139, 250, 0.75);
-  --linkx-accent: #ff007f;
-  --linkx-accent-strong: #cc0066;
-  --linkx-shell-bg: #0b071a;
-  --linkx-workspace-bg: #0b071a;
-  --linkx-workspace-overlay: linear-gradient(180deg, #0b071a 0%, rgba(18, 12, 38, 0.88) 50%, #06030d 100%);
-  --linkx-launcher-bg: rgba(18, 12, 38, 0.88);
-  --linkx-launcher-border: rgba(120, 40, 180, 0.6);
-  --linkx-launcher-item-bg: rgba(28, 19, 56, 0.75);
-  --linkx-launcher-item-hover: rgba(42, 26, 82, 0.9);
-  --linkx-launcher-item-active: rgba(255, 0, 127, 0.75);
-  --linkx-window-bg: rgba(18, 12, 38, 0.88);
-  --linkx-window-border: rgba(120, 40, 180, 0.6);
-  --linkx-window-border-active: rgba(255, 0, 127, 0.65);
-  --linkx-window-shadow: 0 1px 80px rgba(0, 0, 0, 0.65);
-  --linkx-window-header-bg: rgba(28, 19, 56, 0.94);
-  --linkx-window-header-active-bg: rgba(36, 23, 72, 0.96);
-  --linkx-window-header-drag-bg: rgba(48, 30, 94, 0.88);
-  --linkx-window-body-bg: rgba(18, 12, 38, 0.78);
-  --linkx-card-bg: rgba(24, 15, 48, 0.78);
-  --linkx-card-border: rgba(120, 40, 180, 0.6);
-  --linkx-card-hover-border: rgba(255, 0, 127, 0.6);
-  --linkx-card-surface-bg: rgba(18, 12, 38, 0.8);
-  --linkx-input-bg: rgba(28, 19, 56, 0.8);
-  --linkx-input-border: rgba(120, 40, 180, 0.65);
-  --linkx-input-text: #e0d7ff;
-  --linkx-input-placeholder: rgba(167, 139, 250, 0.75);
-  --linkx-button-bg: rgba(28, 19, 56, 0.85);
-  --linkx-button-border: rgba(120, 40, 180, 0.6);
-  --linkx-button-hover-bg: rgba(42, 26, 82, 0.92);
-  --linkx-button-text: #e0d7ff;
-  --linkx-tab-bg: rgba(18, 12, 38, 0.78);
-  --linkx-tab-border: rgba(120, 40, 180, 0.55);
-  --linkx-tab-active-bg: rgba(255, 0, 127, 0.75);
-  --linkx-tab-active-border: rgba(255, 0, 127, 0.75);
-  --linkx-tab-active-text: #ffffff;
-}
-
-/* 4. Replica: Solarized Dark (#002b36) */
-[data-theme="solarized-dark"] {
-  color-scheme: dark;
-  --app-bg: #002b36;
-  --app-text: #839496;
-  --panel-bg: rgba(7, 54, 66, 0.95);
-  --panel-border: #0e4c5b;
-  --panel-shadow: rgba(0, 0, 0, 0.65);
-  --muted-text: #657b83;
-  --input-bg: #053b47;
-  --input-border: #145e6f;
-  --accent: #b58900;
-  --accent-strong: #d30102;
-  --disabled-bg: #083c48;
-  --disabled-border: #115362;
-  --workspace-bg: #002b36;
-  --workspace-scene-bg: #002b36;
-  --workspace-scene-overlay: linear-gradient(180deg, #002b36 0%, rgba(7, 54, 66, 0.88) 50%, #001a22 100%);
-  --window-bg: rgba(7, 54, 66, 0.88);
-  --window-page-bg: rgba(7, 54, 66, 0.78);
-  --window-chrome-bg: rgba(10, 68, 82, 0.94);
-  --window-glass-border: rgba(181, 137, 0, 0.45);
-  --primary-action-bg: rgba(10, 68, 82, 0.85);
-  --primary-action-bg-hover: rgba(16, 88, 105, 0.92);
-  --primary-action-bg-active: rgba(181, 137, 0, 0.75);
-  --primary-action-text: #93a1a1;
-  --primary-action-border: rgba(42, 110, 125, 0.6);
-  --on-scene-text: #fdf6e3;
-  --on-scene-text-muted: #93a1a1;
-  --on-scene-text-subtle: #657b83;
-  --scene-divider: rgba(42, 110, 125, 0.55);
-  --scene-control-hover-bg: rgba(181, 137, 0, 0.25);
-  --scene-drag-bg: radial-gradient(rgba(181, 137, 0, 0.25), rgba(7, 54, 66, 0.15));
-  --scene-drag-border: rgba(181, 137, 0, 0.5);
-
-  --linkx-bg-root: #002b36;
-  --linkx-text-primary: #fdf6e3;
-  --linkx-text-secondary: #93a1a1;
-  --linkx-text-muted: #657b83;
-  --linkx-text-subtle: rgba(101, 123, 131, 0.75);
-  --linkx-accent: #b58900;
-  --linkx-accent-strong: #a17700;
-  --linkx-shell-bg: #002b36;
-  --linkx-workspace-bg: #002b36;
-  --linkx-workspace-overlay: linear-gradient(180deg, #002b36 0%, rgba(7, 54, 66, 0.88) 50%, #001a22 100%);
-  --linkx-launcher-bg: rgba(7, 54, 66, 0.88);
-  --linkx-launcher-border: rgba(42, 110, 125, 0.6);
-  --linkx-launcher-item-bg: rgba(10, 68, 82, 0.75);
-  --linkx-launcher-item-hover: rgba(16, 88, 105, 0.9);
-  --linkx-launcher-item-active: rgba(181, 137, 0, 0.75);
-  --linkx-window-bg: rgba(7, 54, 66, 0.88);
-  --linkx-window-border: rgba(42, 110, 125, 0.6);
-  --linkx-window-border-active: rgba(181, 137, 0, 0.65);
-  --linkx-window-shadow: 0 1px 80px rgba(0, 0, 0, 0.65);
-  --linkx-window-header-bg: rgba(10, 68, 82, 0.94);
-  --linkx-window-header-active-bg: rgba(13, 80, 96, 0.96);
-  --linkx-window-header-drag-bg: rgba(18, 98, 118, 0.88);
-  --linkx-window-body-bg: rgba(7, 54, 66, 0.78);
-  --linkx-card-bg: rgba(9, 60, 74, 0.78);
-  --linkx-card-border: rgba(42, 110, 125, 0.6);
-  --linkx-card-hover-border: rgba(181, 137, 0, 0.6);
-  --linkx-card-surface-bg: rgba(7, 54, 66, 0.8);
-  --linkx-input-bg: rgba(10, 68, 82, 0.8);
-  --linkx-input-border: rgba(42, 110, 125, 0.65);
-  --linkx-input-text: #93a1a1;
-  --linkx-input-placeholder: rgba(101, 123, 131, 0.75);
-  --linkx-button-bg: rgba(10, 68, 82, 0.85);
-  --linkx-button-border: rgba(42, 110, 125, 0.6);
-  --linkx-button-hover-bg: rgba(16, 88, 105, 0.92);
-  --linkx-button-text: #93a1a1;
-  --linkx-tab-bg: rgba(7, 54, 66, 0.78);
-  --linkx-tab-border: rgba(42, 110, 125, 0.55);
-  --linkx-tab-active-bg: rgba(181, 137, 0, 0.75);
-  --linkx-tab-active-border: rgba(181, 137, 0, 0.75);
-  --linkx-tab-active-text: #fdf6e3;
-}
-
-/* 5. Replica: Daylight Clean (#f4f7fa) */
-[data-theme="light-clean"] {
-  color-scheme: light;
-  --app-bg: #f4f7fa;
-  --app-text: #1e293b;
-  --panel-bg: rgba(255, 255, 255, 0.94);
-  --panel-border: #cbd5e1;
-  --panel-shadow: rgba(0, 0, 0, 0.08);
-  --muted-text: #64748b;
-  --input-bg: #ffffff;
-  --input-border: #94a3b8;
-  --accent: #0d9488;
-  --accent-strong: #0f766e;
-  --disabled-bg: #e2e8f0;
-  --disabled-border: #cbd5e1;
-  --workspace-bg: #f4f7fa;
-  --workspace-scene-bg: #f4f7fa;
-  --workspace-scene-overlay: linear-gradient(180deg, #f4f7fa 0%, rgba(255, 255, 255, 0.9) 50%, #e2e8f0 100%);
-  --window-bg: rgba(255, 255, 255, 0.95);
-  --window-page-bg: rgba(255, 255, 255, 0.88);
-  --window-chrome-bg: rgba(241, 245, 249, 0.96);
-  --window-glass-border: rgba(13, 148, 136, 0.45);
-  --primary-action-bg: rgba(241, 245, 249, 0.95);
-  --primary-action-bg-hover: rgba(226, 232, 240, 0.98);
-  --primary-action-bg-active: rgba(13, 148, 136, 0.85);
-  --primary-action-text: #0f172a;
-  --primary-action-border: rgba(148, 163, 184, 0.6);
-  --on-scene-text: #0f172a;
-  --on-scene-text-muted: #334155;
-  --on-scene-text-subtle: #64748b;
-  --scene-divider: rgba(203, 213, 225, 0.8);
-  --scene-control-hover-bg: rgba(13, 148, 136, 0.15);
-  --scene-drag-bg: radial-gradient(rgba(13, 148, 136, 0.15), rgba(244, 247, 250, 0.5));
-  --scene-drag-border: rgba(13, 148, 136, 0.5);
-
-  --linkx-bg-root: #f4f7fa;
-  --linkx-text-primary: #0f172a;
-  --linkx-text-secondary: #334155;
-  --linkx-text-muted: #64748b;
-  --linkx-text-subtle: rgba(100, 116, 139, 0.8);
-  --linkx-accent: #0d9488;
-  --linkx-accent-strong: #0f766e;
-  --linkx-shell-bg: #f4f7fa;
-  --linkx-workspace-bg: #f4f7fa;
-  --linkx-workspace-overlay: linear-gradient(180deg, #f4f7fa 0%, rgba(255, 255, 255, 0.9) 50%, #e2e8f0 100%);
-  --linkx-launcher-bg: rgba(255, 255, 255, 0.92);
-  --linkx-launcher-border: rgba(203, 213, 225, 0.8);
-  --linkx-launcher-item-bg: rgba(241, 245, 249, 0.85);
-  --linkx-launcher-item-hover: rgba(226, 232, 240, 0.95);
-  --linkx-launcher-item-active: rgba(13, 148, 136, 0.85);
-  --linkx-window-bg: rgba(255, 255, 255, 0.95);
-  --linkx-window-border: rgba(203, 213, 225, 0.8);
-  --linkx-window-border-active: rgba(13, 148, 136, 0.75);
-  --linkx-window-shadow: 0 10px 40px rgba(15, 23, 42, 0.12);
-  --linkx-window-header-bg: rgba(241, 245, 249, 0.96);
-  --linkx-window-header-active-bg: rgba(226, 232, 240, 0.98);
-  --linkx-window-header-drag-bg: rgba(203, 213, 225, 0.95);
-  --linkx-window-body-bg: rgba(255, 255, 255, 0.92);
-  --linkx-card-bg: rgba(248, 250, 252, 0.95);
-  --linkx-card-border: rgba(203, 213, 225, 0.8);
-  --linkx-card-hover-border: rgba(13, 148, 136, 0.6);
-  --linkx-card-surface-bg: rgba(255, 255, 255, 0.95);
-  --linkx-input-bg: rgba(255, 255, 255, 0.95);
-  --linkx-input-border: rgba(148, 163, 184, 0.8);
-  --linkx-input-text: #0f172a;
-  --linkx-input-placeholder: rgba(100, 116, 139, 0.8);
-  --linkx-button-bg: rgba(241, 245, 249, 0.95);
-  --linkx-button-border: rgba(203, 213, 225, 0.8);
-  --linkx-button-hover-bg: rgba(226, 232, 240, 0.98);
-  --linkx-button-text: #0f172a;
-  --linkx-tab-bg: rgba(241, 245, 249, 0.9);
-  --linkx-tab-border: rgba(203, 213, 225, 0.8);
-  --linkx-tab-active-bg: rgba(13, 148, 136, 0.85);
-  --linkx-tab-active-border: rgba(13, 148, 136, 0.85);
-  --linkx-tab-active-text: #ffffff;
-}
-
-/* 6. Replica: Solarized Light (#fdf6e3) */
-[data-theme="solarized-light"] {
-  color-scheme: light;
-  --app-bg: #fdf6e3;
-  --app-text: #657b83;
-  --panel-bg: rgba(238, 232, 213, 0.94);
-  --panel-border: #d3cbb7;
-  --panel-shadow: rgba(0, 0, 0, 0.08);
-  --muted-text: #93a1a1;
-  --input-bg: #fdf6e3;
-  --input-border: #b58900;
-  --accent: #268bd2;
-  --accent-strong: #2aa198;
-  --disabled-bg: #eee8d5;
-  --disabled-border: #d3cbb7;
-  --workspace-bg: #fdf6e3;
-  --workspace-scene-bg: #fdf6e3;
-  --workspace-scene-overlay: linear-gradient(180deg, #fdf6e3 0%, rgba(238, 232, 213, 0.9) 50%, #e5decc 100%);
-  --window-bg: rgba(253, 246, 227, 0.96);
-  --window-page-bg: rgba(238, 232, 213, 0.88);
-  --window-chrome-bg: rgba(238, 232, 213, 0.96);
-  --window-glass-border: rgba(38, 139, 210, 0.45);
-  --primary-action-bg: rgba(238, 232, 213, 0.95);
-  --primary-action-bg-hover: rgba(225, 217, 195, 0.98);
-  --primary-action-bg-active: rgba(38, 139, 210, 0.85);
-  --primary-action-text: #073642;
-  --primary-action-border: rgba(181, 137, 0, 0.6);
-  --on-scene-text: #073642;
-  --on-scene-text-muted: #586e75;
-  --on-scene-text-subtle: #839496;
-  --scene-divider: rgba(211, 203, 183, 0.8);
-  --scene-control-hover-bg: rgba(38, 139, 210, 0.15);
-  --scene-drag-bg: radial-gradient(rgba(38, 139, 210, 0.15), rgba(253, 246, 227, 0.5));
-  --scene-drag-border: rgba(38, 139, 210, 0.5);
-
-  --linkx-bg-root: #fdf6e3;
-  --linkx-text-primary: #073642;
-  --linkx-text-secondary: #586e75;
-  --linkx-text-muted: #839496;
-  --linkx-text-subtle: rgba(131, 148, 150, 0.8);
-  --linkx-accent: #268bd2;
-  --linkx-accent-strong: #2aa198;
-  --linkx-shell-bg: #fdf6e3;
-  --linkx-workspace-bg: #fdf6e3;
-  --linkx-workspace-overlay: linear-gradient(180deg, #fdf6e3 0%, rgba(238, 232, 213, 0.9) 50%, #e5decc 100%);
-  --linkx-launcher-bg: rgba(238, 232, 213, 0.94);
-  --linkx-launcher-border: rgba(211, 203, 183, 0.8);
-  --linkx-launcher-item-bg: rgba(253, 246, 227, 0.85);
-  --linkx-launcher-item-hover: rgba(225, 217, 195, 0.95);
-  --linkx-launcher-item-active: rgba(38, 139, 210, 0.85);
-  --linkx-window-bg: rgba(253, 246, 227, 0.96);
-  --linkx-window-border: rgba(211, 203, 183, 0.8);
-  --linkx-window-border-active: rgba(38, 139, 210, 0.75);
-  --linkx-window-shadow: 0 10px 40px rgba(7, 54, 66, 0.12);
-  --linkx-window-header-bg: rgba(238, 232, 213, 0.96);
-  --linkx-window-header-active-bg: rgba(225, 217, 195, 0.98);
-  --linkx-window-header-drag-bg: rgba(211, 203, 183, 0.95);
-  --linkx-window-body-bg: rgba(253, 246, 227, 0.94);
-  --linkx-card-bg: rgba(238, 232, 213, 0.95);
-  --linkx-card-border: rgba(211, 203, 183, 0.8);
-  --linkx-card-hover-border: rgba(38, 139, 210, 0.6);
-  --linkx-card-surface-bg: rgba(253, 246, 227, 0.95);
-  --linkx-input-bg: rgba(253, 246, 227, 0.95);
-  --linkx-input-border: rgba(181, 137, 0, 0.8);
-  --linkx-input-text: #073642;
-  --linkx-input-placeholder: rgba(131, 148, 150, 0.8);
-  --linkx-button-bg: rgba(238, 232, 213, 0.95);
-  --linkx-button-border: rgba(211, 203, 183, 0.8);
-  --linkx-button-hover-bg: rgba(225, 217, 195, 0.98);
-  --linkx-button-text: #073642;
-  --linkx-tab-bg: rgba(238, 232, 213, 0.9);
-  --linkx-tab-border: rgba(211, 203, 183, 0.8);
-  --linkx-tab-active-bg: rgba(38, 139, 210, 0.85);
-  --linkx-tab-active-border: rgba(38, 139, 210, 0.85);
-  --linkx-tab-active-text: #fdf6e3;
-}
-
-/* 7. Replica: NBE Daylight (Bright Golden & Dark Blue Skin) */
-[data-theme="nbe-daylight"] {
-  color-scheme: light;
-  --app-bg: #f6efea;
-  --app-text: #131e2a;
-  --panel-bg: rgba(255, 255, 255, 0.96);
-  --panel-border: rgba(174, 135, 79, 0.45);
-  --panel-shadow: rgba(19, 30, 42, 0.12);
-  --muted-text: #7f5523;
-  --input-bg: #FFFFFF;
-  --input-border: #ae874f;
-  --accent: #FCC676;
-  --accent-strong: #ae874f;
-  --disabled-bg: #F6F7F885;
-  --disabled-border: rgba(174, 135, 79, 0.3);
-  --workspace-bg: #f6efea;
-  --workspace-scene-bg: #f6efea;
-  --workspace-scene-overlay: linear-gradient(180deg, #f6efea 0%, rgba(255, 255, 255, 0.92) 50%, #eae1d7 100%);
-  --window-bg: rgba(255, 255, 255, 0.96);
-  --window-page-bg: rgba(246, 247, 248, 0.85);
-  --window-chrome-bg: #131e2a;
-  --window-glass-border: rgba(252, 198, 118, 0.6);
-  --primary-action-bg: #131e2a;
-  --primary-action-bg-hover: #1f2d3d;
-  --primary-action-bg-active: #ae874f;
-  --primary-action-text: #FCC676;
-  --primary-action-border: #ae874f;
-  --on-scene-text: #131e2a;
-  --on-scene-text-muted: #7f5523;
-  --on-scene-text-subtle: #ae874f;
-  --scene-divider: rgba(174, 135, 79, 0.4);
-  --scene-control-hover-bg: rgba(252, 198, 118, 0.25);
-  --scene-drag-bg: radial-gradient(rgba(252, 198, 118, 0.3), rgba(246, 239, 234, 0.5));
-  --scene-drag-border: #ae874f;
-
-  --linkx-bg-root: #f6efea;
-  --linkx-text-primary: #131e2a;
-  --linkx-text-secondary: #7f5523;
-  --linkx-text-muted: #ae874f;
-  --linkx-text-subtle: rgba(127, 85, 35, 0.8);
-  --linkx-accent: #FCC676;
-  --linkx-accent-strong: #ae874f;
-  --linkx-shell-bg: #f6efea;
-  --linkx-workspace-bg: #f6efea;
-  --linkx-workspace-overlay: linear-gradient(180deg, #f6efea 0%, rgba(255, 255, 255, 0.92) 50%, #eae1d7 100%);
-  --linkx-launcher-bg: rgba(255, 255, 255, 0.95);
-  --linkx-launcher-border: rgba(174, 135, 79, 0.45);
-  --linkx-launcher-item-bg: rgba(246, 247, 248, 0.85);
-  --linkx-launcher-item-hover: rgba(252, 198, 118, 0.25);
-  --linkx-launcher-item-active: #131e2a;
-  --linkx-window-bg: rgba(248, 248, 248, 0.96);
-  --linkx-window-bg-active: rgba(255, 255, 255, 1);
-  --linkx-window-border: rgba(174, 135, 79, 0.5);
-  --linkx-window-border-active: #FCC676;
-  --linkx-window-shadow: 0 14px 48px rgba(19, 30, 42, 0.16);
-  --linkx-window-header-bg: #131e2a;
-  --linkx-window-header-active-bg: #1f2d3d;
-  --linkx-window-header-drag-bg: #2b3d52;
-  --linkx-window-body-bg: rgba(255, 255, 255, 0.96);
-  --linkx-card-bg: #FFFFFF;
-  --linkx-card-border: rgba(174, 135, 79, 0.45);
-  --linkx-card-hover-border: #FCC676;
-  --linkx-card-surface-bg: rgba(255, 255, 255, 0.96);
-  --linkx-input-bg: #FFFFFF;
-  --linkx-input-border: rgba(174, 135, 79, 0.6);
-  --linkx-input-text: #131e2a;
-  --linkx-input-placeholder: rgba(127, 85, 35, 0.75);
-  --linkx-button-bg: #131e2a;
-  --linkx-button-border: #ae874f;
-  --linkx-button-hover-bg: #1f2d3d;
-  --linkx-button-text: #FCC676;
-  --linkx-tab-bg: rgba(246, 247, 248, 0.92);
-  --linkx-tab-border: rgba(174, 135, 79, 0.45);
-  --linkx-tab-active-bg: #131e2a;
-  --linkx-tab-active-border: #ae874f;
-  --linkx-tab-active-text: #FCC676;
-}
-
-/* 8. Replica: NBE Darknight (#0f172a) */
-[data-theme="nbe-darknight"] {
-  color-scheme: dark;
-  --app-bg: #0f172a;
-  --app-text: #f8fafc;
-  --panel-bg: rgba(15, 23, 42, 0.94);
-  --panel-border: #334155;
-  --panel-shadow: rgba(0, 0, 0, 0.65);
-  --muted-text: #94a3b8;
-  --input-bg: #1e293b;
-  --input-border: #475569;
-  --accent: #38bdf8;
-  --accent-strong: #0284c7;
-  --disabled-bg: #1e293b;
-  --disabled-border: #334155;
-  --workspace-bg: #0f172a;
-  --workspace-scene-bg: #0f172a;
-  --workspace-scene-overlay: linear-gradient(180deg, #0f172a 0%, rgba(15, 23, 42, 0.88) 50%, #090d16 100%);
-  --window-bg: rgba(15, 23, 42, 0.88);
-  --window-page-bg: rgba(15, 23, 42, 0.78);
-  --window-chrome-bg: rgba(30, 41, 59, 0.94);
-  --window-glass-border: rgba(56, 189, 248, 0.45);
-  --primary-action-bg: rgba(30, 41, 59, 0.85);
-  --primary-action-bg-hover: rgba(51, 65, 85, 0.92);
-  --primary-action-bg-active: rgba(56, 189, 248, 0.75);
-  --primary-action-text: #f8fafc;
-  --primary-action-border: rgba(71, 85, 105, 0.6);
-  --on-scene-text: #ffffff;
-  --on-scene-text-muted: #f8fafc;
-  --on-scene-text-subtle: #94a3b8;
-  --scene-divider: rgba(71, 85, 105, 0.55);
-  --scene-control-hover-bg: rgba(56, 189, 248, 0.25);
-  --scene-drag-bg: radial-gradient(rgba(56, 189, 248, 0.25), rgba(15, 23, 42, 0.15));
-  --scene-drag-border: rgba(56, 189, 248, 0.5);
-
-  --linkx-bg-root: #0f172a;
-  --linkx-text-primary: #ffffff;
-  --linkx-text-secondary: #f8fafc;
-  --linkx-text-muted: #94a3b8;
-  --linkx-text-subtle: rgba(148, 163, 184, 0.75);
-  --linkx-accent: #38bdf8;
-  --linkx-accent-strong: #0284c7;
-  --linkx-shell-bg: #0f172a;
-  --linkx-workspace-bg: #0f172a;
-  --linkx-workspace-overlay: linear-gradient(180deg, #0f172a 0%, rgba(15, 23, 42, 0.88) 50%, #090d16 100%);
-  --linkx-launcher-bg: rgba(15, 23, 42, 0.88);
-  --linkx-launcher-border: rgba(71, 85, 105, 0.6);
-  --linkx-launcher-item-bg: rgba(30, 41, 59, 0.75);
-  --linkx-launcher-item-hover: rgba(51, 65, 85, 0.9);
-  --linkx-launcher-item-active: rgba(56, 189, 248, 0.75);
-  --linkx-window-bg: rgba(15, 23, 42, 0.88);
-  --linkx-window-border: rgba(71, 85, 105, 0.6);
-  --linkx-window-border-active: rgba(56, 189, 248, 0.65);
-  --linkx-window-shadow: 0 1px 80px rgba(0, 0, 0, 0.65);
-  --linkx-window-header-bg: rgba(30, 41, 59, 0.94);
-  --linkx-window-header-active-bg: rgba(40, 53, 75, 0.96);
-  --linkx-window-header-drag-bg: rgba(51, 65, 85, 0.88);
-  --linkx-window-body-bg: rgba(15, 23, 42, 0.78);
-  --linkx-card-bg: rgba(24, 34, 54, 0.78);
-  --linkx-card-border: rgba(71, 85, 105, 0.6);
-  --linkx-card-hover-border: rgba(56, 189, 248, 0.6);
-  --linkx-card-surface-bg: rgba(15, 23, 42, 0.8);
-  --linkx-input-bg: rgba(30, 41, 59, 0.8);
-  --linkx-input-border: rgba(71, 85, 105, 0.65);
-  --linkx-input-text: #f8fafc;
-  --linkx-input-placeholder: rgba(148, 163, 184, 0.75);
-  --linkx-button-bg: rgba(30, 41, 59, 0.85);
-  --linkx-button-border: rgba(71, 85, 105, 0.6);
-  --linkx-button-hover-bg: rgba(51, 65, 85, 0.92);
-  --linkx-button-text: #f8fafc;
-  --linkx-tab-bg: rgba(15, 23, 42, 0.78);
-  --linkx-tab-border: rgba(71, 85, 105, 0.55);
-  --linkx-tab-active-bg: rgba(56, 189, 248, 0.75);
-  --linkx-tab-active-border: rgba(56, 189, 248, 0.75);
-  --linkx-tab-active-text: #ffffff;
-}
 
 
 ::-webkit-scrollbar {
@@ -2106,37 +43,6 @@ select,
 
 ::-webkit-scrollbar-corner {
   background: var(--linkx-card-bg);
-}
-/* Keyframes for swinging, hueshift */
-@keyframes swing {
-  0% {
-    transform: rotateZ(0deg);
-	left:1.3vw;
-	top: calc(5px + 1.35vh);	
-  }
-  97% {
-    transform: rotateZ(0deg);
-	left:1.3vw;
-	top: calc(5px + 1.35vh);	
-  }
-  98% {
-    transform: rotateZ(70deg); /* swing downward clockwise */
-    left: 2.4vw;
-    top: calc(5px + 2.3vh);
-  }
-  100% {
-    transform: rotateZ(0deg);
-	left:1.3vw;
-	top: calc(5px + 1.35vh);	
-  }
-}
-@keyframes hueshift{
-	from {
-		filter: hue-rotate(0deg);
-	}
-	to {
-		filter: hue-rotate(360deg);
-	}
 }
 @keyframes rotate2D {
   0% {
@@ -2455,7 +361,6 @@ body{
 	padding: 18px;
 	box-sizing: border-box;
 	overflow: hidden;
-	transition: grid-template-columns 220ms ease;
 }
 
 .workspace_frame.is-launcher-expanded {
@@ -2469,9 +374,10 @@ body{
 }
 
 .workspace_work_area {
+	--right-panel-width: 380px;
 	position: relative;
 	display: grid;
-	grid-template-columns: minmax(0, 1fr) 380px;
+	grid-template-columns: minmax(0, 1fr) var(--right-panel-width);
 	gap: 10px;
 	min-width: 0;
 	height: calc(100dvh - 36px);
@@ -2564,6 +470,9 @@ body{
 	height: 34px;
 	object-fit: cover;
 	display: block;
+	border-radius: 50%;
+	background: var(--launcher-brand-logo-bg, transparent);
+	box-shadow: var(--launcher-brand-logo-ring, none);
 }
 
 .workspace_launcher_brand_label {
@@ -2628,9 +537,9 @@ body{
 	align-items: center;
 	width: 34px;
 	height: 34px;
-	border: 1px solid rgb(108 133 139 / 0%);
+	border: 1px solid var(--launcher-item-idle-border, transparent);
 	border-radius: 4px;
-	background: transparent;
+	background: var(--launcher-item-idle-bg, transparent);
 	color: var(--launcher-text-secondary);
 	padding: 0;
 	cursor: pointer;
@@ -3000,7 +909,7 @@ body{
 	background: var(--central-page-dot-bg, rgba(174, 135, 79, 0.35));
 	padding: 0;
 	cursor: pointer;
-	transition: all 220ms cubic-bezier(0.25, 1, 0.5, 1);
+	transition: width 220ms cubic-bezier(0.25, 1, 0.5, 1), background-color 220ms ease, border-color 220ms ease, transform 220ms ease;
 }
 
 .workspace_home_page_dot:hover {
@@ -3013,7 +922,7 @@ body{
 	height: 22px;
 	background: var(--central-page-dot-active-bg, #FCC676);
 	border-color: var(--central-page-dot-active-border, #FCC676);
-	box-shadow: 0 0 10px rgba(252, 198, 118, 0.6);
+	box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 60%, transparent);
 }
 
 /* Tooltip direction override for Right Page Dots (pops to the LEFT to avoid right screen edge cropping) */
@@ -3548,7 +1457,7 @@ body{
 	height: 6px;
 	width: 100%;
 	border-radius: 3px;
-	background: rgba(255, 255, 255, 0.15);
+	background: var(--central-analysis-overlay-track-bg, rgba(255, 255, 255, 0.15));
 	overflow: hidden;
 }
 
@@ -3716,14 +1625,14 @@ body{
 	border: none;
 	background: var(--central-analyze-btn-bg-custom, linear-gradient(var(--central-analyze-btn-gradient-angle, 135deg), var(--central-analyze-btn-gradient-top, #FCC676), var(--central-analyze-btn-gradient-bottom, #fdb84d)));
 	color: var(--central-analyze-btn-text);
-	box-shadow: 0 4px 16px rgba(252, 198, 118, 0.35);
+	box-shadow: 0 4px 16px color-mix(in srgb, var(--accent) 35%, transparent);
 	transition: background 150ms ease, border-color 150ms ease, color 150ms ease, transform 120ms ease, box-shadow 150ms ease;
 }
 
 .workspace_home_analyze_btn:hover:not(:disabled) {
 	opacity: var(--central-analyze-btn-hover-opacity, 0.85);
 	transform: translateY(-1px);
-	box-shadow: 0 6px 20px rgba(252, 198, 118, 0.45);
+	box-shadow: 0 6px 20px color-mix(in srgb, var(--accent) 45%, transparent);
 }
 
 .workspace_home_bg_btn {
@@ -3973,7 +1882,7 @@ body{
 	background: var(--central-option-active-bg, rgba(252, 198, 118, 0.18));
 	color: var(--central-option-active-text, #131e2a);
 	font-weight: 700;
-	box-shadow: 0 4px 14px rgba(252, 198, 118, 0.18);
+	box-shadow: 0 4px 14px color-mix(in srgb, var(--accent) 18%, transparent);
 }
 
 .workspace_home_option.is-selected input {
@@ -4155,22 +2064,30 @@ body{
 	border-radius: 6px !important;
 	color: var(--launcher-text, #131e2a) !important;
 	transition: width 280ms cubic-bezier(0.25, 1, 0.5, 1), border-color 280ms ease;
-	overflow: visible !important;
+	/* Rail tooltips render in the global tooltip layer, so the rail can clip
+	   the (fixed-width) context panel while it slides out. */
+	overflow: hidden !important;
 }
 
 .workspace_context_panel {
-	width: 100%;
+	/* Fixed width (zone width minus its 1px left border) so the content does not
+	   re-layout on every frame while the column width animates; the zone clips it. */
+	flex: 0 0 auto;
+	width: calc(var(--right-panel-width, 380px) - 1px);
 	height: 100%;
 	opacity: 1;
+	visibility: visible;
 	pointer-events: auto;
-	transition: opacity 180ms ease, transform 280ms cubic-bezier(0.25, 1, 0.5, 1);
+	transition: opacity 180ms ease, transform 280ms cubic-bezier(0.25, 1, 0.5, 1), visibility 0s;
 	transform: translateX(0);
 }
 
 .workspace_zone_right.is-collapsed .workspace_context_panel {
 	opacity: 0 !important;
+	visibility: hidden;
 	pointer-events: none !important;
 	transform: translateX(12px);
+	transition: opacity 180ms ease, transform 280ms cubic-bezier(0.25, 1, 0.5, 1), visibility 0s linear 180ms;
 }
 
 .workspace_right_collapsed_rail {
@@ -4663,6 +2580,99 @@ body{
 
 .workspace_context_section.is-collapsed {
 	padding-bottom: 12px;
+}
+
+.workspace_context_hint {
+	margin: 0 0 10px;
+	color: var(--right-card-title-color, var(--text-secondary, #8a97a6));
+	font-size: 11px;
+	line-height: 1.4;
+}
+
+.workspace_context_button_row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.workspace_context_button {
+	flex: 1 1 auto;
+	min-width: 120px;
+	padding: 8px 12px;
+	border-radius: 6px;
+	border: 1px solid var(--panel-border, rgba(174, 135, 79, 0.45));
+	background: color-mix(in srgb, var(--accent, #FCC676) 12%, transparent);
+	color: var(--text-primary, inherit);
+	font-size: 12px;
+	font-weight: 600;
+	cursor: pointer;
+	transition: background 150ms ease, border-color 150ms ease, opacity 150ms ease;
+}
+
+.workspace_context_button:hover:not(:disabled) {
+	background: color-mix(in srgb, var(--accent, #FCC676) 24%, transparent);
+	border-color: var(--accent-strong, #ae874f);
+}
+
+.workspace_context_button.is-active {
+	background: var(--accent, #FCC676);
+	border-color: var(--accent-strong, #ae874f);
+	color: #131e2a;
+}
+
+.workspace_context_button.is-danger {
+	background: color-mix(in srgb, #e5484d 14%, transparent);
+	border-color: color-mix(in srgb, #e5484d 45%, transparent);
+}
+
+.workspace_context_button:disabled {
+	opacity: 0.45;
+	cursor: not-allowed;
+}
+
+.workspace_context_subheading {
+	margin: 14px 0 6px;
+	font-size: 0.78rem;
+	font-weight: 600;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: var(--muted-text);
+}
+
+.workspace_preset_list {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.workspace_preset_option {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	text-align: left;
+	padding: 10px 12px;
+	border-radius: 6px;
+	border: 1px solid var(--panel-border, rgba(174, 135, 79, 0.45));
+	background: color-mix(in srgb, var(--panel-bg, #FFFFFF) 60%, transparent);
+	color: var(--text-primary, inherit);
+	cursor: pointer;
+	transition: background 150ms ease, border-color 150ms ease;
+}
+
+.workspace_preset_option:hover {
+	background: color-mix(in srgb, var(--accent, #FCC676) 16%, transparent);
+	border-color: var(--accent-strong, #ae874f);
+}
+
+.workspace_preset_option strong {
+	font-size: 12px;
+	font-weight: 700;
+}
+
+.workspace_preset_option small {
+	font-size: 10px;
+	opacity: 0.75;
+	line-height: 1.35;
 }
 
 .workspace_section_header {
@@ -5552,20 +3562,28 @@ body{
 	min-height: min(420px, calc(100% - 96px));
 	margin: 0;
 	box-sizing: border-box;
-	border: 1px solid var(--linkx-window-border, rgba(174, 135, 79, 0.35));
+	/* Header and body draw their own borders so each can be coloured separately. */
+	border: 0;
 	border-radius: var(--linkx-window-radius, 6px);
 	background: var(--linkx-window-bg, rgba(255, 255, 255, 0.96));
 	overflow: visible;
 	opacity: 1;
 	will-change: transform;
 	pointer-events: auto;
-	backdrop-filter: blur(var(--linkx-window-backdrop-blur, 20px));
+	backdrop-filter: blur(var(--linkx-window-backdrop-blur, 8px));
 	box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
-	transition: border-color 200ms ease, box-shadow 200ms ease, opacity 200ms ease, background 200ms ease;
+	transition: box-shadow 200ms ease, opacity 200ms ease, background 200ms ease;
+}
+
+/* Blur is re-composited every frame while moving; drop it during gestures. */
+.workspace_window.is-dragging,
+.workspace_window.is-resizing {
+	backdrop-filter: none;
+	-webkit-backdrop-filter: none;
+	transition: none;
 }
 
 .workspace_window.is-active {
-	border-color: var(--linkx-window-border-active, #FCC676);
 	background: var(--linkx-window-bg-active, rgba(255, 255, 255, 0.99));
 	box-shadow: var(--linkx-window-shadow, 0 14px 48px rgba(19, 30, 42, 0.16));
 	opacity: 1;
@@ -5578,8 +3596,11 @@ body{
 	gap: 12px;
 	min-height: 46px;
 	padding: 0 12px 0 16px;
-	background: var(--linkx-window-header-bg, #131e2a);
+	box-sizing: border-box;
+	border: 1px solid var(--window-header-border, var(--linkx-window-border, rgba(174, 135, 79, 0.35)));
 	border-bottom: 1px solid var(--linkx-window-header-border-bottom, rgba(174, 135, 79, 0.3));
+	border-radius: var(--linkx-window-radius, 6px) var(--linkx-window-radius, 6px) 0 0;
+	background: var(--linkx-window-header-bg, #131e2a);
 	color: var(--window-header-text, #FCC676);
 	cursor: grab;
 	user-select: none;
@@ -5587,6 +3608,8 @@ body{
 }
 
 .workspace_window.is-active .workspace_window_header {
+	border-color: var(--window-header-border-active, var(--linkx-window-border-active, #AE874F));
+	border-bottom-color: var(--linkx-window-header-border-bottom, rgba(174, 135, 79, 0.3));
 	background: var(--linkx-window-header-active-bg, #1f2d3d);
 }
 
@@ -5674,6 +3697,18 @@ body{
 	font-size: 13px;
 	line-height: 1.45;
 	overflow: hidden;
+}
+
+.workspace_window > .workspace_window_body {
+	box-sizing: border-box;
+	border: 1px solid var(--window-body-border, var(--linkx-window-border, rgba(174, 135, 79, 0.35)));
+	border-top: 0;
+	border-radius: 0 0 var(--linkx-window-radius, 6px) var(--linkx-window-radius, 6px);
+	transition: border-color 200ms ease;
+}
+
+.workspace_window.is-active > .workspace_window_body {
+	border-color: var(--window-body-border-active, var(--linkx-window-border-active, #AE874F));
 }
 
 .workspace_window_body > * {
@@ -5824,7 +3859,7 @@ body{
 	grid-template-rows: auto minmax(0, 1fr);
 	/* padding: 64px 18px 18px; */
 	pointer-events: auto;
-	backdrop-filter: blur(20px);
+	backdrop-filter: blur(10px);
 }
 
 .workspace_window_dock_header {
@@ -9478,7 +7513,7 @@ body{
 	border-radius: 7px;
 	background: var(--notice-card-bg);
 	box-shadow: inset 0 1px 0 var(--notice-separator);
-	backdrop-filter: blur(16px) saturate(120%);
+	backdrop-filter: blur(10px) saturate(120%);
 	color: var(--notice-text-secondary);
 }
 
@@ -10918,7 +8953,7 @@ body{
 	color: var(--app-text);
 	cursor: pointer;
 	text-align: left;
-	transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+	transition: background-color 0.2s, border-color 0.2s, color 0.2s, box-shadow 0.2s, transform 0.2s, opacity 0.2s;
 	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
@@ -11013,7 +9048,7 @@ body{
 	border: 1px solid var(--window-glass-border);
 	background: var(--panel-bg);
 	box-shadow: 0 16px 48px var(--panel-shadow), 0 0 0 1px var(--panel-border) inset;
-	backdrop-filter: blur(16px);
+	backdrop-filter: blur(10px);
 	text-align: center;
 	animation: workspaceLockPop 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
@@ -11099,7 +9134,7 @@ body{
 	font-weight: 600;
 	font-size: 14px;
 	cursor: pointer;
-	transition: all 0.2s ease;
+	transition: background-color 0.2s, border-color 0.2s, color 0.2s, box-shadow 0.2s, transform 0.2s, opacity 0.2s;
 }
 
 .workspace_lock_btn_primary:hover:not(:disabled) {
@@ -11117,7 +9152,7 @@ body{
 	font-weight: 500;
 	font-size: 13px;
 	cursor: pointer;
-	transition: all 0.2s ease;
+	transition: background-color 0.2s, border-color 0.2s, color 0.2s, box-shadow 0.2s, transform 0.2s, opacity 0.2s;
 }
 
 .workspace_lock_btn_secondary:hover:not(:disabled) {
@@ -11152,7 +9187,7 @@ body{
 	backdrop-filter: blur(12px);
 	color: var(--notice-app-text);
 	animation: noticeSlideIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-	transition: all 0.2s ease;
+	transition: background-color 0.2s, border-color 0.2s, color 0.2s, box-shadow 0.2s, transform 0.2s, opacity 0.2s;
 }
 
 @keyframes noticeSlideIn {
@@ -11388,7 +9423,7 @@ body{
 	font-size: 13px;
 	font-weight: 600;
 	cursor: pointer;
-	transition: all 0.2s ease;
+	transition: background-color 0.2s, border-color 0.2s, color 0.2s, box-shadow 0.2s, transform 0.2s, opacity 0.2s;
 }
 
 .graph_btn_primary,
@@ -11590,7 +9625,7 @@ body{
 	font-size: 12px;
 	font-weight: 600;
 	cursor: pointer;
-	transition: all 160ms ease;
+	transition: background-color 160ms, border-color 160ms, color 160ms, box-shadow 160ms, transform 160ms, opacity 160ms;
 }
 
 .theme_studio_pill:hover {
@@ -11627,7 +9662,7 @@ body{
 	font-size: 12px;
 	font-weight: 600;
 	cursor: pointer;
-	transition: all 160ms ease;
+	transition: background-color 160ms, border-color 160ms, color 160ms, box-shadow 160ms, transform 160ms, opacity 160ms;
 }
 
 .theme_studio_cat_btn:hover {
@@ -11682,7 +9717,7 @@ body{
 
 .theme_studio_token_row.is-overridden {
 	border-color: var(--linkx-accent);
-	box-shadow: 0 0 8px rgba(252, 198, 118, 0.2);
+	box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 20%, transparent);
 }
 
 .theme_studio_token_label {
@@ -12124,7 +10159,7 @@ body{
 }
 
 /* Cursor override when inspector active */
-html:has(.element_picker_overlay) *:not(.element_picker_panel *):not(.element_picker_badge *) {
+html.is-element-picking *:not(.element_picker_panel *):not(.element_picker_badge *) {
   cursor: crosshair !important;
 }
 
@@ -12703,7 +10738,7 @@ html:has(.element_picker_overlay) *:not(.element_picker_panel *):not(.element_pi
 .workspace_home_realtime_card.is-selected {
 	background: var(--central-realtime-card-active-bg, rgba(252, 198, 118, 0.22));
 	border-color: var(--central-realtime-card-active-border, #fdb84d);
-	box-shadow: 0 4px 14px rgba(252, 198, 118, 0.22);
+	box-shadow: 0 4px 14px color-mix(in srgb, var(--accent) 22%, transparent);
 }
 
 .workspace_home_realtime_card.is-selected .workspace_home_realtime_icon {
@@ -12830,7 +10865,7 @@ html:has(.element_picker_overlay) *:not(.element_picker_panel *):not(.element_pi
 
 .theme_studio_search_input:focus {
 	border-color: var(--right-tab-active-border, #FCC676);
-	box-shadow: 0 0 0 3px rgba(252, 198, 118, 0.25);
+	box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent);
 }
 
 .theme_studio_search_clear {
@@ -12858,7 +10893,7 @@ html:has(.element_picker_overlay) *:not(.element_picker_panel *):not(.element_pi
 	border-radius: 10px;
 	font-size: 10px;
 	font-weight: 700;
-	background: rgba(252, 198, 118, 0.35);
+	background: color-mix(in srgb, var(--accent) 35%, transparent);
 	color: #131e2a;
 }
 
@@ -12877,4 +10912,255 @@ html:has(.element_picker_overlay) *:not(.element_picker_panel *):not(.element_pi
 .theme_studio_search_hint {
 	font-size: 11px;
 	color: var(--right-label-color, #7f5523);
+}
+
+/* Glass (backdrop blur) is opt-in: each blurred layer is re-composited whenever
+   anything behind it repaints. Toggle via src/utils/glassEffects.js. */
+html:not([data-glass="on"]) :is(
+	.linkx_login_panel,
+	.workspace_home_page_dots,
+	.workspace_home_analysis_overlay,
+	.workspace_chat_scroll_bottom_btn,
+	.workspace_window,
+	.workspace_window_dock,
+	.linkx_notice,
+	.linkx_message_box,
+	.workspace_lock_panel,
+	.linkx_confirm_overlay,
+	.workspace_home_modal_backdrop
+) {
+	backdrop-filter: none !important;
+	-webkit-backdrop-filter: none !important;
+}
+
+/* Central home panels must stay inside the workspace: cap to the viewport section
+   and scroll internally instead of overflowing past the top/bottom edges. */
+.workspace_home_viewport_section > .workspace_home_panel,
+.workspace_home_viewport_section > .workspace_home_secondary_box {
+	flex: 0 1 auto;
+	min-height: 0;
+	max-height: 100%;
+	box-sizing: border-box;
+	overflow-x: hidden;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+}
+
+/* Compact density for shorter screens. */
+@media (max-height: 900px) {
+	.workspace_home {
+		padding-top: 44px;
+		padding-bottom: 10px;
+	}
+	.workspace_home_viewport_section {
+		padding: 6px 0;
+	}
+	.workspace_home_panel,
+	.workspace_home_panel.is-expanded {
+		gap: 12px;
+		padding: 18px;
+	}
+}
+
+@media (max-height: 720px) {
+	.workspace_home {
+		padding-top: 36px;
+	}
+	.workspace_home_panel,
+	.workspace_home_panel.is-expanded {
+		gap: 10px;
+		padding: 14px;
+	}
+}
+
+.workspace_home_viewport_section > .workspace_home_secondary_box {
+	margin-top: clamp(8px, 4vh, 48px);
+	margin-bottom: clamp(4px, 2vh, 24px);
+	max-height: calc(100% - clamp(8px, 4vh, 48px) - clamp(4px, 2vh, 24px));
+}
+
+/* The analysis overlay is anchored to the panel box; keep it covering the view. */
+.workspace_home_viewport_section > .workspace_home_panel.is-overlay-active {
+	overflow-y: hidden;
+}
+
+/* ── Quick analysis panel: body structure ───────────────────────────── */
+.workspace_home_panel_body,
+.workspace_home_panel_inputs {
+	display: grid;
+	gap: inherit;
+	min-width: 0;
+}
+
+/* Expanded: single column, capped at the central workspace height so the panel
+   itself never scrolls (the file list scrolls internally if needed). */
+.workspace_home_viewport_section > .workspace_home_panel.is-expanded {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	overflow: hidden;
+}
+
+.workspace_home_panel.is-expanded > .workspace_home_panel_header {
+	flex: none;
+	margin-bottom: 0;
+}
+
+.workspace_home_panel.is-expanded > .workspace_home_panel_body,
+.workspace_home_panel.is-expanded > .workspace_home_findings {
+	flex: 1 1 auto;
+	min-height: 0;
+}
+
+.workspace_home_panel_body.is-fill,
+.workspace_home_panel_body.is-fill > .workspace_home_panel_inputs {
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+}
+
+.workspace_home_panel_body.is-fill > .workspace_home_panel_inputs {
+	flex: 1 1 auto;
+}
+
+/* Upload step: blocks keep their natural size (nothing stretches); the panel
+   hugs its content. Only the file list shrinks/scrolls when space runs out. */
+.workspace_home_panel_body.is-fill .workspace_home_upload {
+	flex: none;
+}
+
+.workspace_home_panel_body.is-fill .workspace_home_file_list {
+	flex: 0 1 auto;
+	min-height: 40px;
+	max-height: none;
+}
+
+.workspace_home_viewport_section > .workspace_home_panel.is-expanded {
+	height: auto;
+	max-height: 100%;
+}
+
+.workspace_home_panel.is-expanded > .workspace_home_panel_body.is-fill {
+	flex: 0 1 auto;
+}
+
+.workspace_home_panel_body.is-fill .workspace_home_options,
+.workspace_home_panel_body.is-fill .workspace_home_realtime_container,
+.workspace_home_panel_body.is-fill > .workspace_home_review_section {
+	flex: none;
+}
+
+.workspace_home_panel_body.is-fill .workspace_home_configs_grid {
+	grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+	gap: 8px 18px;
+}
+
+/* Results: the panel hugs its content (compact) and is only capped at the
+   workspace height. */
+.workspace_home_viewport_section > .workspace_home_panel.is-expanded.is-results {
+	height: auto;
+	max-height: 100%;
+}
+
+.workspace_home_panel.is-expanded > .workspace_home_findings {
+	gap: 12px;
+	padding: 4px 0 0;
+	overflow: hidden;
+}
+
+.workspace_home_panel.is-expanded > .workspace_home_findings > * {
+	flex: none;
+}
+
+/* Very short screens: scrolling is the only way to keep everything reachable. */
+@media (max-height: 640px) {
+	.workspace_home_viewport_section > .workspace_home_panel.is-expanded {
+		overflow-y: auto;
+	}
+}
+
+
+/* ── Global tooltip layer (src/shared/components/TooltipLayer.jsx) ──────
+   Tooltips render in one fixed node on <body>, so overflow on panels/windows
+   can no longer clip them. The legacy CSS pseudo-element tooltips are off. */
+.linkx_tooltip_anchor::before,
+.linkx_tooltip_anchor::after,
+.source_window_tooltip_anchor::before,
+.source_window_tooltip_anchor::after {
+	content: none !important;
+	display: none !important;
+}
+
+.linkx_tooltip {
+	position: fixed;
+	top: 0;
+	left: 0;
+	z-index: 2147483000;
+	max-width: min(280px, calc(100vw - 12px));
+	padding: 6px 11px;
+	border: 1px solid var(--tooltip-border);
+	border-radius: 6px;
+	background: var(--tooltip-bg);
+	box-shadow: var(--tooltip-shadow);
+	color: var(--tooltip-text);
+	font-size: var(--tooltip-font-size, 11px);
+	font-weight: var(--tooltip-font-weight, 600);
+	line-height: 1.35;
+	letter-spacing: 0.02em;
+	text-align: center;
+	overflow-wrap: break-word;
+	pointer-events: none;
+	opacity: 0;
+	visibility: hidden;
+	transition: opacity 120ms ease, visibility 0s linear 120ms;
+	will-change: transform;
+}
+
+.linkx_tooltip.is-visible {
+	opacity: 1;
+	visibility: visible;
+	transition: opacity 120ms ease;
+}
+
+html[data-glass="on"] .linkx_tooltip {
+	backdrop-filter: blur(6px);
+	-webkit-backdrop-filter: blur(6px);
+}
+
+.linkx_tooltip_text {
+	position: relative;
+	z-index: 1;
+}
+
+.linkx_tooltip_arrow {
+	position: absolute;
+	width: 8px;
+	height: 8px;
+	background: var(--tooltip-bg);
+	border: 1px solid var(--tooltip-border);
+	transform: translate(-50%, -50%) rotate(45deg);
+}
+
+.linkx_tooltip[data-placement="top"] .linkx_tooltip_arrow {
+	top: 100%;
+	border-top-color: transparent;
+	border-left-color: transparent;
+}
+
+.linkx_tooltip[data-placement="bottom"] .linkx_tooltip_arrow {
+	top: 0;
+	border-bottom-color: transparent;
+	border-right-color: transparent;
+}
+
+.linkx_tooltip[data-placement="left"] .linkx_tooltip_arrow {
+	left: 100%;
+	border-bottom-color: transparent;
+	border-left-color: transparent;
+}
+
+.linkx_tooltip[data-placement="right"] .linkx_tooltip_arrow {
+	left: 0;
+	border-top-color: transparent;
+	border-right-color: transparent;
 }

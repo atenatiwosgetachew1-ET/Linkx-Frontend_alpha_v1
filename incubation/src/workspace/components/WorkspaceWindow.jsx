@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import WorkspaceWindowBody from './WorkspaceWindowBody.jsx';
 
@@ -40,6 +40,9 @@ const RESIZE_HANDLES = [
   { direction: RESIZE_DIRECTIONS.BOTTOM_RIGHT, className: 'is-bottom-right' },
 ];
 
+const EDGE_GAP = 8;
+const DRAG_THRESHOLD = 3;
+
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 
 const getInitialWindowPosition = (windowItem, stackIndex) => {
@@ -72,14 +75,68 @@ const getInitialWindowSize = (windowItem, parentSize = {}) => {
   };
 };
 
-export default function WorkspaceWindow({ windowItem, stackIndex = 0, isActive, onFocus, onCustomTitleChange, onWindowLayoutChange, onClose }) {
+const applyFrameStyle = (element, nextPosition, nextSize) => {
+  if (!element) return;
+  element.style.transform = 'translate3d(' + nextPosition.x + 'px, ' + nextPosition.y + 'px, 0)';
+  if (nextSize) {
+    element.style.width = nextSize.width + 'px';
+    element.style.height = nextSize.height + 'px';
+  }
+};
+
+function WorkspaceWindow({ windowItem, stackIndex = 0, isActive, onFocus, onCustomTitleChange, onWindowLayoutChange, onClose }) {
   const windowRef = useRef(null);
   const dragRef = useRef(null);
   const resizeRef = useRef(null);
+  const frameRef = useRef(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
   const [position, setPosition] = useState(() => getInitialWindowPosition(windowItem, stackIndex));
   const [size, setSize] = useState(() => getInitialWindowSize(windowItem));
+  // Refs hold the live geometry (updated during gestures and bounds changes
+  // without re-rendering); state is committed afterwards to keep React in sync.
+  const positionRef = useRef(position);
+  const sizeRef = useRef(size);
+  const pendingFrameRef = useRef(null);
+  const commitTimerRef = useRef(null);
+
+  const commitLayout = useCallback((nextPosition, nextSize) => {
+    if (nextPosition) {
+      positionRef.current = nextPosition;
+      setPosition(nextPosition);
+    }
+    if (nextSize) {
+      sizeRef.current = nextSize;
+      setSize(nextSize);
+    }
+  }, []);
+
+  useEffect(() => () => {
+    if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
+    clearTimeout(commitTimerRef.current);
+  }, []);
+
+  // One pending rAF per window; pointer events only replace the target geometry.
+  const scheduleFrame = useCallback((nextPosition, nextSize) => {
+    pendingFrameRef.current = { nextPosition, nextSize };
+    if (frameRef.current !== null) return;
+    frameRef.current = requestAnimationFrame(() => {
+      frameRef.current = null;
+      const pending = pendingFrameRef.current;
+      pendingFrameRef.current = null;
+      if (pending) applyFrameStyle(windowRef.current, pending.nextPosition, pending.nextSize);
+    });
+  }, []);
+
+  const flushFrame = useCallback(() => {
+    if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
+    frameRef.current = null;
+    pendingFrameRef.current = null;
+  }, []);
+
+  const focusIfInactive = useCallback(() => {
+    if (!isActive) onFocus(windowItem.id);
+  }, [isActive, onFocus, windowItem.id]);
 
   // Returns the element to use as the boundary for window positioning & resizing.
   // Collapsed right panel → constrain to .workspace_canvas (don't cover tab rail)
@@ -95,84 +152,98 @@ export default function WorkspaceWindow({ windowItem, stackIndex = 0, isActive, 
     return workArea || currentWindow.closest('.workspace_canvas') || currentWindow.parentElement;
   }, []);
 
-  const clampPosition = useCallback((nextPosition, currentSize = size) => {
+  // Measured once per gesture to avoid layout reads on every pointermove.
+  const measureBounds = useCallback(() => {
     const boundsEl = getBoundsElement();
-
-    if (!boundsEl) {
-      return {
-        x: Math.max(0, nextPosition.x),
-        y: Math.max(0, nextPosition.y),
-      };
-    }
-
+    if (!boundsEl) return null;
     const boundsRect = boundsEl.getBoundingClientRect();
-    const canvasEl = windowRef.current?.closest('.workspace_canvas');
-    const canvasRect = canvasEl?.getBoundingClientRect();
-    // x is relative to the window layer which starts at canvas left edge,
-    // so max x must account for the offset between canvas and bounds element
-    const rightOverflow = canvasRect && boundsRect
-      ? Math.max(0, boundsRect.right - canvasRect.left - currentSize.width - 8)
-      : Math.max(boundsRect.width - currentSize.width - 8, 0);
-    const maxY = Math.max(boundsRect.height - currentSize.height - 8, 0);
-
+    const canvasRect = windowRef.current?.closest('.workspace_canvas')?.getBoundingClientRect();
+    // x is relative to the window layer, which starts at the canvas left edge.
     return {
-      x: clamp(nextPosition.x, 0, rightOverflow),
-      y: clamp(nextPosition.y, 0, maxY),
+      maxRight: canvasRect ? Math.max(0, boundsRect.right - canvasRect.left) : boundsRect.width,
+      maxBottom: boundsRect.height,
     };
-  }, [getBoundsElement, size.height, size.width]);
+  }, [getBoundsElement]);
 
-  // React to canvas size changes from panel expand/collapse
-  // - Canvas shrinks (panel expanding) → push windows left so they clear the panel
-  // - Canvas grows (panel collapsing) → leave windows exactly where they are
-  React.useEffect(() => {
-    const currentWindow = windowRef.current;
-    const canvasEl = currentWindow?.closest('.workspace_canvas');
-    if (!canvasEl) return;
+  // Shrink/move the window so it is fully reachable inside the workspace bounds.
+  // `shiftLeft` pushes it left first (used when the canvas shrinks). With
+  // `deferCommit`, the DOM is updated immediately and React state is committed
+  // once the bounds settle (avoids a render per frame during panel animations).
+  const fitWithinBounds = useCallback(({ shiftLeft = 0, deferCommit = false } = {}) => {
+    if (dragRef.current || resizeRef.current) return;
+    const bounds = measureBounds();
+    if (!bounds || bounds.maxBottom <= 0 || bounds.maxRight <= 0) return;
+    const currentSize = sizeRef.current;
+    const currentPosition = positionRef.current;
+    const width = Math.min(currentSize.width, Math.max(0, bounds.maxRight - EDGE_GAP));
+    const height = Math.min(currentSize.height, Math.max(0, bounds.maxBottom - EDGE_GAP));
+    const x = clamp(currentPosition.x - shiftLeft, 0, Math.max(0, bounds.maxRight - width - EDGE_GAP));
+    const y = clamp(currentPosition.y, 0, Math.max(0, bounds.maxBottom - height - EDGE_GAP));
+    const sizeChanged = width !== currentSize.width || height !== currentSize.height;
+    const positionChanged = x !== currentPosition.x || y !== currentPosition.y;
+    if (!sizeChanged && !positionChanged) return;
 
-    let prevCanvasWidth = canvasEl.getBoundingClientRect().width;
+    const nextPosition = { x, y };
+    const nextSize = { width, height };
+    if (!deferCommit) {
+      commitLayout(positionChanged ? nextPosition : null, sizeChanged ? nextSize : null);
+      return;
+    }
+    positionRef.current = nextPosition;
+    sizeRef.current = nextSize;
+    applyFrameStyle(windowRef.current, nextPosition, nextSize);
+    clearTimeout(commitTimerRef.current);
+    commitTimerRef.current = setTimeout(() => commitLayout(positionRef.current, sizeRef.current), 150);
+  }, [measureBounds, commitLayout]);
 
-    const handleBoundsChange = () => {
-      const canvasRect = canvasEl.getBoundingClientRect();
-      const currentCanvasWidth = canvasRect.width;
-      const delta = currentCanvasWidth - prevCanvasWidth;
+  // New windows (no saved layout) open inside the central workspace only, so they
+  // never start out covering the right workspace panel; the first one is centred.
+  // Runs before paint so there is no visible jump. Later drags/resizes may still
+  // extend over the panel area.
+  useLayoutEffect(() => {
+    const metadata = windowItem?.metadata || {};
+    if (metadata.windowSize || metadata.windowPosition) return;
+    const canvasRect = windowRef.current?.closest('.workspace_canvas')?.getBoundingClientRect();
+    if (!canvasRect || canvasRect.width <= 0 || canvasRect.height <= 0) return;
 
-      if (delta < 0) {
-        // Canvas shrank (panel expanding) → push windows left by the shrink amount
-        const shrinkAmount = Math.abs(delta);
-        setPosition((prevPos) => {
-          const newX = Math.max(0, prevPos.x - shrinkAmount);
-          return newX !== prevPos.x ? { x: newX, y: prevPos.y } : prevPos;
-        });
+    const offset = Math.min(stackIndex, 5);
+    const maxWidth = Math.max(0, canvasRect.width - 2 * EDGE_GAP - offset * WINDOW_STAGGER.x);
+    const maxHeight = Math.max(0, canvasRect.height - 2 * EDGE_GAP - offset * WINDOW_STAGGER.y);
+    const width = Math.min(sizeRef.current.width, maxWidth);
+    const height = Math.min(sizeRef.current.height, maxHeight);
+    const initialPosition = stackIndex === 0
+      ? {
+        x: Math.max(EDGE_GAP, Math.round((canvasRect.width - width) / 2)),
+        y: Math.max(EDGE_GAP, Math.round((canvasRect.height - height) / 2)),
       }
-      // Canvas grew (panel collapsing) → do nothing, windows stay put
+      : { x: EDGE_GAP + offset * WINDOW_STAGGER.x, y: EDGE_GAP + offset * WINDOW_STAGGER.y };
 
-      prevCanvasWidth = currentCanvasWidth;
-    };
-
-    const resizeObserver = new ResizeObserver(handleBoundsChange);
-    resizeObserver.observe(canvasEl);
-
-    return () => resizeObserver.disconnect();
+    commitLayout(initialPosition, { width, height });
+    // Mount-only: initial placement.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Center the first window (stackIndex === 0) strictly in the central workspace canvas (.workspace_canvas) on initial load
-  React.useEffect(() => {
-    const hasStoredPos = Boolean(windowItem?.metadata?.windowPosition);
-    if (hasStoredPos) return;
+  useLayoutEffect(() => {
+    fitWithinBounds();
+  }, [fitWithinBounds]);
 
-    const currentWindow = windowRef.current;
-    if (!currentWindow) return;
+  // React to canvas size changes (right panel expand/collapse animates the grid):
+  // - canvas shrinks → push the window left by the shrink amount, then fit
+  // - canvas grows   → leave the window where it is
+  useEffect(() => {
+    const canvasEl = windowRef.current?.closest('.workspace_canvas');
+    if (!canvasEl) return undefined;
 
-    const canvasEl = currentWindow.closest('.workspace_canvas');
-    if (!canvasEl) return;
-
-    const canvasRect = canvasEl.getBoundingClientRect();
-    if (canvasRect.width > 0 && canvasRect.height > 0 && stackIndex === 0) {
-      const centerX = Math.max(0, Math.round((canvasRect.width - size.width) / 2));
-      const centerY = Math.max(0, Math.round((canvasRect.height - size.height) / 2));
-      setPosition({ x: centerX, y: centerY });
-    }
-  }, [stackIndex, size.width, size.height, windowItem?.metadata?.windowPosition]);
+    let prevCanvasWidth = canvasEl.getBoundingClientRect().width;
+    const resizeObserver = new ResizeObserver((entries) => {
+      const currentCanvasWidth = entries[0]?.contentRect.width ?? prevCanvasWidth;
+      const delta = currentCanvasWidth - prevCanvasWidth;
+      prevCanvasWidth = currentCanvasWidth;
+      fitWithinBounds({ shiftLeft: delta < 0 ? -delta : 0, deferCommit: true });
+    });
+    resizeObserver.observe(canvasEl);
+    return () => resizeObserver.disconnect();
+  }, [fitWithinBounds]);
 
   const persistLayout = useCallback((nextPosition, nextSize) => {
     if (!onWindowLayoutChange) return;
@@ -188,47 +259,66 @@ export default function WorkspaceWindow({ windowItem, stackIndex = 0, isActive, 
   const handleDragStart = useCallback((event) => {
     if (event.button !== 0) return;
 
-    onFocus(windowItem.id);
-    setIsDragging(true);
+    focusIfInactive();
     event.currentTarget.setPointerCapture(event.pointerId);
+    const origin = positionRef.current;
     dragRef.current = {
       pointerId: event.pointerId,
       startX: event.clientX,
       startY: event.clientY,
-      originX: position.x,
-      originY: position.y,
-      nextPosition: { x: position.x, y: position.y },
+      originX: origin.x,
+      originY: origin.y,
+      bounds: measureBounds(),
+      size: sizeRef.current,
+      nextPosition: null,
+      started: false,
     };
-  }, [onFocus, position.x, position.y, windowItem.id]);
+  }, [focusIfInactive, measureBounds]);
 
   const handleDragMove = useCallback((event) => {
     const dragState = dragRef.current;
     if (!dragState || dragState.pointerId !== event.pointerId) return;
 
-    const nextPosition = {
-      x: dragState.originX + event.clientX - dragState.startX,
-      y: dragState.originY + event.clientY - dragState.startY,
-    };
-    const clampedPosition = clampPosition(nextPosition);
+    const dx = event.clientX - dragState.startX;
+    const dy = event.clientY - dragState.startY;
+    // A plain click on the header must not enter drag mode (re-render, blur off).
+    if (!dragState.started) {
+      if (Math.abs(dx) < DRAG_THRESHOLD && Math.abs(dy) < DRAG_THRESHOLD) return;
+      dragState.started = true;
+      setIsDragging(true);
+    }
+    const rawX = dragState.originX + dx;
+    const rawY = dragState.originY + dy;
+    const { bounds, size: currentSize } = dragState;
+    const nextPosition = bounds
+      ? {
+        x: clamp(rawX, 0, Math.max(0, bounds.maxRight - currentSize.width - 8)),
+        y: clamp(rawY, 0, Math.max(0, bounds.maxBottom - currentSize.height - 8)),
+      }
+      : { x: Math.max(0, rawX), y: Math.max(0, rawY) };
 
-    dragRef.current.nextPosition = clampedPosition;
-    setPosition(clampedPosition);
-  }, [clampPosition]);
+    dragState.nextPosition = nextPosition;
+    positionRef.current = nextPosition;
+    scheduleFrame(nextPosition);
+  }, [scheduleFrame]);
 
   const handleDragEnd = useCallback((event) => {
     const dragState = dragRef.current;
     if (!dragState || dragState.pointerId !== event.pointerId) return;
 
-    if (dragState?.nextPosition) {
-      persistLayout(dragState.nextPosition, size);
+    flushFrame();
+    if (dragState.nextPosition) {
+      applyFrameStyle(windowRef.current, dragState.nextPosition);
+      commitLayout(dragState.nextPosition);
+      persistLayout(dragState.nextPosition, sizeRef.current);
     }
 
     dragRef.current = null;
-    setIsDragging(false);
+    if (dragState.started) setIsDragging(false);
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
-  }, [persistLayout, size]);
+  }, [flushFrame, commitLayout, persistLayout]);
 
   const handleCustomTitleChange = useCallback((event) => {
     onCustomTitleChange(windowItem.id, event.target.value);
@@ -242,20 +332,23 @@ export default function WorkspaceWindow({ windowItem, stackIndex = 0, isActive, 
 
     event.preventDefault();
     event.stopPropagation();
-    onFocus(windowItem.id);
+    focusIfInactive();
     setIsResizing(true);
+    const originPosition = { ...positionRef.current };
+    const originSize = { ...sizeRef.current };
     resizeRef.current = {
       pointerId: event.pointerId,
       startX: event.clientX,
       startY: event.clientY,
       direction,
-      originPosition: { x: position.x, y: position.y },
-      originSize: { width: size.width, height: size.height },
-      nextPosition: { x: position.x, y: position.y },
-      nextSize: { width: size.width, height: size.height },
+      bounds: measureBounds(),
+      originPosition,
+      originSize,
+      nextPosition: originPosition,
+      nextSize: originSize,
     };
     event.currentTarget.setPointerCapture(event.pointerId);
-  }, [onFocus, position.x, position.y, size.height, size.width, windowItem.id]);
+  }, [focusIfInactive, measureBounds]);
 
   const handleResizeMove = useCallback((event) => {
     const resizeState = resizeRef.current;
@@ -263,19 +356,9 @@ export default function WorkspaceWindow({ windowItem, stackIndex = 0, isActive, 
 
     event.preventDefault();
 
-    const currentWindow = windowRef.current;
-    const canvasEl = currentWindow?.closest('.workspace_canvas');
-    const workArea = currentWindow?.closest('.workspace_work_area');
-    const isCollapsed = workArea?.classList.contains('is-right-collapsed');
-    const boundsEl = isCollapsed ? canvasEl : (workArea || canvasEl);
-
-    const boundsRect = boundsEl?.getBoundingClientRect();
-    const canvasRect = canvasEl?.getBoundingClientRect();
     // maxRight = how far the window's right edge can extend (relative to window layer origin = canvas left)
-    const maxRight = (boundsRect && canvasRect)
-      ? Math.max(0, boundsRect.right - canvasRect.left)
-      : 0;
-    const maxBottom = Number(boundsRect?.height) || 0;
+    const maxRight = resizeState.bounds?.maxRight || 0;
+    const maxBottom = resizeState.bounds?.maxBottom || 0;
 
     const deltaX = event.clientX - resizeState.startX;
     const deltaY = event.clientY - resizeState.startY;
@@ -337,14 +420,18 @@ export default function WorkspaceWindow({ windowItem, stackIndex = 0, isActive, 
 
     resizeState.nextPosition = nextPosition;
     resizeState.nextSize = nextSize;
-    setPosition(nextPosition);
-    setSize(nextSize);
-  }, []);
+    positionRef.current = nextPosition;
+    sizeRef.current = nextSize;
+    scheduleFrame(nextPosition, nextSize);
+  }, [scheduleFrame]);
 
   const handleResizeEnd = useCallback((event) => {
     const resizeState = resizeRef.current;
     if (!resizeState || resizeState.pointerId !== event.pointerId) return;
 
+    flushFrame();
+    applyFrameStyle(windowRef.current, resizeState.nextPosition, resizeState.nextSize);
+    commitLayout(resizeState.nextPosition, resizeState.nextSize);
     persistLayout(resizeState.nextPosition, resizeState.nextSize);
 
     resizeRef.current = null;
@@ -352,7 +439,7 @@ export default function WorkspaceWindow({ windowItem, stackIndex = 0, isActive, 
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
-  }, [persistLayout]);
+  }, [flushFrame, commitLayout, persistLayout]);
 
   const stopHeaderControlDrag = useCallback((event) => {
     event.stopPropagation();
@@ -368,13 +455,13 @@ export default function WorkspaceWindow({ windowItem, stackIndex = 0, isActive, 
       ref={windowRef}
       className={'workspace_window' + (isActive ? ' is-active' : '') + (isDragging ? ' is-dragging' : '') + (isResizing ? ' is-resizing' : '')}
       aria-label={windowItem.customTitle ? windowItem.title + ': ' + windowItem.customTitle : windowItem.title}
-      onMouseDown={() => onFocus(windowItem.id)}
+      onMouseDown={focusIfInactive}
       style={{
-        transform: 'translate3d(' + position.x + 'px, ' + position.y + 'px, 0)',
-        width: size.width + 'px',
-        height: size.height + 'px',
-        minWidth: WINDOW_SIZE_LIMITS.minWidth + 'px',
-        minHeight: WINDOW_SIZE_LIMITS.minHeight + 'px',
+        transform: 'translate3d(' + positionRef.current.x + 'px, ' + positionRef.current.y + 'px, 0)',
+        width: sizeRef.current.width + 'px',
+        height: sizeRef.current.height + 'px',
+        minWidth: 'min(' + WINDOW_SIZE_LIMITS.minWidth + 'px, 100%)',
+        minHeight: 'min(' + WINDOW_SIZE_LIMITS.minHeight + 'px, 100%)',
         zIndex: isActive ? 100 + stackIndex : 20 + stackIndex,
       }}
     >
@@ -429,3 +516,5 @@ export default function WorkspaceWindow({ windowItem, stackIndex = 0, isActive, 
     </article>
   );
 }
+
+export default memo(WorkspaceWindow);

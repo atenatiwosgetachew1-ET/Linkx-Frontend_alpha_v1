@@ -7,16 +7,12 @@
     "dev": "vite --host 0.0.0.0 --port 7153 --strictPort",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview --host 0.0.0.0 --port 7153 --strictPort"
+    "preview": "vite preview --host 0.0.0.0 --port 7153 --strictPort",
+    "theme:check": "node scripts/theme-check.mjs"
   },
   "dependencies": {
-    "@react-three/fiber": "^9.4.0",
-    "neovis.js": "^2.1.0",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0",
-    "react-globe.gl": "^2.36.0",
-    "socket.io-client": "^4.8.1",
-    "vis-network": "^9.1.11"
+    "react-dom": "^19.1.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.25.0",

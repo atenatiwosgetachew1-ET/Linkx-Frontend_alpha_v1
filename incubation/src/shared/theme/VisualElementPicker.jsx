@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useTheme } from './ThemeContext.jsx';
 
 /**
@@ -11,6 +11,13 @@ import { useTheme } from './ThemeContext.jsx';
  *
  * Press Escape or click the X to exit inspector mode.
  */
+const PICKER_LANDMARK_SELECTOR = [
+  '.workspace_window',
+  '.workspace_window_header',
+  '.workspace_window_body',
+  '[class*="workspace_zone_"]',
+].join(', ');
+
 export default function VisualElementPicker() {
   const { inspectorActive, toggleInspector, setCustomVariable, customOverrides } = useTheme();
   const [hoveredEl, setHoveredEl] = useState(null);
@@ -18,7 +25,6 @@ export default function VisualElementPicker() {
   const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
   const [pinnedVars, setPinnedVars] = useState([]);
   const [panelPos, setPanelPos] = useState({ x: 0, y: 0 });
-  const overlayRef = useRef(null);
 
   // Extract CSS variables that affect a given DOM element (+ parents up to 6 levels)
   const extractCssVars = useCallback((el) => {
@@ -51,15 +57,15 @@ export default function VisualElementPicker() {
                     const val = computed.getPropertyValue(varName).trim() || rootStyle.getPropertyValue(varName).trim();
                     let propContext = 'unknown';
                     const escaped = varName.replace(/[-]/g, '\\-');
-                    if (ruleText.match(new RegExp(`(?:background|background-color)\\s*:\\s*[^;]*var\\(${escaped}\\)`))) {
+                    if (ruleText.match(new RegExp(`(?:background|background-color)\\s*:\\s*[^;]*var\\(${escaped}[,)]`))) {
                       propContext = 'background';
-                    } else if (ruleText.match(new RegExp(`(?:^|[^-])color\\s*:\\s*[^;]*var\\(${escaped}\\)`))) {
+                    } else if (ruleText.match(new RegExp(`(?:^|[^-])color\\s*:\\s*[^;]*var\\(${escaped}[,)]`))) {
                       propContext = 'text color';
-                    } else if (ruleText.match(new RegExp(`border[^:]*:\\s*[^;]*var\\(${escaped}\\)`))) {
+                    } else if (ruleText.match(new RegExp(`border[^:]*:\\s*[^;]*var\\(${escaped}[,)]`))) {
                       propContext = 'border';
-                    } else if (ruleText.match(new RegExp(`box-shadow\\s*:\\s*[^;]*var\\(${escaped}\\)`))) {
+                    } else if (ruleText.match(new RegExp(`box-shadow\\s*:\\s*[^;]*var\\(${escaped}[,)]`))) {
                       propContext = 'shadow';
-                    } else if (ruleText.match(new RegExp(`accent-color\\s*:\\s*[^;]*var\\(${escaped}\\)`))) {
+                    } else if (ruleText.match(new RegExp(`accent-color\\s*:\\s*[^;]*var\\(${escaped}[,)]`))) {
                       propContext = 'accent';
                     }
                     vars.push({
@@ -78,10 +84,12 @@ export default function VisualElementPicker() {
       } catch { /* cross-origin sheets */ }
     };
 
-    // Scan self + parents (up to 6 levels for good coverage)
+    // Scan self + parents (up to 6 levels), then keep climbing but only scan
+    // container landmarks (window frame/header/body, workspace zones) so deeply
+    // nested content still exposes its window's border/background variables.
     let current = el;
-    for (let depth = 0; depth < 6 && current && current !== document.documentElement; depth++) {
-      scanElement(current, depth);
+    for (let depth = 0; current && current !== document.documentElement; depth++) {
+      if (depth < 6 || current.matches(PICKER_LANDMARK_SELECTOR)) scanElement(current, depth);
       current = current.parentElement;
     }
 
@@ -154,9 +162,11 @@ export default function VisualElementPicker() {
       setPinnedVars([]);
       return;
     }
+    document.documentElement.classList.add('is-element-picking');
     window.addEventListener('mousemove', handleMouseMove, true);
     window.addEventListener('click', handleClick, true);
     return () => {
+      document.documentElement.classList.remove('is-element-picking');
       window.removeEventListener('mousemove', handleMouseMove, true);
       window.removeEventListener('click', handleClick, true);
     };

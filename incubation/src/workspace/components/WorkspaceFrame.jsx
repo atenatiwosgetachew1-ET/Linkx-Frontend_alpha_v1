@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 
 import WorkspaceHome from './WorkspaceHome.jsx';
 import NetworkBackground from './NetworkBackground.jsx';
@@ -107,6 +107,7 @@ export default function WorkspaceFrame({ user, token, apiUrl, mainSessionId, ses
   const [isOpeningSource, setIsOpeningSource] = useState(false);
   const [isSidebarOverviewOpen, setIsSidebarOverviewOpen] = useState(false);
   const workspace = useWorkspace();
+  const toggleRightCollapsed = useCallback(() => setIsRightCollapsed((current) => !current), []);
 
 
   useEffect(() => {
@@ -127,8 +128,12 @@ export default function WorkspaceFrame({ user, token, apiUrl, mainSessionId, ses
     setIsSidebarOverviewOpen(false);
   };
 
-  const handleCloseWindow = (windowId) => {
-    const targetWindow = workspace.windows.find((windowItem) => windowItem.id === windowId);
+  const windowsRef = React.useRef(workspace.windows);
+  windowsRef.current = workspace.windows;
+  const { closeWindow } = workspace;
+
+  const handleCloseWindow = useCallback((windowId) => {
+    const targetWindow = windowsRef.current.find((windowItem) => windowItem.id === windowId);
     if (targetWindow?.type === WORKSPACE_WINDOW_TYPES.SOURCE && token) {
       closeSourceWindow(apiUrl, token, {
         sessionId: targetWindow.parentSessionId,
@@ -138,13 +143,13 @@ export default function WorkspaceFrame({ user, token, apiUrl, mainSessionId, ses
         console.error('Source window cleanup failed', { status: error?.status, message: error?.message });
       });
     }
-    workspace.closeWindow(windowId);
-  };
+    closeWindow(windowId);
+  }, [apiUrl, token, closeWindow]);
 
-  const windowWorkspace = {
+  const windowWorkspace = useMemo(() => ({
     ...workspace,
     closeWindow: handleCloseWindow,
-  };
+  }), [workspace, handleCloseWindow]);
 
   const handleLauncherAction = async (item) => {
     setSourceOpenError('');
@@ -311,15 +316,14 @@ export default function WorkspaceFrame({ user, token, apiUrl, mainSessionId, ses
                 {sourceOpenError || sessionError}
               </div>
             )}
-            {workspace.orientation === WORKSPACE_ORIENTATIONS.DOCKED && <WindowManager workspace={windowWorkspace} />}
-            {workspace.orientation === WORKSPACE_ORIENTATIONS.FLOATING && <WindowManager workspace={windowWorkspace} />}
+            <WindowManager workspace={windowWorkspace} />
           </section>
           <RightWorkspace
             displayName={displayName}
             workspace={workspace}
             logoSrc={logoSrc}
             isRightCollapsed={isRightCollapsed}
-            onToggleCollapse={() => setIsRightCollapsed((current) => !current)}
+            onToggleCollapse={toggleRightCollapsed}
           />
         </div>
       </div>

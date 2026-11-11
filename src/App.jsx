@@ -39,22 +39,8 @@ const GRAPH_LIMIT_HARD_MAX = 100000;
 const DEFAULT_GRAPH_IFRAME_SETTINGS = ["", "", { min: 0, max: 25 }, "", "", "", false, false, false, false, "concentric", "UD", "directed", "hop_distance", ""];
 const LINKX_IFRAME_CHANNEL = "linkx:iframe";
 const LINKX_IFRAME_VERSION = 1;
-const TRUSTED_IFRAME_MESSAGE_TYPES = new Set(["app_notification", "notification", "nodeProperties", "all_property_keys_response", "graph_search_results", "graph_render_stats", "network_components", "entity_selection", "graph_alerts", "pinned_evidence_update", "clipboard_get", "clipboard_set", "evidence_report_generated"]);
+const TRUSTED_IFRAME_MESSAGE_TYPES = new Set(["app_notification", "notification", "nodeProperties", "activate_graph_tab", "all_property_keys_response", "graph_search_results", "graph_render_stats", "network_components", "entity_selection", "graph_alerts", "pinned_evidence_update", "clipboard_get", "clipboard_set", "evidence_report_generated"]);
 const SESSION_POLICY_CACHE_KEY = "linkx_session_policy_cache";
-const AdminLockIcon = () => (
-  <span title="Requires Admin privileges" style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "10px", fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.5px", background: "var(--brand-badge-gradient, linear-gradient(90deg, #ac854d, #825825))", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", marginLeft: "8px", verticalAlign: "middle" }}>
-    <svg viewBox="0 0 24 24" stroke="none" style={{ width: "12px", height: "12px", transform: "translateY(-1px)" }}>
-      <defs>
-        <linearGradient id="brandGradientLock" x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%" stopColor="var(--brand-badge-stop-1, #ac854d)" />
-          <stop offset="100%" stopColor="var(--brand-badge-stop-2, #825825)" />
-        </linearGradient>
-      </defs>
-      <path fill="url(#brandGradientLock)" d="M12 2C9.243 2 7 4.243 7 7v3H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-1V7c0-2.757-2.243-5-5-5zM9 7c0-1.654 1.346-3 3-3s3 1.346 3 3v3H9V7zm7.5 13h-9a.5.5 0 0 1-.5-.5v-7a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 .5.5v7a.5.5 0 0 1-.5.5z"/>
-    </svg>
-    Admin Only
-  </span>
-);
 
 const DEFAULT_IDLE_WARNING_MS = 14 * 60 * 1000;
 const DEFAULT_IDLE_LOCK_MS = 15 * 60 * 1000;
@@ -1699,7 +1685,7 @@ const Configurations = React.memo(function Configurations({sessionId,actions,loa
             <div className="configurations_options_panel" style={{ display: activeConfigTab === "connections" || activeConfigTab === "system" ? "block" : "none" }}>
               {/* Broker Configuration */}
               <fieldset style={{ display: activeConfigTab === "connections" ? "block" : "none" }}>
-                <legend>Broker configuration <AdminLockIcon /></legend>
+                <legend>Broker configuration</legend>
 
                 <label>IP address</label>
                 <select
@@ -1747,7 +1733,7 @@ const Configurations = React.memo(function Configurations({sessionId,actions,loa
 
               {/* Storage Configuration */}
               <fieldset style={{ display: activeConfigTab === "connections" ? "block" : "none" }}>
-                <legend>Storage configuration <AdminLockIcon /></legend>
+                <legend>Storage configuration</legend>
 
                 <label>IP address</label>
                 <select
@@ -1993,7 +1979,7 @@ const Configurations = React.memo(function Configurations({sessionId,actions,loa
 
               {/* Domain Pillar Switching (User Session) */}
               <fieldset style={{ display: activeConfigTab === "system" ? "block" : "none" }}>
-                <legend>Domain Pillar (Session) <AdminLockIcon /></legend>
+                <legend>Domain Pillar (Session)</legend>
                 <label className="sublabel">
                   Active investigative pillar for this session. Switching pillars automatically reprojects database catalogs, ports, and schema mappings.
                 </label>
@@ -2091,7 +2077,7 @@ const Configurations = React.memo(function Configurations({sessionId,actions,loa
             <div className="configurations_options_panel" style={{ display: activeConfigTab !== "connections" ? "block" : "none" }}>
               {/* Tool Configuration */}
               <fieldset style={{ display: activeConfigTab === "tools" ? "block" : "none" }}>
-                <legend>Tool configuration <AdminLockIcon /></legend>
+                <legend>Tool configuration</legend>
 
                 <label>Tool</label>
                 <select
@@ -2200,7 +2186,7 @@ const Configurations = React.memo(function Configurations({sessionId,actions,loa
 
               {/* Analysis Rules */}
               <fieldset style={{ display: activeConfigTab === "rules" ? "block" : "none" }}>
-                <legend>Analysis Rules <AdminLockIcon /></legend>
+                <legend>Analysis Rules</legend>
                 <label>Active rule</label>
                 <select
                   name="active_rule"
@@ -2258,7 +2244,7 @@ const Configurations = React.memo(function Configurations({sessionId,actions,loa
               </fieldset>
 
               <fieldset style={{ display: activeConfigTab === "rules" ? "block" : "none" }}>
-                <legend>Column Mapping <AdminLockIcon /></legend>
+                <legend>Column Mapping</legend>
                 <table className="config_trusted_list_table">
                   <thead>
                     <tr>
@@ -2317,7 +2303,7 @@ const Configurations = React.memo(function Configurations({sessionId,actions,loa
               </fieldset>
 
               <fieldset style={{ display: activeConfigTab === "rules" ? "block" : "none" }}>
-                <legend>{isCdrDomain ? "Classified Entities (Telecom Whitelist / Watchlist)" : "Classified Entities"} <AdminLockIcon /></legend>
+                <legend>{isCdrDomain ? "Classified Entities (Telecom Whitelist / Watchlist)" : "Classified Entities"}</legend>
                 <table className="config_classified_entities_table">
                   <thead>
                     <tr>
@@ -2466,7 +2452,7 @@ const Configurations = React.memo(function Configurations({sessionId,actions,loa
 
 
               <fieldset style={{ display: activeConfigTab === "system" ? "block" : "none" }}>
-                <legend>Session timeout policy <AdminLockIcon /></legend>
+                <legend>Session timeout policy</legend>
                 <label className="sublabel">Backend source: {idlePolicyMeta?.source || "session"}</label>
                 <div className="idle_timeout_grid">
                   <label>Warn after
@@ -2523,7 +2509,7 @@ const Configurations = React.memo(function Configurations({sessionId,actions,loa
 
               {/* Miscellaneous */}
               <fieldset style={{ display: activeConfigTab === "system" ? "block" : "none" }}>
-                <legend>Miscellaneous <AdminLockIcon /></legend>
+                <legend>Miscellaneous</legend>
                 <input
                   type="checkbox"
                   id="Automated_across_service"
@@ -6129,7 +6115,7 @@ function UserManagementPanel({ apiFetch, canManageUsers, canManageSuperusers, on
     return (
       <div className="settings_admin_panel service_accounts_mgmt_panel">
         <fieldset className="service_accounts_section_fieldset">
-          <legend>Users <AdminLockIcon /></legend>
+          <legend>Users</legend>
           <p className="settings_hint">You need users:manage to manage users.</p>
         </fieldset>
       </div>
@@ -6166,7 +6152,7 @@ function UserManagementPanel({ apiFetch, canManageUsers, canManageSuperusers, on
           title={isCreateOpen ? "Click to collapse" : "Click to expand create user form"}
         >
           <span className="service_create_legend_title">
-            Create User <AdminLockIcon />
+            Create User
           </span>
           <span className="service_create_legend_toggle">
             {isCreateOpen ? "▲" : "▼"}
@@ -6328,7 +6314,7 @@ function UserManagementPanel({ apiFetch, canManageUsers, canManageSuperusers, on
 
       {/* ── Section 2: Registered Users ── */}
       <fieldset className="service_accounts_section_fieldset">
-        <legend>Registered Users <AdminLockIcon /></legend>
+        <legend>Registered Users</legend>
 
         <div className="service_accounts_toolbar">
           <div className="service_accounts_count">
@@ -6987,7 +6973,7 @@ function ServiceAccountsPanel({ apiFetch, canManageUsers, onNotice, requestConfi
   if (!canManageUsers) return (
     <div className="settings_admin_panel service_accounts_mgmt_panel">
       <fieldset className="service_accounts_section_fieldset">
-        <legend>Service Accounts <AdminLockIcon /></legend>
+        <legend>Service Accounts</legend>
         <p className="settings_hint">You need users:manage permission to manage service accounts.</p>
       </fieldset>
     </div>
@@ -7014,7 +7000,7 @@ function ServiceAccountsPanel({ apiFetch, canManageUsers, onNotice, requestConfi
           title={isCreateOpen ? "Click to collapse" : "Click to expand create service account form"}
         >
           <span className="service_create_legend_title">
-            Create Service Account <AdminLockIcon />
+            Create Service Account
           </span>
           <span className="service_create_legend_toggle">
             {isCreateOpen ? "▲" : "▼"}
@@ -7158,7 +7144,7 @@ function ServiceAccountsPanel({ apiFetch, canManageUsers, onNotice, requestConfi
 
       {/* ── Section 2: Configured Service Accounts (Modeled after Connections Storage Section) ── */}
       <fieldset className="service_accounts_section_fieldset">
-        <legend>Configured Service Accounts <AdminLockIcon /></legend>
+        <legend>Configured Service Accounts</legend>
 
         <div className="service_accounts_toolbar">
           <div className="service_accounts_count">
@@ -12919,6 +12905,19 @@ const fileInputRef = useRef(null);
         );
         return;
       }
+      if (event.data?.type === "activate_graph_tab") {
+        const tab = event.data?.payload?.tab;
+        const targetGraphWindowId = event.data?.payload?.windowId ?? resolvedSourceWindowId;
+        if (!tab || !targetGraphWindowId) return;
+        setWindows(prev =>
+          prev.map(w =>
+            w.type === "graph" && String(w.id) === String(targetGraphWindowId)
+              ? { ...w, selectedPropertyTab: tab }
+              : w
+          )
+        );
+        return;
+      }
       if (event.data?.type === "all_property_keys_response") {
         const payload = event.data?.payload || {};
         const targetGraphWindowId = payload.id ?? resolvedSourceWindowId;
@@ -15266,6 +15265,7 @@ const fileInputRef = useRef(null);
                      }),
                      sourceStatus: SOURCE_STATUSES.CONNECTED,
                      sourceKind: sourcePayload.addressType,
+                     sourceAddressType: sourcePayload.addressType,
                      toolStatus: TOOL_STATUSES.CONNECTED
                   } : win));
                } else {
@@ -15285,6 +15285,7 @@ const fileInputRef = useRef(null);
                      }),
                      sourceStatus: isSourceSuccess ? SOURCE_STATUSES.CONNECTED : SOURCE_STATUSES.FAILED,
                      sourceKind: sourcePayload.addressType,
+                     sourceAddressType: sourcePayload.addressType,
                      toolStatus: isToolSuccess ? TOOL_STATUSES.CONNECTED : TOOL_STATUSES.FAILED
                   } : win));
                }
@@ -20266,14 +20267,14 @@ function ScoreLineagePanel({ apiFetch, canManageUsers }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
       <fieldset>
-        <legend>Base Scores by Typology <AdminLockIcon /></legend>
+        <legend>Base Scores by Typology</legend>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}>
           {activeTypologyKeys.map(renderTypologySlider)}
         </div>
       </fieldset>
 
       <fieldset>
-        <legend>{isCdr ? "Network Scale / Subscriber Multipliers" : "Node Count Multipliers"} <AdminLockIcon /></legend>
+        <legend>{isCdr ? "Network Scale / Subscriber Multipliers" : "Node Count Multipliers"}</legend>
         {nodeThresholds.map((t, idx) => (
           <div key={idx} style={{ display: "flex", gap: "10px", marginBottom: "10px", alignItems: "center" }}>
             <label style={{ width: isCdr ? "160px" : "80px" }}>{isCdr ? "Min Contacts / MSISDNs:" : "Min Nodes:"}</label>
@@ -20295,7 +20296,7 @@ function ScoreLineagePanel({ apiFetch, canManageUsers }) {
       </fieldset>
 
       <fieldset>
-        <legend>{isCdr ? "Cumulative Duration Volume Score Tiers" : "Financial Value Multipliers"} <AdminLockIcon /></legend>
+        <legend>{isCdr ? "Cumulative Duration Volume Score Tiers" : "Financial Value Multipliers"}</legend>
         {moneyThresholds.map((t, idx) => (
           <div key={idx} style={{ display: "flex", gap: "10px", marginBottom: "10px", alignItems: "center" }}>
             <label style={{ width: isCdr ? "160px" : "80px" }}>{isCdr ? "Min Duration (sec):" : "Min Amount:"}</label>
@@ -20457,7 +20458,7 @@ function RuleThresholdsPanel({ apiFetch, canManageUsers }) {
         }
       }
       
-      const saveEndpoint = isCdr ? "/rule-thresholds?domain_id=cdr" : "/rule-thresholds";
+      const saveEndpoint = `/rule-thresholds?domain=${isCdr ? "cdr" : "bank"}`;
       const fallbackSave = "/rule-thresholds";
       const payload = {
         ...(isCdr ? { domain_id: "cdr" } : {}),
@@ -20507,7 +20508,7 @@ function RuleThresholdsPanel({ apiFetch, canManageUsers }) {
       {isCdr ? (
         <>
           <fieldset>
-            <legend>Call Patterns &amp; Relays <AdminLockIcon /></legend>
+            <legend>Call Patterns &amp; Relays</legend>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}>
               <div className="configurations_input">
                 <label title="Minimum number of calls between two numbers before flagging a frequent contact cluster.">
@@ -20543,7 +20544,7 @@ function RuleThresholdsPanel({ apiFetch, canManageUsers }) {
           </fieldset>
 
           <fieldset>
-            <legend>Durations &amp; Night Activity <AdminLockIcon /></legend>
+            <legend>Durations &amp; Night Activity</legend>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}>
               <div className="configurations_input">
                 <label title="Calls shorter than this duration are treated as short burst signals.">
@@ -20579,7 +20580,7 @@ function RuleThresholdsPanel({ apiFetch, canManageUsers }) {
           </fieldset>
 
           <fieldset>
-            <legend>Network Dispersion &amp; Towers <AdminLockIcon /></legend>
+            <legend>Network Dispersion &amp; Towers</legend>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}>
               <div className="configurations_input">
                 <label title="Minimum distinct contact numbers to form a star network hub.">
@@ -20609,7 +20610,7 @@ function RuleThresholdsPanel({ apiFetch, canManageUsers }) {
           </fieldset>
 
           <fieldset>
-            <legend>Telecom Fraud &amp; Telephony Exploits <AdminLockIcon /></legend>
+            <legend>Telecom Fraud &amp; Telephony Exploits</legend>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}>
               <div className="configurations_input">
                 <label title="Minimum outbound call count indicating automated SIM box termination.">
@@ -20647,7 +20648,7 @@ function RuleThresholdsPanel({ apiFetch, canManageUsers }) {
       ) : (
         <>
           <fieldset>
-            <legend>Global Baseline Floor <AdminLockIcon /></legend>
+            <legend>Global Baseline Floor</legend>
             <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "15px" }}>
               <div className="configurations_input">
                 <label title="Universal baseline floor. Transactions below this value will not trigger anomalies unless explicitly overridden by a rule-specific threshold.">
@@ -20659,7 +20660,7 @@ function RuleThresholdsPanel({ apiFetch, canManageUsers }) {
           </fieldset>
 
           <fieldset>
-            <legend>Per-Rule Amount Floors (False Positive Suppression) <AdminLockIcon /></legend>
+            <legend>Per-Rule Amount Floors (False Positive Suppression)</legend>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}>
               <div className="configurations_input">
                 <label title="Late night transactions below this amount will not be flagged.">Late Night Min Amount (Amount)</label>
@@ -20697,7 +20698,7 @@ function RuleThresholdsPanel({ apiFetch, canManageUsers }) {
           </fieldset>
 
           <fieldset>
-            <legend>Structural &amp; Ratio Settings <AdminLockIcon /></legend>
+            <legend>Structural &amp; Ratio Settings</legend>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}>
               <div className="configurations_input">
                 <label>Circular Flow Amount Tolerance (0.01 - 1.0)</label>
@@ -20739,7 +20740,7 @@ function RuleThresholdsPanel({ apiFetch, canManageUsers }) {
           </fieldset>
 
           <fieldset>
-            <legend>Regulatory Limits &amp; Operating Hours <AdminLockIcon /></legend>
+            <legend>Regulatory Limits &amp; Operating Hours</legend>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}>
               <div className="configurations_input">
                 <label title="Minimum number of transactions an account must perform in the near-CTR band before flagging structuring. Set to 2 or 3 to avoid false alerts on isolated single payments.">Min Repeated Structuring Count</label>

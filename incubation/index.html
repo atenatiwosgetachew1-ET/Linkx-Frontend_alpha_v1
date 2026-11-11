@@ -8,6 +8,25 @@
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
     <title>Linkx</title>
+    <script>
+      // Pre-paint theme boot: avoids a flash of the default theme before React mounts.
+      (function () {
+        try {
+          var root = document.documentElement;
+          // Mirrors src/utils/glassEffects.js (off unless explicitly enabled).
+          root.setAttribute('data-glass', localStorage.getItem('linkx_enable_glass_effects') === 'true' ? 'on' : 'off');
+          var mode = localStorage.getItem('linkx_theme_mode') || 'nbe-daylight';
+          root.setAttribute('data-theme', mode);
+          // Keys mirror src/shared/theme/themeRegistry.js (per-theme, then legacy flat).
+          var byTheme = JSON.parse(localStorage.getItem('linkx_theme_overrides_by_theme') || 'null');
+          var overrides = byTheme ? (byTheme[mode] || {})
+            : JSON.parse(localStorage.getItem('linkx_theme_custom_overrides') || '{}');
+          for (var key in overrides) {
+            if (overrides[key]) root.style.setProperty(key, overrides[key]);
+          }
+        } catch (e) { /* storage unavailable: CSS defaults apply */ }
+      })();
+    </script>
   </head>
   <body>
     <!-- Root container -->

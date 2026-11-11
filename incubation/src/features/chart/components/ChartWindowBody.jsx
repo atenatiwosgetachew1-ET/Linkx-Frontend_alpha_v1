@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-export default function ChartWindowBody({ windowItem }) {
+export default function ChartWindowBody() {
   const [chartType, setChartType] = useState('bar');
   const [metric, setMetric] = useState('frequency');
 

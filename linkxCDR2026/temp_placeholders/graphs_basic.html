@@ -47,18 +47,19 @@
                                     position: absolute; 
                                     width: 300px; 
                                     min-height: 10vh; 
-                                    border: 0.1vh solid rgb(179, 179, 179); 
-                                    box-shadow: rgba(0, 0, 0, 0.2) 0px 0px 8px; 
-                                    background-color: rgba(255, 255, 255,0.7); 
+                                    border: 1px solid var(--border-color, rgba(0,0,0,0.1)); 
+                                    box-shadow: 0 4px 10px rgba(0,0,0,0.08); 
+                                    background: var(--bg-primary, rgba(255, 255, 255, 0.96)); 
+                                    color: var(--text-primary, #333);
+                                    font-family: system-ui;
                                     padding: 0.5vw; 
                                     z-index: 9999; 
                                     top: 150.337px; 
                                     left: 555.958px; 
-                                    border-radius: 0.5vh;
-                                    backdrop-filter: blur(1px);
+                                    border-radius: 8px;
                                 }
                                 .adjustBox:hover{
-                                    background-color: rgba(255, 255, 255,0.9); 
+                                    background: var(--bg-primary, rgba(255, 255, 255, 0.98)); 
                                 }
                                 .albumBox{
                                 	display: block;
@@ -394,34 +395,40 @@
 									display: none;
                                     position: absolute; 
                                     width: auto; 
+                                    max-width: 280px;
                                     min-height: 3vh; 
-                                    border: 0.1vh solid rgb(179, 179, 179); 
-                                    box-shadow: rgba(0, 0, 0, 0.2) 0px 0px 8px; 
-                                    background-color: rgba(255, 255, 255,0.7); 
-                                    padding: 0.5vw; 
+                                    max-height: 80vh;
+                                    overflow-y: auto;
+                                    border: 1px solid var(--border-color, rgba(0,0,0,0.1)); 
+                                    box-shadow: 0 4px 10px rgba(0,0,0,0.08); 
+                                    background: var(--bg-primary, rgba(255, 255, 255, 0.96)); 
+                                    color: var(--text-primary, #333);
+                                    font-family: system-ui;
+                                    padding: 5px; 
                                     z-index: 10001;
-                                    border-radius: 0.5vh;
-                                    backdrop-filter: blur(1px);
+                                    border-radius: 8px;
 								}
 								.customContextMenu .menu_item{
-									background-color: rgba(255, 255, 255,0.4); 
+									background-color: transparent; 
 									padding: 0.5vh;
 									height: 15;
 									font-size: 13px;
-									color: #444;
+									color: var(--text-primary, #444);
 									cursor: default;
 									line-height: 15px;
+									white-space: nowrap;
+									border-radius: 5px;
 									border: 0.1vh solid rgba(179, 179, 179,0); 
-									border-bottom-color: rgba(179, 179, 179,0.3); 
+									border-bottom-color: var(--border-color, rgba(179, 179, 179,0.25)); 
 									padding-left: 0.7vh;
 								}
 								.customContextMenu .menu_item:last-child{
 									border-bottom-color: rgba(179, 179, 179,0); 
 								}
 								.customContextMenu .menu_item:hover{
-									background-color: rgba(255, 255, 255,1); 
-									color: #000;
-									border: 0.1vh solid rgba(179, 179, 179,1); 
+									background-color: rgba(128, 128, 128,0.15); 
+									color: var(--text-primary, #000);
+									border: 0.1vh solid rgba(128, 128, 128,0.25); 
 								}
 								.customContextMenu .menu_item:active{
 									background-color: rgba(200, 200, 200,0.1); 
@@ -594,6 +601,26 @@
 								  background-color: rgba(15, 24, 32, 0.92) !important;
 								  color: #c4d0db !important;
 								  border-color: rgba(86, 114, 137, 0.28) !important;
+								}
+								/* Light theme: keep native dropdowns readable (dark text on light),
+								   otherwise OS dark mode can render option text white. */
+								html:not([data-theme="dark"]) select,
+								html:not([data-theme="dark"]) .select_options {
+								  color-scheme: light;
+								  color: #2a3a49;
+								  background-color: #ffffff;
+								}
+								html:not([data-theme="dark"]) select option,
+								html:not([data-theme="dark"]) .select_options option {
+								  color: #2a3a49;
+								  background-color: #ffffff;
+								}
+								html[data-theme="dark"] select,
+								html[data-theme="dark"] .select_options { color-scheme: dark; }
+								html[data-theme="dark"] select option,
+								html[data-theme="dark"] .select_options option {
+								  color: #c4d0db;
+								  background-color: #15202a;
 								}
 								html[data-theme="dark"] .iconThumb,
 								html[data-theme="dark"] .iconThumb:last-child {
@@ -810,11 +837,10 @@
 
   /* Modernized adjust box separators and fields */
   .adjustBox {
-    border-color: rgba(132, 146, 163, 0.26) !important;
-    border-radius: 0.6vh !important;
-    box-shadow: 0 1.2vh 3.2vh rgba(16, 24, 40, 0.14) !important;
-    background-color: rgba(255, 255, 255, 0.82) !important;
-    backdrop-filter: blur(6px);
+    border-color: var(--border-color, rgba(132, 146, 163, 0.26)) !important;
+    border-radius: 8px !important;
+    box-shadow: 0 4px 10px rgba(16, 24, 40, 0.10) !important;
+    background: var(--bg-primary, rgba(255, 255, 255, 0.98)) !important;
   }
   .adjustBox .nodeAdjustBox_node_label input,
   .adjustBox .nodeAdjustBox_node_note,
@@ -908,10 +934,9 @@
   .customContextMenu,
   .adjustBox,
   .annotationAdjustBox {
-    border: 0.1vh solid rgba(126, 144, 161, 0.28) !important;
-    background: rgba(250, 253, 255, 0.92) !important;
-    box-shadow: 0 10px 24px rgba(16, 29, 41, 0.16) !important;
-    backdrop-filter: blur(8px) !important;
+    border: 1px solid var(--border-color, rgba(0,0,0,0.1)) !important;
+    background: var(--bg-primary, rgba(255, 255, 255, 0.98)) !important;
+    box-shadow: 0 4px 10px rgba(16, 29, 41, 0.10) !important;
   }
   .customContextMenu .menu_item {
     background: transparent !important;
@@ -932,9 +957,9 @@
   html[data-theme="dark"] .customContextMenu,
   html[data-theme="dark"] .adjustBox,
   html[data-theme="dark"] .annotationAdjustBox {
-    border: 0.1vh solid rgba(95, 124, 147, 0.34) !important;
-    background: rgba(15, 25, 35, 0.94) !important;
-    box-shadow: 0 10px 26px rgba(0, 0, 0, 0.52) !important;
+    border: 1px solid var(--border-color, rgba(95, 124, 147, 0.34)) !important;
+    background: var(--bg-primary, rgba(15, 25, 35, 0.985)) !important;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.45) !important;
   }
   html[data-theme="dark"] .customContextMenu .menu_item {
     background: transparent !important;
@@ -1290,6 +1315,12 @@
 											<span id="alerts-summary" style="font-size: 11px; opacity: 0.7;">Reviewing graph…</span>
 										</div>
 										<button onclick="document.getElementById('alerts-overlay').style.display='none'" title="Close" style="background: none; border: none; cursor: pointer; color: var(--text-muted, #777); font-size: 16px; line-height: 1; padding: 0; margin-top: 1px;">&times;</button>
+									</div>
+									<div id="alerts-name-controls" style="display: flex; align-items: center; gap: 6px; padding: 6px 12px; border-bottom: 1px solid var(--border-color, rgba(0,0,0,0.06)); flex-shrink: 0;">
+										<label for="alerts-name-key" style="font-size: 10.5px; opacity: 0.7; white-space: nowrap;">Name by</label>
+										<select id="alerts-name-key" onchange="if (typeof onAlertNameKeyChange === 'function') { onAlertNameKeyChange(this.value); }" title="Choose which node property labels the alerts" style="flex: 1 1 auto; min-width: 0; font-family: inherit; font-size: 11px; padding: 2px 4px; border: 1px solid var(--border-color, rgba(0,0,0,0.18)); border-radius: 5px; background: var(--bg-primary, #fff); color: var(--text-primary, #333);">
+											<option value="">Auto (first property)</option>
+										</select>
 									</div>
 									<div id="alerts-list-container" style="display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; overflow-y: auto; flex: 1 1 auto; min-height: 0;">
 									</div>
@@ -1816,16 +1847,54 @@ smooth: {
 								function positionAdjustBox(box, domPosition) {
 									const offsetX = 20;
 									const offsetY = 20;
-									box.style.top = `${domPosition.y + offsetY}px`;
-									box.style.left = `${domPosition.x + offsetX}px`;
+									const margin = 10;
 
-									const boxRect = box.getBoundingClientRect();
-									if (boxRect.right > window.innerWidth) {
-										box.style.left = `${window.innerWidth - boxRect.width - 10}px`;
-									}
-									if (boxRect.bottom > window.innerHeight) {
-										box.style.top = `${window.innerHeight - boxRect.height - 10}px`;
-									}
+									// Measure real size even though the caller toggles display afterwards:
+									// a display:none element reports 0×0, which breaks edge clamping.
+									const prevVisibility = box.style.visibility;
+									const prevDisplay = box.style.display;
+									box.style.visibility = "hidden";
+									box.style.display = "block";
+									const width = box.offsetWidth;
+									const height = box.offsetHeight;
+									box.style.display = prevDisplay;
+									box.style.visibility = prevVisibility;
+
+									const vw = document.documentElement.clientWidth;
+									const vh = document.documentElement.clientHeight;
+									let left = domPosition.x + offsetX;
+									let top = domPosition.y + offsetY;
+
+									if (left + width > vw - margin) left = vw - width - margin;
+									if (top + height > vh - margin) top = vh - height - margin;
+									if (left < margin) left = margin;
+									if (top < margin) top = margin;
+
+									box.style.left = `${left}px`;
+									box.style.top = `${top}px`;
+								}
+
+								// Place the right-click menu at the cursor, then keep it fully on-screen.
+								function positionContextMenu(menu, pageX, pageY) {
+									const margin = 10;
+									menu.style.left = `${pageX}px`;
+									menu.style.top = `${pageY}px`;
+									menu.style.display = "block";
+
+									const vw = document.documentElement.clientWidth;
+									const vh = document.documentElement.clientHeight;
+									const width = menu.offsetWidth;
+									const height = menu.offsetHeight;
+									let left = pageX;
+									let top = pageY;
+
+									if (left + width > vw - margin) left = vw - width - margin;
+									if (top + height > vh - margin) top = vh - height - margin;
+									if (left < margin) left = margin;
+									if (top < margin) top = margin;
+
+									menu.style.left = `${left}px`;
+									menu.style.top = `${top}px`;
 								}
 
 								function toDateTimeLocalValue(rawValue) {
@@ -2031,8 +2100,6 @@ smooth: {
 								    let selectedNodes = network.getSelectedNodes();
 								    const contextMenu = document.getElementById('customContextMenu');
 								    let menuHTML = "";
-								    contextMenu.style.left = `${params.event.pageX}px`;
-								    contextMenu.style.top = `${params.event.pageY}px`;
 								    window.lastContextMenuPoint = {
 								    	pageX: params.event.pageX,
 								    	pageY: params.event.pageY,
@@ -2135,7 +2202,7 @@ smooth: {
 
 								    if (menuHTML) {
 								        contextMenu.innerHTML = menuHTML;
-								        contextMenu.style.display = 'block';
+								        positionContextMenu(contextMenu, params.event.pageX, params.event.pageY);
 								    } else {
 								        contextMenu.style.display = 'none';
 								    }
@@ -2433,7 +2500,11 @@ smooth: {
 											x: (sourcePos.x + targetPos.x) / 2,
 											y: (sourcePos.y + targetPos.y) / 2
 										};
-										const domPosition = network.canvasToDOM(midpoint);
+										// Prefer the exact click point on the edge; the geometric midpoint of a
+										// long/curved edge can land far from where the user actually clicked.
+										const domPosition = (params.pointer && params.pointer.DOM)
+											? { x: params.pointer.DOM.x, y: params.pointer.DOM.y }
+											: network.canvasToDOM(midpoint);
 
 										const edgelabel = document.getElementById("edgeAdjustBox_edge_label_field");
 										edgelabel.value = edgeData?.label || "";

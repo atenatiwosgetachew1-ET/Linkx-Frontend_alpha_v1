@@ -1,10 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useAuth } from '../../../auth/useAuth.js';
-import { useWorkspace } from '../../../workspace/hooks/useWorkspace.js';
+import ThemePicker from '../../../shared/theme/ThemePicker.jsx';
+import { useWorkspaceActions } from '../../../workspace/hooks/useWorkspace.js';
 import { appConfig } from '../../../app/config.js';
 import { authRequest } from '../../../services/authApi.js';
 import { useBackgroundAnimations } from '../../../utils/backgroundAnimations.js';
+import { useGlassEffects } from '../../../utils/glassEffects.js';
 import {
   compactValidationErrors,
   sanitizeIdentifier,
@@ -326,6 +328,7 @@ function ProfilePanel({ actor, token, sessionId, roles = [], permissions = [] })
 function PreferencesPanel({ areBackgroundAnimationsEnabled, setBackgroundAnimationsEnabled }) {
   const [rememberLayout, setRememberLayout] = useState(() => localStorage.getItem(SETTINGS_STORAGE_KEYS.rememberLayout) !== 'false');
   const [enableNotifications, setEnableNotifications] = useState(() => localStorage.getItem(SETTINGS_STORAGE_KEYS.enableNotifications) !== 'false');
+  const { areGlassEffectsEnabled, setGlassEffectsEnabled } = useGlassEffects();
 
   useEffect(() => {
     localStorage.setItem(SETTINGS_STORAGE_KEYS.rememberLayout, String(rememberLayout));
@@ -356,6 +359,10 @@ function PreferencesPanel({ areBackgroundAnimationsEnabled, setBackgroundAnimati
           <input type="checkbox" checked={areBackgroundAnimationsEnabled} onChange={(event) => setBackgroundAnimationsEnabled(event.target.checked)} />
           <span>Enable background animations</span>
         </label>
+        <label className="settings_toggle_row">
+          <input type="checkbox" checked={areGlassEffectsEnabled} onChange={(event) => setGlassEffectsEnabled(event.target.checked)} />
+          <span>Enable glass blur effects</span>
+        </label>
       </div>
 
       <LiveThemeCustomizerStudio />
@@ -364,7 +371,7 @@ function PreferencesPanel({ areBackgroundAnimationsEnabled, setBackgroundAnimati
 }
 
 function LiveThemeCustomizerStudio() {
-  const { theme, setTheme, themes, categories, customOverrides, setCustomVariable, resetCustomOverrides, exportThemeConfig, importThemeConfig, inspectorActive, toggleInspector } = useTheme();
+  const { categories, customOverrides, setCustomVariable, resetCustomOverrides, exportThemeConfig, importThemeConfig, inspectorActive, toggleInspector } = useTheme();
   const [selectedCategoryId, setSelectedCategoryId] = useState(categories[0]?.id || 'shell');
   const [searchQuery, setSearchQuery] = useState('');
   const [importJson, setImportJson] = useState('');
@@ -415,10 +422,11 @@ function LiveThemeCustomizerStudio() {
     );
   }, [selectedCategory, normalizedQuery]);
 
+  const rootStyle = typeof window !== 'undefined' ? getComputedStyle(document.documentElement) : null;
   const getEffectiveValue = (token) => {
     if (customOverrides[token.key]) return customOverrides[token.key];
-    if (typeof window !== 'undefined') {
-      const computed = getComputedStyle(document.documentElement).getPropertyValue(token.key).trim();
+    if (rootStyle) {
+      const computed = rootStyle.getPropertyValue(token.key).trim();
       if (computed && (computed.startsWith('#') || computed.startsWith('rgb'))) return computed;
     }
     return token.default || '#000000';
@@ -473,19 +481,7 @@ function LiveThemeCustomizerStudio() {
       {/* Base Theme Preset Selection */}
       <div className="theme_studio_base_row">
         <label className="settings_label">Active Theme Preset Base:</label>
-        <div className="theme_studio_preset_pills">
-          {themes.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              className={`theme_studio_pill ${theme === t.id ? 'is-active' : ''}`}
-              onClick={() => setTheme(t.id)}
-            >
-              <span className="theme_studio_pill_dot" style={{ backgroundColor: t.previewColor }} />
-              <span>{t.name}</span>
-            </button>
-          ))}
-        </div>
+        <ThemePicker variant="pills" />
       </div>
 
       {/* Customization Items Search Box */}
@@ -624,7 +620,7 @@ function LiveThemeCustomizerStudio() {
           <textarea
             className="settings_input theme_studio_json_area"
             rows={2}
-            placeholder='Paste JSON configuration here... (e.g. {"theme": "nbe-daylight", "customOverrides": {"--app-bg": "#f6efea"}})'
+            placeholder='Paste JSON configuration here... (e.g. {"theme": "nbe-daylight", "customOverrides": {"--app-bg": "#F4F7FA"}})'
             value={importJson}
             onChange={(e) => setImportJson(e.target.value)}
           />
@@ -1410,8 +1406,9 @@ export default function SettingsWindowBody({ windowItem }) {
   const { user, token, logout, hasPermission } = useAuth();
   const { notify } = useNotifications();
   const { areBackgroundAnimationsEnabled, setBackgroundAnimationsEnabled } = useBackgroundAnimations();
-  const workspace = useWorkspace();
-  const settingsUiState = windowItem?.metadata?.settingsUi || {};
+  const workspace = useWorkspaceActions();
+  const storedSettingsUi = windowItem?.metadata?.settingsUi;
+  const settingsUiState = useMemo(() => storedSettingsUi || {}, [storedSettingsUi]);
   const [activeTab, setActiveTab] = useState(() => settingsUiState.activeTab || 'profile');
   const [sessionId, setSessionId] = useState('');
   const [refreshSignal, setRefreshSignal] = useState(0);

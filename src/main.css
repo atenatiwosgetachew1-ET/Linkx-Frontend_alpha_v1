@@ -573,14 +573,14 @@ body{
 	background-color: var(--workspace-scene-bg);
 }
 #main.linkx_workspace_scene--light {
-	background: var(--workspace-light-bg);
+	background: #f5f6f6;
 }
 .linkx_workspace_scene_light_plane {
 	position: absolute;
 	inset: 0;
 	z-index: 0;
 	pointer-events: none;
-	background: var(--workspace-light-plane);
+	background: #f5f6f6;
 }
 .linkx_workspace_scene_video {
 	display: block;
@@ -2911,31 +2911,34 @@ body{
 	width: 20vw;
 	height: 4vw;
 	background-color: #FFF;
-	border-radius: 0.2vw;
-	border: 0.2vh solid #EEE;
+	border-radius: 0;
+	border: 1px solid #e4e8ec;
 	padding: 0.3vw;
 	opacity: 1;
-	opacity: 1;
+	box-shadow: 0 1px 2px rgba(20, 46, 71, 0.04);
+	transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+	cursor: pointer;
 }
 .window .content_container .live_source_option:hover{
 	opacity: 1;
 	background-color: #FFF;
-	border-color: #333;
-
+	border-color: var(--primary-action-bg);
+	box-shadow: 0 6px 18px rgba(20, 46, 71, 0.10);
+	transform: translateY(-1px);
 }
 .window .content_container .live_source_option:hover .live_source_option_icon use{
-	fill: var(--chrome-bg-dark);
+	fill: var(--primary-action-bg);
 }
 .window .content_container .live_source_option:active{
-	filter: opacity(50%);
+	filter: opacity(70%);
 }
 .window .content_container .live_source_option .live_source_option_icon{
 	position: relative;
 	float: left;
 	height: 4vw;
 	width: 4vw;
-	box-shadow: 0 0 4px rgba(0, 0, 0, 0.5);
-	background-color: #FFF;
+	box-shadow: none;
+	background-color: #f5f7f9;
 }
 .window .content_container .live_source_option .live_source_option_icon use{
 	fill: var(--chrome-bg-dark);
@@ -2975,10 +2978,9 @@ body{
 	width: 20vw;
 	height: 4vw;
 	background-color: #FFF;
-	border-radius: 0.2vw;
-	border: 1px solid #FAFAFA;
+	border-radius: 0;
+	border: 1px solid #eef1f4;
 	padding: 0.2vw;
-	opacity: 1;
 	opacity: 1;
 }
 .window .content_container .live_source_option_passive .live_source_option_icon use{
@@ -2989,8 +2991,33 @@ body{
 	float: left;
 	height: 4vw;
 	width: 4vw;
-	box-shadow: 0 0 4px rgba(0, 0, 0, 0.5);
-	background-color: #FFF;
+	box-shadow: none;
+	background-color: #f5f7f9;
+}
+.window .content_container .live_source_option .live_source_option_icon,
+.window .content_container .live_source_option_passive .live_source_option_icon {
+	height: 3.4vw;
+	width: 3.4vw;
+	overflow: hidden;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	box-sizing: border-box;
+}
+.window .content_container .live_source_option .live_source_option_icon > span,
+.window .content_container .live_source_option_passive .live_source_option_icon > span {
+	margin: 0 !important;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 55%;
+	height: 55%;
+}
+.window .content_container .live_source_option .live_source_option_icon svg,
+.window .content_container .live_source_option_passive .live_source_option_icon svg {
+	width: 100%;
+	height: 100%;
+	display: block;
 }
 .window .content_container .live_source_option_passive .live_source_option_details{
 
@@ -3205,19 +3232,20 @@ body{
 	display: block;
 	left: 0;
 	right: 0;
-	border: 1px solid #EEE;
-	border-radius: 3px;
+	border: 1px solid #e6eaee;
+	border-radius: 0;
 	margin: auto;
 	margin-bottom: 2vh;
 	min-height: 4vh;
 	overflow: hidden;
 	padding: 0.5vw 2vw 0.5vw 2vw;
 	width: 15vw;
+	background-color: #fdfdfe;
 }
 .window .content_container .batch_connection_form_container form fieldset legend{
 	font-size: 1.6vh;
 	text-align: left;
-	color:#777;
+	color: var(--chrome-bg-dark);
 	margin: 0;
 }
 .window .content_container .batch_connection_form_container form fieldset .box_inputs_container{
@@ -3251,11 +3279,17 @@ body{
 	padding: 0 0.5vw;
 	height: 4vh;
 	background-color: #FFF;
-	border: 1px solid #ccc;
-	border-radius: 0.3vh;
+	border: 1px solid #d8dde2;
+	border-radius: 0;
 	color: #333;
 	font-size: 1.6vh;
 	margin: 1vh 0;
+	transition: border-color 0.16s ease, box-shadow 0.16s ease;
+}
+.window .content_container .batch_connection_form_container form fieldset .textinput:focus{
+	outline: none;
+	border-color: var(--primary-action-bg);
+	box-shadow: 0 0 0 2px rgba(174, 121, 79, 0.15);
 }
 .window .content_container .batch_connection_form_container form fieldset .textinput:disabled{
 		background-color: #EEE;
@@ -3293,7 +3327,7 @@ body{
 	position: relative;
 	min-width: 4vw;
 	height: 3.4vh;
-	border-radius: 2px;
+	border-radius: 0;
 	margin: auto;
 	font-size: 1.5vh;
 	padding: 0.5vw;
@@ -3301,15 +3335,23 @@ body{
 	float: right;
 	text-align: center;
 	opacity: 1;
-	background-image: linear-gradient(26deg,#EFEFEF,#DDD,#EEE,#EFEFEF);
-	color: #222;
-	cursor: default;
-
+	background-image: none;
+	background-color: var(--primary-action-bg);
+	color: #fff;
+	border: 1px solid var(--primary-action-border);
+	cursor: pointer;
+	transition: background-color 0.16s ease, box-shadow 0.16s ease, transform 0.12s ease;
 }
 .window .content_container .batch_connection_form_container form fieldset button:hover{
-	background-image: linear-gradient(26deg,#FAFAFA,#EDEDED,#EFEFEF,#FEFEFE);
-	color: #000;
-	outline: 1px solid #BBB;
+	background-image: none;
+	background-color: var(--primary-action-bg-hover);
+	color: #fff;
+	outline: none;
+	box-shadow: 0 4px 12px rgba(174, 121, 79, 0.25);
+}
+.window .content_container .batch_connection_form_container form fieldset button:active{
+	background-color: var(--primary-action-bg-active);
+	transform: translateY(1px);
 }
 .window .content_container .batch_connection_form_container .batch_files_search_form{
 	position: relative;
@@ -3366,7 +3408,7 @@ body{
 	margin: 0;
 	height: calc(1.2vh + 1.5vw);
 	background-color: #FFF;
-	border: 1px solid #ccc;
+	border: 1px solid #d8dde2;
   border-right: none;
 	color: #333;
 	font-size: calc(0.4vh + 0.5vw);
@@ -3412,13 +3454,21 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 	border-radius: 0 1px 1px 0;
 	border-left: none;
   height: calc(1.35vh + 1.5vw);
-	border: 1px solid #ccc;
-	border-radius: 0 0.3vh 0.3vh 0;
+	border: 1px solid #d8dde2;
+	border-radius: 0;
 	border-left: none;
-  background-color: #EEE;
+  background-color: var(--primary-action-bg);
 	overflow: hidden;
 	font-size: calc(0.4vh + 0.5vw);
 	outline: none;
+	cursor: pointer;
+	transition: background-color 0.16s ease;
+}
+.window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_form .batch_files_search_container button use{
+	fill: #fff;
+}
+.window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_form .batch_files_search_container button:hover{
+	background-color: var(--primary-action-bg-hover);
 }
 .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_form .batch_files_search_container button:last-child{
 	border-left: 1px solid #CCC;
@@ -3533,9 +3583,9 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   left: 0.3vw;
 	z-index: 20;
 	margin-left: 1.15vw;
-	border-radius: 0 0 3px 3px;
+	border-radius: 0 0 0.45vw 0.45vw;
 	border-top: 1px solid #EEE;
-	box-shadow: 0 15px 15px rgba(0, 0, 0, 0.4);
+	box-shadow: 0 12px 24px rgba(20, 46, 71, 0.16);
 }
 .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_result_container ul{
 	position: relative;
@@ -3578,10 +3628,10 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 	border-bottom: 1px solid #DDD;
 }
 .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_result_container ul li:hover{
-	background-color: #CCF;
+	background-color: #eef3f8;
 }
 .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_result_container ul li:active{
-	background-color: #AAC;
+	background-color: #dce7f1;
 }
 .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_result_container ul li span{
   float: left;
@@ -4229,49 +4279,57 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 	display: inline-block;
 	width: 7vw;
 	height: 4.4vh;
-	border-radius: 0.3vh;
-	margin: 0 0.2vw;
+	border-radius: 0;
+	margin: 0 0.3vw;
 	font-size: 1.5vh;
 	padding: 0.1vh 0.2vw;
 	line-height: 1vh;
-	cursor: default;
-	background-image: linear-gradient(90deg,#263d53,#263d53,#263d53);
-	color: #EEE;
-	border: 1px solid #FFF;
-	outline: 1px solid #BBB;
+	cursor: pointer;
+	background-image: none;
+	background-color: var(--chrome-bg-dark);
+	color: #f4f6f8;
+	border: 1px solid transparent;
+	outline: none;
 	opacity: 1;
 	text-align: center;
+	transition: background-color 0.16s ease, box-shadow 0.16s ease, transform 0.12s ease;
 }
 .window .content_container .batch_connection_form_pager_container button:disabled{
 	position: relative;
 	display: inline-block;
 	width: 7vw;
 	height: 4.4vh;
-	border-radius: 2px;
-	margin: 0 0.2vw;
+	border-radius: 0;
+	margin: 0 0.3vw;
 	font-size: 1.5vh;
 	padding: 0.1vh 0.2vw;
 	line-height: 1vh;
-	cursor: default;
-	background-image: linear-gradient(26deg,#CCC,#CCC,#CCC,#CCC);
-	color: #000;
-	border: 1px solid #FFF;
-	outline: 1px solid #BBB;
-	opacity: 0.3;
+	cursor: not-allowed;
+	background-image: none;
+	background-color: #e7eaed;
+	color: #9aa4ad;
+	border: 1px solid transparent;
+	outline: none;
+	opacity: 1;
 	text-align: center;
 }
 .window .content_container .batch_connection_form_pager_container button:disabled:hover{
-	outline: 1px solid #BBB;
+	outline: none;
 }
 .window .content_container .batch_connection_form_pager_container button:disabled:active{
-	outline: 1px solid #BBB;
-	background-image: linear-gradient(26deg,#CCC,#CCC,#CCC,#CCC);
+	outline: none;
+	background-image: none;
+	background-color: #e7eaed;
 }
 .window .content_container .batch_connection_form_pager_container button:hover{
-	outline: 1px solid #1a2e41;
+	outline: none;
+	background-color: #1b3a58;
+	box-shadow: 0 4px 12px rgba(20, 46, 71, 0.22);
 }
 .window .content_container .batch_connection_form_pager_container button:active{
-	background-image: linear-gradient(90deg,#000,#000,#000);
+	background-image: none;
+	background-color: #0f2338;
+	transform: translateY(1px);
 }
 .window .content_container .iframe_graph{
 	height: 69vh;
@@ -6394,15 +6452,15 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 }
 [data-theme="light"] .window .content_container .live_source_option,
 [data-theme="light"] .window .content_container .live_source_option_passive {
-  background: linear-gradient(180deg, rgba(255, 254, 251, 0.98), rgba(249, 244, 237, 0.94)) !important;
+  background: #ffffff !important;
   border: 1px solid rgba(214, 193, 171, 0.92) !important;
-  border-radius: 4px;
-  box-shadow: 0 12px 24px rgba(174, 121, 79, 0.08) !important;
+  border-radius: 0;
+  box-shadow: 0 1px 2px rgba(174, 121, 79, 0.06) !important;
 }
 [data-theme="light"] .window .content_container .live_source_option:hover {
   border-color: rgba(174, 121, 79, 0.72) !important;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 1), rgba(248, 240, 230, 0.96)) !important;
-  box-shadow: 0 16px 28px rgba(174, 121, 79, 0.14) !important;
+  background: #ffffff !important;
+  box-shadow: 0 6px 16px rgba(174, 121, 79, 0.12) !important;
 }
 [data-theme="light"] .window .content_container .live_source_option_passive {
   border-color: rgba(174, 121, 79, 0.56) !important;
@@ -6411,7 +6469,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 [data-theme="light"] .window .content_container .live_source_option .live_source_option_icon,
 [data-theme="light"] .window .content_container .live_source_option_passive .live_source_option_icon,
 [data-theme="light"] .window .content_container .upload_source_option .upload_source_option_icon {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(241, 231, 222, 0.95)) !important;
+  background: #ffffff !important;
   box-shadow: inset 0 0 0 1px rgba(214, 193, 171, 0.92) !important;
 }
 [data-theme="light"] .window .content_container .live_source_option .live_source_option_icon use,
@@ -6433,14 +6491,14 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   color: #81614b !important;
 }
 [data-theme="light"] .window .content_container .upload_source_option {
-  background: linear-gradient(180deg, rgba(255, 254, 251, 0.98), rgba(250, 246, 240, 0.96)) !important;
+  background: #ffffff !important;
   border: 1px dashed rgba(174, 121, 79, 0.64) !important;
-  border-radius: 4px;
+  border-radius: 0;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.72) !important;
 }
 [data-theme="light"] .window .content_container .upload_source_option:hover {
   border-color: rgba(174, 121, 79, 0.92) !important;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 1), rgba(247, 239, 229, 0.96)) !important;
+  background: #ffffff !important;
 }
 [data-theme="light"] .window .content_container .upload_source_option button,
 [data-theme="light"] .window .content_container .batch_connection_form_container form fieldset button,
@@ -6451,8 +6509,8 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   color: #fffaf6 !important;
   border: 1px solid rgba(174, 121, 79, 0.78) !important;
   outline: none !important;
-  border-radius: 3px;
-  box-shadow: 0 8px 18px rgba(174, 121, 79, 0.18);
+  border-radius: 0;
+  box-shadow: 0 2px 6px rgba(174, 121, 79, 0.18);
 }
 [data-theme="light"] .window .content_container .upload_source_option button:hover,
 [data-theme="light"] .window .content_container .batch_connection_form_container form fieldset button:hover,
@@ -6486,8 +6544,8 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 }
 [data-theme="light"] .window .content_container .batch_connection_form_container .form_response_container {
   border: 1px solid rgba(214, 193, 171, 0.92) !important;
-  border-radius: 0 0 3px 3px;
-  box-shadow: 0 10px 20px rgba(174, 121, 79, 0.08);
+  border-radius: 0;
+  box-shadow: 0 4px 10px rgba(174, 121, 79, 0.06);
 }
 [data-theme="light"] .window .content_container .batch_connection_form_container form:first-child {
   border-right-color: rgba(214, 193, 171, 0.72);
@@ -6495,9 +6553,9 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 [data-theme="light"] .window .content_container .batch_connection_form_container form fieldset,
 [data-theme="light"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_form_fieldset,
 [data-theme="light"] .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(249, 244, 237, 0.94)) !important;
+  background: #ffffff !important;
   border-color: rgba(214, 193, 171, 0.92) !important;
-  border-radius: 4px;
+  border-radius: 0;
 }
 [data-theme="light"] .window .content_container .batch_connection_form_container form fieldset legend,
 [data-theme="light"] .window .content_container .batch_files_dataframe_form .batch_files_dataframe_form_fieldset legend {
@@ -6537,7 +6595,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 [data-theme="light"] .window .content_container .batch_connection_form_container form fieldset .textinput:disabled,
 [data-theme="light"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_and_actions_container .batch_files_dataframe_action_inputs .actions_partition input:disabled,
 [data-theme="light"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_and_actions_container .batch_files_dataframe_action_inputs .actions_partition select:disabled {
-  background: rgba(247, 239, 231, 0.9) !important;
+  background: #eef0f2 !important;
   color: #9b8571 !important;
 }
 [data-theme="light"] .window .content_container .batch_connection_form_container form fieldset .box_inputs_container .radioinput,
@@ -6546,7 +6604,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 }
 [data-theme="light"] .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_form .batch_files_search_container button,
 [data-theme="light"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_and_actions_container .batch_files_dataframe_filter_inputs .filters_partition button {
-  background: #f1e7de !important;
+  background: #ffffff !important;
   border-color: rgba(214, 193, 171, 0.92) !important;
   color: #6a4931 !important;
 }
@@ -6555,7 +6613,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 }
 [data-theme="light"] .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_form .batch_files_search_options_containerI {
   background-image: none;
-  background-color: rgba(248, 242, 235, 0.72);
+  background-color: #ffffff;
   border-image: none;
   border-top-color: rgba(214, 193, 171, 0.92);
 }
@@ -6569,13 +6627,13 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   border-color: rgba(214, 193, 171, 0.72);
 }
 [data-theme="light"] .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_result_container {
-  background: rgba(255, 253, 250, 0.98) !important;
+  background: #ffffff !important;
   border-color: rgba(214, 193, 171, 0.92);
   border-top-color: rgba(201, 173, 146, 0.72);
   box-shadow: 0 18px 28px rgba(123, 86, 53, 0.16) !important;
 }
 [data-theme="light"] .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_result_container ul {
-  background: rgba(248, 242, 235, 0.72);
+  background: #ffffff;
   color: #624530;
 }
 [data-theme="light"] .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_result_container ul::before,
@@ -6592,20 +6650,20 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   border-left-color: rgba(231, 218, 205, 0.92);
 }
 [data-theme="light"] .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_result_container ul li:hover {
-  background: rgba(243, 226, 207, 0.76);
+  background: #f2f4f6;
 }
 [data-theme="light"] .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_result_container ul li:active {
-  background: rgba(231, 206, 181, 0.82);
+  background: #e7ebef;
 }
 [data-theme="light"] .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_result_container ul .batch_files_search_results_load_more {
   background-image: none;
-  background-color: #f1e7de !important;
+  background-color: #ffffff !important;
   color: #6a4931;
   border-top-color: rgba(214, 193, 171, 0.92);
 }
 [data-theme="light"] .window .content_container .batch_connection_form_container .batch_files_search_form .batch_files_search_form_fieldset .batch_files_search_result_container ul .batch_files_search_results_load_more:hover {
   background-image: none;
-  background-color: #ead9ca;
+  background-color: #eef0f2;
   color: #6f4529;
 }
 [data-theme="light"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_menu,
@@ -6619,7 +6677,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 [data-theme="light"] .window .content_container .batch_connection_form_container form .batch_files_table_form_fieldset table tbody tr td,
 [data-theme="light"] .window .content_container .batch_connection_form_container form .batch_files_table_form_fieldset table tfoot,
 [data-theme="light"] .window .content_container .batch_connection_form_container form .batch_files_table_form_fieldset table tfoot tr td {
-  background-color: rgba(255, 253, 250, 0.98) !important;
+  background-color: #ffffff !important;
   border-color: rgba(214, 193, 171, 0.92) !important;
   color: #4f3928 !important;
 }
@@ -6627,7 +6685,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 [data-theme="light"] .window .content_container .batch_connection_form_container .batch_files_dataframe_form .batch_files_dataframe_filter_and_actions .batch_files_dataframe_filter_and_actions_container .batch_files_dataframe_action_inputs .actions_label,
 [data-theme="light"] .window .content_container .batch_connection_form_container form .batch_files_table_form_fieldset table thead,
 [data-theme="light"] .window .content_container .batch_connection_form_container form .batch_files_table_form_fieldset table thead tr th {
-  background-color: #f1e7de !important;
+  background-color: #ffffff !important;
   border-color: rgba(214, 193, 171, 0.92);
   color: #6a4931;
 }

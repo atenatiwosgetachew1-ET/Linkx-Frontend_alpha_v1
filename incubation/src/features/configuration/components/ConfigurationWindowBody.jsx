@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNotifications } from '../../../shared/notifications/useNotifications.js';
 
-export default function ConfigurationWindowBody({ windowItem }) {
+export default function ConfigurationWindowBody() {
   const { notify } = useNotifications();
   const [dbUrl, setDbUrl] = useState('bolt://localhost:7687');
   const [dbUser, setDbUser] = useState('neo4j');

@@ -1,16 +1,33 @@
-import React from 'react';
+import React, { Suspense, lazy, memo } from 'react';
 
-import SourceWindowBody from '../../features/source/components/SourceWindowBody.jsx';
-import SettingsWindowBody from '../../features/settings/components/SettingsWindowBody.jsx';
 import { WORKSPACE_WINDOW_TYPES } from '../state/workspaceTypes.js';
 
-export default function WorkspaceWindowBody({ windowItem }) {
+const SourceWindowBody = lazy(() => import('../../features/source/components/SourceWindowBody.jsx'));
+const SettingsWindowBody = lazy(() => import('../../features/settings/components/SettingsWindowBody.jsx'));
+
+const bodyFallback = <div className="workspace_window_body" aria-busy="true" />;
+
+// Header-only fields: editing them must not re-render the (heavy) window body.
+const HEADER_ONLY_KEYS = new Set(['customTitle', 'updatedAt']);
+
+const areBodyPropsEqual = (prev, next) => {
+  const a = prev.windowItem;
+  const b = next.windowItem;
+  if (a === b) return true;
+  const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+  for (const key of keys) {
+    if (!HEADER_ONLY_KEYS.has(key) && a[key] !== b[key]) return false;
+  }
+  return true;
+};
+
+function WorkspaceWindowBody({ windowItem }) {
   if (windowItem.type === WORKSPACE_WINDOW_TYPES.SOURCE) {
-    return <SourceWindowBody windowItem={windowItem} />;
+    return <Suspense fallback={bodyFallback}><SourceWindowBody windowItem={windowItem} /></Suspense>;
   }
 
   if (windowItem.type === WORKSPACE_WINDOW_TYPES.SETTINGS) {
-    return <SettingsWindowBody windowItem={windowItem} />;
+    return <Suspense fallback={bodyFallback}><SettingsWindowBody windowItem={windowItem} /></Suspense>;
   }
 
   return (
@@ -19,3 +36,5 @@ export default function WorkspaceWindowBody({ windowItem }) {
     </div>
   );
 }
+
+export default memo(WorkspaceWindowBody, areBodyPropsEqual);

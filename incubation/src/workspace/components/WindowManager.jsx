@@ -4,7 +4,7 @@ import WindowDock from './WindowDock.jsx';
 import WorkspaceWindow from './WorkspaceWindow.jsx';
 import { WORKSPACE_ORIENTATIONS } from '../state/workspaceTypes.js';
 
-export default function WindowManager({ workspace }) {
+function WindowManager({ workspace }) {
   if (workspace.windows.length === 0) return null;
 
   if (workspace.orientation === WORKSPACE_ORIENTATIONS.DOCKED) {
@@ -30,3 +30,5 @@ export default function WindowManager({ workspace }) {
     </div>
   );
 }
+
+export default React.memo(WindowManager);

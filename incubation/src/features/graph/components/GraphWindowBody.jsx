@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNotifications } from '../../../shared/notifications/useNotifications.js';
 
-export default function GraphWindowBody({ windowItem }) {
+export default function GraphWindowBody() {
   const { notify } = useNotifications();
   const [performanceMood, setPerformanceMood] = useState('normal');
   const [searchQuery, setSearchQuery] = useState('');

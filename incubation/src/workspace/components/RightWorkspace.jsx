@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import WorkspaceContextTabs, { contextTabs } from './right/WorkspaceContextTabs.jsx';
 import WorkspaceRightCollapsedRail from './right/WorkspaceRightCollapsedRail.jsx';
 import WorkspaceOverviewTab from './right/WorkspaceOverviewTab.jsx';
@@ -25,7 +25,7 @@ function ChevronIcon({ isCollapsed }) {
   );
 }
 
-export default function RightWorkspace({ displayName, workspace, logoSrc, isRightCollapsed = false, onToggleCollapse }) {
+function RightWorkspace({ displayName, workspace, logoSrc, isRightCollapsed = false, onToggleCollapse }) {
   // Independent user-controlled tab state
   const [activeTab, setActiveTab] = useState('overview');
   const activeTabConfig = contextTabs.find((tab) => tab.id === activeTab) || contextTabs[0];
@@ -50,9 +50,10 @@ export default function RightWorkspace({ displayName, workspace, logoSrc, isRigh
   // - If panel is disabled: all tabs disabled
   // - If Graph or Chart window is active: ALL tabs enabled ([])
   // - If Source or other window is active: ONLY 'overview' is enabled, so assistant, info, filter, settings are disabled
-  const disabledTabs = isPanelDisabled
-    ? ['overview', 'assistant', 'info', 'filter', 'settings']
-    : (isGraphOrChartActive ? [] : ['assistant', 'info', 'filter', 'settings']);
+  const disabledTabs = useMemo(() => {
+    if (isPanelDisabled) return ['overview', 'assistant', 'info', 'filter', 'settings'];
+    return isGraphOrChartActive ? [] : ['assistant', 'info', 'filter', 'settings'];
+  }, [isPanelDisabled, isGraphOrChartActive]);
 
   // If active window changes and current activeTab becomes disabled, automatically fall back to 'overview'
   useEffect(() => {
@@ -165,3 +166,5 @@ export default function RightWorkspace({ displayName, workspace, logoSrc, isRigh
     </aside>
   );
 }
+
+export default React.memo(RightWorkspace);

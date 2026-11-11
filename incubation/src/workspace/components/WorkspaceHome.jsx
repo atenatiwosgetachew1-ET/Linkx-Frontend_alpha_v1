@@ -244,7 +244,7 @@ function LockIcon() {
   );
 }
 
-export default function WorkspaceHome({ openWindowsCount = 0, onOpenWindow }) {
+function WorkspaceHome({ openWindowsCount = 0, onOpenWindow }) {
   const [isDragOver, setIsDragOver] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState([]);
   const [selectedSourceMode, setSelectedSourceMode] = useState(null); // Options: null, 'realtime', 'batch', 'tasks', 'reports'
@@ -276,6 +276,7 @@ export default function WorkspaceHome({ openWindowsCount = 0, onOpenWindow }) {
   const workspaceHomeRef = useRef(null);
   const secondaryBoxRef = useRef(null);
   const panelsContainerRef = useRef(null);
+  const quickPanelRef = useRef(null);
 
   const handleToggleScroll = () => {
     setIsScrolledToSecondary((prev) => !prev);
@@ -288,6 +289,10 @@ export default function WorkspaceHome({ openWindowsCount = 0, onOpenWindow }) {
   const handleScrollBottom = () => {
     setIsScrolledToSecondary(true);
   };
+
+  useEffect(() => {
+    if (isAnalyzing && quickPanelRef.current) quickPanelRef.current.scrollTop = 0;
+  }, [isAnalyzing]);
 
   useEffect(() => {
     const container = panelsContainerRef.current;
@@ -317,9 +322,19 @@ export default function WorkspaceHome({ openWindowsCount = 0, onOpenWindow }) {
       }
     };
     updateLabels();
-    const observer = new MutationObserver(updateLabels);
+    let frame = null;
+    const observer = new MutationObserver(() => {
+      if (frame !== null) return;
+      frame = requestAnimationFrame(() => {
+        frame = null;
+        updateLabels();
+      });
+    });
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ['style'] });
-    return () => observer.disconnect();
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
   }, []);
 
   const clearLiveAnalysisTimeouts = () => {
@@ -386,8 +401,6 @@ export default function WorkspaceHome({ openWindowsCount = 0, onOpenWindow }) {
     }
   };
 
-  // Analyze CTA button is active by default for workspace quick analysis
-  const isCanAnalyze = true;
   const isAnalyzeDisabled = isAnalyzing;
 
   const handleStartAnalysis = () => {
@@ -607,7 +620,8 @@ export default function WorkspaceHome({ openWindowsCount = 0, onOpenWindow }) {
         {/* Full-Page Viewport Section 1: Quick Analysis Panel */}
         <div className="workspace_home_viewport_section workspace_home_section_primary">
         <section
-          className={`workspace_home_panel${showExpandedReview || analysisResult ? ' is-expanded' : ''}`}
+          ref={quickPanelRef}
+          className={`workspace_home_panel${showExpandedReview || analysisResult ? ' is-expanded' : ''}${isOverlayVisible ? ' is-overlay-active' : ''}${analysisResult ? ' is-results' : ''}`}
           aria-label="Quick analysis"
         >
         {/* Semi-transparent Full-Panel Cover Overlay during Analysis */}
@@ -675,8 +689,10 @@ export default function WorkspaceHome({ openWindowsCount = 0, onOpenWindow }) {
           </header>
         )}
 
-        {/* Original Panel Layout: Dropzone at top */}
         {!analysisResult && (
+        <div className={`workspace_home_panel_body${showExpandedReview ? ' is-fill' : ''}`}>
+        <div className="workspace_home_panel_inputs">
+        {/* Dropzone at top */}
           <>
             <label
               className={`workspace_home_upload${isDragOver ? ' is-dragover' : ''}${isOverlayVisible ? ' is-disabled' : ''}`}
@@ -755,7 +771,6 @@ export default function WorkspaceHome({ openWindowsCount = 0, onOpenWindow }) {
               ))}
             </div>
           </>
-        )}
 
         {/* Real-time Source Sub-Menu Container */}
         {selectedSourceMode === 'realtime' && !isOverlayVisible && !analysisResult && (
@@ -884,7 +899,9 @@ export default function WorkspaceHome({ openWindowsCount = 0, onOpenWindow }) {
           </div>
         )}
 
-        {/* Pre-Analysis Review Section */}
+        </div>
+
+        {/* Pre-Analysis Review Section (right column when expanded) */}
         {showExpandedReview && !isOverlayVisible && !analysisResult && (
           <div className="workspace_home_review_section">
             <div className="workspace_home_configs_review">
@@ -918,6 +935,8 @@ export default function WorkspaceHome({ openWindowsCount = 0, onOpenWindow }) {
             </div>
           </div>
         )}
+        </div>
+        )}
 
         {/* Completed Analysis Findings Container */}
         {analysisResult && !isOverlayVisible && (
@@ -928,7 +947,7 @@ export default function WorkspaceHome({ openWindowsCount = 0, onOpenWindow }) {
             </div>
 
             {/* Status Section */}
-            <div className="workspace_home_findings_section">
+            <div className="workspace_home_findings_section is-status">
               <span className="workspace_home_findings_subtitle">Status</span>
               <div className={`workspace_home_status_tag is-${analysisResult.statusType}`}>
                 <span className="workspace_home_status_dot" />
@@ -937,7 +956,7 @@ export default function WorkspaceHome({ openWindowsCount = 0, onOpenWindow }) {
             </div>
 
             {/* Anomalies Detected Section */}
-            <div className="workspace_home_findings_section">
+            <div className="workspace_home_findings_section is-anomalies">
               <span className="workspace_home_findings_subtitle">Anomalies detected</span>
               <div className="workspace_home_anomalies_list">
                 {analysisResult.anomalies.map((item) => (
@@ -949,7 +968,7 @@ export default function WorkspaceHome({ openWindowsCount = 0, onOpenWindow }) {
             </div>
 
             {/* GDS Metric Values Subtitle & Grid */}
-            <div className="workspace_home_findings_section">
+            <div className="workspace_home_findings_section is-gds">
               <span className="workspace_home_findings_subtitle">GDS metric values</span>
               <div className="workspace_home_gds_grid">
                 {analysisResult.gdsMetrics.map((m) => (
@@ -962,7 +981,7 @@ export default function WorkspaceHome({ openWindowsCount = 0, onOpenWindow }) {
             </div>
 
             {/* Highest-Influencers Subtitle & Node Tooltip Buttons */}
-            <div className="workspace_home_findings_section">
+            <div className="workspace_home_findings_section is-influencers">
               <span className="workspace_home_findings_subtitle">Highest-Influencers</span>
               <div className="workspace_home_influencers_list">
                 {analysisResult.influencers.map((inf) => (
@@ -1137,3 +1156,5 @@ export default function WorkspaceHome({ openWindowsCount = 0, onOpenWindow }) {
     </div>
   );
 }
+
+export default React.memo(WorkspaceHome);

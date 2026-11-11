@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { useTheme } from '../shared/theme/ThemeContext.jsx';
 import { useBackgroundAnimations } from '../utils/backgroundAnimations.js';
 
 const workspaceBackgroundVideo = import.meta.env.BASE_URL + 'site_videos/background.mp4';
@@ -17,7 +16,6 @@ export default function WorkspaceLockOverlay({
 }) {
   const displayName = user?.display_name || user?.username || user?.client_id || 'Analyst';
   const avatarLetter = displayName.trim().charAt(0).toUpperCase() || 'A';
-  const { theme } = useTheme();
   const { areBackgroundAnimationsEnabled } = useBackgroundAnimations();
   const [videoSrc, setVideoSrc] = useState(workspaceBackgroundVideo);
   const [isVideoUnavailable, setIsVideoUnavailable] = useState(false);

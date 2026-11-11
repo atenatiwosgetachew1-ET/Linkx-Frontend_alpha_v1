@@ -1,0 +1,406 @@
+/* NBE Daylight — default theme (also the fallback for every theme).
+ *
+ * Palette taken from the official National Bank of Ethiopia site (nbe.gov.et,
+ * Elementor/Astra global colors):
+ *   Navy        #131E2A  primary text, headings, dark sections
+ *   Navy 2      #202F3F  header menu / footer background
+ *   Gold        #AE874F  links, hover/active states, dividers, buttons
+ *   Bronze      #7F5523  gradient start of primary buttons
+ *   Light gold  #FCC676  (site uses it sparingly on dark sections; not used here —
+ *                         gold #AE874F is the single accent for this theme)
+ *   Teal        #1C6F8A  secondary accent
+ *   Ice blue    #E8EFF7  card borders / light surfaces
+ *   Greys       #54595F secondary text, #7A7A7A body text, #A2A2A2 disabled, #EFEFEF surface
+ * Official CTA: linear-gradient(250deg, #7F5523, #AE874F).
+ */
+:root, [data-theme="nbe-daylight"] {
+  color-scheme: light;
+  --accent: #AE874F;
+  --accent-strong: #AE874F;
+  --app-bg: #F4F7FA;
+  --app-text: #131E2A;
+  --disabled-bg: #EFEFEF;
+  --disabled-border: #E8EFF7;
+  --input-bg: #FFFFFF;
+  --input-border: #AE874F;
+  --muted-text: #54595F;
+  --on-scene-text: #131E2A;
+  --on-scene-text-muted: #54595F;
+  --on-scene-text-subtle: #7A7A7A;
+  --panel-bg: rgba(255, 255, 255, 0.97);
+  --panel-border: #DCE4EE;
+  --panel-shadow: rgba(19, 30, 42, 0.10);
+  --primary-action-bg: #131E2A;
+  --primary-action-bg-active: #AE874F;
+  --primary-action-bg-hover: #202F3F;
+  --primary-action-border: #AE874F;
+  --primary-action-text: #AE874F;
+  --scene-control-hover-bg: rgba(174, 135, 79, 0.12);
+  --scene-divider: rgba(174, 135, 79, 0.45);
+  --scene-drag-bg: radial-gradient(rgba(174, 135, 79, 0.18), rgba(232, 239, 247, 0.6));
+  --scene-drag-border: #AE874F;
+  --window-bg: rgba(255, 255, 255, 0.97);
+  --window-chrome-bg: #131E2A;
+  --window-glass-border: rgba(174, 135, 79, 0.55);
+  --window-page-bg: rgba(244, 247, 250, 0.9);
+  --workspace-bg: #F4F7FA;
+  --workspace-scene-bg: #F4F7FA;
+  --workspace-scene-overlay: linear-gradient(180deg, #FFFFFF 0%, #F4F7FA 55%, #E8EFF7 100%);
+  --linkx-accent: #AE874F;
+  --linkx-accent-strong: #AE874F;
+  --linkx-bg-root: #F4F7FA;
+  --linkx-button-bg: #131E2A;
+  --linkx-button-border: #AE874F;
+  --linkx-button-hover-bg: #202F3F;
+  --linkx-button-text: #AE874F;
+  --linkx-card-bg: #FFFFFF;
+  --linkx-card-border: #E8EFF7;
+  --linkx-card-hover-border: #AE874F;
+  --linkx-card-surface-bg: rgba(255, 255, 255, 0.97);
+  --linkx-input-bg: #FFFFFF;
+  --linkx-input-border: #D5DEE8;
+  --linkx-input-placeholder: #A2A2A2;
+  --linkx-input-text: #131E2A;
+  --linkx-launcher-bg: rgba(255, 255, 255, 0.97);
+  --linkx-launcher-border: #DCE4EE;
+  --linkx-launcher-item-active: #131E2A;
+  --linkx-launcher-item-bg: rgba(232, 239, 247, 0.6);
+  --linkx-launcher-item-hover: rgba(174, 135, 79, 0.12);
+  --linkx-shell-bg: #F4F7FA;
+  --linkx-tab-active-bg: #131E2A;
+  --linkx-tab-active-border: #AE874F;
+  --linkx-tab-active-text: #AE874F;
+  --linkx-tab-bg: rgba(244, 247, 250, 0.95);
+  --linkx-tab-border: #DCE4EE;
+  --linkx-text-muted: #7A7A7A;
+  --linkx-text-primary: #131E2A;
+  --linkx-text-secondary: #54595F;
+  --linkx-text-subtle: rgba(84, 89, 95, 0.8);
+  --linkx-window-bg: rgba(250, 251, 253, 0.97);
+  --linkx-window-body-bg: rgba(255, 255, 255, 0.97);
+  --linkx-window-border: #D5DEE8;
+  --linkx-window-border-active: #AE874F;
+  --linkx-window-header-active-bg: #131E2A;
+  --linkx-window-header-bg: #202F3F;
+  --linkx-window-header-drag-bg: #2B3D52;
+  --linkx-window-shadow: 0 14px 40px rgba(19, 30, 42, 0.14);
+  --linkx-workspace-bg: #F4F7FA;
+  --linkx-workspace-overlay: linear-gradient(180deg, #FFFFFF 0%, #F4F7FA 55%, #E8EFF7 100%);
+}
+
+/* Daylight-only component overrides: brand values for tokens that hold literal
+   colors in tokens.css (other themes keep their own values). */
+[data-theme="nbe-daylight"] {
+  --linkx-window-bg-active: #FFFFFF;
+
+  /* Text on navy surfaces */
+  --window-header-text: #FFFFFF;
+  --linkx-cta-text: #FFFFFF;
+  --dataframe-manage-rules-btn-text: #FFFFFF;
+  --storage-connect-btn-text: #FFFFFF;
+
+  /* Neutral greys → NBE greys */
+  --window-subtitle-text: #7A7A7A;
+  --window-action-btn-icon: #7A7A7A;
+  --session-chip-label-color: #7A7A7A;
+  --session-chip-btn-icon: #7A7A7A;
+  --mode-grid-btn-icon: #7A7A7A;
+  --connection-grid-btn-icon: #7A7A7A;
+  --connection-grid-btn-badge-color: #7A7A7A;
+  --config-preview-btn-icon: #7A7A7A;
+  --storage-parent-search-placeholder: #A2A2A2;
+  --right-collapse-btn-icon: #7A7A7A;
+  --right-tab-text: #54595F;
+  --right-chat-user-msg-time: #7A7A7A;
+  --right-chat-assistant-msg-time: #7A7A7A;
+  --right-chat-input-placeholder: #A2A2A2;
+  --right-chat-word-counter-color: #7A7A7A;
+  --step-label-desc-color: #54595F;
+  --mode-grid-btn-desc-color: #54595F;
+  --config-preview-btn-desc-color: #54595F;
+  --window-card-subtext-color: #54595F;
+  --central-secondary-box-text: #54595F;
+  --right-form-label-color: #54595F;
+  --right-theme-card-desc-color: #54595F;
+  --central-drop-modal-body-color: #54595F;
+  --central-drop-modal-cancel-text: #54595F;
+  --mode-grid-btn-disabled-icon: #A2A2A2;
+  --mode-grid-btn-disabled-title-color: #A2A2A2;
+  --mode-grid-btn-disabled-desc-color: #A2A2A2;
+  --connection-grid-btn-disabled-icon: #A2A2A2;
+  --connection-grid-btn-disabled-title-color: #A2A2A2;
+  --connection-grid-btn-disabled-badge-color: #A2A2A2;
+  --config-preview-btn-disabled-icon: #A2A2A2;
+  --config-preview-btn-disabled-title-color: #A2A2A2;
+  --config-preview-btn-disabled-desc-color: #A2A2A2;
+  --window-footer-btn-disabled-text: #A2A2A2;
+  --right-chat-send-btn-disabled-icon: #A2A2A2;
+
+  /* Selected / pressed states → official gold */
+  --mode-grid-btn-pressed-border: #AE874F;
+  --connection-grid-btn-pressed-border: #AE874F;
+  --config-preview-btn-pressed-border: #AE874F;
+  --window-footer-btn-pressed-border: #AE874F;
+  --dataframe-action-btn-border: #D5DEE8;
+  --dataframe-action-btn-icon-color: #AE874F;
+  --dataframe-action-btn-selected-bg: #202F3F;
+  --dataframe-action-btn-selected-border: #AE874F;
+  --storage-type-btn-border: #D5DEE8;
+  --storage-type-btn-icon-color: #AE874F;
+  --storage-type-btn-selected-bg: #202F3F;
+  --storage-type-btn-selected-border: #AE874F;
+  --storage-search-btn-icon-color: #AE874F;
+  --central-footer-round-btn-icon-color: #AE874F;
+  --source-choose-step-label-border: #DCE4EE;
+  --central-overlay-top: #E8EFF7;
+  --central-overlay-bottom: #E8EFF7;
+  --stream-log-bg: #131E2A;
+  --central-graph-node: #1C6F8A;
+
+  /* Official CTA gradient (bronze → gold, 250deg) */
+  --central-analyze-btn-gradient-angle: 250deg;
+  --central-analyze-btn-gradient-top: #7F5523;
+  --central-analyze-btn-gradient-bottom: #AE874F;
+  --central-analyze-btn-border: #AE874F;
+  --central-analyze-btn-text: #FFFFFF;
+  --central-analyze-btn-hover-text: #FFFFFF;
+  --central-analyze-btn-hover-bg: #AE874F;
+  --central-analyzing-active-gradient-angle: 250deg;
+  --central-analyzing-active-gradient-top: #AE874F;
+  --central-analyzing-active-gradient-bottom: #7F5523;
+  --central-analyzing-active-border-color: #AE874F;
+  --central-analyzing-active-text-color: #FFFFFF;
+  --step-label-number-bg: linear-gradient(250deg, #7F5523 0%, #AE874F 100%);
+  --step-label-number-border: #AE874F;
+  --step-label-number-text: #FFFFFF;
+  --timeline-step-circle-fulfilled-bg-angle: 250deg;
+  --timeline-step-circle-fulfilled-bg-top: #7F5523;
+  --timeline-step-circle-fulfilled-bg-bottom: #AE874F;
+  --timeline-step-circle-fulfilled-border: #AE874F;
+}
+
+/* Quick analysis panel selection controls (source radios + stream/batch
+   source cards): the SELECTED item gets a navy surface, gold icon/radio and
+   white text. Idle, hover and disabled states keep the light theme styles. */
+[data-theme="nbe-daylight"] {
+  --central-option-active-bg: #131E2A;
+  --central-option-active-border: #AE874F;
+  --central-option-active-text: #FFFFFF;
+  --central-option-active-radio-color: #AE874F;
+
+  --central-realtime-card-active-bg: #131E2A;
+  --central-realtime-card-active-border: #AE874F;
+  --central-realtime-card-active-title-color: #FFFFFF;
+  --central-realtime-card-active-body-color: rgba(255, 255, 255, 0.8);
+  --central-realtime-card-icon-active-bg: rgba(174, 135, 79, 0.22);
+  --central-realtime-card-icon-active-color: #AE874F;
+
+  --central-realtime-card-body-color: #54595F;
+  --central-realtime-card-disabled-text: #A2A2A2;
+  --central-realtime-card-disabled-icon-color: #A2A2A2;
+}
+
+/* Right workspace (analyst panel): navy header strip + navy collapsed rail
+   (mirrors the left sidebar), white cards with ice borders, and navy/gold
+   selected states (mirrors the quick analysis panel radios/cards). */
+[data-theme="nbe-daylight"] {
+  --right-workspace-border: #DCE4EE;
+  --right-workspace-bg-solid: #FFFFFF;
+
+  /* Tab strip */
+  --right-tabs-wrapper-bg: #131E2A;
+  --right-tabs-bg: transparent;
+  --right-tabs-border: rgba(255, 255, 255, 0.08);
+  --right-tab-text: rgba(255, 255, 255, 0.72);
+  --right-tab-hover-bg: rgba(255, 255, 255, 0.10);
+  --right-tab-hover-text: #FFFFFF;
+  --right-tab-active-bg: rgba(174, 135, 79, 0.22);
+  --right-tab-active-text: #FFFFFF;
+  --right-tab-active-border: #AE874F;
+  --right-collapse-btn-bg: transparent;
+  --right-collapse-btn-border: rgba(255, 255, 255, 0.18);
+  --right-collapse-btn-icon: rgba(255, 255, 255, 0.72);
+  --right-collapse-btn-hover-bg: rgba(255, 255, 255, 0.10);
+  --right-collapse-btn-hover-border: rgba(255, 255, 255, 0.28);
+  --right-collapse-btn-hover-icon: #FFFFFF;
+
+  /* Collapsed rail */
+  --right-collapsed-bg: #131E2A;
+  --right-collapsed-border: #202F3F;
+  --right-collapsed-btn-icon: rgba(255, 255, 255, 0.82);
+  --right-collapsed-btn-hover-bg: rgba(255, 255, 255, 0.10);
+  --right-collapsed-btn-hover-border: rgba(255, 255, 255, 0.28);
+  --right-collapsed-btn-hover-icon: #FFFFFF;
+  --right-collapsed-btn-active-bg: rgba(174, 135, 79, 0.22);
+  --right-collapsed-btn-active-border: #AE874F;
+  --right-collapsed-btn-active-icon: #FFFFFF;
+
+  /* Section cards */
+  --right-card-bg: #FFFFFF;
+  --right-card-bg-opacity: 1;
+  --right-card-border: #DCE4EE;
+  --right-card-title-color: #131E2A;
+  --right-section-title-color: #131E2A;
+  --right-card-toggle-btn-color: #AE874F;
+  --right-card-toggle-btn-hover-bg: rgba(174, 135, 79, 0.12);
+  --right-card-toggle-btn-hover-color: #7F5523;
+  --right-label-color: #7A7A7A;
+  --right-value-color: #131E2A;
+  --right-empty-text-color: #7A7A7A;
+
+  /* Forms */
+  --right-filter-input-bg: #FFFFFF;
+  --right-filter-input-border: #D5DEE8;
+  --right-filter-btn-bg: #131E2A;
+  --right-filter-btn-text: #FFFFFF;
+  --right-theme-option-border: #DCE4EE;
+  --right-theme-option-active-bg: rgba(174, 135, 79, 0.12);
+  --right-theme-option-active-border: #AE874F;
+
+  /* Disabled */
+  --right-disabled-bg: #F4F7FA;
+  --right-disabled-border: #DCE4EE;
+  --right-disabled-icon-color: #A2A2A2;
+
+  /* Assistant + chat */
+  --right-chat-bg: #FFFFFF;
+  --right-chat-border: #DCE4EE;
+  --right-assistant-action-btn-color: #AE874F;
+  --right-assistant-action-btn-hover-bg: rgba(174, 135, 79, 0.12);
+  --right-assistant-action-btn-hover-color: #7F5523;
+  --right-chat-avatar-bg: #131E2A;
+  --right-chat-avatar-text: #AE874F;
+  --right-chat-user-msg-bg: #131E2A;
+  --right-chat-user-msg-border: #131E2A;
+  --right-chat-user-msg-text: #FFFFFF;
+  --right-chat-user-msg-time: rgba(255, 255, 255, 0.62);
+  --right-chat-assistant-msg-bg: #F4F7FA;
+  --right-chat-assistant-msg-border: #DCE4EE;
+  --right-chat-assistant-msg-text: #131E2A;
+  --right-chat-thinking-bg: #F4F7FA;
+  --right-chat-thinking-border: #DCE4EE;
+  --right-chat-thinking-dot-color: #AE874F;
+  --right-chat-prompt-bg: #FFFFFF;
+  --right-chat-prompt-border: #DCE4EE;
+  --right-chat-prompt-text: #54595F;
+  --right-chat-prompt-hover-bg: rgba(174, 135, 79, 0.10);
+  --right-chat-prompt-hover-border: #AE874F;
+  --right-chat-prompt-hover-text: #131E2A;
+  --right-chat-bubble-action-color: #AE874F;
+  --right-chat-bubble-action-hover-bg: rgba(174, 135, 79, 0.14);
+  --right-chat-bubble-action-hover-color: #7F5523;
+  --right-chat-input-bg: #FFFFFF;
+  --right-chat-input-focus-bg: #FFFFFF;
+  --right-chat-input-border: #D5DEE8;
+  --right-chat-input-text: #131E2A;
+  --right-chat-input-focus-border: #AE874F;
+  --right-chat-input-focus-ring: rgba(174, 135, 79, 0.20);
+  --right-chat-send-btn-bg: #131E2A;
+  --right-chat-send-btn-border: #131E2A;
+  --right-chat-send-btn-icon: #AE874F;
+  --right-chat-send-btn-hover-bg: #202F3F;
+  --right-chat-send-btn-hover-border: #AE874F;
+  --right-chat-send-btn-hover-icon: #FFFFFF;
+  --right-chat-send-btn-disabled-bg: #EFEFEF;
+  --right-chat-send-btn-disabled-border: #DCE4EE;
+  --right-chat-scroll-btn-bg: #FFFFFF;
+  --right-chat-scroll-btn-border: #DCE4EE;
+  --right-chat-scroll-btn-color: #131E2A;
+  --right-chat-scroll-btn-hover-bg: #131E2A;
+  --right-chat-scroll-btn-hover-border: #131E2A;
+  --right-chat-scroll-btn-hover-color: #FFFFFF;
+}
+
+/* Generic text tokens the disabled notice / context buttons read (undefined
+   globally, so they fell back to slate greys). */
+[data-theme="nbe-daylight"] .workspace_zone_right {
+  --text-primary: #131E2A;
+  --text-heading: #131E2A;
+  --text-body: #54595F;
+  --text-muted: #7A7A7A;
+}
+
+/* Collapsed rail: navy like the left sidebar (the zone background normally
+   comes from the expanded gradient). */
+[data-theme="nbe-daylight"] .workspace_zone_right.is-collapsed {
+  --right-workspace-bg: #131E2A;
+  --right-workspace-bg-solid: #131E2A;
+  --right-disabled-bg: #131E2A;
+  --right-disabled-border: #202F3F;
+  --right-disabled-icon-color: rgba(255, 255, 255, 0.4);
+}
+
+[data-theme="nbe-daylight"] .workspace_right_tabs_wrapper {
+  --right-disabled-icon-color: rgba(255, 255, 255, 0.32);
+  border-radius: 6px;
+}
+
+[data-theme="nbe-daylight"] .workspace_context_tabs button.is-active {
+  box-shadow: inset 0 -2px 0 #AE874F !important;
+}
+
+[data-theme="nbe-daylight"] .workspace_context_tabs button.is-active .workspace_tab_icon {
+  color: #AE874F;
+}
+
+[data-theme="nbe-daylight"] .workspace_context_button {
+  border-color: #D5DEE8;
+  background: #FFFFFF;
+  color: #131E2A;
+}
+
+[data-theme="nbe-daylight"] .workspace_context_button:hover:not(:disabled) {
+  border-color: #AE874F;
+  background: rgba(174, 135, 79, 0.10);
+}
+
+[data-theme="nbe-daylight"] .workspace_context_button.is-active,
+[data-theme="nbe-daylight"] .workspace_context_button.is-active:hover:not(:disabled) {
+  border-color: #AE874F;
+  background: #131E2A;
+  color: #FFFFFF;
+}
+
+[data-theme="nbe-daylight"] .workspace_context_button.is-danger {
+  border-color: color-mix(in srgb, #e5484d 45%, transparent);
+  background: color-mix(in srgb, #e5484d 10%, #FFFFFF);
+}
+
+[data-theme="nbe-daylight"] .workspace_context_form_stack button {
+  border-color: #131E2A;
+}
+
+[data-theme="nbe-daylight"] .workspace_context_form_stack button:hover:not(:disabled) {
+  border-color: #AE874F;
+  background: #202F3F;
+}
+
+[data-theme="nbe-daylight"] .workspace_assistant_summary_key_finding {
+  border: 1px solid #DCE4EE;
+  border-left: 3px solid #AE874F;
+  background: #F4F7FA;
+}
+
+[data-theme="nbe-daylight"] .workspace_panel_disabled_icon {
+  background: #EFEFEF;
+}
+
+/* Left launcher sidebar: official NBE navy background with white text/icons.
+   Button borders/backgrounds keep the theme defaults. Scoped to the sidebar so
+   other components sharing --launcher-* tokens keep the light palette; text
+   tokens are set explicitly because derived tokens resolve at :root. */
+[data-theme="nbe-daylight"] .workspace_zone_left {
+  --linkx-launcher-bg: #131E2A;
+  --linkx-launcher-border: #202F3F;
+  --launcher-expanded-shadow: rgba(19, 30, 42, 0.28);
+  --launcher-text: #FFFFFF;
+  --launcher-text-secondary: #FFFFFF;
+  --launcher-hover-bg: rgba(255, 255, 255, 0.10);
+  --launcher-hover-border: rgba(255, 255, 255, 0.28);
+  --launcher-hover-text: #FFFFFF;
+  --launcher-active-text: #FFFFFF;
+  --launcher-focus-ring: rgba(174, 135, 79, 0.65);
+  --launcher-shell-bg: #131E2A;
+  --launcher-brand-logo-bg: #F4F7FA;
+  --launcher-brand-logo-ring: 0 0 0 1px #AE874F;
+}

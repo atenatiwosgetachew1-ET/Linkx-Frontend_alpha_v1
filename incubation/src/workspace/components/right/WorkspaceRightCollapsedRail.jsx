@@ -1,7 +1,7 @@
 import React from 'react';
 import { contextTabs } from './WorkspaceContextTabs.jsx';
 
-export default function WorkspaceRightCollapsedRail({ activeTab, onSelectTab, onExpand, isPanelDisabled = false, disabledTabs = [] }) {
+export default function WorkspaceRightCollapsedRail({ activeTab, onSelectTab, isPanelDisabled = false, disabledTabs = [] }) {
   return (
     <nav className={`workspace_right_collapsed_rail${isPanelDisabled ? ' is-disabled' : ''}`} aria-label="Right workspace navigation rail">
       {/* Main Tab Navigation Icons */}

@@ -28,13 +28,14 @@ export default function WindowDock({ workspace }) {
   const [dropTargetWindowId, setDropTargetWindowId] = useState(null);
   const tabsRef = useRef(null);
   const activeWindow = workspace.activeWindow || workspace.windows.at(-1);
+  const activeWindowId = activeWindow?.id;
 
   useLayoutEffect(() => {
-    if (!activeWindow) return;
+    if (!activeWindowId) return;
     const tabsElement = tabsRef.current;
     if (!tabsElement) return;
 
-    const activeTabElement = tabsElement.querySelector('[data-window-tab-id="' + activeWindow.id + '"]');
+    const activeTabElement = tabsElement.querySelector('[data-window-tab-id="' + activeWindowId + '"]');
     if (!activeTabElement) return;
 
     activeTabElement.scrollIntoView({
@@ -42,7 +43,7 @@ export default function WindowDock({ workspace }) {
       block: 'nearest',
       inline: 'nearest',
     });
-  }, [activeWindow?.id, workspace.windows.length]);
+  }, [activeWindowId, workspace.windows.length]);
 
   if (!activeWindow) return null;
 

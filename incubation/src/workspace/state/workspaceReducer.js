@@ -145,7 +145,8 @@ export function workspaceReducer(state, action) {
 
     case WORKSPACE_ACTIONS.FOCUS_WINDOW: {
       const windowId = action.payload?.id;
-      if (!windowId || !state.windows.some((windowItem) => windowItem.id === windowId)) return state;
+      if (!windowId || state.activeWindowId === windowId) return state;
+      if (!state.windows.some((windowItem) => windowItem.id === windowId)) return state;
       return {
         ...state,
         activeWindowId: windowId,
@@ -225,9 +226,11 @@ export function workspaceReducer(state, action) {
     }
 
     case WORKSPACE_ACTIONS.SET_CONTEXT_TAB: {
+      const contextTab = action.payload?.tab || WORKSPACE_CONTEXT_TABS.OVERVIEW;
+      if (state.contextTab === contextTab) return state;
       return {
         ...state,
-        contextTab: action.payload?.tab || WORKSPACE_CONTEXT_TABS.OVERVIEW,
+        contextTab,
       };
     }
 

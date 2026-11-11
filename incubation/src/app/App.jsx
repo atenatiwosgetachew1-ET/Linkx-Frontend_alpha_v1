@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { Suspense, lazy, useEffect, useState } from 'react';
 
+import '../styles/themes/index.css';
 import '../main.css';
 import { AuthProvider } from '../auth/AuthContext.jsx';
 import { useAuth } from '../auth/useAuth.js';
@@ -8,12 +9,25 @@ import WorkspaceFrame from '../workspace/components/WorkspaceFrame.jsx';
 import { WorkspaceProvider } from '../workspace/state/WorkspaceContext.jsx';
 import { extractMainSessionConfiguration, initializeMainSession } from '../services/sessionApi.js';
 import { NotificationProvider } from '../shared/notifications/NotificationContext.jsx';
-import { ThemeProvider } from '../shared/theme/ThemeContext.jsx';
-import VisualElementPicker from '../shared/theme/VisualElementPicker.jsx';
+import { ThemeProvider, useTheme } from '../shared/theme/ThemeContext.jsx';
 import { appConfig } from './config.js';
+import TooltipLayer from '../shared/components/TooltipLayer.jsx';
 
 import WorkspaceLockOverlay from '../auth/WorkspaceLockOverlay.jsx';
 import { useIdleTimeout } from '../auth/useIdleTimeout.js';
+
+const VisualElementPicker = lazy(() => import('../shared/theme/VisualElementPicker.jsx'));
+
+// Only load and mount the inspector while it is active.
+function ElementPickerGate() {
+  const { inspectorActive } = useTheme();
+  if (!inspectorActive) return null;
+  return (
+    <Suspense fallback={null}>
+      <VisualElementPicker />
+    </Suspense>
+  );
+}
 
 const loginLogo = import.meta.env.BASE_URL + 'site_images/Linkx square Icon (256x256).png';
 
@@ -94,6 +108,10 @@ function IncubationShell() {
 function IncubationApp() {
   const { isAuthReady, isAuthenticated, isSsoAuthenticating, ssoError, login } = useAuth();
 
+  if (appConfig.authDisabled) {
+    return <IncubationShell />;
+  }
+
   if (!isAuthReady) {
     return (
       <main className="linkx_login_shell">
@@ -128,7 +146,8 @@ export default function App() {
           <IncubationApp />
         </NotificationProvider>
       </AuthProvider>
-      <VisualElementPicker />
+      <ElementPickerGate />
+      <TooltipLayer />
     </ThemeProvider>
   );
 }

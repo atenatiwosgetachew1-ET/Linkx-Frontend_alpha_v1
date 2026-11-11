@@ -14,6 +14,9 @@ export function useIdleTimeout({
 }) {
   const lastActivityRef = useRef(Date.now());
   const hasWarnedRef = useRef(false);
+  // Keep latest callbacks without re-subscribing listeners on every render.
+  const callbacksRef = useRef({ onWarn, onLock, onTimeout });
+  callbacksRef.current = { onWarn, onLock, onTimeout };
 
   useEffect(() => {
     if (!enabled) return undefined;
@@ -36,14 +39,14 @@ export function useIdleTimeout({
       if (!isLocked) {
         if (elapsed >= warningMs && !hasWarnedRef.current) {
           hasWarnedRef.current = true;
-          onWarn?.();
+          callbacksRef.current.onWarn?.();
         }
         if (elapsed >= lockMs) {
-          onLock?.();
+          callbacksRef.current.onLock?.();
         }
       } else {
         if (elapsed >= timeoutMs) {
-          onTimeout?.();
+          callbacksRef.current.onTimeout?.();
         }
       }
     }, 5000);
@@ -54,5 +57,5 @@ export function useIdleTimeout({
       });
       clearInterval(intervalId);
     };
-  }, [enabled, isLocked, warningMs, lockMs, timeoutMs, onWarn, onLock, onTimeout]);
+  }, [enabled, isLocked, warningMs, lockMs, timeoutMs]);
 }
