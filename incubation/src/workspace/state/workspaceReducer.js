@@ -4,6 +4,7 @@ import {
   WORKSPACE_ORIENTATIONS,
   WORKSPACE_WINDOW_LABELS,
   WORKSPACE_WINDOW_TYPES,
+  getWindowLimitBlock,
 } from './workspaceTypes.js';
 
 export const initialWorkspaceState = Object.freeze({
@@ -23,57 +24,11 @@ const MULTI_INSTANCE_WINDOW_TYPES = new Set([
 
 const buildWindowId = (type, index) => `${type}-${index}`;
 
+// The Source window owns its defaults (features/source/lib/sourceModel.js
+// defaultSourceState, applied by mergeSourceState); only the initial mode and
+// any caller-provided state are stored here.
 const createInitialSourceState = (metadata = {}) => ({
   mode: 'choose',
-  batch: {
-    step: 'connect',
-    sourceAddressType: 'broker',
-    brokerAddress: '',
-    topic: '',
-    storageAddress: '',
-    sourceStatus: 'idle',
-    sourceMessage: 'Not connected.',
-    toolStatus: 'idle',
-    toolMessage: 'Not connected.',
-    selectedFiles: [],
-    searchQuery: '',
-    searchDate: '',
-    searchMode: 'raw',
-    dataframeAction: '',
-    sourceColumn: '',
-    targetColumn: '',
-    relationship: '',
-    rule: '',
-    toolUrl: '',
-    toolUsername: '',
-    toolPassword: '',
-    toolDatabase: '',
-    streamStatus: 'idle',
-  },
-  realtime: {
-    step: 'connect',
-    sourceAddressType: 'broker',
-    brokerAddress: '',
-    topic: '',
-    sourceStatus: 'idle',
-    sourceMessage: 'Not connected.',
-    toolStatus: 'idle',
-    toolMessage: 'Not connected.',
-    dataframeAction: '',
-    sourceColumn: '',
-    targetColumn: '',
-    relationship: '',
-    rule: '',
-    toolUrl: '',
-    toolUsername: '',
-    toolPassword: '',
-    toolDatabase: '',
-    streamStatus: 'idle',
-  },
-  upload: {
-    selectedFiles: [],
-    status: 'idle',
-  },
   ...metadata.sourceState,
 });
 
@@ -115,6 +70,15 @@ export function workspaceReducer(state, action) {
           activeWindowId: existingWindow.id,
           contextTab: action.payload?.contextTab || state.contextTab,
         };
+      }
+
+      // Cap reached: focus the most recent window of that type (or of its
+      // limit group, e.g. a Chart when Graph+Chart is full) instead.
+      const limitBlock = getWindowLimitBlock(state.windows, windowType);
+      if (limitBlock) {
+        const latestOfType = state.windows.filter((windowItem) => windowItem.type === windowType).at(-1)
+          || state.windows.filter((windowItem) => limitBlock.types.includes(windowItem.type)).at(-1);
+        return latestOfType ? { ...state, activeWindowId: latestOfType.id } : state;
       }
 
       const instanceNumber = state.windows.filter((windowItem) => windowItem.type === windowType).length + 1;

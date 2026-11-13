@@ -1,13 +1,21 @@
-import React, { Suspense, lazy, useEffect, useState } from 'react';
+import React, { Suspense, lazy, useState } from 'react';
 
 import '../styles/themes/index.css';
 import '../main.css';
+// Feature styles split out of main.css (same cascade order as before).
+import '../styles/features/loader.css';
+import '../styles/features/configuration.css';
+import '../styles/features/settings.css';
+import '../styles/features/source.css';
+import '../styles/features/tasks.css';
+import '../styles/features/window-controls.css';
 import { AuthProvider } from '../auth/AuthContext.jsx';
 import { useAuth } from '../auth/useAuth.js';
 import LoginPage from '../auth/LoginPage.jsx';
 import WorkspaceFrame from '../workspace/components/WorkspaceFrame.jsx';
 import { WorkspaceProvider } from '../workspace/state/WorkspaceContext.jsx';
-import { extractMainSessionConfiguration, initializeMainSession } from '../services/sessionApi.js';
+import { SessionProvider } from '../shared/session/SessionProvider.jsx';
+import { useSession } from '../shared/session/useSession.js';
 import { NotificationProvider } from '../shared/notifications/NotificationContext.jsx';
 import { ThemeProvider, useTheme } from '../shared/theme/ThemeContext.jsx';
 import { appConfig } from './config.js';
@@ -15,6 +23,7 @@ import TooltipLayer from '../shared/components/TooltipLayer.jsx';
 
 import WorkspaceLockOverlay from '../auth/WorkspaceLockOverlay.jsx';
 import { useIdleTimeout } from '../auth/useIdleTimeout.js';
+import { DEFAULT_IDLE_SETTINGS } from '../shared/session/idlePolicy.js';
 
 const VisualElementPicker = lazy(() => import('../shared/theme/VisualElementPicker.jsx'));
 
@@ -33,17 +42,16 @@ const loginLogo = import.meta.env.BASE_URL + 'site_images/Linkx square Icon (256
 
 function IncubationShell() {
   const { user, token, logout } = useAuth();
-  const [mainSessionId, setMainSessionId] = useState(() => localStorage.getItem('session') || sessionStorage.getItem('session') || '');
-  const [sessionConfiguration, setSessionConfiguration] = useState({});
-  const [sessionError, setSessionError] = useState('');
   const [isWorkspaceLocked, setIsWorkspaceLocked] = useState(false);
   const [isUnlocking, setIsUnlocking] = useState(false);
+  // Follows the backend session policy once SessionProvider has loaded it.
+  const [idleSettings, setIdleSettings] = useState(DEFAULT_IDLE_SETTINGS);
 
   useIdleTimeout({
-    enabled: Boolean(token),
-    warningMs: 12 * 60 * 1000,
-    lockMs: 15 * 60 * 1000,
-    timeoutMs: 30 * 60 * 1000,
+    enabled: Boolean(token) && idleSettings.enabled,
+    warningMs: idleSettings.warningMs,
+    lockMs: idleSettings.lockMs,
+    timeoutMs: idleSettings.timeoutMs,
     isLocked: isWorkspaceLocked,
     onWarn: () => {},
     onLock: () => setIsWorkspaceLocked(true),
@@ -58,51 +66,46 @@ function IncubationShell() {
     }, 350);
   };
 
-  useEffect(() => {
-    let cancelled = false;
-    if (!token) return undefined;
-
-    initializeMainSession(appConfig.apiUrl, token)
-      .then(({ data, sessionId }) => {
-        if (!cancelled) {
-          setMainSessionId(sessionId);
-          setSessionConfiguration(extractMainSessionConfiguration(data));
-          setSessionError('');
-        }
-      })
-      .catch((error) => {
-        if (!cancelled) setSessionError(error?.message || 'Session initialization failed.');
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [token]);
 
   return (
+    <SessionProvider
+      apiUrl={appConfig.apiUrl}
+      token={token}
+      onLogout={logout}
+      onLocked={() => setIsWorkspaceLocked(true)}
+      onIdleSettingsChange={setIdleSettings}
+    >
     <WorkspaceProvider>
-      <WorkspaceFrame
-        user={user}
-        token={token}
-        apiUrl={appConfig.apiUrl}
-        mainSessionId={mainSessionId}
-        sessionConfiguration={sessionConfiguration}
-        sessionError={sessionError}
-        onSignOut={logout}
-        logoSrc={loginLogo}
-      />
+      <SessionWorkspaceFrame user={user} token={token} onSignOut={logout} />
       {isWorkspaceLocked && (
         <WorkspaceLockOverlay
           user={user}
           isUnlocking={isUnlocking}
-          lockMinutes={15}
-          logoutMinutes={30}
+          lockMinutes={Math.max(1, Math.round(idleSettings.lockMs / 60000))}
+          logoutMinutes={Math.max(1, Math.round(idleSettings.timeoutMs / 60000))}
           onUnlock={handleUnlock}
           onLogout={logout}
           logoSrc={loginLogo}
         />
       )}
     </WorkspaceProvider>
+    </SessionProvider>
+  );
+}
+
+function SessionWorkspaceFrame({ user, token, onSignOut }) {
+  const { mainSessionId, configuration, sessionError, isSessionReady } = useSession();
+  // Source windows are only opened against a session /init has confirmed.
+  return (
+    <WorkspaceFrame
+      user={user}
+      token={token}
+      mainSessionId={isSessionReady ? mainSessionId : ''}
+      sessionConfiguration={configuration}
+      sessionError={sessionError}
+      onSignOut={onSignOut}
+      logoSrc={loginLogo}
+    />
   );
 }
 function IncubationApp() {
@@ -141,7 +144,7 @@ function IncubationApp() {
 export default function App() {
   return (
     <ThemeProvider>
-      <AuthProvider apiUrl={appConfig.apiUrl} allowedSsoOrigins={appConfig.allowedSsoOrigins}>
+      <AuthProvider apiUrl={appConfig.apiUrl} allowedSsoOrigins={appConfig.allowedSsoOrigins} autoLogin={appConfig.authDisabled}>
         <NotificationProvider>
           <IncubationApp />
         </NotificationProvider>

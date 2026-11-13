@@ -1,6 +1,13 @@
 import React, { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import WorkspaceWindowBody from './WorkspaceWindowBody.jsx';
+import { WORKSPACE_WINDOW_TYPES } from '../state/workspaceTypes.js';
+
+// Only canvas-style windows benefit from filling the workspace.
+const MAXIMIZABLE_WINDOW_TYPES = new Set([
+  WORKSPACE_WINDOW_TYPES.GRAPH,
+  WORKSPACE_WINDOW_TYPES.CHART,
+]);
 
 const DRAG_START_OFFSET = {
   x: 22,
@@ -45,6 +52,71 @@ const DRAG_THRESHOLD = 3;
 
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 
+// Stacking order follows focus history (last focused on top), not open order.
+// The window manager is its own stacking context, so the counter can grow freely.
+let windowZCounter = 0;
+const nextWindowZ = () => {
+  windowZCounter += 1;
+  return windowZCounter;
+};
+
+// New windows cascade in cycles of STAGGER_STEPS; each cycle shifts right so a
+// large number of windows never land exactly on top of each other.
+const STAGGER_STEPS = 6;
+const STAGGER_CYCLE_SHIFT = 60;
+const getStaggerOffset = (stackIndex) => {
+  const step = stackIndex % STAGGER_STEPS;
+  const cycle = Math.floor(stackIndex / STAGGER_STEPS);
+  return {
+    x: step * WINDOW_STAGGER.x + cycle * STAGGER_CYCLE_SHIFT,
+    y: step * WINDOW_STAGGER.y,
+  };
+};
+
+// All windows observe the same canvas; during a panel animation every window's
+// ResizeObserver fires in the same frame. Sharing one measurement per frame
+// avoids N forced layouts (read → write → read thrash) with many windows open.
+const boundsFrameCache = new Map();
+let boundsCacheClearScheduled = false;
+const readCachedRect = (element) => {
+  if (!element) return null;
+  let rect = boundsFrameCache.get(element);
+  if (!rect) {
+    rect = element.getBoundingClientRect();
+    boundsFrameCache.set(element, rect);
+    if (!boundsCacheClearScheduled) {
+      boundsCacheClearScheduled = true;
+      requestAnimationFrame(() => {
+        boundsFrameCache.clear();
+        boundsCacheClearScheduled = false;
+      });
+    }
+  }
+  return rect;
+};
+
+// Default window geometry inside a canvas (same rules as a freshly opened window).
+const getDefaultCanvasLayout = (canvasRect, stackIndex) => {
+  const offset = Math.min(stackIndex, 5);
+  const maxWidth = Math.max(0, canvasRect.width - 2 * EDGE_GAP - offset * WINDOW_STAGGER.x);
+  const maxHeight = Math.max(0, canvasRect.height - 2 * EDGE_GAP - offset * WINDOW_STAGGER.y);
+  const width = Math.min(DEFAULT_WINDOW_SIZE.width, maxWidth);
+  const height = Math.min(DEFAULT_WINDOW_SIZE.height, maxHeight);
+  return {
+    position: {
+      x: Math.max(EDGE_GAP, Math.round((canvasRect.width - width) / 2)),
+      y: Math.max(EDGE_GAP, Math.round((canvasRect.height - height) / 2)),
+    },
+    size: { width, height },
+  };
+};
+
+// Fills the current bounds (central canvas + right workspace when it is expanded).
+const getMaximizedLayout = (bounds) => ({
+  position: { x: 0, y: 0 },
+  size: { width: Math.max(0, Math.round(bounds.maxRight)), height: Math.max(0, Math.round(bounds.maxBottom)) },
+});
+
 const getInitialWindowPosition = (windowItem, stackIndex) => {
   const storedPosition = windowItem?.metadata?.windowPosition;
   const storedX = Number(storedPosition?.x);
@@ -54,9 +126,10 @@ const getInitialWindowPosition = (windowItem, stackIndex) => {
     return { x: storedX, y: storedY };
   }
 
+  const offset = getStaggerOffset(stackIndex);
   return {
-    x: DRAG_START_OFFSET.x + stackIndex * WINDOW_STAGGER.x,
-    y: DRAG_START_OFFSET.y + stackIndex * WINDOW_STAGGER.y,
+    x: DRAG_START_OFFSET.x + offset.x,
+    y: DRAG_START_OFFSET.y + offset.y,
   };
 };
 
@@ -91,6 +164,11 @@ function WorkspaceWindow({ windowItem, stackIndex = 0, isActive, onFocus, onCust
   const frameRef = useRef(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
+  const [isMaximized, setIsMaximized] = useState(false);
+  const isMaximizedRef = useRef(false);
+  const restoreLayoutRef = useRef(null);
+  const zIndexRef = useRef(null);
+  if (zIndexRef.current === null) zIndexRef.current = nextWindowZ();
   const [position, setPosition] = useState(() => getInitialWindowPosition(windowItem, stackIndex));
   const [size, setSize] = useState(() => getInitialWindowSize(windowItem));
   // Refs hold the live geometry (updated during gestures and bounds changes
@@ -153,11 +231,14 @@ function WorkspaceWindow({ windowItem, stackIndex = 0, isActive, onFocus, onCust
   }, []);
 
   // Measured once per gesture to avoid layout reads on every pointermove.
-  const measureBounds = useCallback(() => {
+  // `cached` shares one read per frame across windows (bounds-fit paths only;
+  // gestures always measure fresh).
+  const measureBounds = useCallback((cached = false) => {
     const boundsEl = getBoundsElement();
     if (!boundsEl) return null;
-    const boundsRect = boundsEl.getBoundingClientRect();
-    const canvasRect = windowRef.current?.closest('.workspace_canvas')?.getBoundingClientRect();
+    const canvasEl = windowRef.current?.closest('.workspace_canvas');
+    const boundsRect = cached ? readCachedRect(boundsEl) : boundsEl.getBoundingClientRect();
+    const canvasRect = canvasEl ? (cached ? readCachedRect(canvasEl) : canvasEl.getBoundingClientRect()) : null;
     // x is relative to the window layer, which starts at the canvas left edge.
     return {
       maxRight: canvasRect ? Math.max(0, boundsRect.right - canvasRect.left) : boundsRect.width,
@@ -171,7 +252,24 @@ function WorkspaceWindow({ windowItem, stackIndex = 0, isActive, onFocus, onCust
   // once the bounds settle (avoids a render per frame during panel animations).
   const fitWithinBounds = useCallback(({ shiftLeft = 0, deferCommit = false } = {}) => {
     if (dragRef.current || resizeRef.current) return;
-    const bounds = measureBounds();
+    if (isMaximizedRef.current) {
+      const maxBounds = measureBounds(true);
+      if (!maxBounds || maxBounds.maxRight <= 0 || maxBounds.maxBottom <= 0) return;
+      const { position: nextPosition, size: nextSize } = getMaximizedLayout(maxBounds);
+      const currentSize = sizeRef.current;
+      if (nextSize.width === currentSize.width && nextSize.height === currentSize.height) return;
+      if (!deferCommit) {
+        commitLayout(nextPosition, nextSize);
+        return;
+      }
+      positionRef.current = nextPosition;
+      sizeRef.current = nextSize;
+      applyFrameStyle(windowRef.current, nextPosition, nextSize);
+      clearTimeout(commitTimerRef.current);
+      commitTimerRef.current = setTimeout(() => commitLayout(positionRef.current, sizeRef.current), 150);
+      return;
+    }
+    const bounds = measureBounds(true);
     if (!bounds || bounds.maxBottom <= 0 || bounds.maxRight <= 0) return;
     const currentSize = sizeRef.current;
     const currentPosition = positionRef.current;
@@ -206,9 +304,9 @@ function WorkspaceWindow({ windowItem, stackIndex = 0, isActive, onFocus, onCust
     const canvasRect = windowRef.current?.closest('.workspace_canvas')?.getBoundingClientRect();
     if (!canvasRect || canvasRect.width <= 0 || canvasRect.height <= 0) return;
 
-    const offset = Math.min(stackIndex, 5);
-    const maxWidth = Math.max(0, canvasRect.width - 2 * EDGE_GAP - offset * WINDOW_STAGGER.x);
-    const maxHeight = Math.max(0, canvasRect.height - 2 * EDGE_GAP - offset * WINDOW_STAGGER.y);
+    const offset = getStaggerOffset(stackIndex);
+    const maxWidth = Math.max(0, canvasRect.width - 2 * EDGE_GAP - (stackIndex % STAGGER_STEPS) * WINDOW_STAGGER.x);
+    const maxHeight = Math.max(0, canvasRect.height - 2 * EDGE_GAP - (stackIndex % STAGGER_STEPS) * WINDOW_STAGGER.y);
     const width = Math.min(sizeRef.current.width, maxWidth);
     const height = Math.min(sizeRef.current.height, maxHeight);
     const initialPosition = stackIndex === 0
@@ -216,7 +314,11 @@ function WorkspaceWindow({ windowItem, stackIndex = 0, isActive, onFocus, onCust
         x: Math.max(EDGE_GAP, Math.round((canvasRect.width - width) / 2)),
         y: Math.max(EDGE_GAP, Math.round((canvasRect.height - height) / 2)),
       }
-      : { x: EDGE_GAP + offset * WINDOW_STAGGER.x, y: EDGE_GAP + offset * WINDOW_STAGGER.y };
+      // Wrap horizontally so cycle shifts never push a new window out of view.
+      : {
+        x: EDGE_GAP + (offset.x % Math.max(1, Math.round(canvasRect.width - width - 2 * EDGE_GAP))),
+        y: EDGE_GAP + offset.y,
+      };
 
     commitLayout(initialPosition, { width, height });
     // Mount-only: initial placement.
@@ -226,6 +328,14 @@ function WorkspaceWindow({ windowItem, stackIndex = 0, isActive, onFocus, onCust
   useLayoutEffect(() => {
     fitWithinBounds();
   }, [fitWithinBounds]);
+
+  // Becoming active brings the window to the front of the focus stack. Written
+  // to the DOM before paint; later renders read the same ref.
+  useLayoutEffect(() => {
+    if (!isActive) return;
+    zIndexRef.current = nextWindowZ();
+    if (windowRef.current) windowRef.current.style.zIndex = String(zIndexRef.current);
+  }, [isActive]);
 
   // React to canvas size changes (right panel expand/collapse animates the grid):
   // - canvas shrinks → push the window left by the shrink amount, then fit
@@ -286,6 +396,11 @@ function WorkspaceWindow({ windowItem, stackIndex = 0, isActive, onFocus, onCust
       if (Math.abs(dx) < DRAG_THRESHOLD && Math.abs(dy) < DRAG_THRESHOLD) return;
       dragState.started = true;
       setIsDragging(true);
+      if (isMaximizedRef.current) {
+        isMaximizedRef.current = false;
+        restoreLayoutRef.current = null;
+        setIsMaximized(false);
+      }
     }
     const rawX = dragState.originX + dx;
     const rawY = dragState.originY + dy;
@@ -334,6 +449,11 @@ function WorkspaceWindow({ windowItem, stackIndex = 0, isActive, onFocus, onCust
     event.stopPropagation();
     focusIfInactive();
     setIsResizing(true);
+    if (isMaximizedRef.current) {
+      isMaximizedRef.current = false;
+      restoreLayoutRef.current = null;
+      setIsMaximized(false);
+    }
     const originPosition = { ...positionRef.current };
     const originSize = { ...sizeRef.current };
     resizeRef.current = {
@@ -445,6 +565,36 @@ function WorkspaceWindow({ windowItem, stackIndex = 0, isActive, onFocus, onCust
     event.stopPropagation();
   }, []);
 
+  // Toggle: fill central + right workspace <-> back to the exact pre-maximize
+  // position and size (falls back to the default layout if none was saved).
+  const handleToggleMaximize = useCallback((event) => {
+    event.stopPropagation();
+    focusIfInactive();
+    const bounds = measureBounds();
+    if (!bounds || bounds.maxRight <= 0 || bounds.maxBottom <= 0) return;
+    const nextMaximized = !isMaximizedRef.current;
+    let nextLayout;
+    if (nextMaximized) {
+      restoreLayoutRef.current = { position: { ...positionRef.current }, size: { ...sizeRef.current } };
+      nextLayout = getMaximizedLayout(bounds);
+    } else {
+      const canvasRect = windowRef.current?.closest('.workspace_canvas')?.getBoundingClientRect();
+      nextLayout = restoreLayoutRef.current || (canvasRect ? getDefaultCanvasLayout(canvasRect, 0) : null);
+      restoreLayoutRef.current = null;
+      if (!nextLayout) return;
+    }
+    const { position: nextPosition, size: nextSize } = nextLayout;
+    isMaximizedRef.current = nextMaximized;
+    setIsMaximized(nextMaximized);
+    flushFrame();
+    applyFrameStyle(windowRef.current, nextPosition, nextSize);
+    commitLayout(nextPosition, nextSize);
+    persistLayout(nextPosition, nextSize);
+    if (!nextMaximized) fitWithinBounds();
+  }, [focusIfInactive, measureBounds, flushFrame, commitLayout, persistLayout, fitWithinBounds]);
+
+  const canMaximize = MAXIMIZABLE_WINDOW_TYPES.has(windowItem.type);
+
   const handleClose = useCallback((event) => {
     event.stopPropagation();
     onClose(windowItem.id);
@@ -453,7 +603,7 @@ function WorkspaceWindow({ windowItem, stackIndex = 0, isActive, onFocus, onCust
   return (
     <article
       ref={windowRef}
-      className={'workspace_window' + (isActive ? ' is-active' : '') + (isDragging ? ' is-dragging' : '') + (isResizing ? ' is-resizing' : '')}
+      className={'workspace_window' + (isActive ? ' is-active' : '') + (isDragging ? ' is-dragging' : '') + (isResizing ? ' is-resizing' : '') + (isMaximized ? ' is-maximized' : '')}
       aria-label={windowItem.customTitle ? windowItem.title + ': ' + windowItem.customTitle : windowItem.title}
       onMouseDown={focusIfInactive}
       style={{
@@ -462,7 +612,7 @@ function WorkspaceWindow({ windowItem, stackIndex = 0, isActive, onFocus, onCust
         height: sizeRef.current.height + 'px',
         minWidth: 'min(' + WINDOW_SIZE_LIMITS.minWidth + 'px, 100%)',
         minHeight: 'min(' + WINDOW_SIZE_LIMITS.minHeight + 'px, 100%)',
-        zIndex: isActive ? 100 + stackIndex : 20 + stackIndex,
+        zIndex: zIndexRef.current,
       }}
     >
       <header
@@ -486,16 +636,33 @@ function WorkspaceWindow({ windowItem, stackIndex = 0, isActive, onFocus, onCust
             onChange={handleCustomTitleChange}
           />
         </div>
-        <button
-          className="linkx_tooltip_anchor"
-          type="button"
-          data-tooltip={'Close ' + windowItem.title}
-          aria-label={'Close ' + windowItem.title}
-          onPointerDown={stopHeaderControlDrag}
-          onClick={handleClose}
-        >
-          ×
-        </button>
+        <div className="workspace_window_controls">
+          {canMaximize && (
+          <button
+            className={'workspace_window_maximize linkx_tooltip_anchor' + (isMaximized ? ' is-maximized' : '')}
+            type="button"
+            data-tooltip={isMaximized ? 'Restore' : 'Maximize'}
+            aria-label={(isMaximized ? 'Restore ' : 'Maximize ') + windowItem.title}
+            aria-pressed={isMaximized}
+            onPointerDown={stopHeaderControlDrag}
+            onClick={handleToggleMaximize}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d={isMaximized ? 'M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7' : 'M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7'} />
+            </svg>
+          </button>
+          )}
+          <button
+            className="workspace_window_close linkx_tooltip_anchor"
+            type="button"
+            data-tooltip={'Close ' + windowItem.title}
+            aria-label={'Close ' + windowItem.title}
+            onPointerDown={stopHeaderControlDrag}
+            onClick={handleClose}
+          >
+            ×
+          </button>
+        </div>
       </header>
       <WorkspaceWindowBody windowItem={windowItem} />
       {RESIZE_HANDLES.map((handle) => (

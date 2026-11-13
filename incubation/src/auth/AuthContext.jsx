@@ -2,11 +2,15 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { AuthContext } from "./authContext.js";
 import {
   exchangeSsoCodeForAuth,
+  fetchAutoLoginAuth,
   fetchCurrentActor,
   loginWithPassword,
   normalizeAuthUser,
   verifyAuthToken,
 } from "../services/authApi.js";
+import { createLogger } from '../shared/logger.js';
+
+const log = createLogger('auth');
 
 const AUTH_TOKEN_KEY = "linkx_auth_token";
 const SESSION_STORAGE_KEY = "session";
@@ -20,6 +24,21 @@ const clearClientSessionState = () => {
   sessionStorage.removeItem(SESSION_STORAGE_KEY);
   localStorage.removeItem(AUTH_TOKEN_KEY);
   localStorage.removeItem(SESSION_STORAGE_KEY);
+};
+
+const TOKEN_RENEW_LEAD_MS = 2 * 60 * 1000;
+
+// Reads the JWT `exp` claim (ms since epoch); 0 when the token isn't a JWT.
+const readTokenExpiry = (jwt) => {
+  try {
+    const part = String(jwt || "").split(".")[1];
+    if (!part) return 0;
+    const json = atob(part.replace(/-/g, "+").replace(/_/g, "/"));
+    const exp = Number(JSON.parse(json)?.exp);
+    return Number.isFinite(exp) && exp > 0 ? exp * 1000 : 0;
+  } catch {
+    return 0;
+  }
 };
 
 const SSO_CODE_PARAM = "sso_code";
@@ -50,7 +69,7 @@ const clearSsoParams = () => {
   window.history.replaceState({}, document.title, `${url.pathname}${url.search}${url.hash}`);
 };
 
-export function AuthProvider({ apiUrl, allowedSsoOrigins = [], children }) {
+export function AuthProvider({ apiUrl, allowedSsoOrigins = [], autoLogin = false, children }) {
   const [token, setToken] = useState(readStoredToken);
   const [user, setUser] = useState(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
@@ -137,7 +156,17 @@ export function AuthProvider({ apiUrl, allowedSsoOrigins = [], children }) {
       }
 
       if (!token) {
-        setIsAuthReady(true);
+        // With the login page disabled, sign in through the backend's
+        // auto-login endpoint so session/source calls carry a real token.
+        if (autoLogin) {
+          try {
+            const auth = await fetchAutoLoginAuth(apiUrl);
+            if (!cancelled) applyAuth(auth.token, auth.user);
+          } catch (err) {
+            log.warn('Auto-login failed', { status: err?.status, message: err?.message });
+          }
+        }
+        if (!cancelled) setIsAuthReady(true);
         return;
       }
 
@@ -155,7 +184,43 @@ export function AuthProvider({ apiUrl, allowedSsoOrigins = [], children }) {
     return () => {
       cancelled = true;
     };
-  }, [apiUrl, applyAuth, exchangeSsoCode, logout, token]);
+  }, [apiUrl, applyAuth, autoLogin, exchangeSsoCode, logout, token]);
+
+  // Auto-login tokens are short-lived JWTs (≈30 min) and the backend answers
+  // expired tokens with 403 "forbidden" rather than 401. Renew shortly before
+  // `exp`, and again whenever the tab regains focus after the token lapsed
+  // (timers are throttled/suspended in background tabs).
+  useEffect(() => {
+    if (!autoLogin || !token) return undefined;
+
+    let cancelled = false;
+    const renew = async () => {
+      try {
+        const auth = await fetchAutoLoginAuth(apiUrl);
+        if (!cancelled) applyAuth(auth.token, auth.user);
+      } catch (err) {
+        log.warn('Auto-login renewal failed', { status: err?.status, message: err?.message });
+      }
+    };
+
+    const expiresAt = readTokenExpiry(token);
+    if (!expiresAt) return undefined;
+
+    const renewAt = expiresAt - TOKEN_RENEW_LEAD_MS;
+    const timer = window.setTimeout(renew, Math.max(0, renewAt - Date.now()));
+    const handleWake = () => {
+      if (document.visibilityState === 'visible' && Date.now() >= renewAt) renew();
+    };
+    document.addEventListener('visibilitychange', handleWake);
+    window.addEventListener('focus', handleWake);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+      document.removeEventListener('visibilitychange', handleWake);
+      window.removeEventListener('focus', handleWake);
+    };
+  }, [apiUrl, applyAuth, autoLogin, token]);
 
   useEffect(() => {
     const handleSsoMessage = async (event) => {

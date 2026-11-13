@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 
 import WorkspaceHome from './WorkspaceHome.jsx';
 import NetworkBackground from './NetworkBackground.jsx';
@@ -6,7 +6,32 @@ import RightWorkspace from './RightWorkspace.jsx';
 import WindowManager from './WindowManager.jsx';
 import { useWorkspace } from '../hooks/useWorkspace.js';
 import { closeSourceWindow, initializeSourceWindow } from '../../services/sourceApi.js';
-import { WORKSPACE_CONTEXT_TABS, WORKSPACE_ORIENTATIONS, WORKSPACE_WINDOW_TYPES } from '../state/workspaceTypes.js';
+import { useSession } from '../../shared/session/useSession.js';
+import { disposeSourceRuntime } from '../../features/source/lib/sourceRuntime.js';
+import { disposeStreamLog, peekStreamLogLines } from '../../features/source/lib/streamLogs.js';
+import { endAbandonedStream, endAllAbandonedStreams, getActiveStream } from '../../features/source/lib/activeStreams.js';
+import { continueStreamInBackground } from '../../features/source/lib/backgroundStreams.js';
+import {
+  TASK_ORIGINS,
+  TASK_STATUSES,
+  countActiveTasks,
+  finishTask,
+  freezeWindowTaskLogs,
+  getActiveTaskForWindow,
+  getSessionUsage,
+  getTasksSnapshot,
+  onTaskEnded,
+  requestTaskFocus,
+  resetTasks,
+  sessionLimitMessage,
+  subscribeTasks,
+} from '../../features/tasks/lib/taskRegistry.js';
+import { useNotifications } from '../../shared/notifications/useNotifications.js';
+import CloseAnalysisDialog from './CloseAnalysisDialog.jsx';
+import { WORKSPACE_CONTEXT_TABS, WORKSPACE_ORIENTATIONS, WORKSPACE_WINDOW_TYPES, getWindowLimitBlock } from '../state/workspaceTypes.js';
+import { createLogger } from '../../shared/logger.js';
+
+const log = createLogger('workspace');
 
 
 
@@ -37,7 +62,8 @@ const launcherItems = [
     label: 'Reports',
     windowType: WORKSPACE_WINDOW_TYPES.REPORTS,
     contextTab: WORKSPACE_CONTEXT_TABS.OVERVIEW,
-    disabled: true,
+    badgeKey: 'reports',
+    badgeNoun: 'report',
     path: 'M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5.586a1 1 0 0 1 .707.293l5.414 5.414a1 1 0 0 1 .293.707V19a2 2 0 0 1-2 2z',
   },
   {
@@ -45,6 +71,8 @@ const launcherItems = [
     label: 'Tasks',
     windowType: WORKSPACE_WINDOW_TYPES.TASKS,
     contextTab: WORKSPACE_CONTEXT_TABS.OVERVIEW,
+    badgeKey: 'tasks',
+    badgeNoun: 'task',
     path: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4',
   },
   {
@@ -59,14 +87,14 @@ const launcherItems = [
     label: 'Configuration',
     windowType: WORKSPACE_WINDOW_TYPES.CONFIGURATION,
     contextTab: WORKSPACE_CONTEXT_TABS.SETTINGS,
-    path: 'M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Zm0-5v2M12 18.5v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4',
+    path: 'M14.7 6.3a4 4 0 0 0-5 5L4.5 16.5a2.1 2.1 0 0 0 3 3l5.2-5.2a4 4 0 0 0 5-5l-2.6 2.6-3-3z',
   },
   {
     id: 'settings',
     label: 'Settings',
     windowType: WORKSPACE_WINDOW_TYPES.SETTINGS,
     contextTab: WORKSPACE_CONTEXT_TABS.SETTINGS,
-    path: 'M14.7 6.3a4 4 0 0 0-5 5L4.5 16.5a2.1 2.1 0 0 0 3 3l5.2-5.2a4 4 0 0 0 5-5l-2.6 2.6-3-3z',
+    path: 'M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2ZM15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z',
   },
 ];
 
@@ -97,7 +125,7 @@ function LauncherIcon({ path, className = 'workspace_launcher_icon' }) {
   );
 }
 
-export default function WorkspaceFrame({ user, token, apiUrl, mainSessionId, sessionError, onSignOut, logoSrc }) {
+export default function WorkspaceFrame({ user, token, mainSessionId, sessionError, onSignOut, logoSrc }) {
   const displayName = user?.display_name || user?.username || user?.client_id || 'Analyst';
   const avatarLetter = displayName.trim().charAt(0).toUpperCase() || 'A';
   const launcherRef = React.useRef(null);
@@ -107,6 +135,63 @@ export default function WorkspaceFrame({ user, token, apiUrl, mainSessionId, ses
   const [isOpeningSource, setIsOpeningSource] = useState(false);
   const [isSidebarOverviewOpen, setIsSidebarOverviewOpen] = useState(false);
   const workspace = useWorkspace();
+  const { apiFetch } = useSession();
+  const { notify } = useNotifications();
+  const { tasks } = useSyncExternalStore(subscribeTasks, getTasksSnapshot);
+  const activeTaskCount = useMemo(() => countActiveTasks(tasks), [tasks]);
+  const openSourceCount = useMemo(
+    () => workspace.windows.filter((windowItem) => windowItem.type === WORKSPACE_WINDOW_TYPES.SOURCE).length,
+    [workspace.windows],
+  );
+  // Analysis sessions (max 3): open Source windows + background streams +
+  // running quick analyses (taskRegistry.js getSessionUsage).
+  const sessionUsage = useMemo(() => getSessionUsage(openSourceCount, tasks), [openSourceCount, tasks]);
+  const [pendingClose, setPendingClose] = useState(null); // { windowId, windowTitle, taskTitle }
+  // Unseen task/report counters shared by the quick analysis panel and the
+  // sidebar. They clear when the Tasks/Reports window becomes the active
+  // window (opened from the sidebar, the panel, the dock or the windows list).
+  const [unseenBadges, setUnseenBadges] = useState({ tasks: 0, reports: 0 });
+  const activeWindowType = useMemo(
+    () => workspace.windows.find((windowItem) => windowItem.id === workspace.activeWindowId)?.type || null,
+    [workspace.windows, workspace.activeWindowId],
+  );
+  const activeWindowTypeRef = useRef(activeWindowType);
+  activeWindowTypeRef.current = activeWindowType;
+  useEffect(() => {
+    const key = activeWindowType === WORKSPACE_WINDOW_TYPES.TASKS ? 'tasks'
+      : activeWindowType === WORKSPACE_WINDOW_TYPES.REPORTS ? 'reports' : null;
+    if (!key) return;
+    setUnseenBadges((current) => (current[key] ? { ...current, [key]: 0 } : current));
+  }, [activeWindowType]);
+  const handleReportReady = useCallback(() => {
+    setUnseenBadges((current) => ({
+      ...current,
+      reports: activeWindowTypeRef.current === WORKSPACE_WINDOW_TYPES.REPORTS ? current.reports : current.reports + 1,
+    }));
+  }, []);
+  // The Tasks badge counts running analyses (it stays while they run).
+  const launcherBadges = useMemo(() => ({ ...unseenBadges, tasks: activeTaskCount }), [unseenBadges, activeTaskCount]);
+  const { openWindow } = workspace;
+  const handleOpenWindow = useCallback((type, options) => openWindow(type, options), [openWindow]);
+  const openTask = useCallback((taskId) => {
+    if (taskId) requestTaskFocus(taskId);
+    openWindow(WORKSPACE_WINDOW_TYPES.TASKS, { title: 'Tasks', contextTab: WORKSPACE_CONTEXT_TABS.OVERVIEW });
+  }, [openWindow]);
+
+  // Finished analyses are announced with a shortcut to their task. Failures
+  // and stops of foreground runs are already shown in their window.
+  useEffect(() => onTaskEnded((task) => {
+    if (task.origin === TASK_ORIGINS.QUICK && !task.background) return;
+    const view = { label: 'View task', onClick: () => openTask(task.id) };
+    const source = task.background ? 'Background task' : (task.windowTitle || 'Tasks');
+    if (task.status === TASK_STATUSES.COMPLETED) {
+      notify({ title: `${task.title} completed`, message: task.input || 'The results are ready.', level: 'success', source, action: view });
+    } else if (task.background && task.status === TASK_STATUSES.FAILED) {
+      notify({ title: `${task.title} failed`, message: task.message || task.input || 'The analysis failed.', level: 'error', source, action: view });
+    } else if (task.background && task.status === TASK_STATUSES.TERMINATED) {
+      notify({ title: `${task.title} stopped`, message: task.message || task.input || 'The analysis was stopped.', level: 'warning', source, action: view });
+    }
+  }), [notify, openTask]);
   const toggleRightCollapsed = useCallback(() => setIsRightCollapsed((current) => !current), []);
 
 
@@ -132,19 +217,111 @@ export default function WorkspaceFrame({ user, token, apiUrl, mainSessionId, ses
   windowsRef.current = workspace.windows;
   const { closeWindow } = workspace;
 
-  const handleCloseWindow = useCallback((windowId) => {
-    const targetWindow = windowsRef.current.find((windowItem) => windowItem.id === windowId);
-    if (targetWindow?.type === WORKSPACE_WINDOW_TYPES.SOURCE && token) {
-      closeSourceWindow(apiUrl, token, {
-        sessionId: targetWindow.parentSessionId,
-        windowId: targetWindow.backendWindowId,
-        reason: 'user_closed_window',
-      }).catch((error) => {
-        console.error('Source window cleanup failed', { status: error?.status, message: error?.message });
-      });
+  // Requests made after the window is gone (background streams) use the
+  // latest client.
+  const apiFetchRef = React.useRef(apiFetch);
+  apiFetchRef.current = token ? apiFetch : apiFetchRef.current;
+  const latestApiFetch = useCallback((...args) => apiFetchRef.current(...args), []);
+
+  const releaseSourceSession = useCallback((targetWindow, reason) => {
+    closeSourceWindow(latestApiFetch, {
+      sessionId: targetWindow.parentSessionId,
+      windowId: targetWindow.backendWindowId,
+      reason,
+    }).catch((error) => {
+      log.error('Source window cleanup failed', { status: error?.status, message: error?.message });
+    });
+  }, [latestApiFetch]);
+
+  // Closes the window and stops its stream, if any (production Terminate
+  // request: log_stream_unplug + end_session), then the window session.
+  const closeAndStop = useCallback((targetWindow) => {
+    const windowId = targetWindow.id;
+    const task = getActiveTaskForWindow(windowId);
+    const endStream = token && getActiveStream(windowId)
+      ? endAbandonedStream(apiFetch, windowId, { reason: 'user_closed_window' })
+      : Promise.resolve(null);
+    if (task) finishTask(task.id, TASK_STATUSES.TERMINATED, { message: 'Stopped when its Source window was closed.' });
+    freezeWindowTaskLogs(windowId, peekStreamLogLines(windowId));
+    disposeSourceRuntime(windowId);
+    disposeStreamLog(windowId); // log_stream_unplug (production close behaviour)
+    if (token) {
+      endStream.catch(() => null).then(() => releaseSourceSession(targetWindow, 'user_closed_window'));
     }
     closeWindow(windowId);
-  }, [apiUrl, token, closeWindow]);
+  }, [apiFetch, token, closeWindow, releaseSourceSession]);
+
+  // Keeps the stream as a background task: the window leaves the workspace,
+  // its runtime and backend session are freed once the stream ends.
+  const closeAndKeepRunning = useCallback((targetWindow) => {
+    const windowId = targetWindow.id;
+    const task = getActiveTaskForWindow(windowId);
+    const detached = task && continueStreamInBackground({
+      windowId,
+      taskId: task.id,
+      apiFetch: latestApiFetch,
+      release: () => {
+        disposeSourceRuntime(windowId);
+        disposeStreamLog(windowId);
+        if (apiFetchRef.current && hadTokenRef.current) releaseSourceSession(targetWindow, 'background_task_ended');
+      },
+    });
+    if (!detached) {
+      closeAndStop(targetWindow);
+      return;
+    }
+    closeWindow(windowId);
+  }, [latestApiFetch, closeWindow, closeAndStop, releaseSourceSession]);
+
+  const handleCloseWindow = useCallback((windowId) => {
+    const targetWindow = windowsRef.current.find((windowItem) => windowItem.id === windowId);
+    if (targetWindow?.type !== WORKSPACE_WINDOW_TYPES.SOURCE) {
+      closeWindow(windowId);
+      return;
+    }
+    const task = getActiveTaskForWindow(windowId);
+    if (token && task && getActiveStream(windowId)) {
+      setPendingClose({ windowId, windowTitle: targetWindow.title, taskTitle: task.title });
+      return;
+    }
+    closeAndStop(targetWindow);
+  }, [token, closeWindow, closeAndStop]);
+
+  const resolvePendingClose = (choice) => {
+    const pending = pendingClose;
+    setPendingClose(null);
+    const targetWindow = pending && windowsRef.current.find((windowItem) => windowItem.id === pending.windowId);
+    if (!targetWindow || choice === 'cancel') return;
+    if (choice === 'keep') closeAndKeepRunning(targetWindow);
+    else closeAndStop(targetWindow);
+  };
+
+  // Streams left running when the page goes away (tab closed / reloaded) or
+  // the workspace unmounts (sign-out, idle timeout) are ended with keepalive
+  // requests, sent while the session token is still known. Background tasks
+  // included: nobody is left to receive their results.
+  useEffect(() => {
+    const endAll = (reason) => {
+      endAllAbandonedStreams(apiFetchRef.current, { reason, keepalive: true }).catch(() => null);
+    };
+    const onPageHide = () => endAll('page_closed');
+    window.addEventListener('pagehide', onPageHide);
+    return () => {
+      window.removeEventListener('pagehide', onPageHide);
+      endAll('workspace_closed');
+      resetTasks();
+    };
+  }, []);
+
+  // Signed out without unmounting (token cleared): same clean-up.
+  const hadTokenRef = React.useRef(Boolean(token));
+  useEffect(() => {
+    if (hadTokenRef.current && !token) {
+      endAllAbandonedStreams(apiFetchRef.current, { reason: 'signed_out', keepalive: true }).catch(() => null);
+      resetTasks();
+    }
+    hadTokenRef.current = Boolean(token);
+  }, [token]);
 
   const windowWorkspace = useMemo(() => ({
     ...workspace,
@@ -161,10 +338,23 @@ export default function WorkspaceFrame({ user, token, apiUrl, mainSessionId, ses
         return;
       }
 
+      // Check the cap before asking the backend for a new source session;
+      // openWindow notifies and focuses the latest Source window.
+      if (getWindowLimitBlock(workspace.windows, WORKSPACE_WINDOW_TYPES.SOURCE)) {
+        workspace.openWindow(item.windowType);
+        return;
+      }
+      // Background streams and quick analyses hold sessions too.
+      if (sessionUsage.available <= 0) {
+        notify({ title: 'Analysis session limit reached', message: sessionLimitMessage(sessionUsage), level: 'warning', source: 'Workspace' });
+        openTask(null);
+        return;
+      }
+
       const sourceWindowId = workspace.nextSourceWindowId;
       setIsOpeningSource(true);
       try {
-        const identity = await initializeSourceWindow(apiUrl, token, {
+        const identity = await initializeSourceWindow(apiFetch, {
           sessionId: mainSessionId,
           windowId: sourceWindowId,
         });
@@ -177,7 +367,9 @@ export default function WorkspaceFrame({ user, token, apiUrl, mainSessionId, ses
         });
         workspace.setContextTab(item.contextTab);
       } catch (error) {
-        setSourceOpenError(error?.message || 'Source window could not be initialized.');
+        setSourceOpenError(error?.status === 403
+          ? 'Not allowed to open a source window (sign-in expired or missing source:create). Refresh and try again.'
+          : error?.message || 'Source window could not be initialized.');
       } finally {
         setIsOpeningSource(false);
       }
@@ -225,6 +417,16 @@ export default function WorkspaceFrame({ user, token, apiUrl, mainSessionId, ses
                 >
                   <LauncherIcon path={item.path} />
                   <span className="workspace_launcher_label">{item.label}</span>
+                  {item.badgeKey && launcherBadges[item.badgeKey] > 0 && (
+                    <>
+                      <span
+                        className={'workspace_launcher_badge_dot is-item is-' + item.badgeKey}
+                        role="status"
+                        aria-label={`${launcherBadges[item.badgeKey]} ${item.badgeKey === 'tasks' ? 'running' : 'new'} ${item.badgeNoun}${launcherBadges[item.badgeKey] === 1 ? '' : 's'}`}
+                      />
+                      <span className={'workspace_launcher_count is-' + item.badgeKey} aria-hidden="true">{launcherBadges[item.badgeKey]}</span>
+                    </>
+                  )}
                 </button>
               ))}
             </div>
@@ -309,7 +511,12 @@ export default function WorkspaceFrame({ user, token, apiUrl, mainSessionId, ses
             </div>
             <WorkspaceHome
               openWindowsCount={workspace.windows.length}
-              onOpenWindow={workspace.openWindow}
+              onOpenWindow={handleOpenWindow}
+              onReportReady={handleReportReady}
+              onOpenTask={openTask}
+              sessionUsage={sessionUsage}
+              unseenTasks={activeTaskCount}
+              unseenReports={unseenBadges.reports}
             />
             {(sessionError || sourceOpenError) && (
               <div className="workspace_session_notice" role="status">
@@ -317,6 +524,15 @@ export default function WorkspaceFrame({ user, token, apiUrl, mainSessionId, ses
               </div>
             )}
             <WindowManager workspace={windowWorkspace} />
+            {pendingClose && (
+              <CloseAnalysisDialog
+                windowTitle={pendingClose.windowTitle}
+                taskTitle={pendingClose.taskTitle}
+                onKeep={() => resolvePendingClose('keep')}
+                onStop={() => resolvePendingClose('stop')}
+                onCancel={() => resolvePendingClose('cancel')}
+              />
+            )}
           </section>
           <RightWorkspace
             displayName={displayName}

@@ -5,6 +5,18 @@ import { NotificationContext } from './notificationContext.js';
 
 const NOTICE_LEVELS = new Set(['success', 'warning', 'error', 'info']);
 
+// Time on screen follows importance: errors stay until dismissed (they
+// usually need action), warnings linger, routine success/info notices are
+// brief. A caller's explicit durationMs still wins.
+const NOTICE_DURATIONS_MS = { error: 0, warning: 8000, success: 4000, info: 4000 };
+
+const NOTICE_ICONS = {
+  success: <polyline points="5 12.5 10 17 19 7" />,
+  warning: <><path d="M12 8v5" /><path d="M12 16.5v.01" /></>,
+  error: <><path d="M8 8l8 8" /><path d="M16 8l-8 8" /></>,
+  info: <><path d="M12 11v5" /><path d="M12 7.5v.01" /></>,
+};
+
 const stringifyNoticeValue = (value) => {
   if (typeof value === 'string') return value;
   try {
@@ -31,15 +43,27 @@ const sanitizeNoticeText = (value, { maxLength = 500 } = {}) => {
   return text.trim().slice(0, maxLength);
 };
 
-function NoticeStack({ items, onDismiss }) {
+function NoticeStack({ items, onDismiss, onPause, onResume }) {
   if (!Array.isArray(items) || items.length === 0) return null;
   if (typeof document === 'undefined' || !document.body) return null;
 
   return createPortal(
     <div className="linkx_notice_stack" role="region" aria-label="Notifications">
       {items.map((item) => (
-        <article key={item.id} className={'linkx_notice linkx_notice_' + item.level} role="status">
+        <article
+          key={item.id}
+          className={'linkx_notice linkx_notice_' + item.level + (item.durationMs > 0 ? ' is-timed' : ' is-sticky')}
+          role={item.level === 'error' ? 'alert' : 'status'}
+          style={item.durationMs > 0 ? { '--notice-duration': item.durationMs + 'ms' } : undefined}
+          onMouseEnter={() => onPause(item.id)}
+          onMouseLeave={() => onResume(item.id)}
+          onFocus={() => onPause(item.id)}
+          onBlur={() => onResume(item.id)}
+        >
           <div className="linkx_notice_head">
+            <span className="linkx_notice_icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" focusable="false">{NOTICE_ICONS[item.level]}</svg>
+            </span>
             <span className="linkx_notice_title">{item.title}</span>
             <button
               className="linkx_notice_close linkx_tooltip_anchor"
@@ -52,7 +76,22 @@ function NoticeStack({ items, onDismiss }) {
             </button>
           </div>
           <div className="linkx_notice_body">{item.message}</div>
-          <div className="linkx_notice_meta">{item.source}</div>
+          <div className="linkx_notice_meta">
+            <span>{item.source}</span>
+            {item.action ? (
+              <button
+                type="button"
+                className="linkx_notice_action"
+                onClick={() => {
+                  onDismiss(item.id);
+                  item.action.onClick();
+                }}
+              >
+                {item.action.label}
+              </button>
+            ) : null}
+          </div>
+          {item.durationMs > 0 ? <span className="linkx_notice_timer" aria-hidden="true" /> : null}
         </article>
       ))}
     </div>,
@@ -198,20 +237,33 @@ export function NotificationProvider({ children }) {
   const [notices, setNotices] = useState([]);
   const [messages, setMessages] = useState([]);
   const [confirmations, setConfirmations] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
   const noticeSeqRef = useRef(1);
   const messageSeqRef = useRef(1);
   const confirmSeqRef = useRef(1);
   const noticeTimersRef = useRef({});
   const nativeAlertRef = useRef(null);
-  const nativeConfirmRef = useRef(null);
+
+  const clearNoticeTimer = useCallback((id) => {
+    const timer = noticeTimersRef.current[id];
+    if (timer) clearTimeout(timer.handle);
+    delete noticeTimersRef.current[id];
+  }, []);
 
   const dismissNotice = useCallback((id) => {
     setNotices((current) => current.filter((item) => item.id !== id));
-    if (noticeTimersRef.current[id]) {
-      clearTimeout(noticeTimersRef.current[id]);
-      delete noticeTimersRef.current[id];
-    }
-  }, []);
+    clearNoticeTimer(id);
+  }, [clearNoticeTimer]);
+
+  const startNoticeTimer = useCallback((id, remaining) => {
+    clearNoticeTimer(id);
+    noticeTimersRef.current[id] = {
+      remaining,
+      startedAt: Date.now(),
+      pausedRemaining: null,
+      handle: setTimeout(() => dismissNotice(id), remaining),
+    };
+  }, [clearNoticeTimer, dismissNotice]);
 
   const notify = useCallback((payload = {}) => {
     const levelCandidate = String(payload.level || payload.severity || 'info').toLowerCase();
@@ -225,14 +277,38 @@ export function NotificationProvider({ children }) {
     const rawTitle = sanitizeNoticeText(payload.title || '', { maxLength: 80 });
     const title = rawTitle && !/^(alert|message|message alert)$/i.test(rawTitle) ? rawTitle : fallbackTitle;
     const source = sanitizeNoticeText(payload.source || 'Linkx', { maxLength: 80 }) || 'Linkx';
-    const durationMs = Number.isFinite(payload.durationMs) ? Number(payload.durationMs) : 5400;
+    const durationMs = Number.isFinite(payload.durationMs) ? Number(payload.durationMs) : NOTICE_DURATIONS_MS[level];
+    // Optional shortcut, e.g. { label: 'View task', onClick }.
+    const actionLabel = sanitizeNoticeText(payload.action?.label || '', { maxLength: 24 });
+    const action = actionLabel && typeof payload.action?.onClick === 'function'
+      ? { label: actionLabel, onClick: payload.action.onClick }
+      : null;
 
-    setNotices((current) => [...current, { id, title, message, source, level }].slice(-5));
-    if (durationMs > 0) {
-      noticeTimersRef.current[id] = setTimeout(() => dismissNotice(id), durationMs);
-    }
+    setNotices((current) => {
+      const next = [...current, { id, title, message, source, level, durationMs, action }];
+      // Max 5 on screen; drop the oldest (and its timer).
+      next.slice(0, Math.max(0, next.length - 5)).forEach((item) => clearNoticeTimer(item.id));
+      return next.slice(-5);
+    });
+    setUnreadCount((current) => current + 1);
+    if (durationMs > 0) startNoticeTimer(id, durationMs);
     return id;
-  }, [dismissNotice]);
+  }, [clearNoticeTimer, startNoticeTimer]);
+
+  // Hover/focus pauses the countdown (and its progress bar, via CSS); leaving
+  // resumes it with the time that was left.
+  const pauseNotice = useCallback((id) => {
+    const timer = noticeTimersRef.current[id];
+    if (!timer || timer.pausedRemaining != null) return;
+    clearTimeout(timer.handle);
+    timer.pausedRemaining = Math.max(0, timer.remaining - (Date.now() - timer.startedAt));
+  }, []);
+
+  const resumeNotice = useCallback((id) => {
+    const timer = noticeTimersRef.current[id];
+    if (!timer || timer.pausedRemaining == null) return;
+    startNoticeTimer(id, Math.max(800, timer.pausedRemaining));
+  }, [startNoticeTimer]);
 
   const showMessage = useCallback((payload = {}) => {
     const levelCandidate = String(payload.level || payload.severity || 'warning').toLowerCase();
@@ -246,6 +322,7 @@ export function NotificationProvider({ children }) {
     const source = sanitizeNoticeText(payload.source || 'Linkx', { maxLength: 80 }) || 'Linkx';
     const confirmText = sanitizeNoticeText(payload.confirmText || 'OK', { maxLength: 24 }) || 'OK';
     setMessages((current) => [...current, { id, title, message, source, level, confirmText }].slice(-3));
+    setUnreadCount((current) => current + 1);
     return id;
   }, []);
 
@@ -280,28 +357,27 @@ export function NotificationProvider({ children }) {
 
   useEffect(() => {
     nativeAlertRef.current = window.alert;
-    nativeConfirmRef.current = window.confirm;
 
     window.alert = (message) => {
       showMessage({ title: 'Notice', message: String(message ?? ''), source: 'Linkx', level: 'warning' });
     };
 
-    window.confirm = (message) => {
-      requestConfirmation({ title: 'Confirmation Required', message: String(message ?? '') });
-      return false;
-    };
+    // window.confirm is deliberately NOT overridden: it must answer
+    // synchronously, which an in-app dialog cannot. Use
+    // `await requestConfirmation({...})` from useNotifications() instead.
 
     return () => {
       if (nativeAlertRef.current) window.alert = nativeAlertRef.current;
-      if (nativeConfirmRef.current) window.confirm = nativeConfirmRef.current;
-      Object.values(noticeTimersRef.current).forEach((timerId) => clearTimeout(timerId));
+      Object.values(noticeTimersRef.current).forEach((timer) => clearTimeout(timer?.handle));
       noticeTimersRef.current = {};
     };
-  }, [showMessage, requestConfirmation]);
+  }, [showMessage]);
+
+  const markAllRead = useCallback(() => setUnreadCount(0), []);
 
   const value = useMemo(
-    () => ({ notify, showMessage, requestConfirmation, dismissNotice, dismissMessage }),
-    [notify, showMessage, requestConfirmation, dismissNotice, dismissMessage]
+    () => ({ notify, showMessage, requestConfirmation, dismissNotice, dismissMessage, unreadCount, markAllRead }),
+    [notify, showMessage, requestConfirmation, dismissNotice, dismissMessage, unreadCount, markAllRead]
   );
 
   const activeMessage = messages[0] || null;
@@ -310,7 +386,7 @@ export function NotificationProvider({ children }) {
   return (
     <NotificationContext.Provider value={value}>
       {children}
-      <NoticeStack items={notices} onDismiss={dismissNotice} />
+      <NoticeStack items={notices} onDismiss={dismissNotice} onPause={pauseNotice} onResume={resumeNotice} />
       <MessageDialog item={activeMessage} onResolve={dismissMessage} />
       <ConfirmationDialog item={activeConfirmation} onResolve={resolveConfirmation} />
     </NotificationContext.Provider>

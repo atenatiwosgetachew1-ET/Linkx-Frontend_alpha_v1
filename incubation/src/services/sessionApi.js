@@ -1,15 +1,23 @@
-import { authRequest } from './authApi.js';
-
 const SESSION_STORAGE_KEY = 'session';
 
-export const extractMainSessionId = (data = {}) => (
+const isRealSessionId = (value) => {
+  const normalized = String(value ?? '').trim();
+  return Boolean(normalized) && !['null', 'undefined', 'nan'].includes(normalized.toLowerCase());
+};
+
+export const normalizeSessionId = (value) => (isRealSessionId(value) ? String(value).trim() : '');
+
+const scalarOrNull = (value) => (typeof value === 'string' || typeof value === 'number' ? value : null);
+
+export const extractMainSessionId = (data = {}) => normalizeSessionId(
   data?.results?.session_id ??
   data?.results?.sessionId ??
+  data?.results?.id ??
   data?.session_id ??
   data?.sessionId ??
   data?.configurations?.session_id ??
   data?.configurations?.sessionId ??
-  null
+  scalarOrNull(data?.results)
 );
 
 export const extractMainSessionConfiguration = (data = {}) => (
@@ -20,27 +28,60 @@ export const extractMainSessionConfiguration = (data = {}) => (
   {}
 );
 
-export const initializeMainSession = async (apiUrl, token, { socketId = null } = {}) => {
-  const existingSession = localStorage.getItem(SESSION_STORAGE_KEY) || sessionStorage.getItem(SESSION_STORAGE_KEY) || null;
-  const payload = {
-    id: 'init',
-    existing_session: existingSession,
-    socket_id: socketId,
-  };
+export const readStoredSessionId = () => normalizeSessionId(
+  localStorage.getItem(SESSION_STORAGE_KEY) || sessionStorage.getItem(SESSION_STORAGE_KEY)
+);
 
-  const data = await authRequest(apiUrl, '/init', {
+// POST /init — creates or resumes the main analysis session. `socketId` lets
+// the backend route socket events (logs, graph status) to this browser.
+export const initializeMainSession = async (apiFetch, { socketId = null } = {}) => {
+  const data = await apiFetch('/init', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
+    body: {
+      id: 'init',
+      existing_session: readStoredSessionId() || null,
+      socket_id: socketId,
     },
-    body: JSON.stringify(payload),
   });
   const sessionId = extractMainSessionId(data);
   if (sessionId) {
-    localStorage.setItem(SESSION_STORAGE_KEY, String(sessionId));
+    localStorage.setItem(SESSION_STORAGE_KEY, sessionId);
     sessionStorage.removeItem(SESSION_STORAGE_KEY);
   }
+  return { data, sessionId, configuration: extractMainSessionConfiguration(data) };
+};
 
-  return { data, sessionId: sessionId ? String(sessionId) : '' };
+const extractConfigurationPayload = (data) => (
+  data?.results?.configuration ??
+  data?.results?.configurations ??
+  data?.configuration ??
+  data?.configurations ??
+  data?.results ??
+  {}
+);
+
+// Session-scoped configuration (also used per source window id).
+export const loadSessionConfiguration = async (apiFetch, sessionId) => {
+  const data = await apiFetch('/configuration', {
+    method: 'POST',
+    body: { id: 'load', session_id: sessionId },
+  });
+  return { data, configuration: extractConfigurationPayload(data) };
+};
+
+export const saveSessionConfiguration = (apiFetch, sessionId, configuration) => apiFetch('/configuration', {
+  method: 'POST',
+  body: { id: 'save', session_id: sessionId, configuration },
+});
+
+// Switches the session's domain pillar (production's Configuration > Domain
+// switch). The backend re-projects storage targets and connection settings
+// from the domain, so this is the only way to change the storage path.
+export const switchSessionDomain = async (apiFetch, sessionId, domain, { signal } = {}) => {
+  const data = await apiFetch('/configuration', {
+    method: 'POST',
+    body: { id: 'save', session_id: sessionId, domain },
+    signal,
+  });
+  return { data, configuration: extractConfigurationPayload(data) };
 };

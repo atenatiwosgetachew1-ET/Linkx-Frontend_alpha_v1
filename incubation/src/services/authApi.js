@@ -93,3 +93,10 @@ export const fetchCurrentActor = async (apiUrl, token) => {
   });
   return parseAuthResponse(data, token);
 };
+
+// Dev/unattended sign-in: the backend issues a token for its default actor
+// (same endpoint the main Linkx app uses when it has no stored token).
+export const fetchAutoLoginAuth = async (apiUrl) => {
+  const data = await authRequest(apiUrl, '/auth/auto-login', { method: 'GET' });
+  return parseAuthResponse(data);
+};

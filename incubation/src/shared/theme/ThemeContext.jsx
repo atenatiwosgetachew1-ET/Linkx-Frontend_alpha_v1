@@ -9,6 +9,9 @@ import {
   isKnownTheme,
   readStoredOverrides,
 } from './themeRegistry.js';
+import { createLogger } from '../../shared/logger.js';
+
+const log = createLogger('theme');
 
 
 const ThemeContext = createContext();
@@ -83,7 +86,7 @@ export function ThemeProvider({ children }) {
       }
       return true;
     } catch (e) {
-      console.error('Failed to import theme configuration:', e);
+      log.error('Failed to import theme configuration:', e);
       return false;
     }
   }, [setThemeOverrides]);

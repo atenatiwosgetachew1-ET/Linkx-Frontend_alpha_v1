@@ -1,5 +1,30 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useSyncExternalStore } from 'react';
 import { WORKSPACE_WINDOW_TYPES } from '../state/workspaceTypes.js';
+import {
+  TASK_ORIGINS,
+  TASK_STATUSES,
+  appendTaskLog,
+  createTask,
+  finishTask,
+  getTask,
+  getTasksSnapshot,
+  isTaskActive,
+  markTaskRunning,
+  sessionLimitMessage,
+  setTaskBackground,
+  setTaskHandlers,
+  subscribeTasks,
+  updateTask,
+} from '../../features/tasks/lib/taskRegistry.js';
+
+const QUICK_INPUT_LABELS = {
+  realtime: 'Real-time source',
+  kafka: 'Real-time · Apache Kafka',
+  rest_api: 'Real-time · REST API',
+  batch_kafka: 'Batch · Apache Kafka',
+  batch_rest_api: 'Batch · REST API',
+  batch_hadoop: 'Batch · HDFS',
+};
 
 const defaultConfigItems = [
   { label: 'Ingestion Engine', value: 'Auto-detect Pipeline' },
@@ -226,6 +251,16 @@ function HadoopIcon() {
   );
 }
 
+function TaskIcon() {
+  return (
+    <svg className="workspace_home_svg_icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
+      <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2" />
+      <rect x="9" y="3" width="6" height="4" rx="1" />
+      <path d="m9 14 2 2 4-4" />
+    </svg>
+  );
+}
+
 function ResetIcon() {
   return (
     <svg className="workspace_home_svg_icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
@@ -244,14 +279,20 @@ function LockIcon() {
   );
 }
 
-function WorkspaceHome({ openWindowsCount = 0, onOpenWindow }) {
+function WorkspaceHome({ openWindowsCount = 0, onOpenWindow, onOpenTask, onReportReady, sessionUsage = null, unseenTasks = 0, unseenReports = 0 }) {
   const [isDragOver, setIsDragOver] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState([]);
   const [selectedSourceMode, setSelectedSourceMode] = useState(null); // Options: null, 'realtime', 'batch', 'tasks', 'reports'
   const [selectedSubOption, setSelectedSubOption] = useState(null); // Options: null, 'kafka', 'rest_api', 'batch_kafka', 'batch_rest_api', 'batch_hadoop'
   const [lockedSubOptions, setLockedSubOptions] = useState([]); // Sub-option IDs currently locked due to active/background task
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [activeTasksCount, setActiveTasksCount] = useState(0);
+  // Quick analyses are tasks too (Tasks window, 3-session cap).
+  const { tasks: allTasks } = useSyncExternalStore(subscribeTasks, getTasksSnapshot);
+  const activeTasksCount = allTasks.filter(isTaskActive).length;
+  const quickTaskRef = useRef(null); // the live (foreground) quick task
+  const handleCancelRef = useRef(null); // Tasks window "Terminate" on the live task
+  const [resultTaskId, setResultTaskId] = useState(null);
+  const isSessionLimitReached = Boolean(sessionUsage && sessionUsage.available <= 0);
   const [reportsCount, setReportsCount] = useState(0);
   const [analysisStatus, setAnalysisStatus] = useState('');
   const [analysisProgress, setAnalysisProgress] = useState(0);
@@ -267,7 +308,7 @@ function WorkspaceHome({ openWindowsCount = 0, onOpenWindow }) {
     setIsSecondaryResetSpinning(true);
     setTimeout(() => {
       setIsSecondaryResetSpinning(false);
-    }, 700);
+    }, 650);
   };
 
   const [isScrolledToSecondary, setIsScrolledToSecondary] = useState(false);
@@ -401,7 +442,17 @@ function WorkspaceHome({ openWindowsCount = 0, onOpenWindow }) {
     }
   };
 
-  const isAnalyzeDisabled = isAnalyzing;
+  // A new quick analysis needs a free analysis session (max 3).
+  const isAnalyzeDisabled = isAnalyzing || isSessionLimitReached;
+
+  const QUICK_STEPS = [
+    [450, 20, 'Establishing connections'],
+    [900, 38, 'Preparing dataframe'],
+    [1350, 55, 'Ingesting...'],
+    [1800, 72, 'Analyzing...'],
+    [2250, 88, 'Collecting results'],
+    [2700, 100, 'Finalizing...'],
+  ];
 
   const handleStartAnalysis = () => {
     if (isAnalyzeDisabled) return;
@@ -414,57 +465,57 @@ function WorkspaceHome({ openWindowsCount = 0, onOpenWindow }) {
       setLockedSubOptions((prev) => [...prev, currentSub]);
     }
 
+    const fileNames = uploadedFiles.map((file) => file.name);
+    const taskId = createTask({
+      origin: TASK_ORIGINS.QUICK,
+      title: 'Quick analysis',
+      action: 'Link Analysis',
+      input: fileNames.length
+        ? `Upload: ${fileNames.length} file${fileNames.length === 1 ? '' : 's'} (${fileNames.join(', ')})`
+        : QUICK_INPUT_LABELS[currentSub] || 'Quick analysis',
+      mode: fileNames.length || currentSub.startsWith('batch') ? 'batch' : 'realtime',
+      windowTitle: 'Quick analysis panel',
+    });
+    quickTaskRef.current = taskId;
+    setTaskHandlers(taskId, { terminate: () => handleCancelRef.current?.() });
+    appendTaskLog(taskId, 'Quick analysis requested with the saved configuration.');
+    updateTask(taskId, { progress: 5, statusText: 'Initializing services...' });
+    setResultTaskId(null);
+
     setIsAnalyzing(true);
     setAnalysisResult(null);
     setAnalysisProgress(5);
-    setAnalysisStatus('Initalizing services...');
+    setAnalysisStatus('Initializing services...');
 
-    const t1 = setTimeout(() => {
-      setAnalysisProgress(20);
-      setAnalysisStatus('Establizhing connections');
-    }, 450);
+    QUICK_STEPS.forEach(([delay, progress, status]) => {
+      liveTimeoutsRef.current.push(setTimeout(() => {
+        setAnalysisProgress(progress);
+        setAnalysisStatus(status);
+        updateTask(taskId, { progress, statusText: status });
+        appendTaskLog(taskId, status);
+        if (progress >= 55) markTaskRunning(taskId);
+      }, delay));
+    });
 
-    const t2 = setTimeout(() => {
-      setAnalysisProgress(38);
-      setAnalysisStatus('Prepairing dataframe');
-    }, 900);
+    liveTimeoutsRef.current.push(setTimeout(() => {
+      setIsAnalyzing(false);
+      setAnalysisStatus('');
+      setAnalysisProgress(0);
+      setAnalysisResult(mockFindingsData);
+      appendTaskLog(taskId, `Analysis complete. Flagged rules: ${mockFindingsData.anomalies.join(', ')}`);
+      updateTask(taskId, { statusText: '', message: `${mockFindingsData.status} ${mockFindingsData.anomalies.length} anomalies` });
+      finishTask(taskId, TASK_STATUSES.COMPLETED);
+      if (quickTaskRef.current === taskId) quickTaskRef.current = null;
+      setResultTaskId(taskId);
 
-    const t3 = setTimeout(() => {
-      setAnalysisProgress(55);
-      setAnalysisStatus('Ingesting...');
-    }, 1350);
-
-    const t4 = setTimeout(() => {
-      setAnalysisProgress(72);
-      setAnalysisStatus('Analyzing...');
-    }, 1800);
-
-    const t5 = setTimeout(() => {
-      setAnalysisProgress(88);
-      setAnalysisStatus('Collecting results');
-    }, 2250);
-
-    const t6 = setTimeout(() => {
-      setAnalysisProgress(100);
-      setAnalysisStatus('Finalizing...');
-      const t7 = setTimeout(() => {
-        setIsAnalyzing(false);
-        setAnalysisStatus('');
-        setAnalysisProgress(0);
-        setAnalysisResult(mockFindingsData);
-
-        // Live task complete: unlock sub-option protocol
-        if (currentSub) {
-          setLockedSubOptions((prev) => prev.filter((item) => item !== currentSub));
-        }
-        if (activeAnalysisSubRef.current === currentSub) {
-          activeAnalysisSubRef.current = null;
-        }
-      }, 1000);
-      liveTimeoutsRef.current.push(t7);
-    }, 2700);
-
-    liveTimeoutsRef.current.push(t1, t2, t3, t4, t5, t6);
+      // Live task complete: unlock sub-option protocol
+      if (currentSub) {
+        setLockedSubOptions((prev) => prev.filter((item) => item !== currentSub));
+      }
+      if (activeAnalysisSubRef.current === currentSub) {
+        activeAnalysisSubRef.current = null;
+      }
+    }, 3700));
   };
 
   const handleMinimizeToTask = () => {
@@ -473,8 +524,12 @@ function WorkspaceHome({ openWindowsCount = 0, onOpenWindow }) {
     // Capture the exact sub-option protocol running for this specific background task
     const taskSub = activeAnalysisSubRef.current;
     activeAnalysisSubRef.current = null;
+    const taskId = quickTaskRef.current;
+    quickTaskRef.current = null;
+    const unlock = () => {
+      if (taskSub) setLockedSubOptions((prev) => prev.filter((item) => item !== taskSub));
+    };
 
-    setActiveTasksCount((prev) => prev + 1);
     setIsAnalyzing(false);
 
     // Keep source option mode active (e.g. 'batch' or 'realtime'), but unselect specific sub-option card
@@ -484,19 +539,49 @@ function WorkspaceHome({ openWindowsCount = 0, onOpenWindow }) {
     setAnalysisProgress(0);
     setAnalysisStatus('');
 
+    if (taskId) {
+      setTaskBackground(taskId, true);
+      markTaskRunning(taskId);
+      appendTaskLog(taskId, 'Moved to the background.');
+    }
+
     // Independent background timer: does NOT get cleared when new live tasks start
-    setTimeout(() => {
-      setActiveTasksCount((prev) => Math.max(0, prev - 1));
-      setReportsCount((prev) => prev + 1);
-      // Unlock this specific task's protocol upon background completion
-      if (taskSub) {
-        setLockedSubOptions((prev) => prev.filter((item) => item !== taskSub));
+    const timer = setTimeout(() => {
+      if (taskId && isTaskActive(getTask(taskId))) {
+        appendTaskLog(taskId, `Analysis complete. Flagged rules: ${mockFindingsData.anomalies.join(', ')}`);
+        updateTask(taskId, { statusText: '', message: `${mockFindingsData.status} ${mockFindingsData.anomalies.length} anomalies` });
+        finishTask(taskId, TASK_STATUSES.COMPLETED);
       }
+      setReportsCount((prev) => prev + 1);
+      if (onReportReady) onReportReady();
+      // Unlock this specific task's protocol upon background completion
+      unlock();
     }, 6000);
+
+    if (taskId) {
+      setTaskHandlers(taskId, {
+        terminate: () => {
+          clearTimeout(timer);
+          appendTaskLog(taskId, 'Stopped by user.', 'warn');
+          finishTask(taskId, TASK_STATUSES.TERMINATED);
+          unlock();
+        },
+      });
+    }
+  };
+
+  // Ends the live quick task (cancel, drop, reset).
+  const stopLiveQuickTask = (message) => {
+    const taskId = quickTaskRef.current;
+    quickTaskRef.current = null;
+    if (!taskId || !isTaskActive(getTask(taskId))) return;
+    appendTaskLog(taskId, message, 'warn');
+    finishTask(taskId, TASK_STATUSES.TERMINATED, { message });
   };
 
   const handleCancelAnalysis = () => {
     clearLiveAnalysisTimeouts();
+    stopLiveQuickTask('Analysis cancelled.');
     const currentSub = activeAnalysisSubRef.current;
     if (currentSub) {
       setLockedSubOptions((prev) => prev.filter((item) => item !== currentSub));
@@ -509,12 +594,15 @@ function WorkspaceHome({ openWindowsCount = 0, onOpenWindow }) {
     liveTimeoutsRef.current.push(t);
   };
 
+  handleCancelRef.current = handleCancelAnalysis;
+
   const handlePromptDropAnalysis = () => {
     setShowDropConfirmModal(true);
   };
 
   const handleConfirmDropAnalysis = () => {
     clearLiveAnalysisTimeouts();
+    stopLiveQuickTask('Analysis dropped.');
     setIsAnalyzing(false);
     setUploadedFiles([]);
     setSelectedSourceMode(null);
@@ -527,8 +615,9 @@ function WorkspaceHome({ openWindowsCount = 0, onOpenWindow }) {
 
   const handleResetPanel = () => {
     if (isAnalyzing) return;
+    stopLiveQuickTask('Panel reset.');
     setIsResetSpinning(true);
-    setTimeout(() => setIsResetSpinning(false), 750); // 2-round rotation duration
+    setTimeout(() => setIsResetSpinning(false), 650); // full-turn spin duration (600ms) + buffer
     clearLiveAnalysisTimeouts();
     setUploadedFiles([]);
     setSelectedSourceMode(null);
@@ -547,8 +636,9 @@ function WorkspaceHome({ openWindowsCount = 0, onOpenWindow }) {
     }
     if (isAnalyzing) return;
     if (option.id === 'tasks') {
-      if (activeTasksCount > 0 && onOpenWindow) {
-        onOpenWindow(WORKSPACE_WINDOW_TYPES.TASKS);
+      if (allTasks.length > 0) {
+        if (onOpenTask) onOpenTask(null);
+        else if (onOpenWindow) onOpenWindow(WORKSPACE_WINDOW_TYPES.TASKS);
       }
       return;
     }
@@ -577,14 +667,14 @@ function WorkspaceHome({ openWindowsCount = 0, onOpenWindow }) {
     {
       id: 'tasks',
       label: activeTasksCount > 0 ? `Tasks (${activeTasksCount})` : 'Tasks',
-      disabled: activeTasksCount === 0,
-      badge: activeTasksCount > 0 ? activeTasksCount : null,
+      disabled: allTasks.length === 0,
+      badge: unseenTasks > 0 ? unseenTasks : null,
     },
     {
       id: 'reports',
       label: reportsCount > 0 ? `Reports (${reportsCount})` : 'Reports',
       disabled: reportsCount === 0,
-      badge: reportsCount > 0 ? reportsCount : null,
+      badge: unseenReports > 0 ? unseenReports : null,
     },
   ];
 
@@ -932,6 +1022,12 @@ function WorkspaceHome({ openWindowsCount = 0, onOpenWindow }) {
                   <><ShockIcon /> {analyzeButtonLabelText}{uploadedFiles.length > 0 ? ` (${uploadedFiles.length} file${uploadedFiles.length > 1 ? 's' : ''})` : ''}</>
                 )}
               </button>
+              {isSessionLimitReached && !isAnalyzing && (
+                <p className="workspace_home_session_limit" role="status">
+                  {sessionLimitMessage(sessionUsage)}{' '}
+                  <button type="button" onClick={() => onOpenTask && onOpenTask(null)}>Open Tasks</button>
+                </p>
+              )}
             </div>
           </div>
         )}
@@ -1008,6 +1104,15 @@ function WorkspaceHome({ openWindowsCount = 0, onOpenWindow }) {
               >
                 <ShockIcon /> Re-analyze
               </button>
+              {resultTaskId && onOpenTask && (
+                <button
+                  type="button"
+                  className="workspace_home_findings_btn is-task"
+                  onClick={() => onOpenTask(resultTaskId)}
+                >
+                  <TaskIcon /> View task
+                </button>
+              )}
               <button
                 type="button"
                 className="workspace_home_findings_btn is-network"

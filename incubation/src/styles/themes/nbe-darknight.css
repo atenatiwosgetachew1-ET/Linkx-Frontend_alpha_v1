@@ -73,4 +73,16 @@
   --linkx-tab-active-bg: rgba(56, 189, 248, 0.75);
   --linkx-tab-active-border: rgba(56, 189, 248, 0.75);
   --linkx-tab-active-text: #ffffff;
+
+  /* Status colours for dark backgrounds (were missing: fell back to the
+     light-theme reds/greens, about 2.5:1 on dark cards). */
+  --linkx-danger-bg: rgba(127, 29, 29, 0.32);
+  --linkx-danger-text: #fecaca;
+  --linkx-danger-border: rgba(248, 113, 113, 0.5);
+  --linkx-success-bg: rgba(34, 197, 94, 0.15);
+  --linkx-success-text: #bbf7d0;
+  --linkx-success-border: rgba(134, 239, 172, 0.28);
+  --settings-danger-text: var(--linkx-danger-text);
+  --settings-danger-bg: var(--linkx-danger-bg);
+  --linkx-overlay-bg: rgba(0, 0, 0, 0.5);
 }

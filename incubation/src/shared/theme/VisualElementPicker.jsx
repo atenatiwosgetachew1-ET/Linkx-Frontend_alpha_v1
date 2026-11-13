@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTheme } from './ThemeContext.jsx';
+import { SCROLLBAR_PSEUDO_RE, stateFreeSelector } from './pickerSelectors.js';
 
 /**
  * VisualElementPicker — Inspector overlay.
@@ -18,6 +19,78 @@ const PICKER_LANDMARK_SELECTOR = [
   '[class*="workspace_zone_"]',
 ].join(', ');
 
+// Comma split that ignores commas inside (...) / [...].
+const splitSelectorList = (selectorText) => {
+  const parts = [];
+  let depth = 0;
+  let start = 0;
+  for (let i = 0; i < selectorText.length; i++) {
+    const ch = selectorText[i];
+    if (ch === '(' || ch === '[') depth++;
+    else if (ch === ')' || ch === ']') depth--;
+    else if (ch === ',' && depth === 0) {
+      parts.push(selectorText.slice(start, i).trim());
+      start = i + 1;
+    }
+  }
+  parts.push(selectorText.slice(start).trim());
+  return parts.filter(Boolean);
+};
+
+const isScrollable = (el) => {
+  const cs = getComputedStyle(el);
+  const scrollY = /(auto|scroll|overlay)/.test(cs.overflowY) && el.scrollHeight > el.clientHeight;
+  const scrollX = /(auto|scroll|overlay)/.test(cs.overflowX) && el.scrollWidth > el.clientWidth;
+  return scrollY || scrollX || el === document.scrollingElement;
+};
+
+// Rules that only set scrollbar-width/scrollbar-color (Firefox) count as scrollbar rules.
+const isScrollbarOnlyRule = (rule) => {
+  const style = rule.style;
+  if (!style || style.length === 0) return false;
+  for (let i = 0; i < style.length; i++) {
+    if (!style[i].startsWith('scrollbar')) return false;
+  }
+  return true;
+};
+
+// Flattens style rules, descending into @media/@supports/@layer blocks that apply.
+const collectStyleRules = (ruleList, out) => {
+  for (const rule of ruleList) {
+    if (rule.selectorText) {
+      out.push(rule);
+      continue;
+    }
+    if (!rule.cssRules) continue;
+    try {
+      if (rule.media && rule.conditionText && !window.matchMedia(rule.conditionText).matches) continue;
+      if (!rule.media && rule.conditionText && typeof CSS !== 'undefined' && !CSS.supports(rule.conditionText)) continue;
+    } catch { /* unknown condition: include */ }
+    collectStyleRules(rule.cssRules, out);
+  }
+  return out;
+};
+
+// Returns { selector, isScrollbar } for the first selector part matching `el`, or null.
+const matchRule = (el, rule, scrollable) => {
+  const scrollbarOnly = isScrollbarOnlyRule(rule);
+  if (scrollbarOnly && !scrollable) return null;
+  for (const part of splitSelectorList(rule.selectorText)) {
+    const isScrollbarPart = SCROLLBAR_PSEUDO_RE.test(part);
+    if (isScrollbarPart && !scrollable) continue;
+    const base = stateFreeSelector(part);
+    try {
+      if (el.matches(base)) return { selector: part, isScrollbar: isScrollbarPart || scrollbarOnly };
+    } catch {
+      // Stripping can break selectors like :not(:hover); fall back to the original.
+      try {
+        if (!isScrollbarPart && el.matches(part)) return { selector: part, isScrollbar: scrollbarOnly };
+      } catch { /* unsupported selector */ }
+    }
+  }
+  return null;
+};
+
 export default function VisualElementPicker() {
   const { inspectorActive, toggleInspector, setCustomVariable, customOverrides } = useTheme();
   const [hoveredEl, setHoveredEl] = useState(null);
@@ -34,20 +107,24 @@ export default function VisualElementPicker() {
     const rootStyle = getComputedStyle(document.documentElement);
 
     // Scan an element's matching CSS rules for var(--xxx) references
+    const allRules = [];
+    for (const sheet of document.styleSheets) {
+      let rules;
+      try { rules = sheet.cssRules || sheet.rules; } catch { continue; }
+      if (rules) collectStyleRules(rules, allRules);
+    }
+
     const scanElement = (targetEl, depth) => {
       const computed = getComputedStyle(targetEl);
       const tag = depth === 0 ? '(self)' : `(parent ×${depth})`;
+      const scrollable = isScrollable(targetEl);
 
       try {
-        for (const sheet of document.styleSheets) {
-          let rules;
-          try { rules = sheet.cssRules || sheet.rules; } catch { continue; }
-          if (!rules) continue;
-
-          for (const rule of rules) {
-            if (!rule.selectorText) continue;
+        {
+          for (const rule of allRules) {
             try {
-              if (targetEl.matches(rule.selectorText)) {
+              const match = matchRule(targetEl, rule, scrollable);
+              if (match) {
                 const ruleText = rule.cssText;
                 const varMatches = ruleText.matchAll(/var\((--[\w-]+)/g);
                 for (const m of varMatches) {
@@ -57,7 +134,9 @@ export default function VisualElementPicker() {
                     const val = computed.getPropertyValue(varName).trim() || rootStyle.getPropertyValue(varName).trim();
                     let propContext = 'unknown';
                     const escaped = varName.replace(/[-]/g, '\\-');
-                    if (ruleText.match(new RegExp(`(?:background|background-color)\\s*:\\s*[^;]*var\\(${escaped}[,)]`))) {
+                    if (match.isScrollbar) {
+                      propContext = 'scrollbar';
+                    } else if (ruleText.match(new RegExp(`(?:background|background-color)\\s*:\\s*[^;]*var\\(${escaped}[,)]`))) {
                       propContext = 'background';
                     } else if (ruleText.match(new RegExp(`(?:^|[^-])color\\s*:\\s*[^;]*var\\(${escaped}[,)]`))) {
                       propContext = 'text color';
@@ -72,7 +151,7 @@ export default function VisualElementPicker() {
                       name: varName,
                       value: val,
                       context: propContext,
-                      selector: rule.selectorText,
+                      selector: match.selector,
                       source: depth === 0 ? 'direct' : `inherited ${tag}`,
                     });
                   }
@@ -124,6 +203,9 @@ export default function VisualElementPicker() {
   // Click handler — pin element
   const handleClick = useCallback((e) => {
     if (!inspectorActive) return;
+    // Alt+click passes through to the app (open menus/lists like the dock's
+    // "show all windows" shell, then pick inside them).
+    if (e.altKey) return;
     // If clicking inside the panel, let it through
     if (e.target.closest('.element_picker_panel')) return;
     e.preventDefault();
@@ -276,7 +358,7 @@ export default function VisualElementPicker() {
       {/* Floating badge: inspector mode active */}
       <div className="element_picker_badge" style={{ position: 'fixed', top: 10, left: '50%', transform: 'translateX(-50%)', zIndex: 100001, pointerEvents: 'auto' }}>
         <span>🔍 Element Picker Active</span>
-        <span className="element_picker_badge_hint">Hover & click any element • ESC to exit</span>
+        <span className="element_picker_badge_hint">Hover & click any element • Alt+click to use the app (open menus) • ESC to exit</span>
         <button className="element_picker_badge_close" onClick={toggleInspector}>✕</button>
       </div>
 

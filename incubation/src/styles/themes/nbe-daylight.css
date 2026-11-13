@@ -28,7 +28,7 @@
   --on-scene-text-muted: #54595F;
   --on-scene-text-subtle: #7A7A7A;
   --panel-bg: rgba(255, 255, 255, 0.97);
-  --panel-border: #DCE4EE;
+  --panel-border: #dce4ee;
   --panel-shadow: rgba(19, 30, 42, 0.10);
   --primary-action-bg: #131E2A;
   --primary-action-bg-active: #AE874F;
@@ -78,12 +78,12 @@
   --linkx-text-subtle: rgba(84, 89, 95, 0.8);
   --linkx-window-bg: rgba(250, 251, 253, 0.97);
   --linkx-window-body-bg: rgba(255, 255, 255, 0.97);
-  --linkx-window-border: #D5DEE8;
-  --linkx-window-border-active: #AE874F;
+  --linkx-window-border: rgba(58, 77, 100, 0.54);
+  --linkx-window-border-active: #2b3d50;
   --linkx-window-header-active-bg: #131E2A;
   --linkx-window-header-bg: #202F3F;
   --linkx-window-header-drag-bg: #2B3D52;
-  --linkx-window-shadow: 0 14px 40px rgba(19, 30, 42, 0.14);
+  --linkx-window-shadow: #131e2a;
   --linkx-workspace-bg: #F4F7FA;
   --linkx-workspace-overlay: linear-gradient(180deg, #FFFFFF 0%, #F4F7FA 55%, #E8EFF7 100%);
 }
@@ -102,12 +102,8 @@
   /* Neutral greys → NBE greys */
   --window-subtitle-text: #7A7A7A;
   --window-action-btn-icon: #7A7A7A;
-  --session-chip-label-color: #7A7A7A;
+  --session-chip-label-color: #ffffff;
   --session-chip-btn-icon: #7A7A7A;
-  --mode-grid-btn-icon: #7A7A7A;
-  --connection-grid-btn-icon: #7A7A7A;
-  --connection-grid-btn-badge-color: #7A7A7A;
-  --config-preview-btn-icon: #7A7A7A;
   --storage-parent-search-placeholder: #A2A2A2;
   --right-collapse-btn-icon: #7A7A7A;
   --right-tab-text: #54595F;
@@ -116,45 +112,30 @@
   --right-chat-input-placeholder: #A2A2A2;
   --right-chat-word-counter-color: #7A7A7A;
   --step-label-desc-color: #54595F;
-  --mode-grid-btn-desc-color: #54595F;
-  --config-preview-btn-desc-color: #54595F;
-  --window-card-subtext-color: #54595F;
   --central-secondary-box-text: #54595F;
   --right-form-label-color: #54595F;
   --right-theme-card-desc-color: #54595F;
   --central-drop-modal-body-color: #54595F;
   --central-drop-modal-cancel-text: #54595F;
-  --mode-grid-btn-disabled-icon: #A2A2A2;
-  --mode-grid-btn-disabled-title-color: #A2A2A2;
-  --mode-grid-btn-disabled-desc-color: #A2A2A2;
-  --connection-grid-btn-disabled-icon: #A2A2A2;
-  --connection-grid-btn-disabled-title-color: #A2A2A2;
-  --connection-grid-btn-disabled-badge-color: #A2A2A2;
-  --config-preview-btn-disabled-icon: #A2A2A2;
-  --config-preview-btn-disabled-title-color: #A2A2A2;
-  --config-preview-btn-disabled-desc-color: #A2A2A2;
   --window-footer-btn-disabled-text: #A2A2A2;
   --right-chat-send-btn-disabled-icon: #A2A2A2;
 
   /* Selected / pressed states → official gold */
-  --mode-grid-btn-pressed-border: #AE874F;
-  --connection-grid-btn-pressed-border: #AE874F;
-  --config-preview-btn-pressed-border: #AE874F;
   --window-footer-btn-pressed-border: #AE874F;
   --dataframe-action-btn-border: #D5DEE8;
   --dataframe-action-btn-icon-color: #AE874F;
-  --dataframe-action-btn-selected-bg: #202F3F;
   --dataframe-action-btn-selected-border: #AE874F;
   --storage-type-btn-border: #D5DEE8;
   --storage-type-btn-icon-color: #AE874F;
-  --storage-type-btn-selected-bg: #202F3F;
   --storage-type-btn-selected-border: #AE874F;
+  /* Source window cards, radios and upload now derive from the quick analysis
+     panel tokens (tokens.css), so they are not pinned here. */
   --storage-search-btn-icon-color: #AE874F;
   --central-footer-round-btn-icon-color: #AE874F;
   --source-choose-step-label-border: #DCE4EE;
   --central-overlay-top: #E8EFF7;
   --central-overlay-bottom: #E8EFF7;
-  --stream-log-bg: #131E2A;
+  --stream-log-bg: #f4f7fa;
   --central-graph-node: #1C6F8A;
 
   /* Official CTA gradient (bronze → gold, 250deg) */
@@ -204,24 +185,24 @@
    (mirrors the left sidebar), white cards with ice borders, and navy/gold
    selected states (mirrors the quick analysis panel radios/cards). */
 [data-theme="nbe-daylight"] {
-  --right-workspace-border: #DCE4EE;
+  --right-workspace-border: #e6eaed;
   --right-workspace-bg-solid: #FFFFFF;
 
   /* Tab strip */
-  --right-tabs-wrapper-bg: #131E2A;
-  --right-tabs-bg: transparent;
+  --right-tabs-wrapper-bg: #1f2e3e;
+  --right-tabs-bg: rgba(0, 0, 0, 0.04);
   --right-tabs-border: rgba(255, 255, 255, 0.08);
   --right-tab-text: rgba(255, 255, 255, 0.72);
   --right-tab-hover-bg: rgba(255, 255, 255, 0.10);
   --right-tab-hover-text: #FFFFFF;
-  --right-tab-active-bg: rgba(174, 135, 79, 0.22);
-  --right-tab-active-text: #FFFFFF;
+  --right-tab-active-bg: #131e2a;
+  --right-tab-active-text: #ffffff;
   --right-tab-active-border: #AE874F;
-  --right-collapse-btn-bg: transparent;
-  --right-collapse-btn-border: rgba(255, 255, 255, 0.18);
+  --right-collapse-btn-bg: #30435a;
+  --right-collapse-btn-border: rgba(255, 255, 255, 0.0);
   --right-collapse-btn-icon: rgba(255, 255, 255, 0.72);
-  --right-collapse-btn-hover-bg: rgba(255, 255, 255, 0.10);
-  --right-collapse-btn-hover-border: rgba(255, 255, 255, 0.28);
+  --right-collapse-btn-hover-bg: #3e516a;
+  --right-collapse-btn-hover-border: rgba(255, 255, 255, 0.1);
   --right-collapse-btn-hover-icon: #FFFFFF;
 
   /* Collapsed rail */
@@ -236,9 +217,9 @@
   --right-collapsed-btn-active-icon: #FFFFFF;
 
   /* Section cards */
-  --right-card-bg: #FFFFFF;
-  --right-card-bg-opacity: 1;
-  --right-card-border: #DCE4EE;
+  --right-card-bg: #ffffff;
+  --right-card-bg-opacity: 0.67;
+  --right-card-border: #e8e8e8;
   --right-card-title-color: #131E2A;
   --right-section-title-color: #131E2A;
   --right-card-toggle-btn-color: #AE874F;
@@ -263,9 +244,9 @@
   --right-disabled-icon-color: #A2A2A2;
 
   /* Assistant + chat */
-  --right-chat-bg: #FFFFFF;
+  --right-chat-bg: rgba(255, 255, 255, 0.54);
   --right-chat-border: #DCE4EE;
-  --right-assistant-action-btn-color: #AE874F;
+  --right-assistant-action-btn-color: #ae874f;
   --right-assistant-action-btn-hover-bg: rgba(174, 135, 79, 0.12);
   --right-assistant-action-btn-hover-color: #7F5523;
   --right-chat-avatar-bg: #131E2A;
@@ -400,7 +381,134 @@
   --launcher-hover-text: #FFFFFF;
   --launcher-active-text: #FFFFFF;
   --launcher-focus-ring: rgba(174, 135, 79, 0.65);
+  --launcher-badge-dot: #AE874F;
+  --launcher-badge-dot-glow: rgba(174, 135, 79, 0.7);
   --launcher-shell-bg: #131E2A;
   --launcher-brand-logo-bg: #F4F7FA;
   --launcher-brand-logo-ring: 0 0 0 1px #AE874F;
+}
+
+/* Theme Studio overrides sealed into NBE Daylight (2026-11-11 export). */
+[data-theme="nbe-daylight"] {
+  --context-text-secondary: #54595f;
+  --linkx-shell-bg-solid: #f4f7fa;
+  --right-workspace-gradient-top: rgba(19, 30, 42, 0.06);
+  --right-workspace-gradient-bottom: rgba(19, 30, 42, 0.06);
+  --window-body-border-active: #131e2a;
+  --window-body-border: rgba(58, 77, 100, 0.32);
+  --linkx-dock-header-bg: #121c28;
+  --dock-overview-btn-icon: #e3e3e3;
+  --dock-overview-btn-hover-icon: #ffffff;
+  --dock-overview-btn-hover-bg: #2e4056;
+  --dock-overview-btn-bg: #1d2a3a;
+  --dock-tab-bg: #1f2c3d;
+  --dock-tab-text: #c4c4c4;
+  --dock-tabs-border: #2d3a49;
+  --dock-tab-icon: #c4c4c4;
+  --dock-tab-active-subtitle: #cfcfcf;
+  --dock-tab-subtitle: #a6a6a6;
+  --dock-tab-active-bg: #30435a;
+  --dock-tab-active-text: #ffffff;
+  --dock-tab-active-icon: #ffffff;
+  --dock-tab-active-close-bg: #7e2020;
+  --dock-tab-close-hover-bg: rgba(130, 28, 28, 0.5);
+  --dock-tab-close-icon: #e8e8e8;
+  --dock-tab-close-hover-icon: #ffffff;
+  --dock-tab-hover-bg: #223349;
+  --dock-tab-subtitle-focus: #e0e0e0;
+  --dock-tab-active-close-hover-bg: #8d2525;
+  --dock-tab-active-close-hover-icon: #ffffff;
+  --dock-tab-active-close-icon: #cccccc;
+  --dock-tab-close-bg: #1a2837;
+  --dock-menu-bg: #f4f7fa;
+  --dock-menu-border: #dce4ee;
+  --dock-menu-item-hover-border: #ae874f;
+  --dock-menu-item-active-border: #f4f7fa;
+  --dock-menu-item-active-bg: #d8dee4;
+  --dock-overview-btn-open-bg: #0f161f;
+  --dock-overview-btn-open-icon: #3d4a57;
+  --session-chip-bg: #131e2a;
+  --session-chip-value-color: #7a7a7a;
+  --settings-border: #dce4ee;
+  --settings-text-muted: #666666; /* 5.7:1 on white (was #7a7a7a, 4.3:1) */
+}
+
+/* Theme Studio overrides sealed into NBE Daylight (2026-11-12 export). */
+[data-theme="nbe-daylight"] {
+  --window-active-close-bg: #7e2020;
+  --window-active-close-hover-bg: #8d2525;
+  --window-active-close-icon: #ededed;
+  --window-active-close-border: #7e2020;
+  --window-active-close-hover-border: #8d2525;
+  --window-close-bg: #30435a;
+  --window-close-border: #203040;
+  --window-close-hover-bg: #7e2020;
+  --window-close-hover-border: #7e2020;
+  --window-close-icon: #ababab;
+  --window-footer-info-icon-color: #ae874f;
+  /* Window load screen cancel strip: lightly broken (warm off-white) background. */
+  --loader-footer-bg: #FBF9F6;
+  --central-badge-text-color: #131e2a;
+  --window-active-maximize-bg: #1d2a3a;
+  --window-active-maximize-border: #21303f;
+  --window-active-maximize-hover-bg: #30435a;
+  --window-active-maximize-hover-border: #30435a;
+  --window-active-maximize-hover-icon: #ffffff;
+  --window-active-maximize-icon: #e5e5e5;
+  --window-scrollbar-width: 5px;
+  --launcher-border: #dce4ee;
+  --window-scrollbar-track-bg: #ebedef;
+  --window-scrollbar-thumb-bg: rgba(122, 122, 122, 0.6);
+  --window-scrollbar-thumb-hover-bg: rgba(174, 135, 79, 0.75);
+  --window-scrollbar-thumb-active-bg: rgba(131, 107, 73, 0.65);
+  --window-maximize-border: transparent;
+  --window-maximize-hover-bg: #30435a;
+  --window-maximize-hover-border: #30435a;
+  --window-maximize-hover-icon: #ffffff;
+  --central-findings-drop-btn-hover-bg: #8d2525;
+  --central-findings-drop-btn-hover-text: #ffffff;
+  --central-findings-drop-btn-text: #681d1b;
+  --central-findings-drop-btn-icon-color: #681d1b;
+  --central-findings-drop-btn-hover-icon-color: #ffffff;
+  --central-overlay-close-btn-hover-bg: #8d2525;
+  --central-overlay-close-btn-text: #ffffff;
+  --central-overlay-close-btn-bg: #7e2020;
+  --central-overlay-min-btn-bg: transparent;
+  --central-overlay-min-btn-border: transparent;
+  --central-overlay-close-btn-border: #691b1b;
+  --central-tasks-badge-text: #131e2a;
+  --central-reports-badge-text: #131e2a;
+  --source-choose-step-gradient-bottom: #fafafa;
+  --source-choose-step-gradient-top: #fafafa;
+  --mode-grid-btn-active-bg: #1e2c3c;
+  --connection-grid-btn-active-bg: #d4cbbf;
+  --connection-grid-btn-active-icon: #ffffff;
+  --connection-grid-btn-active-icon-bg: #ae874f;
+  --mode-grid-btn-active-icon: #ffffff;
+  --mode-grid-btn-active-icon-bg: #ae874f;
+  --mode-grid-btn-active-title-color: #ffffff;
+  --window-card-active-subtext-color: #c8bca7;
+  --connection-grid-btn-active-border: #dfcfb9;
+  --connection-grid-btn-active-title-color: #1e2c3c;
+  --connection-grid-btn-active-badge-color: #845b28;
+  --storage-table-header-bg: #30435a;
+  --storage-table-header-text: #ffffff;
+  --storage-table-header-border: #e8eff7;
+  --storage-browser-border: #dce4ee;
+  --storage-browser-columns: #000000;
+  --dataframe-actions-card-bg: #ffffff;
+  --dataframe-desc-banner-border: #f0e9df;
+  --dataframe-desc-banner-bg: #efefef;
+  --dataframe-desc-banner-text: #131e2a;
+  --dataframe-desc-banner-subtext: #ae874f;
+  --dataframe-metric-card-border: #e8e0d4;
+  --dataframe-metric-card-bg: #f2f2f2;
+  --dataframe-pill-border: #ae9065;
+  --dataframe-pill-bg: #a48e70;
+  --dataframe-pill-text: #ffffff;
+  --dataframe-pill-icon-color: #ffffff;
+  --dataframe-manage-rules-btn-bg: #131e2a;
+  --dataframe-manage-rules-btn-border: #dce4ee;
+  --stream-log-text: #54595f;
+  --stream-log-border: #e7dbcb;
 }

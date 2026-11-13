@@ -1,0 +1,472 @@
+/* Settings window additions: permissions editor, service accounts, Vigilance.
+   Imported after main.css (src/app/App.jsx); order matters. */
+
+/* ── Settings window additions (Vigilance, service account storage
+   targets, permission quick actions, user editor actions) ── */
+.settings_window_body {
+	position: relative;
+}
+
+.settings_link_button {
+	padding: 0;
+	border: 0;
+	background: transparent;
+	color: var(--settings-accent-text);
+	font-size: 12px;
+	cursor: pointer;
+}
+
+.settings_link_button:hover:not(:disabled) {
+	text-decoration: underline;
+}
+
+.settings_link_button small {
+	color: var(--settings-text-muted);
+	font-size: 11px;
+}
+
+.settings_permission_editor {
+	display: grid;
+	gap: 8px;
+}
+
+.settings_permission_editor_header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 10px;
+	color: var(--settings-text-secondary);
+	font-size: 12px;
+	font-weight: 600;
+}
+
+.settings_permission_editor_header small {
+	color: var(--settings-text-muted);
+	font-weight: 400;
+	font-style: italic;
+}
+
+.settings_permission_quick_actions {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	color: var(--settings-text-muted);
+}
+
+.settings_user_browser_editor_actions {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 8px;
+	padding: 10px 12px 12px;
+}
+
+.settings_user_browser_editor_actions .settings_permission_quick_actions {
+	margin-right: auto;
+}
+
+/* Service accounts */
+.service_account_card {
+	display: grid;
+	border: 1px solid var(--settings-card-border);
+	border-radius: 4px;
+}
+
+.service_account_card.is-expanded {
+	border-color: var(--settings-accent);
+}
+
+.service_account_card_row {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 10px;
+	padding: 10px 12px;
+}
+
+.service_account_card_info {
+	display: grid;
+	gap: 4px;
+	min-width: 0;
+}
+
+.service_account_card_info > div {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+}
+
+.service_account_card_info small {
+	color: var(--settings-text-muted);
+	font-size: 11px;
+}
+
+.service_account_card_info strong {
+	color: var(--settings-text);
+	font-size: 13px;
+}
+
+.service_account_card_info p {
+	margin: 0;
+	overflow: hidden;
+	color: var(--settings-text-secondary);
+	font-size: 12px;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.service_account_badge {
+	padding: 1px 8px;
+	border: 1px solid var(--settings-card-border);
+	border-radius: 999px;
+	font-size: 11px;
+}
+
+.service_account_badge.is-active {
+	border-color: var(--linkx-success-border);
+	color: var(--linkx-success-text);
+}
+
+.service_account_badge.is-inactive {
+	color: var(--settings-text-muted);
+}
+
+.service_account_badge.is-system {
+	border-color: var(--settings-accent);
+	color: var(--settings-accent-text);
+}
+
+.service_account_card_actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.service_account_card_drawer {
+	display: grid;
+	gap: 14px;
+	padding: 12px;
+	border-top: 1px solid var(--settings-card-border);
+}
+
+.service_target_editor {
+	display: grid;
+	gap: 12px;
+	padding: 12px;
+	border: 1px dashed var(--settings-card-border);
+	border-radius: 4px;
+}
+
+.service_target_header {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 10px;
+}
+
+.service_target_header > div {
+	display: grid;
+	gap: 2px;
+}
+
+.service_target_header strong {
+	color: var(--settings-text);
+	font-size: 13px;
+}
+
+.service_target_header small {
+	color: var(--settings-text-muted);
+	font-size: 11px;
+}
+
+.service_target_catalog_badge {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 2px 10px;
+	border: 1px solid var(--linkx-success-border);
+	border-radius: 999px;
+	color: var(--linkx-success-text);
+	font-size: 11px;
+}
+
+.service_target_catalog_badge.is-error {
+	border-color: var(--linkx-danger-border);
+	color: var(--settings-danger-text, #c62828);
+}
+
+.service_target_domain_grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+	gap: 8px;
+}
+
+.service_target_domain_card {
+	display: grid;
+	gap: 2px;
+	padding: 8px 10px;
+	border: 1px solid var(--settings-card-border);
+	border-radius: 4px;
+	background: var(--settings-card-bg);
+	color: var(--settings-text);
+	text-align: left;
+	cursor: pointer;
+}
+
+.service_target_domain_card strong {
+	font-size: 12px;
+}
+
+.service_target_domain_card small {
+	color: var(--settings-text-muted);
+	font-size: 10px;
+}
+
+.service_target_domain_card span {
+	margin-top: 4px;
+	color: var(--settings-text-secondary);
+	font-size: 11px;
+}
+
+.service_target_domain_card.is-registered {
+	border-color: var(--settings-accent);
+}
+
+.service_target_domain_card.is-registered span {
+	color: var(--settings-accent-text);
+	font-weight: 600;
+}
+
+.service_target_domain_card.is-current {
+	box-shadow: inset 0 0 0 1px var(--settings-accent);
+}
+
+.service_target_domain_body {
+	display: grid;
+	gap: 12px;
+}
+
+.service_target_tabs {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	border-bottom: 1px solid var(--settings-card-border);
+}
+
+.service_target_tab {
+	display: inline-flex;
+	align-items: center;
+	border-bottom: 2px solid transparent;
+}
+
+.service_target_tab.is-active {
+	border-bottom-color: var(--settings-accent);
+}
+
+.service_target_tab button {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 6px 6px;
+	border: 0;
+	background: transparent;
+	color: var(--settings-text);
+	font-size: 12px;
+	cursor: pointer;
+}
+
+.service_target_tab i {
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: var(--settings-text-muted);
+}
+
+.service_target_tab i.is-configured {
+	background: var(--linkx-success-text);
+}
+
+.service_target_tab_remove {
+	color: var(--settings-text-muted) !important;
+	font-size: 10px !important;
+}
+
+.service_target_banner {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	color: var(--settings-text-secondary);
+	font-size: 12px;
+}
+
+.service_target_banner code {
+	color: var(--settings-text);
+}
+
+.service_target_advanced_toggle {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	width: 100%;
+	padding: 8px 10px;
+	border: 1px solid var(--settings-card-border);
+	border-radius: 4px;
+	background: transparent;
+	color: var(--settings-text);
+	text-align: left;
+	cursor: pointer;
+}
+
+.service_target_advanced_toggle > span:first-child {
+	display: grid;
+	gap: 2px;
+}
+
+.service_target_advanced_toggle strong {
+	font-size: 12px;
+}
+
+.service_target_advanced_toggle small {
+	color: var(--settings-text-muted);
+	font-size: 11px;
+}
+
+.service_target_advanced {
+	display: grid;
+	gap: 8px;
+}
+
+.service_target_chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.service_target_chips span {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 2px 8px;
+	border: 1px solid var(--settings-card-border);
+	border-radius: 999px;
+	color: var(--settings-text);
+	font-size: 11px;
+}
+
+.service_target_chips button {
+	border: 0;
+	background: transparent;
+	color: var(--settings-text-muted);
+	font-size: 10px;
+	cursor: pointer;
+}
+
+.service_target_mapping_row {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto minmax(0, 1.4fr) auto;
+	align-items: center;
+	gap: 8px;
+}
+
+.service_target_mapping_row .settings_input {
+	width: 100%;
+	min-width: 0;
+	box-sizing: border-box;
+}
+
+/* Vigilance */
+.vigilance_status_pill {
+	padding: 2px 10px;
+	border: 1px solid var(--linkx-danger-border);
+	border-radius: var(--radius-pill, 999px);
+	background: var(--linkx-danger-bg);
+	color: var(--linkx-danger-text);
+	font-size: var(--fs-xs, 11px);
+	font-weight: 700;
+	text-transform: uppercase;
+}
+
+.vigilance_status_pill.is-active {
+	border-color: var(--linkx-success-border);
+	background: var(--linkx-success-bg);
+	color: var(--linkx-success-text);
+}
+
+.vigilance_status_pill.is-paused {
+	border-color: var(--settings-card-border);
+	background: color-mix(in srgb, var(--settings-text) 8%, transparent);
+	color: var(--settings-text);
+}
+
+.vigilance_feed {
+	margin: 0;
+	color: var(--settings-text);
+	font-size: 13px;
+}
+
+.vigilance_feed span {
+	margin-right: 6px;
+	color: var(--settings-text-muted);
+	font-size: 12px;
+}
+
+.vigilance_counter {
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+	margin: 0;
+}
+
+.vigilance_counter strong {
+	color: var(--settings-text);
+	font-size: 24px;
+}
+
+.vigilance_counter span {
+	color: var(--settings-text-secondary);
+	font-size: 13px;
+}
+
+.vigilance_runs {
+	max-height: 340px;
+}
+
+.vigilance_run {
+	cursor: pointer;
+}
+
+.vigilance_run:hover td {
+	background: color-mix(in srgb, var(--settings-text) 5%, transparent);
+}
+
+.vigilance_run.is-failed td {
+	background: color-mix(in srgb, var(--linkx-danger-bg) 55%, transparent);
+}
+
+.vigilance_run.is-checking {
+	cursor: wait;
+	opacity: 0.7;
+}
+
+.vigilance_error_trace {
+	max-height: 50vh;
+	margin: 0;
+	padding: 10px;
+	overflow: auto;
+	border: 1px solid var(--settings-card-border);
+	border-radius: 4px;
+	color: var(--settings-text);
+	font-size: 12px;
+	white-space: pre-wrap;
+}
+
+.config_window_dialog.is-wide {
+	width: min(640px, 100%);
+}

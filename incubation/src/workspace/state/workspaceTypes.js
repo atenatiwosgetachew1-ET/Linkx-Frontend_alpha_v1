@@ -9,6 +9,22 @@ export const WORKSPACE_WINDOW_TYPES = Object.freeze({
   SETTINGS: 'settings',
 });
 
+// Max simultaneously open windows, shared across the types in each group.
+export const WORKSPACE_WINDOW_LIMITS = Object.freeze([
+  Object.freeze({ types: Object.freeze([WORKSPACE_WINDOW_TYPES.SOURCE]), limit: 3, label: 'Source' }),
+  Object.freeze({ types: Object.freeze([WORKSPACE_WINDOW_TYPES.GRAPH, WORKSPACE_WINDOW_TYPES.CHART]), limit: 5, label: 'Graph and Chart' }),
+]);
+
+const findWindowLimitGroup = (type) => WORKSPACE_WINDOW_LIMITS.find((group) => group.types.includes(type)) || null;
+
+// Null when the window may open, otherwise { type, types, limit, label, count }.
+export const getWindowLimitBlock = (windows = [], type) => {
+  const group = findWindowLimitGroup(type);
+  if (!group) return null;
+  const count = windows.filter((windowItem) => group.types.includes(windowItem.type)).length;
+  return count >= group.limit ? { type, types: group.types, limit: group.limit, label: group.label, count } : null;
+};
+
 export const WORKSPACE_CONTEXT_TABS = Object.freeze({
   OVERVIEW: 'overview',
   INFO: 'info',

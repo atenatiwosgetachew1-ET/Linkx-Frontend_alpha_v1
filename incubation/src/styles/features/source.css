@@ -1,0 +1,577 @@
+/* Source window: storage "Use Default" discarded values, Elastic toolbar.
+   Imported after main.css (src/app/App.jsx); order matters. */
+
+/* Storage step: values ignored while "Use Default" is on */
+.source_window_storage_fields .source_window_field.is-discarded input,
+.source_window_storage_fields .source_window_field.is-discarded select {
+	text-decoration: line-through;
+	text-decoration-thickness: 1px;
+	text-decoration-color: var(--source-text-muted, #7f5523);
+}
+
+
+/* Stream step: tighter log lines and a status dot
+   (red while ingesting, green once completed). The dot reads the theme
+   variables directly (no locally redefined variable), so Theme Studio and
+   the style picker overrides on <html> always reach it. */
+.source_window_stream_header.is-hot .source_window_stream_dot,
+.source_window_stream_header.is-passive .source_window_stream_dot {
+	opacity: 1;
+}
+.source_window_stream_log {
+	line-height: 1.35;
+	/* Long lines wrap inside the box: no horizontal scrollbar. */
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	word-break: break-word;
+	overflow-x: hidden;
+	width: 100%;
+	max-width: 100%;
+	box-sizing: border-box;
+	font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+	font-size: var(--fs-xs, 11px);
+}
+
+.source_window_stream_dot {
+	display: block;
+	width: 10px;
+	height: 10px;
+	border-radius: 50%;
+	background: var(--stream-passive-dot-color, #16a34a);
+	box-shadow: 0 0 0 2px color-mix(in srgb, var(--stream-passive-dot-color, #16a34a) 25%, transparent);
+	opacity: 0.55;
+	transition: opacity 160ms ease;
+}
+
+.source_window_stream_header.is-hot .source_window_stream_dot {
+	background: var(--stream-hot-dot-color, #dc2626);
+	box-shadow: 0 0 0 2px color-mix(in srgb, var(--stream-hot-dot-color, #dc2626) 25%, transparent);
+}
+
+.source_window_stream_header.is-live .source_window_stream_dot {
+	opacity: 1;
+	animation: streamLiveBeat 1.8s ease-in-out infinite;
+}
+
+.source_window_stream_header.is-live .source_window_stream_icon::before,
+.source_window_stream_header.is-live .source_window_stream_icon::after {
+	border-color: var(--stream-hot-dot-color, #dc2626);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.source_window_stream_header.is-live .source_window_stream_dot {
+		animation: none;
+	}
+}
+
+/* Text without a colour of its own picked up whatever the window body
+   inherited, so the style picker had nothing Source-specific to edit. */
+.source_window_status_text {
+	color: var(--source-status-text-color, var(--source-text-secondary));
+}
+
+.source_window_section h3 {
+	color: var(--source-section-title-color, var(--source-text));
+}
+
+/* ---- Message broker page (batch broker + realtime connect) -------------
+   Two matching cards side by side: broker connection | tool integration.
+   Compact rhythm: header, status line, type switch, one input row with the
+   action button, then the message preview filling the rest. */
+.source_window_step_body_broker {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr);
+	align-items: start;
+	gap: 10px;
+	height: 100%;
+	min-height: 0;
+	padding: 10px 12px;
+	overflow: auto;
+}
+
+.source_window_step_body_broker.has-tool {
+	grid-template-columns: minmax(0, 1.3fr) minmax(260px, 1fr);
+}
+
+@media (max-width: 900px) {
+	.source_window_step_body_broker.has-tool {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}
+
+.source_window_broker_panel,
+.source_window_step_body_broker > .source_window_section {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	min-width: 0;
+	min-height: 0;
+	box-sizing: border-box;
+	border: 1px solid var(--source-card-border);
+	border-radius: 4px;
+	background: var(--source-card-bg);
+	padding: 12px;
+}
+
+/* Both cards run the full height of the page; the broker preview and the
+   space under the tool form absorb the extra height. */
+.source_window_broker_panel,
+.source_window_step_body_broker > .source_window_section {
+	align-self: stretch;
+}
+
+.source_window_step_body_broker.has-tool {
+	align-items: stretch;
+}
+
+.source_window_broker_header,
+.source_window_step_body_broker > .source_window_section > header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 10px;
+	min-width: 0;
+	padding-bottom: 8px;
+	border-bottom: 1px solid var(--source-separator);
+}
+
+.source_window_broker_header h3,
+.source_window_step_body_broker > .source_window_section > header h3 {
+	margin: 0;
+	font-size: 13px;
+}
+
+.source_window_broker_summary {
+	display: grid;
+	gap: 2px;
+	min-width: 0;
+}
+
+.source_window_broker_summary p,
+.source_window_broker_summary span {
+	margin: 0;
+	font-size: 11px;
+	line-height: 1.35;
+}
+
+.source_window_broker_summary p {
+	color: var(--source-status-text-color, var(--source-text-secondary));
+	font-weight: 600;
+}
+
+.source_window_broker_summary span {
+	color: var(--source-text-subtle);
+}
+
+/* Kafka | REST API: a compact two-option switch. */
+.source_window_broker_type_group {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 8px;
+	min-width: 0;
+}
+
+.source_window_broker_type_group label {
+	display: grid;
+	grid-template-columns: 14px 18px minmax(0, 1fr);
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+	height: 36px;
+	padding: 0 10px;
+	border-radius: 4px;
+	font-size: 11px;
+}
+
+.source_window_broker_type_group input {
+	width: 13px;
+	height: 13px;
+	margin: 0;
+}
+
+.source_window_broker_type_group .source_window_mode_icon {
+	width: 16px;
+	height: 16px;
+}
+
+/* Address | topic | action on one row (address | action for REST API). */
+.source_window_broker_fields {
+	display: grid;
+	grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) auto;
+	align-items: end;
+	gap: 8px;
+	min-width: 0;
+}
+
+.source_window_broker_fields.is-api {
+	grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.source_window_broker_fields .source_window_field {
+	gap: 4px;
+}
+
+.source_window_broker_fields .source_window_field input {
+	height: 32px;
+	font-size: 11px;
+}
+
+.source_window_broker_fields .source_window_field input:disabled {
+	color: var(--source-text-subtle);
+	cursor: not-allowed;
+}
+
+.source_window_broker_fields > button {
+	height: 32px;
+	min-width: 88px;
+	border: 1px solid var(--source-card-border);
+	border-radius: 4px;
+	background: var(--source-cta-bg);
+	color: var(--source-cta-text);
+	padding: 0 12px;
+	font: inherit;
+	font-size: 11px;
+	font-weight: 600;
+	white-space: nowrap;
+	cursor: pointer;
+	transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+
+.source_window_broker_fields > button:hover:not(:disabled) {
+	background: var(--source-highlight);
+	color: var(--source-text);
+}
+
+.source_window_broker_fields > button:disabled {
+	cursor: wait;
+	opacity: 0.62;
+}
+
+@media (max-width: 640px) {
+	.source_window_broker_fields,
+	.source_window_broker_fields.is-api {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}
+
+.source_window_broker_panel .source_window_validation {
+	margin: 0;
+}
+
+/* Message preview: fills the remaining height of the card. */
+.source_window_broker_preview {
+	display: flex;
+	flex: 1 1 auto;
+	align-items: center;
+	justify-content: center;
+	min-height: 96px;
+	border: 1px dashed var(--source-card-border);
+	border-radius: 4px;
+	background: var(--source-highlight);
+}
+
+.source_window_broker_preview > span {
+	display: none;
+}
+
+.source_window_broker_preview p {
+	margin: 0;
+	color: var(--source-text-subtle);
+	font-size: 11px;
+}
+
+/* Tool card: one field per line, action pinned to the bottom of the card. */
+.source_window_step_body_broker > .source_window_section .source_window_form_grid {
+	grid-template-columns: minmax(0, 1fr);
+	gap: 8px;
+}
+
+.source_window_step_body_broker > .source_window_section .source_window_field input,
+.source_window_step_body_broker > .source_window_section .source_window_field select {
+	height: 32px;
+	font-size: 11px;
+}
+
+.source_window_step_body_broker > .source_window_section .source_window_status_text,
+.source_window_step_body_broker > .source_window_section .source_window_tool_hint {
+	margin: 0;
+	font-size: 11px;
+}
+
+.source_window_step_body_broker > .source_window_section .source_window_actions {
+	justify-content: flex-end;
+	margin-top: auto;
+}
+
+/* ---- Elastic Search page toolbar ----------------------------------------
+   One row like the Storage page:
+     Use Default | Storage address | Search mode | Column | Connect
+   Every control is 34px tall so the row lines up. */
+.source_window_storage_fields.source_window_search_fields {
+	grid-template-columns: auto minmax(150px, 1fr) auto minmax(170px, 1fr) auto;
+	align-items: end;
+	gap: 10px;
+}
+
+.source_window_search_fields .source_window_storage_default_toggle,
+.source_window_search_fields .source_window_storage_connect_button,
+.source_window_search_fields .source_window_field input,
+.source_window_search_fields .source_window_field select {
+	height: 34px;
+	box-sizing: border-box;
+}
+
+/* Column select styled like the inputs beside it. */
+.source_window_search_fields .source_window_field select {
+	border: 1px solid var(--storage-input-border, var(--source-card-border, rgba(174, 135, 79, 0.45)));
+	border-radius: 4px;
+	background: var(--storage-input-bg, var(--source-card-bg, #FFFFFF));
+	color: var(--storage-input-text, var(--source-text, #131e2a));
+}
+
+.source_window_search_fields .source_window_field select:disabled {
+	color: var(--source-text-subtle);
+	cursor: not-allowed;
+	opacity: 0.7;
+}
+
+/* Strict | Fuzzy as a compact segmented switch. */
+.source_window_search_mode_field {
+	gap: 5px;
+}
+
+.source_window_search_mode_field > span {
+	color: var(--storage-field-label-color, var(--source-text-muted, #7f5523));
+}
+
+.source_window_search_fields .source_window_search_mode_group {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(76px, auto));
+	gap: 6px;
+	flex-wrap: nowrap;
+}
+
+.source_window_search_fields .source_window_search_mode_group label {
+	display: inline-flex;
+	align-items: center;
+	justify-content: flex-start;
+	gap: 6px;
+	height: 34px;
+	box-sizing: border-box;
+	padding: 0 12px;
+	border-radius: 4px;
+	font-size: var(--fs-sm, 12px);
+	box-shadow: none;
+}
+
+.source_window_search_fields .source_window_search_mode_group input {
+	width: 13px;
+	height: 13px;
+	margin: 0;
+}
+
+/* Narrow windows: wrap like the Storage toolbar. */
+@container (max-width: 760px) {
+	.source_window_storage_fields.source_window_search_fields {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
+	.source_window_search_fields .source_window_storage_connect_button {
+		grid-column: 1 / -1;
+	}
+}
+
+@container (max-width: 460px) {
+	.source_window_storage_fields.source_window_search_fields {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}
+
+/* ---- Storage / Elastic header: type buttons + toolbar toggle ------------ */
+.source_window_storage_browser_header {
+	grid-template-columns: minmax(0, 1fr) auto auto;
+	gap: 10px;
+}
+
+.source_window_storage_type_buttons button {
+	white-space: nowrap;
+}
+
+.source_window_storage_type_buttons button span {
+	white-space: nowrap;
+}
+
+/* Toolbar hidden: the result list takes the freed space. */
+.source_window_storage_browser.is-toolbar-collapsed {
+	grid-template-rows: auto minmax(0, 1fr);
+}
+
+.source_window_storage_fields[hidden] {
+	display: none !important;
+}
+
+.source_window_toolbar_toggle {
+	display: inline-grid;
+	place-items: center;
+	width: 30px;
+	height: 30px;
+	padding: 0;
+	border: 1px solid var(--storage-type-btn-border, var(--source-card-border));
+	border-radius: 4px;
+	background: var(--storage-type-btn-bg, var(--source-card-bg));
+	color: var(--storage-type-btn-icon-color, var(--source-text-muted));
+	cursor: pointer;
+	transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+
+.source_window_toolbar_toggle:hover,
+.source_window_toolbar_toggle:focus-visible {
+	background: var(--source-highlight);
+	color: var(--source-text);
+}
+
+.source_window_toolbar_toggle svg {
+	width: 14px;
+	height: 14px;
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 2.2;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+	transition: transform 180ms ease;
+}
+
+/* Chevron points up while open (collapse), down while collapsed (expand). */
+.source_window_toolbar_toggle.is-collapsed svg {
+	transform: rotate(180deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.source_window_toolbar_toggle svg { transition: none; }
+}
+
+/* ---- Search row without the leading icon (Elastic page) ----------------
+   The search box spans the icon column so the result columns stay aligned. */
+.source_window_storage_parent_row.has-no-icon > .source_window_storage_search_input {
+	grid-column: 1 / 3;
+	margin-left: 10px;
+}
+
+/* Start → end date range in one bordered box. */
+.source_window_storage_date_range.is-range {
+	grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+	gap: 6px;
+	padding: 0 8px;
+}
+
+.source_window_storage_date_range.is-range b {
+	color: var(--storage-date-input-text, var(--source-text-muted, #7f5523));
+	font-size: 11px;
+	opacity: 0.7;
+}
+
+/* Stream log lines: time | level | message, the same layout as the Tasks
+   window activity log (shared/logs/LogLines.jsx). Colours from the
+   --stream-log-* tokens. */
+.source_window_stream_log {
+	display: block;
+	padding: 6px 0;
+	overflow-y: auto;
+	white-space: normal;
+	line-height: 1.55;
+	font-size: 11px;
+}
+
+.source_window_stream_log:focus-visible {
+	box-shadow: inset 0 0 0 2px var(--stream-log-border, rgba(174, 135, 79, 0.35));
+}
+
+.source_window_stream_log_line {
+	display: grid;
+	/* "HH:MM:SS" is 8 monospace characters. */
+	grid-template-columns: 8.5ch minmax(0, 1fr);
+	align-items: start;
+	gap: 12px;
+	padding: 1px 14px;
+	border-left: 2px solid transparent;
+	color: var(--stream-log-text, #38bdf8);
+}
+
+.source_window_stream_log_line:hover {
+	background: var(--stream-log-line-hover-bg, rgba(56, 189, 248, 0.07));
+}
+
+.source_window_stream_log_time {
+	min-width: 0;
+	overflow: hidden;
+	color: var(--stream-log-time-color, rgba(56, 189, 248, 0.55));
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+
+.source_window_stream_log_text {
+	min-width: 0;
+	color: var(--stream-log-text, #38bdf8);
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+
+.source_window_stream_log_level {
+	display: inline-block;
+	margin-right: 6px;
+	padding: 0 5px;
+	border-radius: 3px;
+	background: color-mix(in srgb, var(--stream-log-time-color, #38bdf8) 16%, transparent);
+	color: var(--stream-log-time-color, #38bdf8);
+	font-size: 9.5px;
+	font-weight: 700;
+	letter-spacing: 0.4px;
+	line-height: 15px;
+	text-transform: uppercase;
+	vertical-align: 1px;
+}
+
+.source_window_stream_log_line.is-warn {
+	border-left-color: var(--stream-log-warn-color, #d97706);
+	background: color-mix(in srgb, var(--stream-log-warn-color, #d97706) 6%, transparent);
+}
+
+.source_window_stream_log_line.is-warn .source_window_stream_log_level {
+	background: color-mix(in srgb, var(--stream-log-warn-color, #d97706) 16%, transparent);
+	color: var(--stream-log-warn-color, #d97706);
+}
+
+.source_window_stream_log_line.is-error {
+	border-left-color: var(--stream-log-error-color, #dc2626);
+	background: color-mix(in srgb, var(--stream-log-error-color, #dc2626) 6%, transparent);
+}
+
+.source_window_stream_log_line.is-error .source_window_stream_log_level,
+.source_window_stream_log_line.is-error .source_window_stream_log_text {
+	color: var(--stream-log-error-color, #dc2626);
+}
+
+.source_window_stream_log_line.is-error .source_window_stream_log_level {
+	background: color-mix(in srgb, var(--stream-log-error-color, #dc2626) 16%, transparent);
+}
+
+.source_window_stream_log_line.is-success .source_window_stream_log_level {
+	background: color-mix(in srgb, var(--status-success-text, #16a34a) 16%, transparent);
+	color: var(--status-success-text, #16a34a);
+}
+
+.source_window_stream_log_line.is-flagged {
+	border-left-color: color-mix(in srgb, var(--stream-log-flag-color, #dc2626) 60%, transparent);
+}
+
+.source_window_stream_log_note,
+.source_window_stream_log_empty {
+	margin: 0;
+	padding: 4px 14px 8px;
+	color: var(--stream-log-time-color, rgba(56, 189, 248, 0.55));
+	font-style: italic;
+}
+
+.source_window_stream_log_empty {
+	padding-top: 8px;
+}

@@ -437,6 +437,7 @@
   --settings-text-muted: var(--linkx-text-muted);
   --settings-text-subtle: var(--linkx-text-subtle);
   --settings-accent: var(--linkx-accent);
+  --settings-accent-text: color-mix(in srgb, var(--settings-accent) 70%, var(--settings-text, #e8eef3));
   --settings-card-bg: var(--linkx-card-bg);
   --settings-card-border: var(--linkx-card-border);
 

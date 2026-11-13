@@ -1,1550 +1,256 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 
-import { useAuth } from '../../../auth/useAuth.js';
-import { appConfig } from '../../../app/config.js';
+import WindowLoadScreen from '../../../shared/components/WindowLoadScreen.jsx';
+import { useCan } from '../../../auth/useCan.js';
+import { isSuccessResponse } from '../../../services/apiClient.js';
+import { sanitizeBackendUserMessage } from '../../../services/apiErrors.js';
+import { loadSessionConfiguration, switchSessionDomain } from '../../../services/sessionApi.js';
 import {
+  buildAddressDataframePayload,
+  buildArrayDataframePayload,
+  buildToolConnectPayload,
   connectSource,
   connectTool,
+  createDataframe,
   disconnectSource,
   disconnectTool,
+  formatDataframeFailureMessage,
+  isMaskedSecret,
+  searchSourceFiles,
+  toHybridResultItem,
+  toStorageFileItem,
+  uploadBatchFiles,
+  buildStreamPayload,
+  endStreamRequest,
+  resolveStreamLogFile,
+  startStreamRequest,
+  waitForStreamJob,
 } from '../../../services/sourceApi.js';
+import { persistRealtimeToolConfiguration } from '../../../services/configurationApi.js';
+import { useNotifications } from '../../../shared/notifications/useNotifications.js';
+import { useSession } from '../../../shared/session/useSession.js';
 import {
   compactValidationErrors,
   sanitizeConnectionValue,
   sanitizeIdentifier,
   sanitizeKafkaTopic,
-  sanitizeSecret,
   sanitizeText,
   validateConnectionValue,
   validateKafkaTopic,
+  sanitizeRelationshipName,
 } from '../../../utils/inputSecurity.js';
 import { useWorkspaceActions } from '../../../workspace/hooks/useWorkspace.js';
 import { WORKSPACE_WINDOW_TYPES } from '../../../workspace/state/workspaceTypes.js';
-import { useNotifications } from '../../../shared/notifications/useNotifications.js';
-
-const SOURCE_MODES = {
-  CHOOSE: 'choose',
-  BATCH: 'batch',
-  REALTIME: 'realtime',
-};
-
-const BATCH_TIMELINE_STEPS = [
-  { id: 'upload', label: 'Upload', value: 'Select source files' },
-  { id: 'dataframe', label: 'Dataframe', value: 'Prepare columns and action' },
-  { id: 'stream', label: 'Stream', value: 'Run ingestion' },
-];
-
-const BATCH_STORAGE_TIMELINE_STEPS = [
-  { id: 'upload', label: 'Storage', value: 'Connect table or path' },
-  { id: 'dataframe', label: 'Dataframe', value: 'Prepare columns and action' },
-  { id: 'stream', label: 'Stream', value: 'Run ingestion' },
-];
-
-const BATCH_BROKER_TIMELINE_STEPS = [
-  { id: 'upload', label: 'Broker', value: 'Connect message source' },
-  { id: 'dataframe', label: 'Dataframe', value: 'Prepare columns and action' },
-  { id: 'stream', label: 'Stream', value: 'Run ingestion' },
-];
-
-const BATCH_SEARCH_TIMELINE_STEPS = [
-  { id: 'upload', label: 'Search', value: 'Find source files' },
-  { id: 'dataframe', label: 'Dataframe', value: 'Prepare columns and action' },
-  { id: 'stream', label: 'Stream', value: 'Run ingestion' },
-];
-
-const REALTIME_TIMELINE_STEPS = [
-  { id: 'connect', label: 'Connect', value: 'Broker/API and tool' },
-  { id: 'dataframe', label: 'Dataframe', value: 'Prepare columns and action' },
-  { id: 'stream', label: 'Stream', value: 'Run ingestion' },
-];
-
-const SOURCE_STATUSES = {
-  IDLE: 'idle',
-  CONNECTING: 'connecting',
-  CONNECTED: 'connected',
-  DISCONNECTING: 'disconnecting',
-  DISCONNECTED: 'disconnected',
-  FAILED: 'failed',
-  UPLOADED: 'uploaded',
-};
-
-const TOOL_STATUSES = {
-  IDLE: 'idle',
-  CONNECTING: 'connecting',
-  CONNECTED: 'connected',
-  DISCONNECTING: 'disconnecting',
-  DISCONNECTED: 'disconnected',
-  FAILED: 'failed',
-};
-
-const STREAM_STATUSES = {
-  IDLE: 'idle',
-  RUNNING: 'running',
-};
-
-const UPLOAD_LIMITS = Object.freeze({
-  maxFiles: 10,
-  maxFileSizeBytes: 100 * 1024 * 1024,
-  maxTotalSizeBytes: 250 * 1024 * 1024,
-  allowedExtensions: new Set(['csv', 'json', 'parquet', 'xlsx', 'xls', 'txt', 'zip']),
-});
-
-const uploadAcceptValue = Array.from(UPLOAD_LIMITS.allowedExtensions).map((extension) => '.' + extension).join(',');
-
-const formatBytes = (value) => {
-  if (value >= 1024 * 1024) return Math.round(value / (1024 * 1024)) + ' MB';
-  if (value >= 1024) return Math.round(value / 1024) + ' KB';
-  return value + ' bytes';
-};
-
-const modeLabels = {
-  [SOURCE_MODES.BATCH]: 'Batch input',
-  [SOURCE_MODES.REALTIME]: 'Real-time input',
-};
-
-const defaultSourceState = {
-  mode: SOURCE_MODES.CHOOSE,
-  batch: {
-    step: 'upload',
-    selectedConnectionType: 'upload',
-    sourceAddressType: 'broker',
-    brokerAddress: '',
-    topic: '',
-    storageAddress: '',
-    storageUseDefault: true,
-    storageType: 'hdfs',
-    storagePort: '',
-    storageDatabase: '',
-    storagePath: '',
-    storageTable: '',
-    storageSearchQuery: '',
-    storageSearchStatus: 'idle',
-    storageDateFrom: '',
-    storageDateTo: '',
-    selectedStorageFiles: [],
-    searchDateFrom: '',
-    searchDateTo: '',
-    searchScope: 'transactions',
-    searchUseDefault: true,
-    searchPath: '',
-    selectedSearchFiles: [],
-    sourceStatus: SOURCE_STATUSES.IDLE,
-    sourceMessage: 'Not connected.',
-    toolStatus: TOOL_STATUSES.IDLE,
-    toolMessage: 'Not connected.',
-    selectedFiles: [],
-    searchQuery: '',
-    searchDate: '',
-    searchMode: 'raw',
-    dataframeAction: '',
-    sourceColumn: '',
-    targetColumn: '',
-    relationship: '',
-    rule: '',
-    toolUrl: '',
-    toolUsername: '',
-    toolPassword: '',
-    toolDatabase: '',
-    streamStatus: STREAM_STATUSES.IDLE,
-  },
-  realtime: {
-    step: 'connect',
-    sourceAddressType: 'broker',
-    brokerAddress: '',
-    topic: '',
-    sourceStatus: SOURCE_STATUSES.IDLE,
-    sourceMessage: 'Not connected.',
-    toolStatus: TOOL_STATUSES.IDLE,
-    toolMessage: 'Not connected.',
-    dataframeAction: '',
-    sourceColumn: '',
-    targetColumn: '',
-    relationship: '',
-    rule: '',
-    toolUrl: '',
-    toolUsername: '',
-    toolPassword: '',
-    toolDatabase: '',
-    streamStatus: STREAM_STATUSES.IDLE,
-  },
-  upload: {
-    selectedFiles: [],
-    status: 'idle',
-  },
-};
-
-const mergeSourceState = (sourceState = {}) => ({
-  ...defaultSourceState,
-  ...sourceState,
-  batch: { ...defaultSourceState.batch, ...(sourceState.batch || {}) },
-  realtime: { ...defaultSourceState.realtime, ...(sourceState.realtime || {}) },
-  upload: { ...defaultSourceState.upload, ...(sourceState.upload || {}) },
-});
-
-const sourceStatusFromMessage = (message) => {
-  if (message === 'Connection established!' || message === 'success') return SOURCE_STATUSES.CONNECTED;
-  if (message === 'Disconnected!') return SOURCE_STATUSES.DISCONNECTED;
-  if (String(message || '').toLowerCase().includes('failed')) return SOURCE_STATUSES.FAILED;
-  return SOURCE_STATUSES.IDLE;
-};
-
-const toolStatusFromMessage = (message) => {
-  if (message === 'Connected!' || message === 'Connection established!' || message === 'success') return TOOL_STATUSES.CONNECTED;
-  if (message === 'Disconnected!') return TOOL_STATUSES.DISCONNECTED;
-  if (String(message || '').toLowerCase().includes('failed')) return TOOL_STATUSES.FAILED;
-  return TOOL_STATUSES.IDLE;
-};
-
-const displaySourceMessage = (status) => {
-  if (status === SOURCE_STATUSES.CONNECTING) return 'Connecting...';
-  if (status === SOURCE_STATUSES.CONNECTED) return 'Connection established.';
-  if (status === SOURCE_STATUSES.DISCONNECTING) return 'Disconnecting...';
-  if (status === SOURCE_STATUSES.DISCONNECTED) return 'Disconnected.';
-  if (status === SOURCE_STATUSES.FAILED) return 'Connection failed. Please check the values and try again.';
-  return 'Not connected.';
-};
-
-const displayToolMessage = (status) => {
-  if (status === TOOL_STATUSES.CONNECTING) return 'Connecting...';
-  if (status === TOOL_STATUSES.CONNECTED) return 'Connected.';
-  if (status === TOOL_STATUSES.DISCONNECTING) return 'Disconnecting...';
-  if (status === TOOL_STATUSES.DISCONNECTED) return 'Disconnected.';
-  if (status === TOOL_STATUSES.FAILED) return 'Connection failed. Please check the values and try again.';
-  return 'Not connected.';
-};
-
-const isSourceBusy = (state) => [SOURCE_STATUSES.CONNECTING, SOURCE_STATUSES.DISCONNECTING].includes(state.sourceStatus);
-const isToolBusy = (state) => [TOOL_STATUSES.CONNECTING, TOOL_STATUSES.DISCONNECTING].includes(state.toolStatus);
-const isSourceReady = (state) => state.sourceStatus === SOURCE_STATUSES.CONNECTED || state.sourceStatus === SOURCE_STATUSES.UPLOADED;
-const isToolReady = (state) => state.toolStatus === TOOL_STATUSES.CONNECTED;
-
-const canStream = (state) => {
-  if (state.dataframeAction === 'Store data') return true;
-  if (state.dataframeAction === 'Source / Target Mapping') return Boolean(state.sourceColumn && state.targetColumn);
-  if (state.dataframeAction === 'Link Analysis') return Boolean(state.rule);
-  return false;
-};
-
-const getWorkflowSteps = (mode, state) => {
-  if (mode === SOURCE_MODES.REALTIME) return REALTIME_TIMELINE_STEPS;
-  if (state.selectedConnectionType === 'storage') return BATCH_STORAGE_TIMELINE_STEPS;
-  if (state.selectedConnectionType === 'broker') return BATCH_BROKER_TIMELINE_STEPS;
-  if (state.selectedConnectionType === 'search') return BATCH_SEARCH_TIMELINE_STEPS;
-  return BATCH_TIMELINE_STEPS;
-};
-
-const getAccessibleSteps = (mode, state) => {
-  if (mode === SOURCE_MODES.BATCH) {
-    const steps = new Set(['upload']);
-    if ((state.selectedFiles || []).length > 0 || (state.selectedSearchFiles || []).length > 0 || isSourceReady(state)) steps.add('dataframe');
-    if (steps.has('dataframe') && canStream(state)) steps.add('stream');
-    if (state.streamStatus === STREAM_STATUSES.RUNNING) steps.add('stream');
-    return steps;
-  }
-
-  const steps = new Set(['connect']);
-  if (isSourceReady(state) && isToolReady(state)) steps.add('dataframe');
-  if (steps.has('dataframe') && canStream(state)) steps.add('stream');
-  if (state.streamStatus === STREAM_STATUSES.RUNNING) steps.add('stream');
-  return steps;
-};
-
-const normalizeWindowSessionId = (windowItem) => String(windowItem.sourceSessionId || '').trim();
-
-function SourceModeIcon({ type }) {
-  const icons = {
-    source: (
-      <>
-        <path d="M7 7h4" />
-        <path d="M13 7h4" />
-        <path d="M9 3v4" />
-        <path d="M15 3v4" />
-        <path d="M8 17h8a3 3 0 0 0 3-3V9H5v5a3 3 0 0 0 3 3Z" />
-        <path d="M12 17v4" />
-      </>
-    ),
-    batch: (
-      <>
-        <ellipse cx="12" cy="6" rx="6.5" ry="2.7" />
-        <path d="M5.5 6v5c0 1.5 2.9 2.7 6.5 2.7s6.5-1.2 6.5-2.7V6" />
-        <path d="M5.5 11v5c0 1.5 2.9 2.7 6.5 2.7s6.5-1.2 6.5-2.7v-5" />
-      </>
-    ),
-    realtime: (
-      <>
-        <path d="M6.5 16.5a7.8 7.8 0 0 1 0-9" />
-        <path d="M9.5 14a3.9 3.9 0 0 1 0-4" />
-        <path d="M17.5 7.5a7.8 7.8 0 0 1 0 9" />
-        <path d="M14.5 10a3.9 3.9 0 0 1 0 4" />
-        <circle cx="12" cy="12" r="1.6" />
-      </>
-    ),
-    upload: (
-      <>
-        <path d="M12 15V4" />
-        <path d="M8 8l4-4 4 4" />
-        <path d="M5 16v2.5A2.5 2.5 0 0 0 7.5 21h9a2.5 2.5 0 0 0 2.5-2.5V16" />
-      </>
-    ),
-    storage: (
-      <>
-        <path d="M3.5 6.5h6.2l2.1 2.2h8.7v9.8h-17z" />
-        <path d="M3.5 10h17" />
-      </>
-    ),
-    broker: (
-      <>
-        <circle cx="6" cy="7" r="2.4" />
-        <circle cx="18" cy="7" r="2.4" />
-        <circle cx="12" cy="18" r="2.4" />
-        <path d="M8.1 8.3l2.9 7.4" />
-        <path d="M15.9 8.3l-2.9 7.4" />
-      </>
-    ),
-    search: (
-      <>
-        <circle cx="10.5" cy="10.5" r="6.2" />
-        <path d="M15.1 15.1 20 20" />
-      </>
-    ),
-    cloud: (
-      <>
-        <path d="M7.2 18h9.8a4 4 0 0 0 .2-8 5.8 5.8 0 0 0-11.1-1.9A4.9 4.9 0 0 0 7.2 18Z" />
-      </>
-    ),
-    configure: (
-      <>
-        <path d="M4 7h7" />
-        <path d="M15 7h5" />
-        <circle cx="13" cy="7" r="2" />
-        <path d="M4 12h3" />
-        <path d="M11 12h9" />
-        <circle cx="9" cy="12" r="2" />
-        <path d="M4 17h9" />
-        <path d="M17 17h3" />
-        <circle cx="15" cy="17" r="2" />
-      </>
-    ),
-    table: (
-      <>
-        <rect x="4" y="4" width="16" height="16" rx="1.8" />
-        <path d="M4 9h16" />
-        <path d="M4 14h16" />
-        <path d="M9 4v16" />
-        <path d="M15 4v16" />
-      </>
-    ),
-    tool: (
-      <>
-        <path d="M14.7 6.3a4 4 0 0 0-5 5L4.5 16.5a2.1 2.1 0 0 0 3 3l5.2-5.2a4 4 0 0 0 5-5l-2.6 2.6-3-3z" />
-      </>
-    ),
-    bolt: (
-      <>
-        <path d="M13 2 5 13h6l-1 9 8-12h-6z" />
-      </>
-    ),
-    clock: (
-      <>
-        <circle cx="12" cy="12" r="8" />
-        <path d="M12 7v5l3 2" />
-      </>
-    ),
-    copy: (
-      <>
-        <rect x="8" y="8" width="11" height="11" rx="1.8" />
-        <path d="M5 15H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1" />
-      </>
-    ),
-    clear: (
-      <>
-        <path d="M6 6l12 12" />
-        <path d="M18 6 6 18" />
-      </>
-    ),
-    link: (
-      <>
-        <path d="M10 13a5 5 0 0 0 7.1 0l1.4-1.4a5 5 0 0 0-7.1-7.1L10.6 5.3" />
-        <path d="M14 11a5 5 0 0 0-7.1 0l-1.4 1.4a5 5 0 0 0 7.1 7.1l.8-.8" />
-      </>
-    ),
-  };
-
-  return (
-    <svg className="source_window_mode_icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      {icons[type] || icons.batch}
-    </svg>
-  );
-}
-
-function StatusPill({ label, status = 'idle' }) {
-  return (
-    <span className={'source_window_status_pill is-' + status}>
-      <span>{label}</span>
-      <strong>{status.replace('-', ' ')}</strong>
-    </span>
-  );
-}
-
-function Field({ label, children, className = '' }) {
-  return (
-    <label className={'source_window_field' + (className ? ' ' + className : '')}>
-      <span>{label}</span>
-      {children}
-    </label>
-  );
-}
-
-function DataframeField({ label, icon = 'table', children }) {
-  return (
-    <label className="source_window_field source_window_dataframe_field">
-      <span className="source_window_dataframe_field_label">
-        <SourceModeIcon type={icon} />
-        <strong>{label}</strong>
-        <i aria-hidden="true">?</i>
-      </span>
-      {children}
-    </label>
-  );
-}
-
-function SessionBadge({ sessionId, onCopySession }) {
-  const displaySessionId = sessionId || 'Pending';
-
-  return (
-    <dl>
-      <div className="source_window_session_chip">
-        <dt>Session</dt>
-        <dd>{displaySessionId}</dd>
-        <span className="source_window_session_actions">
-          <button
-            type="button"
-            aria-label="Copy window ID"
-            className="source_window_tooltip_anchor"
-            data-tooltip="Copy window ID"
-            disabled={!sessionId}
-            onClick={() => onCopySession(sessionId)}
-          >
-            <SourceModeIcon type="copy" />
-          </button>
-          <button
-            type="button"
-            aria-label="Link to Graph Window"
-            className="source_window_tooltip_anchor"
-            data-tooltip="Link to Graph Window"
-            disabled
-          >
-            <SourceModeIcon type="link" />
-          </button>
-        </span>
-      </div>
-    </dl>
-  );
-}
-
-
-function WorkflowTimeline({ activeStep, steps, accessibleSteps, onStepChange }) {
-  const activeIndex = steps.findIndex((s) => s.id === activeStep);
-
-  return (
-    <aside className="source_window_timeline" aria-label="Source workflow timeline">
-      {steps.map((step, index) => {
-        const isLocked = !accessibleSteps.has(step.id);
-        const isActive = activeStep === step.id;
-        const isFulfilled = accessibleSteps.has(step.id) && index < activeIndex;
-
-        const stateClass = isActive
-          ? 'is-active'
-          : isFulfilled
-          ? 'is-fulfilled'
-          : 'is-inactive';
-
-        return (
-          <button
-            key={step.id}
-            type="button"
-            className={`${stateClass}${isLocked ? ' is-locked' : ''}`}
-            disabled={isLocked}
-            onClick={() => onStepChange(step.id)}
-          >
-            <span>{isFulfilled ? '✓' : index + 1}</span>
-            <strong>{step.label}</strong>
-            <small>{step.value}</small>
-          </button>
-        );
-      })}
-    </aside>
-  );
-}
-
-function ModeChooser({ sourceSessionId, onSelectMode, onOpenConfiguration, onCopySession }) {
-  const [selectedInputMode, setSelectedInputMode] = useState(SOURCE_MODES.BATCH);
-  const [selectedConnectionType, setSelectedConnectionType] = useState('upload');
-  const connectionOptions = [
-    { id: 'upload', label: 'Upload file', badge: 'Upload local files', icon: 'upload' },
-    { id: 'storage', label: 'Storage', badge: 'Fetch from data warehouse', icon: 'storage' },
-    { id: 'broker', label: 'Message broker', badge: 'Kafka/ REST API', icon: 'broker' },
-    { id: 'search', label: 'Elastic Search', badge: 'Search data from warehouse', icon: 'search' },
-    { id: 'cloud', label: 'Cloud dataset', badge: 'Coming soon', icon: 'cloud', disabled: true },
-  ];
-  const selectableConnections = connectionOptions.map((option) => ({
-    ...option,
-    disabled: option.disabled || (selectedInputMode === SOURCE_MODES.REALTIME && option.id !== 'broker'),
-  }));
-
-  const handleInputModeChange = (mode) => {
-    setSelectedInputMode(mode);
-    if (mode === SOURCE_MODES.REALTIME) {
-      setSelectedConnectionType('broker');
-    }
-  };
-
-  return (
-    <div className="source_window_choose">
-      <header className="source_window_choose_header">
-        <SourceModeIcon type="source" />
-        <div>
-          <h2>Analysis Source</h2>
-          <p>Choose how data enters this workspace. You can change settings later.</p>
-          <SessionBadge sessionId={sourceSessionId} onCopySession={onCopySession} />
-        </div>
-      </header>
-
-      <div className="source_window_choose_board">
-        <div className="source_window_choose_step">
-          <div className="source_window_choose_step_label">
-            <span>1</span>
-            <strong>Input mode</strong>
-            <small>Select how your data will arrive.</small>
-          </div>
-          <div className="source_window_mode_grid source_window_input_mode_grid">
-            <button
-              type="button"
-              className={selectedInputMode === SOURCE_MODES.BATCH ? 'is-selected' : ''}
-              onClick={() => handleInputModeChange(SOURCE_MODES.BATCH)}
-            >
-              <SourceModeIcon type="batch" />
-              <span>
-                <strong>Batch / historical data</strong>
-                <small>Import, search, or load data in batches. Best for historical data.</small>
-              </span>
-            </button>
-            <button
-              type="button"
-              className={selectedInputMode === SOURCE_MODES.REALTIME ? 'is-selected' : ''}
-              onClick={() => handleInputModeChange(SOURCE_MODES.REALTIME)}
-            >
-              <SourceModeIcon type="realtime" />
-              <span>
-                <strong>Live / streaming data</strong>
-                <small>Ingest events in real time from APIs, brokers, or streaming sources.</small>
-              </span>
-            </button>
-          </div>
-        </div>
-
-        <div className="source_window_choose_step">
-          <div className="source_window_choose_step_label">
-            <span>2</span>
-            <strong>Connection type</strong>
-            <small>Choose a source to connect your data.</small>
-          </div>
-          <div className="source_window_connection_grid">
-            {selectableConnections.map((option) => (
-              <button
-                key={option.id}
-                type="button"
-                className={selectedConnectionType === option.id ? 'is-selected' : ''}
-                disabled={option.disabled}
-                onClick={() => setSelectedConnectionType(option.id)}
-              >
-                <SourceModeIcon type={option.icon} />
-                <strong>{option.label}</strong>
-                {option.badge && <small>{option.badge}</small>}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="source_window_choose_step">
-          <div className="source_window_choose_step_label">
-            <span>3</span>
-            <strong>Configure</strong>
-            <small>Set up your source connection.</small>
-          </div>
-          <button type="button" className="source_window_config_preview" onClick={onOpenConfiguration}>
-            <SourceModeIcon type="configure" />
-            <span>
-              <strong>Open configuration</strong>
-              <small>Optional. Use saved settings to prefill later source and tool connection fields.</small>
-            </span>
-          </button>
-        </div>
-      </div>
-
-      <footer className="source_window_choose_footer">
-        <span>
-          <svg className="window_footer_info_icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="10" />
-            <line x1="12" y1="16" x2="12" y2="12" />
-            <line x1="12" y1="8" x2="12.01" y2="8" />
-          </svg>
-          Learn more about data input options
-        </span>
-        <div>
-          <button type="button" disabled>Back</button>
-          <button type="button" onClick={() => onSelectMode(selectedInputMode, selectedConnectionType)}>Continue</button>
-        </div>
-      </footer>
-    </div>
-  );
-}
-
-function ConnectStep({ mode, state, windowId, validationMessage, onPatchModeState, onSourceAction, onToolAction }) {
-  const isRealtime = mode === SOURCE_MODES.REALTIME;
-  const addressTypeName = 'source-address-type-' + windowId + '-' + mode;
-  const sourceConnected = state.sourceStatus === SOURCE_STATUSES.CONNECTED;
-  const toolConnected = state.toolStatus === TOOL_STATUSES.CONNECTED;
-  const sourceDisabled = isSourceBusy(state) || state.streamStatus === STREAM_STATUSES.RUNNING;
-  const toolDisabled = isToolBusy(state) || !isSourceReady(state) || state.streamStatus === STREAM_STATUSES.RUNNING;
-
-  return (
-    <div className="source_window_step_body">
-      <section className="source_window_section">
-        <header>
-          <h3>{isRealtime ? 'Broker/API connection' : 'Source connection'}</h3>
-          <StatusPill label="Source" status={state.sourceStatus} />
-        </header>
-        <p className="source_window_status_text">{state.sourceMessage || displaySourceMessage(state.sourceStatus)}</p>
-        <div className="source_window_radio_group" role="radiogroup" aria-label="Source address type">
-          <label>
-            <input
-              type="radio"
-              name={addressTypeName}
-              checked={state.sourceAddressType === 'broker'}
-              disabled={sourceConnected || sourceDisabled}
-              onChange={() => onPatchModeState({ sourceAddressType: 'broker' })}
-            />
-            <span>Kafka Broker</span>
-          </label>
-          <label>
-            <input
-              type="radio"
-              name={addressTypeName}
-              checked={state.sourceAddressType === 'api'}
-              disabled={sourceConnected || sourceDisabled}
-              onChange={() => onPatchModeState({ sourceAddressType: 'api' })}
-            />
-            <span>REST API</span>
-          </label>
-          {!isRealtime && (
-            <label>
-              <input
-                type="radio"
-                name={addressTypeName}
-                checked={state.sourceAddressType === 'storage'}
-                disabled={sourceConnected || sourceDisabled}
-                onChange={() => onPatchModeState({ sourceAddressType: 'storage' })}
-              />
-              <span>Hadoop Cluster</span>
-            </label>
-          )}
-        </div>
-        <div className="source_window_form_grid">
-          {state.sourceAddressType !== 'storage' && (
-            <>
-              <Field label="Broker/API address">
-                <input
-                  type="text"
-                  value={state.brokerAddress}
-                  placeholder="Enter Broker/API address"
-                  disabled={sourceConnected || sourceDisabled}
-                  onChange={(event) => onPatchModeState({ brokerAddress: sanitizeConnectionValue(event.target.value) })}
-                />
-              </Field>
-              {state.sourceAddressType === 'broker' && (
-                <Field label="Kafka topic">
-                  <input
-                    type="text"
-                    value={state.topic}
-                    placeholder="Enter Kafka topic"
-                    disabled={sourceConnected || sourceDisabled}
-                    onChange={(event) => onPatchModeState({ topic: sanitizeKafkaTopic(event.target.value) })}
-                  />
-                </Field>
-              )}
-            </>
-          )}
-          {!isRealtime && (
-            <Field label="HDFS address">
-              <input
-                type="text"
-                value={state.storageAddress}
-                placeholder="Enter HDFS address"
-                disabled={sourceConnected || sourceDisabled}
-                onChange={(event) => onPatchModeState({ storageAddress: sanitizeConnectionValue(event.target.value) })}
-              />
-            </Field>
-          )}
-        </div>
-        <div className="source_window_actions">
-          <button type="button" disabled={sourceDisabled} onClick={onSourceAction}>
-            {sourceConnected ? 'Disconnect source' : isSourceBusy(state) ? displaySourceMessage(state.sourceStatus) : 'Connect source'}
-          </button>
-        </div>
-      </section>
-      <section className="source_window_section">
-        <header>
-          <h3>Tool integration</h3>
-          <StatusPill label="Tool" status={state.toolStatus} />
-        </header>
-        <p className="source_window_status_text">{state.toolMessage || displayToolMessage(state.toolStatus)}</p>
-        <div className="source_window_form_grid">
-          <Field label="Tool">
-            <select defaultValue="neo4j" disabled>
-              <option value="neo4j">Neo4j</option>
-            </select>
-          </Field>
-          <Field label="URL">
-            <input
-              type="text"
-              value={state.toolUrl}
-              placeholder="neo4j://host:7687"
-              disabled={toolConnected || toolDisabled}
-              onChange={(event) => onPatchModeState({ toolUrl: sanitizeConnectionValue(event.target.value) })}
-            />
-          </Field>
-          <Field label="Username">
-            <input
-              type="text"
-              value={state.toolUsername}
-              placeholder="Username"
-              disabled={toolConnected || toolDisabled}
-              onChange={(event) => onPatchModeState({ toolUsername: sanitizeIdentifier(event.target.value) })}
-            />
-          </Field>
-          <Field label="Password">
-            <input
-              type="password"
-              value={state.toolPassword}
-              placeholder="Password"
-              disabled={toolConnected || toolDisabled}
-              onChange={(event) => onPatchModeState({ toolPassword: sanitizeSecret(event.target.value) })}
-            />
-          </Field>
-          <Field label="Database">
-            <input
-              type="text"
-              value={state.toolDatabase}
-              placeholder="Database name"
-              disabled={toolConnected || toolDisabled}
-              onChange={(event) => onPatchModeState({ toolDatabase: sanitizeIdentifier(event.target.value) })}
-            />
-          </Field>
-        </div>
-        <div className="source_window_actions">
-          <button type="button" disabled={toolDisabled} onClick={onToolAction}>
-            {toolConnected ? 'Disconnect tool' : isToolBusy(state) ? displayToolMessage(state.toolStatus) : 'Connect tool'}
-          </button>
-        </div>
-        {validationMessage && <p className="source_window_validation" role="status">{validationMessage}</p>}
-      </section>
-    </div>
-  );
-}
-
-function UploadStep({ state, onPatchModeState }) {
-  const selectedFiles = state.selectedFiles || [];
-  const [uploadError, setUploadError] = useState('');
-  const [isDragOver, setIsDragOver] = useState(false);
-
-  const applyFiles = (fileList) => {
-    const files = Array.from(fileList || []);
-    if (files.length === 0) return;
-    if (files.length > UPLOAD_LIMITS.maxFiles) {
-      setUploadError('Select ' + UPLOAD_LIMITS.maxFiles + ' files or fewer.');
-      return;
-    }
-
-    const totalSize = files.reduce((sum, file) => sum + Number(file.size || 0), 0);
-    if (totalSize > UPLOAD_LIMITS.maxTotalSizeBytes) {
-      setUploadError('Total staged upload size must be ' + formatBytes(UPLOAD_LIMITS.maxTotalSizeBytes) + ' or less.');
-      return;
-    }
-
-    const rejectedFile = files.find((file) => {
-      const fileName = String(file.name || '');
-      const extension = fileName.includes('.') ? fileName.split('.').pop().toLowerCase() : '';
-      return !UPLOAD_LIMITS.allowedExtensions.has(extension) || Number(file.size || 0) > UPLOAD_LIMITS.maxFileSizeBytes;
-    });
-
-    if (rejectedFile) {
-      setUploadError('Only supported files up to ' + formatBytes(UPLOAD_LIMITS.maxFileSizeBytes) + ' each can be staged.');
-      return;
-    }
-
-    const nextFiles = files
-      .map((file) => sanitizeText(file.name, { maxLength: 160 }))
-      .filter(Boolean);
-    if (nextFiles.length === 0) return;
-    setUploadError('');
-    onPatchModeState({
-      selectedFiles: nextFiles,
-      sourceStatus: SOURCE_STATUSES.UPLOADED,
-      sourceMessage: nextFiles.length === 1 ? '1 file staged for dataframe creation.' : nextFiles.length + ' files staged for dataframe creation.',
-    });
-  };
-
-  return (
-    <div className="source_window_step_body source_window_step_body_single">
-      <section className="source_window_section source_window_upload_page">
-        <header>
-          <h3>Upload source files</h3>
-          <span className="source_window_hint">Drag and drop files, or browse from this workstation.</span>
-        </header>
-        <label
-          className={`source_window_upload_drop${isDragOver ? ' is-drag-over' : ''}`}
-          htmlFor="source-window-upload-input"
-          onDragOver={(event) => {
-            event.preventDefault();
-            if (!isDragOver) setIsDragOver(true);
-          }}
-          onDragEnter={(event) => {
-            event.preventDefault();
-            setIsDragOver(true);
-          }}
-          onDragLeave={(event) => {
-            event.preventDefault();
-            setIsDragOver(false);
-          }}
-          onDrop={(event) => {
-            event.preventDefault();
-            setIsDragOver(false);
-            applyFiles(event.dataTransfer.files);
-          }}
-        >
-          <input
-            id="source-window-upload-input"
-            type="file"
-            multiple
-            accept={uploadAcceptValue}
-            onChange={(event) => applyFiles(event.target.files)}
-          />
-          <span className="source_window_upload_mark">
-            <SourceModeIcon type="upload" />
-          </span>
-          <span className="source_window_upload_text">
-            <strong>{isDragOver ? 'Release to upload files' : 'File upload'}</strong>
-            <small>{isDragOver ? 'Drop files now to stage them for dataframe creation.' : 'Drop source files here or browse to stage them for dataframe creation.'}</small>
-          </span>
-        </label>
-        <div className="source_window_upload_summary">
-          <div className="source_window_upload_summary_header">
-            <strong>{selectedFiles.length ? selectedFiles.length + ' file(s) selected' : 'No files selected yet'}</strong>
-            {selectedFiles.length > 0 && (
-              <button
-                type="button"
-                className="source_window_upload_clear_btn linkx_tooltip_anchor"
-                data-tooltip="Drop staged files"
-                aria-label="Drop staged files"
-                onClick={() => {
-                  setUploadError('');
-                  onPatchModeState({
-                    selectedFiles: [],
-                    sourceStatus: SOURCE_STATUSES.IDLE,
-                    sourceMessage: 'Not connected.',
-                  });
-                }}
-              >
-                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="3 6 5 6 21 6" />
-                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                </svg>
-              </button>
-            )}
-          </div>
-          {uploadError && <p className="source_window_validation" role="status">{uploadError}</p>}
-          {selectedFiles.length > 0 && (
-            <ul>
-              {selectedFiles.slice(0, 5).map((fileName) => <li key={fileName}>{fileName}</li>)}
-            </ul>
-          )}
-        </div>
-
-      </section>
-    </div>
-  );
-}
-
-function BrokerStep({ mode, state, windowId, validationMessage, onPatchModeState, onSourceAction }) {
-  const addressTypeName = 'broker-source-address-type-' + windowId + '-' + mode;
-  const sourceConnected = state.sourceStatus === SOURCE_STATUSES.CONNECTED;
-  const sourceDisabled = isSourceBusy(state) || state.streamStatus === STREAM_STATUSES.RUNNING;
-  const isBroker = state.sourceAddressType !== 'api';
-
-  return (
-    <div className="source_window_step_body source_window_step_body_broker">
-      <section className="source_window_broker_panel">
-        <header className="source_window_broker_header">
-          <span className="source_window_panel_title">
-            <SourceModeIcon type="broker" />
-            <h3>Message broker</h3>
-          </span>
-          <StatusPill label="Source" status={state.sourceStatus} />
-        </header>
-
-        <div className="source_window_broker_summary">
-          <p>{state.sourceMessage || displaySourceMessage(state.sourceStatus)}</p>
-          <span>Connect a Kafka broker or compatible API before creating the dataframe.</span>
-        </div>
-
-        <div className="source_window_broker_type_group" role="radiogroup" aria-label="Broker source type">
-          <label className={isBroker ? 'is-selected' : ''}>
-            <input
-              type="radio"
-              name={addressTypeName}
-              checked={isBroker}
-              disabled={sourceConnected || sourceDisabled}
-              onChange={() => onPatchModeState({ sourceAddressType: 'broker' })}
-            />
-            <SourceModeIcon type="broker" />
-            <span>Kafka Broker</span>
-          </label>
-          <label className={!isBroker ? 'is-selected' : ''}>
-            <input
-              type="radio"
-              name={addressTypeName}
-              checked={!isBroker}
-              disabled={sourceConnected || sourceDisabled}
-              onChange={() => onPatchModeState({ sourceAddressType: 'api' })}
-            />
-            <SourceModeIcon type="source" />
-            <span>REST API</span>
-          </label>
-        </div>
-
-        <div className="source_window_broker_fields">
-          <Field label={isBroker ? 'Broker address' : 'API address'}>
-            <input
-              type="text"
-              value={state.brokerAddress}
-              placeholder={isBroker ? 'Kafka / broker address' : 'REST API address'}
-              disabled={sourceConnected || sourceDisabled}
-              onChange={(event) => onPatchModeState({ brokerAddress: sanitizeConnectionValue(event.target.value) })}
-            />
-          </Field>
-          {isBroker && (
-            <Field label="Kafka topic">
-              <input
-                type="text"
-                value={state.topic}
-                placeholder="Enter Kafka topic"
-                disabled={sourceConnected || sourceDisabled}
-                onChange={(event) => onPatchModeState({ topic: sanitizeKafkaTopic(event.target.value) })}
-              />
-            </Field>
-          )}
-          <button type="button" disabled={sourceDisabled} onClick={onSourceAction}>
-            {sourceConnected ? 'Disconnect' : isSourceBusy(state) ? displaySourceMessage(state.sourceStatus) : 'Connect'}
-          </button>
-        </div>
-
-        {validationMessage && <p className="source_window_validation" role="status">{validationMessage}</p>}
-
-        <div className="source_window_broker_preview">
-          <span />
-          <p>No broker messages to show.</p>
-        </div>
-      </section>
-    </div>
-  );
-}
-
-function StorageStep({ state, onPatchModeState, onSourceAction }) {
-  const selectedFiles = state.selectedStorageFiles || [];
-  const storageUsesDefault = state.storageUseDefault !== false;
-  const storageConnected = state.sourceStatus === SOURCE_STATUSES.CONNECTED;
-  const storageBusy = isSourceBusy(state);
-  const storageLoading = storageBusy || state.storageSearchStatus === 'loading';
-  const storageEmptyMessage = storageLoading ? 'Loading...' : 'No files to show.';
-
-  return (
-    <div className="source_window_step_body source_window_step_body_storage">
-      <section className="source_window_storage_browser">
-        <header className="source_window_storage_browser_header">
-          <div className="source_window_storage_title">
-            <h3>Storage source</h3>
-            <StatusPill label="Storage" status={state.sourceStatus} />
-          </div>
-          <div className="source_window_storage_type_buttons" role="group" aria-label="Storage source type">
-            <button type="button" className="is-selected" onClick={() => onPatchModeState({ storageType: 'hdfs' })}>
-              <SourceModeIcon type="storage" />
-              <span>HDFS path</span>
-            </button>
-            <button type="button" disabled>
-              <SourceModeIcon type="table" />
-              <span>Hive table</span>
-            </button>
-          </div>
-        </header>
-
-        <div className="source_window_storage_fields">
-          <label className="source_window_storage_default_toggle">
-            <input
-              type="checkbox"
-              checked={storageUsesDefault}
-              onChange={(event) => onPatchModeState({ storageUseDefault: event.target.checked })}
-            />
-            <span>Use Default</span>
-          </label>
-          <Field label="Storage address">
-            <input
-              type="text"
-              value={state.storageAddress}
-              placeholder="HDFS/Hive host address"
-              disabled={storageUsesDefault || storageBusy || storageConnected}
-              onChange={(event) => onPatchModeState({ storageAddress: sanitizeConnectionValue(event.target.value) })}
-            />
-          </Field>
-          <Field label="RPC/Web port">
-            <input
-              type="text"
-              value={state.storagePort}
-              placeholder="9870"
-              disabled={storageUsesDefault || storageBusy || storageConnected}
-              onChange={(event) => onPatchModeState({ storagePort: sanitizeConnectionValue(event.target.value) })}
-            />
-          </Field>
-          <Field label="Path">
-            <input
-              type="text"
-              value={state.storagePath}
-              placeholder="user/data/path"
-              disabled={storageUsesDefault || storageBusy || storageConnected}
-              onChange={(event) => onPatchModeState({ storagePath: sanitizeConnectionValue(event.target.value) })}
-            />
-          </Field>
-          <button
-            type="button"
-            className="source_window_storage_connect_button"
-            disabled={storageBusy}
-            onClick={onSourceAction}
-          >
-            {storageConnected ? 'Disconnect' : storageBusy ? displaySourceMessage(state.sourceStatus) : 'Connect'}
-          </button>
-        </div>
-
-        <div className="source_window_storage_file_panel">
-          <div className="source_window_storage_file_browser" aria-label="Storage file browser">
-            <div className="source_window_storage_parent_row">
-              <button
-                type="button"
-                className="source_window_storage_parent_button linkx_tooltip_anchor"
-                data-tooltip="Return to parent directory"
-                aria-label="Return to parent directory"
-              >
-                ..
-              </button>
-              <div className="source_window_storage_search_input">
-                <input
-                  type="text"
-                  value={state.storageSearchQuery}
-                  placeholder="Search by file name"
-                  onChange={(event) => onPatchModeState({ storageSearchQuery: sanitizeText(event.target.value, { maxLength: 160, allowNewlines: true }) })}
-                />
-                <button type="button" aria-label="Search storage files" disabled>
-                  <SourceModeIcon type="search" />
-                </button>
-              </div>
-              <div className="source_window_storage_date_range">
-                <input
-                  type="date"
-                  value={state.storageDateFrom}
-                  onChange={(event) => onPatchModeState({ storageDateFrom: event.target.value })}
-                />
-                <b aria-hidden="true">-</b>
-                <input
-                  type="date"
-                  value={state.storageDateTo}
-                  onChange={(event) => onPatchModeState({ storageDateTo: event.target.value })}
-                />
-              </div>
-              <span className="source_window_storage_selection_tools">
-                <span className="source_window_storage_selected_count">
-                  {selectedFiles.length} Selected files
-                </span>
-                <button
-                  type="button"
-                  className="source_window_storage_discard_button linkx_tooltip_anchor"
-                  data-tooltip="Discard selection"
-                  aria-label="Discard selection"
-                  disabled={selectedFiles.length === 0}
-                  onClick={() => onPatchModeState({ selectedStorageFiles: [] })}
-                >
-                  <SourceModeIcon type="clear" />
-                </button>
-              </span>
-            </div>
-            <div className="source_window_storage_file_header" aria-hidden="true">
-              <span />
-              <span>File name</span>
-              <span>Last modified Date</span>
-              <span>Size</span>
-            </div>
-            <div className="source_window_storage_placeholder_row" role="status" aria-live="polite">
-              <span />
-              <span>{storageEmptyMessage}</span>
-              <small />
-              <small />
-            </div>
-          </div>
-        </div>
-      </section>
-    </div>
-  );
-}
-function SearchStep({ state, onPatchModeState }) {
-  const searchModeName = 'source-search-mode';
-  const [lastSearchRequest, setLastSearchRequest] = useState(null);
-  const searchOptions = ['transactions', 'accounts', 'alerts'];
-  const sampleRows = [
-    { keyword: 'AMOUNT:1200', searchedAt: '2026-07-15 09:12', count: 18 },
-    { keyword: 'BENACCOUNTNO:334900', searchedAt: '2026-07-15 09:10', count: 24 },
-    { keyword: 'TRANSACTIONDATE:2026-07-14', searchedAt: '2026-07-15 09:09', count: 30 },
-    { keyword: 'BRANCHNAME:ADDIS', searchedAt: '2026-07-15 09:07', count: 16 },
-    { keyword: 'ACCOUNTNO:102392', searchedAt: '2026-07-15 09:06', count: 20 },
-    { keyword: 'ALERT:RISK_FLAG', searchedAt: '2026-07-15 09:04', count: 12 },
-    { keyword: 'CUSTOMER:ACTIVE', searchedAt: '2026-07-15 09:03', count: 14 },
-    { keyword: 'MERCHANT:ONLINE', searchedAt: '2026-07-15 09:01', count: 21 },
-    { keyword: 'COUNTRY:ET', searchedAt: '2026-07-15 08:59', count: 11 },
-    { keyword: 'TX:HIGH_VALUE', searchedAt: '2026-07-15 08:57', count: 28 },
-  ];
-  const selectedResults = state.selectedSearchFiles || [];
-  const normalizedQuery = String(lastSearchRequest?.query || '').trim().toLowerCase();
-  const strictResults = normalizedQuery
-    ? sampleRows.filter((row) => row.keyword.toLowerCase().includes(normalizedQuery))
-    : sampleRows;
-  const fuzzyResults = normalizedQuery
-    ? sampleRows.filter((row) => normalizedQuery.split('').every((char) => row.keyword.toLowerCase().includes(char)))
-    : sampleRows;
-  const matchedRows = lastSearchRequest?.mode === 'hybrid' ? fuzzyResults : strictResults;
-  const visibleRows = matchedRows.slice(0, lastSearchRequest?.revealCount || 0);
-  const hasSearched = Boolean(lastSearchRequest);
-  const showRows = hasSearched && visibleRows.length > 0;
-  const emptyMessage = hasSearched ? 'No matching keywords found.' : 'Search results will appear here.';
-
-  const handleSearchSubmit = () => {
-    const nextQuery = state.searchQuery || '';
-    const nextMode = state.searchMode;
-
-    setLastSearchRequest((previous) => {
-      const sameSearch = previous && previous.query === nextQuery && previous.mode === nextMode;
-      return {
-        query: nextQuery,
-        mode: nextMode,
-        revealCount: sameSearch ? previous.revealCount + 1 : 1,
-      };
-    });
-  };
-
-  const toggleSearchResult = (keyword) => {
-    const nextSelected = selectedResults.includes(keyword)
-      ? selectedResults.filter((item) => item !== keyword)
-      : [...selectedResults, keyword];
-    onPatchModeState({ selectedSearchFiles: nextSelected });
-  };
-
-  return (
-    <div className="source_window_step_body source_window_step_body_storage">
-      <section className="source_window_storage_browser">
-        <header className="source_window_storage_browser_header">
-          <div className="source_window_storage_title">
-            <SourceModeIcon type="search" />
-            <h3>Elastic Search source</h3>
-            <StatusPill label="Search" status={state.sourceStatus} />
-          </div>
-          <div className="source_window_storage_type_buttons" role="group" aria-label="Elastic Search source type">
-            <button type="button" className="is-selected">
-              <SourceModeIcon type="search" />
-              <span>Index search</span>
-            </button>
-            <button type="button" disabled>
-              <SourceModeIcon type="cloud" />
-              <span>Remote index</span>
-            </button>
-          </div>
-        </header>
-
-        <div className="source_window_storage_fields source_window_search_fields">
-          <label className="source_window_storage_default_toggle">
-            <input
-              type="checkbox"
-              checked={state.searchUseDefault !== false}
-              onChange={(event) => onPatchModeState({ searchUseDefault: event.target.checked })}
-            />
-            <span>Use Default</span>
-          </label>
-          <Field label="Path">
-            <input
-              type="text"
-              value={state.searchPath}
-              placeholder="Keyword index path"
-              disabled={state.searchUseDefault !== false}
-              onChange={(event) => onPatchModeState({ searchPath: event.target.value })}
-            />
-          </Field>
-          <div className="source_window_search_mode_group" role="radiogroup" aria-label="Search mode">
-            <label className={state.searchMode === 'raw' ? 'is-selected' : ''}>
-              <input
-                type="radio"
-                name={searchModeName}
-                checked={state.searchMode === 'raw'}
-                onChange={() => onPatchModeState({ searchMode: 'raw' })}
-              />
-              <span>Strict search</span>
-            </label>
-            <label className={state.searchMode === 'hybrid' ? 'is-selected' : ''}>
-              <input
-                type="radio"
-                name={searchModeName}
-                checked={state.searchMode === 'hybrid'}
-                onChange={() => onPatchModeState({ searchMode: 'hybrid' })}
-              />
-              <span>Fuzzy search</span>
-            </label>
-          </div>
-          <Field label="Index">
-            <select value={state.searchScope || 'transactions'} onChange={(event) => onPatchModeState({ searchScope: event.target.value })}>
-              {searchOptions.map((option) => <option key={option} value={option}>{option}</option>)}
-            </select>
-          </Field>
-        </div>
-
-        <div className="source_window_storage_file_panel">
-          <div className="source_window_storage_file_browser" aria-label="Elastic Search result browser">
-            <div className="source_window_storage_parent_row">
-              <button
-                type="button"
-                className="source_window_storage_parent_button"
-                aria-label="Return to parent directory"
-                disabled
-              >
-                ..
-              </button>
-              <div className="source_window_storage_search_input">
-                <input
-                  type="text"
-                  value={state.searchQuery}
-                  placeholder="Search results by keyword"
-                  onChange={(event) => onPatchModeState({ searchQuery: event.target.value })}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter') {
-                      event.preventDefault();
-                      handleSearchSubmit();
-                    }
-                  }}
-                />
-                <button type="button" aria-label="Search results" onClick={handleSearchSubmit}>
-                  <SourceModeIcon type="search" />
-                </button>
-              </div>
-              <div className="source_window_storage_date_range">
-                <input
-                  type="date"
-                  value={state.searchDateFrom}
-                  onChange={(event) => onPatchModeState({ searchDateFrom: event.target.value })}
-                />
-                <b aria-hidden="true">-</b>
-                <input
-                  type="date"
-                  value={state.searchDateTo}
-                  onChange={(event) => onPatchModeState({ searchDateTo: event.target.value })}
-                />
-              </div>
-              <span className="source_window_storage_selection_tools">
-                <span className="source_window_storage_selected_count">{selectedResults.length} Selected results</span>
-                <button
-                  type="button"
-                  className="source_window_storage_discard_button linkx_tooltip_anchor"
-                  data-tooltip="Discard selection"
-                  aria-label="Discard selection"
-                  disabled={selectedResults.length === 0}
-                  onClick={() => onPatchModeState({ selectedSearchFiles: [] })}
-                >
-                  <SourceModeIcon type="clear" />
-                </button>
-              </span>
-            </div>
-            <div className="source_window_storage_file_header" aria-hidden="true">
-              <span />
-              <span>Keyword</span>
-              <span>Searched at</span>
-              <span>Size</span>
-            </div>
-            {showRows ? visibleRows.map((row, index) => (
-              <button
-                key={row.keyword + index}
-                type="button"
-                className={'source_window_storage_file_row' + (selectedResults.includes(row.keyword) ? ' is-selected' : '')}
-                onClick={() => toggleSearchResult(row.keyword)}
-              >
-                <span className="source_window_storage_file_selector" aria-hidden="true" />
-                <span>{row.keyword}</span>
-                <small>{row.searchedAt}</small>
-                <small>{row.count} results</small>
-              </button>
-            )) : (
-              <div className="source_window_storage_placeholder_row" role="status" aria-live="polite">
-                <span />
-                <span>{emptyMessage}</span>
-                <small />
-                <small />
-              </div>
-            )}
-          </div>
-        </div>
-      </section>
-    </div>
-  );
-}
-
-function DataframeStep({ mode, state, onPatchModeState, onOpenConfiguration }) {
-  const sampleColumns = ['ACCOUNTNO', 'BENACCOUNTNO', 'AMOUNT', 'TRANSACTIONDATE'];
-  const sampleActions = ['Store data', 'Source / Target Mapping', 'Link Analysis'];
-  const actionIconTypes = {
-    'Store data': 'batch',
-    'Source / Target Mapping': 'broker',
-    'Link Analysis': 'link',
-  };
-  const actionDescriptions = {
-    'Store data': {
-      text: 'Stores the prepared dataframe in the selected tool without creating relationships.',
-      detail: 'Use this when the dataframe only needs to be persisted for later analysis.',
-    },
-    'Source / Target Mapping': {
-      text: 'Maps columns from your source to target and selects the relationship label used to create graph relationships.',
-      detail: 'This step uses the selected source and target columns along with the provided label.',
-    },
-    'Link Analysis': {
-      text: 'Applies a saved rule to the dataframe so analysis flags can create relationships.',
-      detail: 'Use this when rule results should become graph-ready links.',
-    },
-  };
-  const selectedActionDescription = actionDescriptions[state.dataframeAction] || {
-    text: 'Please select a dataframe action to continue.',
-    detail: 'Required fields will appear below based on the selected action.',
-  };
-  const showsMappingFields = state.dataframeAction === 'Source / Target Mapping';
-  const showsRuleField = state.dataframeAction === 'Link Analysis';
-
-  return (
-    <div className="source_window_step_body source_window_step_body_dataframe">
-      <section className="source_window_dataframe_card source_window_dataframe_info">
-        <header className="source_window_dataframe_card_header">
-          <span className="source_window_panel_title">
-            <SourceModeIcon type="table" />
-            <h3>Dataframe information</h3>
-          </span>
-          <span className="source_window_panel_pill">
-            <SourceModeIcon type="clock" />
-            Waiting for dataframe creation
-          </span>
-        </header>
-        <dl className="source_window_dataframe_metrics">
-          <div>
-            <SourceModeIcon type={mode === SOURCE_MODES.REALTIME ? 'realtime' : 'batch'} />
-            <dl><dt>Source mode</dt><dd>{modeLabels[mode]}</dd></dl>
-          </div>
-          <div>
-            <SourceModeIcon type="table" />
-            <dl><dt>Total rows</dt><dd>0</dd></dl>
-          </div>
-          <div>
-            <SourceModeIcon type="table" />
-            <dl><dt>Total columns</dt><dd>0</dd></dl>
-          </div>
-          <div>
-            <SourceModeIcon type="tool" />
-            <dl><dt>Tool</dt><dd>Neo4j</dd></dl>
-          </div>
-        </dl>
-      </section>
-      <section className="source_window_dataframe_card source_window_dataframe_actions_card">
-        <header className="source_window_dataframe_card_header">
-          <span className="source_window_panel_title source_window_panel_title_stack">
-            <span>
-              <SourceModeIcon type="bolt" />
-              <h3>Actions</h3>
-            </span>
-            <small>Define how the dataframe columns will be used.</small>
-          </span>
-          <span className="source_window_panel_pill">
-            <SourceModeIcon type="clock" />
-            Matches the old mandatory action area.
-          </span>
-        </header>
-        <div className="source_window_dataframe_form_grid">
-          <div className="source_window_dataframe_action_description">
-            <span className="source_window_dataframe_info_mark" aria-hidden="true">i</span>
-            <div>
-              <p>{selectedActionDescription.text}</p>
-              <small>{selectedActionDescription.detail}</small>
-            </div>
-          </div>
-
-          <div className="source_window_dataframe_action_area">
-            <div className="source_window_dataframe_action_group" role="group" aria-label="Dataframe action">
-              {sampleActions.map((action) => (
-                <button
-                  key={action}
-                  type="button"
-                  className={state.dataframeAction === action ? 'is-selected' : ''}
-                  onClick={() => onPatchModeState({ dataframeAction: action })}
-                >
-                  <SourceModeIcon type={actionIconTypes[action]} />
-                  <span>{action}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {showsMappingFields && (
-            <div className="source_window_dataframe_relation_grid">
-              <DataframeField label="Source column" icon="batch">
-                <select value={state.sourceColumn} onChange={(event) => onPatchModeState({ sourceColumn: event.target.value })}>
-                  <option value="">Select source</option>
-                  {sampleColumns.map((column) => <option key={column} value={column}>{column}</option>)}
-                </select>
-              </DataframeField>
-              <DataframeField label="Target column" icon="batch">
-                <select value={state.targetColumn} onChange={(event) => onPatchModeState({ targetColumn: event.target.value })}>
-                  <option value="">Select target</option>
-                  {sampleColumns.map((column) => <option key={column} value={column}>{column}</option>)}
-                </select>
-              </DataframeField>
-              <DataframeField label="Relationship label" icon="link">
-                <input
-                  type="text"
-                  value={state.relationship}
-                  placeholder="HAS_RELATIONSHIP"
-                  onChange={(event) => onPatchModeState({ relationship: sanitizeIdentifier(event.target.value).toUpperCase() })}
-                />
-              </DataframeField>
-            </div>
-          )}
-
-          {showsRuleField && (
-            <div className="source_window_dataframe_rule_area">
-              <DataframeField label="Rule to apply" icon="table">
-                <select value={state.rule} onChange={(event) => onPatchModeState({ rule: event.target.value })}>
-                  <option value="">Select analysis rule</option>
-                  <option value="bank transactions">bank transactions</option>
-                </select>
-              </DataframeField>
-              <button type="button" className="source_window_manage_rules_button" onClick={onOpenConfiguration}>Manage rules</button>
-            </div>
-          )}
-        </div>
-      </section>
-    </div>
-  );
-}
-
-function StreamStep({ state }) {
-  return (
-    <div className="source_window_step_body source_window_step_body_stream">
-      <section className="source_window_stream_card">
-        <header className="source_window_stream_header">
-          <span className="source_window_panel_title">
-            <SourceModeIcon type="realtime" />
-            <h3>Streaming</h3>
-          </span>
-          <StatusPill label="Stream" status={state.streamStatus} />
-        </header>
-        <textarea
-          className="source_window_log source_window_stream_log"
-          readOnly
-          value={'Session log will appear here after streaming integration is restored.\nNo streaming request is sent from this step yet.'}
-        />
-      </section>
-    </div>
-  );
-}
-
-function WorkflowBody({ mode, modeState, windowId, validationMessage, handlers, onPatchModeState, onOpenConfiguration }) {
-  if (mode === SOURCE_MODES.BATCH && modeState.step === 'upload' && modeState.selectedConnectionType === 'storage') {
-    return <StorageStep state={modeState} onPatchModeState={onPatchModeState} onSourceAction={handlers.onSourceAction} />;
-  }
-  if (mode === SOURCE_MODES.BATCH && modeState.step === 'upload' && modeState.selectedConnectionType === 'broker') {
-    return <BrokerStep mode={mode} state={modeState} windowId={windowId} validationMessage={validationMessage} onPatchModeState={onPatchModeState} onSourceAction={handlers.onSourceAction} />;
-  }
-  if (mode === SOURCE_MODES.BATCH && modeState.step === 'upload' && modeState.selectedConnectionType === 'search') {
-    return <SearchStep state={modeState} onPatchModeState={onPatchModeState} />;
-  }
-  if (mode === SOURCE_MODES.REALTIME && modeState.step === 'connect') {
-    return <BrokerStep mode={mode} state={modeState} windowId={windowId} validationMessage={validationMessage} onPatchModeState={onPatchModeState} onSourceAction={handlers.onSourceAction} />;
-  }
-  if (mode === SOURCE_MODES.BATCH && modeState.step === 'upload') return <UploadStep state={modeState} onPatchModeState={onPatchModeState} />;
-  if (modeState.step === 'search') return <SearchStep state={modeState} onPatchModeState={onPatchModeState} />;
-  if (modeState.step === 'dataframe') return <DataframeStep mode={mode} state={modeState} onPatchModeState={onPatchModeState} onOpenConfiguration={onOpenConfiguration} />;
-  if (modeState.step === 'stream') return <StreamStep state={modeState} />;
-  return (
-    <ConnectStep
-      mode={mode}
-      state={modeState}
-      windowId={windowId}
-      validationMessage={validationMessage}
-      onPatchModeState={onPatchModeState}
-      onSourceAction={handlers.onSourceAction}
-      onToolAction={handlers.onToolAction}
-    />
-  );
-}
+import { buildSourceAutofillPatch, resolveSourceDefaults } from '../lib/sourceConfig.js';
+import {
+  canPrepareDataframe,
+  canStream,
+  connectionKindOf,
+  DATAFRAME_ACTION_BACKEND_VALUES,
+  DATAFRAME_STATUSES,
+  displaySourceMessage,
+  displayToolMessage,
+  domainDefaultsPatch,
+  formatDomainLabel,
+  getAccessibleSteps,
+  getContinueBlockers,
+  getDataframeFlow,
+  getWorkflowSteps,
+  isInputStep,
+  isSourceBusy,
+  isSourceReady,
+  isStreamActive,
+  isToolBusy,
+  mergeSourceState,
+  modeLabels,
+  normalizeWindowSessionId,
+  SOURCE_MODES,
+  SOURCE_STATUSES,
+  sourceStatusFromMessage,
+  STALE_DATAFRAME_PATCH,
+  STORAGE_SEARCH_RESET_PATCH,
+  STREAM_STATUSES,
+  TOOL_STATUSES,
+  toolStatusFromMessage,
+  UPLOAD_STATUSES,
+} from '../lib/sourceModel.js';
+import {
+  abortSourceRequests,
+  getSecret,
+  getStagedFiles,
+  setActiveJob,
+  onSourceRuntimeDispose,
+  windowRef,
+  setSecret,
+  trackRequest,
+} from '../lib/sourceRuntime.js';
+import {
+  appendStreamLog,
+  clearStreamLog,
+  getStreamLogFile,
+  getStreamLogLines,
+  peekStreamLogLines,
+  plugStreamLog,
+  subscribeStreamLog,
+  unplugStreamLog,
+} from '../lib/streamLogs.js';
+import { endAbandonedStream, markStreamActive, markStreamEnded, setActiveStreamLogFile } from '../lib/activeStreams.js';
+import {
+  TASK_ORIGINS,
+  TASK_STATUSES,
+  createTask,
+  finishTask,
+  freezeWindowTaskLogs,
+  markTaskRunning,
+  requestTaskFocus,
+  setTaskHandlers,
+  updateTask,
+} from '../../tasks/lib/taskRegistry.js';
+import { ModeChooser } from './ModeChooser.jsx';
+import { SessionBadge, SourceWindowHeading, WorkflowTimeline } from './sourceUi.jsx';
+import { WorkflowBody } from './steps/WorkflowBody.jsx';
+import { createLogger } from '../../../shared/logger.js';
+
+const log = createLogger('source');
 
 export default function SourceWindowBody({ windowItem }) {
   const workspace = useWorkspaceActions();
   const { notify } = useNotifications();
-  const { token } = useAuth();
+  const { apiFetch, configuration, setConfiguration, mainSessionId, socket } = useSession();
+  // Live stream log (runtime store, not window state; see streamLogs.js).
+  const streamLogLines = useSyncExternalStore(
+    (listener) => subscribeStreamLog(windowItem.id, listener),
+    () => getStreamLogLines(windowItem.id),
+  );
+  const can = useCan();
   const [validationMessage, setValidationMessage] = useState('');
-  const sourceState = mergeSourceState(windowItem.sourceState);
+  const [toolValidationMessage, setToolValidationMessage] = useState('');
+  // Memoised so derived values (accessible steps, defaults merge) only
+  // recompute when this window's state actually changes.
+  const sourceState = useMemo(() => mergeSourceState(windowItem.sourceState), [windowItem.sourceState]);
+  const sourceDefaults = useMemo(() => resolveSourceDefaults(configuration), [configuration]);
+  const hasConfiguration = Boolean(configuration && Object.keys(configuration).length);
   const activeMode = sourceState.mode;
   const modeKey = activeMode === SOURCE_MODES.REALTIME ? 'realtime' : 'batch';
   const modeState = sourceState[modeKey];
   const isChoosing = activeMode === SOURCE_MODES.CHOOSE;
   const accessibleSteps = useMemo(() => getAccessibleSteps(activeMode, modeState), [activeMode, modeState]);
 
+  // Async flows (upload -> tool -> create_DF) patch state across awaits, so
+  // updates build on the latest written state rather than this render's copy.
+  // Per-window (not per-component) ref: see windowRef in sourceRuntime.js.
+  const sourceStateRef = windowRef(windowItem.id, 'sourceState');
+  sourceStateRef.current = sourceState;
+
   const updateSourceState = (nextSourceState) => {
+    sourceStateRef.current = nextSourceState;
     workspace.updateWindowMetadata(windowItem.id, { sourceState: nextSourceState });
   };
 
-  const patchModeState = (patch) => {
+  const patchModeState = (patch, key = modeKey) => {
+    const current = sourceStateRef.current;
     updateSourceState({
-      ...sourceState,
-      [modeKey]: {
-        ...modeState,
+      ...current,
+      [key]: {
+        ...current[key],
         ...patch,
       },
     });
   };
 
+  // Prefill connection fields from the session configuration once per window
+  // (or as soon as /init delivers it). Analyst-typed values are never replaced.
+  const windowId = windowItem.id;
+  const rawSourceState = windowItem.sourceState;
+  const { updateWindowMetadata } = workspace;
+  useEffect(() => {
+    if (!hasConfiguration) return;
+    const current = mergeSourceState(sourceStateRef.current || rawSourceState);
+    if (current.autofillApplied) return;
+    const next = {
+      ...current,
+      autofillApplied: true,
+      batch: { ...current.batch, ...buildSourceAutofillPatch(sourceDefaults, current.batch) },
+      realtime: { ...current.realtime, ...buildSourceAutofillPatch(sourceDefaults, current.realtime) },
+    };
+    // Same path as updateSourceState: keep the ref in step so a patch that
+    // lands before the next render builds on the autofilled state.
+    sourceStateRef.current = next;
+    updateWindowMetadata(windowId, { sourceState: next });
+  }, [hasConfiguration, rawSourceState, sourceDefaults, sourceStateRef, updateWindowMetadata, windowId]);
+
+  // Closes a backend connection that no longer matches the selected input
+  // (e.g. storage -> upload). Runs in the background; the UI is reset first.
+  const releaseConnection = async (key, previous) => {
+    const mode = key === 'realtime' ? SOURCE_MODES.REALTIME : SOURCE_MODES.BATCH;
+    const tracked = trackRequest(windowItem.id);
+    try {
+      if (previous.toolStatus === TOOL_STATUSES.CONNECTED) {
+        await disconnectTool(apiFetch, buildToolDisconnectPayload(), { signal: tracked.signal }).catch(() => null);
+      }
+      if (previous.sourceStatus === SOURCE_STATUSES.CONNECTED) {
+        await disconnectSource(apiFetch, buildSourcePayload(previous, sourceDefaults, mode), { signal: tracked.signal }).catch(() => null);
+      }
+    } finally {
+      tracked.release();
+    }
+  };
+
   const selectMode = (mode, connectionType = '') => {
     setValidationMessage('');
+    setToolValidationMessage('');
     const addressTypePatch = ['broker', 'storage'].includes(connectionType)
       ? { sourceAddressType: connectionType }
-      : {};
+      : connectionType === 'search'
+        ? { sourceAddressType: 'storage' }
+        : {};
     const nextModeKey = mode === SOURCE_MODES.REALTIME ? 'realtime' : 'batch';
+    const current = sourceStateRef.current;
+    const previous = current[nextModeKey];
+    const typeChanged = previous.selectedConnectionType !== connectionType;
+    const nextKind = connectionKindOf({ selectedConnectionType: connectionType });
+    const previousKind = previous.connectedKind || connectionKindOf(previous);
+    const hasLiveConnection = previous.sourceStatus === SOURCE_STATUSES.CONNECTED;
+    // A live connection (or an upload) only carries over to an input that
+    // uses the same backend connection; otherwise it is closed and reset.
+    const mustRelease = mode === SOURCE_MODES.BATCH && typeChanged && (
+      (hasLiveConnection && previousKind !== nextKind) ||
+      (previous.sourceStatus === SOURCE_STATUSES.UPLOADED && nextKind !== 'upload')
+    );
+    const resetPatch = mustRelease
+      ? {
+        sourceStatus: SOURCE_STATUSES.IDLE,
+        sourceMessage: displaySourceMessage(SOURCE_STATUSES.IDLE),
+        connectedKind: '',
+        toolStatus: TOOL_STATUSES.IDLE,
+        toolMessage: displayToolMessage(TOOL_STATUSES.IDLE),
+        ...STORAGE_SEARCH_RESET_PATCH,
+      }
+      : {};
 
     updateSourceState({
-      ...sourceState,
+      ...current,
       mode,
       [nextModeKey]: {
-        ...sourceState[nextModeKey],
+        ...previous,
         step: mode === SOURCE_MODES.REALTIME ? 'connect' : 'upload',
         selectedConnectionType: connectionType,
-        ...(connectionType === 'storage' ? { sourceStatus: SOURCE_STATUSES.IDLE, sourceMessage: 'Not connected.' } : {}),
+        // A dataframe belongs to the input it was built from.
+        ...(typeChanged ? STALE_DATAFRAME_PATCH : {}),
+        ...resetPatch,
         ...addressTypePatch,
       },
     });
+
+    if (mustRelease && hasLiveConnection) {
+      releaseConnection(nextModeKey, previous);
+      notify({
+        title: `${previousKind === 'storage' ? 'Storage' : 'Broker'} disconnected`,
+        message: 'The previous connection was closed because a different input type was selected.',
+        level: 'info',
+        source: windowItem.title,
+      });
+    }
   };
 
   const copySessionId = async (sessionId) => {
@@ -1558,7 +264,7 @@ export default function SourceWindowBody({ windowItem }) {
         source: windowItem.title,
       });
     } catch (error) {
-      console.error('Session id copy failed', { name: error?.name });
+      log.error('Session id copy failed', { name: error?.name });
       notify({
         title: 'Copy failed',
         message: 'The session id could not be copied from this browser context.',
@@ -1574,10 +280,20 @@ export default function SourceWindowBody({ windowItem }) {
     });
   };
 
+  const openLibrariesWindow = () => {
+    workspace.openWindow(WORKSPACE_WINDOW_TYPES.LIBRARIES, {
+      customTitle: 'Rules library',
+    });
+  };
+
+  // Back to the chooser; it reopens on the input this window was using so a
+  // plain Continue never switches (and disconnects) the input by accident.
   const changeInputSelection = () => {
     setValidationMessage('');
+    const current = sourceStateRef.current;
     updateSourceState({
-      ...sourceState,
+      ...current,
+      lastMode: current.mode === SOURCE_MODES.CHOOSE ? current.lastMode : current.mode,
       mode: SOURCE_MODES.CHOOSE,
     });
   };
@@ -1587,10 +303,24 @@ export default function SourceWindowBody({ windowItem }) {
   const activeWorkflowStep = activeStepIndex >= 0 ? workflowSteps[activeStepIndex] : workflowSteps[0];
   const previousStep = activeStepIndex > 0 ? workflowSteps[activeStepIndex - 1] : null;
   const nextStep = activeStepIndex >= 0 && activeStepIndex < workflowSteps.length - 1 ? workflowSteps[activeStepIndex + 1] : null;
-  const canContinueWorkflow = Boolean(nextStep && accessibleSteps.has(nextStep.id));
+  const isPreparing = Boolean(modeState.preparing);
+  // Branded overlay for long-running actions: upload, tool connect, create_DF
+  // (Continue pipeline) and source/tool connect or disconnect.
+  const busyLabel = modeState.preparing
+    || (isSourceBusy(modeState) ? displaySourceMessage(modeState.sourceStatus) : '')
+    || (isToolBusy(modeState) ? displayToolMessage(modeState.toolStatus) : '');
+  // On the input step Continue runs upload/tool/create_DF unless a dataframe
+  // for this input already exists (then it simply moves on).
+  const runsDataframePipeline = isInputStep(modeState) &&
+    modeState.dataframeStatus !== DATAFRAME_STATUSES.READY;
+  const canContinueWorkflow = runsDataframePipeline
+    ? canPrepareDataframe(activeMode, modeState) && !isPreparing
+    : Boolean(nextStep && accessibleSteps.has(nextStep.id));
+  const continueBlockers = nextStep && !canContinueWorkflow && !isPreparing ? getContinueBlockers(activeMode, modeState) : [];
+  const continueBlockedHint = continueBlockers.length ? 'To continue: ' + continueBlockers.join(' · ') : '';
   const workflowFooterMessage = activeMode === SOURCE_MODES.BATCH && modeState.step === 'upload'
     ? modeState.selectedConnectionType === 'storage'
-      ? 'Connected storage will be used to create the dataframe.'
+      ? 'Selected storage files will be used to create the dataframe.'
       : modeState.selectedConnectionType === 'search'
         ? 'Selected search results will be used to create the dataframe.'
         : 'Selected files will be used to create the dataframe.'
@@ -1602,7 +332,306 @@ export default function SourceWindowBody({ windowItem }) {
     'Source / Target Mapping': 'Map network',
     'Link Analysis': 'Analyze',
   };
-  const continueButtonLabel = modeState.step === 'stream' ? streamActionLabels[modeState.dataframeAction] || 'Analyze' : 'Continue';
+  const runActionLabel = streamActionLabels[modeState.dataframeAction] || 'Analyze';
+  const isDataframeStep = modeState.step === 'dataframe';
+  const isStreamStep = modeState.step === 'stream';
+  const isStreamRunning = isStreamActive(modeState);
+  const isStreamTerminating = modeState.streamStatus === STREAM_STATUSES.TERMINATING;
+  // Once a run exists (live or terminated) the primary button leads to the
+  // results; while live the left button becomes Terminate instead of Back.
+  const isStreamDone = [STREAM_STATUSES.TERMINATED, STREAM_STATUSES.COMPLETED].includes(modeState.streamStatus);
+  const hasStreamRun = isStreamStep && (isStreamRunning || isStreamTerminating || isStreamDone);
+  const continueButtonLabel = isPreparing
+    ? modeState.preparing
+    : isStreamStep
+      ? (hasStreamRun ? 'Show results' : runActionLabel)
+      : isDataframeStep ? runActionLabel : 'Continue';
+  const primaryActionDisabled = isPreparing || (isStreamStep
+    ? !hasStreamRun && !canStream(modeState)
+    : !canContinueWorkflow);
+  const footerMessage = isStreamStep
+    ? modeState.streamStatus === STREAM_STATUSES.STARTING
+      ? 'The ingestion job is queued on the backend. The live log appears once it starts.'
+      : modeState.streamStatus === STREAM_STATUSES.RUNNING
+        ? 'Streaming in progress. Show the results or terminate the ingestion.'
+        : isStreamTerminating
+          ? 'Terminating the stream…'
+          : modeState.streamStatus === STREAM_STATUSES.COMPLETED
+            ? 'Ingestion completed. Show the results, download the log, or go back to run it again.'
+            : modeState.streamStatus === STREAM_STATUSES.TERMINATED
+              ? 'Streaming was terminated. Download the log, show the results, or go back to run it again.'
+            : modeState.streamStatus === STREAM_STATUSES.FAILED
+              ? 'The stream could not start. Check the details in the log and try again.'
+              : 'Ready to start. Run the analysis to begin streaming.'
+    : workflowFooterMessage;
+
+  const describeStreamInput = () => {
+    if (activeMode === SOURCE_MODES.REALTIME) {
+      return `Realtime ${modeState.sourceAddressType || 'broker'} ${modeState.brokerAddress || ''}${modeState.topic ? ' / ' + modeState.topic : ''}`.trim();
+    }
+    if (modeState.selectedConnectionType === 'storage') {
+      const files = (modeState.selectedStorageFiles || []).map((file) => file.name);
+      return 'Batch storage: ' + files.length + (files.length === 1 ? ' file' : ' files') + (files.length ? ' (' + files.join(', ') + ')' : '');
+    }
+    if (modeState.selectedConnectionType === 'search') return 'Batch search results: ' + (modeState.selectedSearchFiles || []).length + ' selected';
+    if (modeState.selectedConnectionType === 'broker') return `Batch broker ${modeState.brokerAddress || ''}${modeState.topic ? ' / ' + modeState.topic : ''}`.trim();
+    const files = modeState.selectedFiles || [];
+    return 'Batch upload: ' + files.length + (files.length === 1 ? ' file' : ' files') + (files.length ? ' (' + files.join(', ') + ')' : '');
+  };
+
+  const describeStreamAction = () => {
+    if (modeState.dataframeAction === 'Link Analysis') return 'Link Analysis with rule "' + modeState.rule + '"';
+    if (modeState.dataframeAction === 'Source / Target Mapping') {
+      return `Source / Target Mapping ${modeState.sourceColumn} -> ${modeState.targetColumn}${modeState.relationship ? ' [' + modeState.relationship + ']' : ''}`;
+    }
+    return modeState.dataframeAction || 'No action';
+  };
+
+  // Production stream flow: POST /live_batch_files {id:'stream'}; the reply
+  // (or the queued ingestion job) names the log file, which is followed over
+  // the socket (log_stream_plug / stream_logs). Terminate sends end_session.
+  const streamJobRef = windowRef(windowItem.id, 'streamJob'); // { controller, terminateRequested }
+  // The Tasks window record of this window's latest run (taskRegistry.js).
+  const streamTaskRef = windowRef(windowItem.id, 'streamTaskId');
+  const terminateStreamRef = windowRef(windowItem.id, 'terminateStream');
+
+  // The live state follows the backend log: the first backend line means the
+  // ingestion is actually running; its "Injection finished" line means done.
+  useEffect(() => {
+    if (modeState.step !== 'stream') return;
+    const status = modeState.streamStatus;
+    if (status !== STREAM_STATUSES.STARTING && status !== STREAM_STATUSES.RUNNING) return;
+    const backendLines = streamLogLines.filter((line) => line.source === 'backend');
+    if (!backendLines.length) return;
+    if (backendLines.some((line) => /Injection finished for action/i.test(line.message))) {
+      completeStream(modeKey);
+      return;
+    }
+    markTaskRunning(streamTaskRef.current);
+    if (status === STREAM_STATUSES.STARTING) patchModeState({ streamStatus: STREAM_STATUSES.RUNNING }, modeKey);
+    // Handlers are recreated each render; only the log/status drive this.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [streamLogLines, modeState.streamStatus, modeState.step, modeKey]);
+
+  const failStream = (key, message) => {
+    markStreamEnded(windowItem.id);
+    unplugStreamLog(windowItem.id);
+    appendStreamLog(windowItem.id, message, 'error');
+    patchModeState({ streamStatus: STREAM_STATUSES.FAILED, streamLogFile: '', preparing: '' }, key);
+    finishTask(streamTaskRef.current, TASK_STATUSES.FAILED, { message });
+    notify({ title: 'Streaming could not start', message, level: 'error', source: windowItem.title });
+  };
+
+  // Ingestion finished (job resolved, or the backend logged its end line).
+  const completeStream = (key) => {
+    const state = sourceStateRef.current[key];
+    if (state?.streamStatus === STREAM_STATUSES.COMPLETED || state?.streamStatus === STREAM_STATUSES.TERMINATED) return;
+    markStreamEnded(windowItem.id);
+    const completionMessages = {
+      'Link Analysis': 'Analysis complete',
+      'Source / Target Mapping': 'Mapping complete',
+      'Store data': 'Data Store completed',
+    };
+    appendStreamLog(windowItem.id, completionMessages[state?.dataframeAction] || 'Ingestion completed.');
+    patchModeState({ streamStatus: STREAM_STATUSES.COMPLETED, preparing: '' }, key);
+    finishTask(streamTaskRef.current, TASK_STATUSES.COMPLETED);
+  };
+
+  const followStreamLog = (key, logFile, status) => {
+    const sourceSessionId = normalizeWindowSessionId(windowItem);
+    plugStreamLog(windowItem.id, { socket, sessionId: sourceSessionId, filename: logFile });
+    setActiveStreamLogFile(windowItem.id, logFile);
+    updateTask(streamTaskRef.current, { logFile });
+    patchModeState({ streamStatus: status, streamLogFile: logFile, preparing: '' }, key);
+  };
+
+  const startStream = async () => {
+    const key = modeKey;
+    const state = sourceStateRef.current[key];
+    // One stream per window: a second start would orphan the running job.
+    if (!canStream(state) || isStreamActive(state)) return;
+    const sourceSessionId = normalizeWindowSessionId(windowItem);
+    if (!sourceSessionId) {
+      setValidationMessage('Source session is not ready yet.');
+      return;
+    }
+    const isRealtime = key === 'realtime';
+    // Realtime streams need Neo4j connected and its credentials saved to
+    // this session (production realtime start guard).
+    if (isRealtime && (state.toolStatus !== TOOL_STATUSES.CONNECTED || state.realtimeConfigSavedFor !== sourceSessionId)) {
+      const message = state.toolStatus !== TOOL_STATUSES.CONNECTED
+        ? `Connect Neo4j successfully for session ${sourceSessionId} before starting realtime.`
+        : state.realtimeConfigMessage || `Save Neo4j credentials for session ${sourceSessionId} before starting realtime (reconnect the tool).`;
+      setValidationMessage(message);
+      notify({ title: 'Realtime stream blocked', message, level: 'warning', source: windowItem.title });
+      return;
+    }
+
+    const action = DATAFRAME_ACTION_BACKEND_VALUES[state.dataframeAction] || state.dataframeAction;
+    const needsSourceTarget = action === 'Source / Target Relationship';
+    // An empty field means the configured default (shown as its placeholder).
+    const relationship = sanitizeRelationshipName(state.relationship || sourceDefaults.dataframe.relationship || 'HAS_RELATIONSHIP') || 'HAS_RELATIONSHIP';
+    if (needsSourceTarget && !/^[A-Z][A-Z0-9_]*$/.test(relationship)) {
+      setValidationMessage('The relationship must start with a letter and use letters, digits or underscores.');
+      return;
+    }
+    const tool = sanitizeIdentifier(state.dataframeInfo?.tool || sourceDefaults.tool.name || 'neo4j', { maxLength: 80 });
+    const payload = buildStreamPayload({
+      sourceSessionId,
+      mode: isRealtime ? 'realtime' : 'batch',
+      tool,
+      action,
+      rule: sanitizeText(state.rule || '', { maxLength: 160 }).trim(),
+      source: needsSourceTarget ? sanitizeText(state.sourceColumn, { maxLength: 120 }).trim() : '',
+      target: needsSourceTarget ? sanitizeText(state.targetColumn, { maxLength: 120 }).trim() : '',
+      relationship,
+    });
+
+    setValidationMessage('');
+    unplugStreamLog(windowItem.id);
+    // The previous run's task keeps its log once this window's log moves on.
+    freezeWindowTaskLogs(windowItem.id, peekStreamLogLines(windowItem.id));
+    clearStreamLog(windowItem.id);
+    appendStreamLog(windowItem.id, `Session ${sourceSessionId}: ${runActionLabel} requested.`);
+    appendStreamLog(windowItem.id, 'Input: ' + describeStreamInput());
+    appendStreamLog(windowItem.id, 'Action: ' + describeStreamAction());
+    patchModeState({ step: 'stream', streamStatus: STREAM_STATUSES.STARTING, streamLogFile: '', preparing: 'Starting stream…' }, key);
+    // From here on the backend may be ingesting: leaving the window any other
+    // way than complete/fail/terminate sends end_session (activeStreams.js).
+    markStreamActive(windowItem.id, { sourceSessionId });
+    const taskId = createTask({
+      origin: TASK_ORIGINS.SOURCE,
+      title: state.dataframeAction || 'Analysis',
+      action: state.dataframeAction || '',
+      input: describeStreamInput(),
+      mode: isRealtime ? 'realtime' : 'batch',
+      windowId: windowItem.id,
+      windowTitle: windowItem.title,
+      sourceSessionId,
+      rule: payload.rule || '',
+      sourceColumn: payload.source || '',
+      targetColumn: payload.target || '',
+      relationship: needsSourceTarget ? relationship : '',
+      // The dataframe this run streams (shown in the Tasks window).
+      dataframe: state.dataframeInfo ? {
+        totalRows: state.dataframeInfo.totalRows,
+        totalColumns: state.dataframeInfo.totalColumns,
+        columns: [...(state.dataframeInfo.columns || [])],
+        name: state.dataframeInfo.storage || state.dataframeInfo.source || '',
+        tool: state.dataframeInfo.tool || tool,
+      } : null,
+    });
+    streamTaskRef.current = taskId;
+    // Stopped from the Tasks window: the same path as this window's Terminate.
+    setTaskHandlers(taskId, { terminate: () => terminateStreamRef.current?.() });
+
+    const request = trackRequest(windowItem.id);
+    let started;
+    try {
+      started = await startStreamRequest(apiFetch, payload, { signal: request.signal });
+    } catch (error) {
+      if (error?.name === 'AbortError' || request.signal.aborted) {
+        // The backend may already have accepted the start: close it.
+        appendStreamLog(windowItem.id, 'Start request cancelled. Closing the stream session on the backend.', 'warn');
+        patchModeState({ streamStatus: STREAM_STATUSES.IDLE, preparing: '' }, key);
+        finishTask(taskId, TASK_STATUSES.TERMINATED, { message: 'Start request cancelled.' });
+        endAbandonedStream(apiFetch, windowItem.id, { reason: 'start_cancelled' });
+        return;
+      }
+      failStream(key, 'The streaming request failed. Please try again.');
+      return;
+    } finally {
+      request.release();
+    }
+    if (request.signal.aborted) {
+      finishTask(taskId, TASK_STATUSES.TERMINATED, { message: 'Start request cancelled.' });
+      endAbandonedStream(apiFetch, windowItem.id, { reason: 'start_cancelled' });
+      return;
+    }
+    if (!started.accepted) {
+      failStream(key, started.message);
+      return;
+    }
+
+    appendStreamLog(windowItem.id, started.queued ? 'Ingestion job queued on the backend.' : 'Stream accepted by the backend.');
+    // Stays "starting" until the first backend log line arrives (see the
+    // effect below); the live indicator then follows the actual ingestion.
+    if (started.logFile) followStreamLog(key, started.logFile, STREAM_STATUSES.STARTING);
+    else patchModeState({ preparing: '', streamStatus: STREAM_STATUSES.STARTING }, key);
+    if (!started.queued || !started.pollPath) return;
+
+    // Long-running ingestion job: follow it outside the busy overlay.
+    const controller = new AbortController();
+    const job = { controller, terminateRequested: false };
+    streamJobRef.current = job;
+    // Closing the window stops following the job (the backend cleans up).
+    onSourceRuntimeDispose(windowItem.id, () => controller.abort());
+    setActiveJob(windowItem.id, 'stream', started.jobId);
+    try {
+      const result = await waitForStreamJob(apiFetch, started.pollPath, { signal: controller.signal });
+      if (job.terminateRequested || controller.signal.aborted) return;
+      // The queued job resolves when the ingestion has finished.
+      const logFile = resolveStreamLogFile(result) || started.logFile;
+      setActiveStreamLogFile(windowItem.id, logFile);
+      if (logFile && !sourceStateRef.current[key]?.streamLogFile) plugStreamLog(windowItem.id, { socket, sessionId: normalizeWindowSessionId(windowItem), filename: logFile });
+      completeStream(key);
+    } catch (error) {
+      if (job.terminateRequested || controller.signal.aborted || error?.name === 'AbortError') return;
+      log.error('Stream job failed', { status: error?.status, jobStatus: error?.jobStatus });
+      failStream(key, sanitizeBackendUserMessage(error?.message, 'The stream job failed before it started.'));
+    } finally {
+      if (streamJobRef.current === job) streamJobRef.current = null;
+      setActiveJob(windowItem.id, 'stream', null);
+    }
+  };
+
+  const terminateStream = async () => {
+    const key = modeKey;
+    const state = sourceStateRef.current[key];
+    if (!isStreamActive(state)) return;
+    const sourceSessionId = normalizeWindowSessionId(windowItem);
+    const logFile = state.streamLogFile || getStreamLogFile(windowItem.id);
+    if (streamJobRef.current) {
+      streamJobRef.current.terminateRequested = true;
+      streamJobRef.current.controller.abort();
+    }
+    markStreamEnded(windowItem.id); // this request is the closing request
+    unplugStreamLog(windowItem.id);
+    patchModeState({ streamStatus: STREAM_STATUSES.TERMINATING }, key);
+    appendStreamLog(windowItem.id, 'Terminating the stream…');
+    const result = await endStreamRequest(apiFetch, { sourceSessionId, logFile });
+    patchModeState({ streamStatus: STREAM_STATUSES.TERMINATED, streamLogFile: '' }, key);
+    finishTask(streamTaskRef.current, TASK_STATUSES.TERMINATED, { message: result.ok ? '' : result.message });
+    if (result.ok) {
+      appendStreamLog(windowItem.id, 'Streaming terminated by user.');
+      notify({ title: 'Stream terminated', message: 'The stream was stopped on the backend.', level: 'info', source: windowItem.title });
+    } else {
+      appendStreamLog(windowItem.id, result.message, 'warn');
+      notify({ title: 'Stream state', message: result.message, level: 'warning', source: windowItem.title });
+    }
+  };
+
+  terminateStreamRef.current = terminateStream;
+
+  // Results live in the Tasks window: it shows this run's record and opens
+  // its Graph (graph link) or Chart from there.
+  const showStreamResults = () => {
+    if (streamTaskRef.current) requestTaskFocus(streamTaskRef.current);
+    workspace.openWindow(WORKSPACE_WINDOW_TYPES.TASKS, { title: 'Tasks' });
+  };
+
+  const handlePrimaryAction = () => {
+    if (isStreamStep) {
+      if (hasStreamRun) showStreamResults();
+      else startStream();
+      return;
+    }
+    if (isDataframeStep) {
+      startStream();
+      return;
+    }
+    continueWorkflow();
+  };
 
   const goBackInWorkflow = () => {
     setValidationMessage('');
@@ -1615,96 +644,112 @@ export default function SourceWindowBody({ windowItem }) {
 
   const continueWorkflow = () => {
     if (!canContinueWorkflow) return;
+    if (runsDataframePipeline) {
+      prepareDataframe();
+      return;
+    }
     setValidationMessage('');
     patchModeState({ step: nextStep.id });
   };
 
-  const validateSourcePayload = () => {
-    if (!token) return 'Authentication is required.';
+  const validateSourcePayload = (state = modeState, defaults = sourceDefaults) => {
     if (!normalizeWindowSessionId(windowItem)) return 'Source session is not ready yet.';
-    if (modeState.sourceAddressType === 'storage') {
-      if (modeState.storageUseDefault !== false) return '';
-      return compactValidationErrors(
-        validateConnectionValue(modeState.storageAddress, 'Storage address'),
-        modeState.storagePath ? '' : 'Storage path is required.'
-      );
+    if (state.sourceAddressType === 'storage') {
+      if (state.storageUseDefault !== false && !resolveStorageAddress(state, defaults)) {
+        return 'No default storage address is configured. Untick "Use Default" and enter one.';
+      }
+      if (state.storageUseDefault === false && state.selectedConnectionType === 'storage') {
+        const port = String(state.storagePort || '').trim();
+        if (port && !(Number(port) >= 1 && Number(port) <= 65535)) return 'The RPC/Web port must be a number between 1 and 65535.';
+        if (port && /:\d+$/.test(String(state.storageAddress || '').trim())) return 'Enter the port either in the address or in the port field, not both.';
+      }
+      return validateConnectionValue(resolveStorageAddress(state, defaults), 'Storage address');
     }
     return compactValidationErrors(
-      validateConnectionValue(modeState.brokerAddress, 'Broker/API address'),
-      modeState.sourceAddressType === 'broker' ? validateKafkaTopic(modeState.topic, 'Kafka topic') : ''
+      validateConnectionValue(state.brokerAddress, 'Broker/API address'),
+      state.sourceAddressType === 'broker' ? validateKafkaTopic(state.topic, 'Kafka topic') : ''
     );
   };
 
   const validateToolPayload = () => {
-    if (!token) return 'Authentication is required.';
     if (!normalizeWindowSessionId(windowItem)) return 'Source session is not ready yet.';
     if (!isSourceReady(modeState)) return 'Connect the source first.';
     return compactValidationErrors(
       validateConnectionValue(modeState.toolUrl, 'Tool URL'),
       modeState.toolUsername ? '' : 'Tool username is required.',
-      modeState.toolPassword ? '' : 'Tool password is required.'
+      getSecret(windowItem.id, modeKey) || (isMaskedSecret(modeState.toolPassword) && modeState.toolPasswordRef) ? '' : 'Tool password is required.'
     );
   };
 
-  const buildSourcePayload = () => {
-    const sourceSessionId = normalizeWindowSessionId(windowItem);
-    const brokerAddress = sanitizeConnectionValue(modeState.brokerAddress);
-    const storageAddress = sanitizeConnectionValue(modeState.storageAddress);
-    const topic = modeState.sourceAddressType === 'broker' ? sanitizeKafkaTopic(modeState.topic) : null;
-    const storageType = sanitizeIdentifier(modeState.storageType || 'hdfs');
-    const activeAddress = modeState.sourceAddressType === 'storage' ? storageAddress : brokerAddress;
+  // With "Use Default" on, storage always targets the configured address and
+  // the typed address/port are discarded (shown struck through); the backend
+  // reads port and path from the session configuration. A custom target sends
+  // "host:port" (the connect contract has no separate port field).
+  const resolveStorageAddress = (state = modeState, defaults = sourceDefaults) => {
+    if (state.storageUseDefault !== false) return sanitizeConnectionValue(defaults.storage.address || state.storageAddress);
+    const address = sanitizeConnectionValue(state.storageAddress);
+    // Only the Storage page has a port field (Elastic search shares the state).
+    const port = state.selectedConnectionType === 'storage' ? String(state.storagePort || '').trim() : '';
+    return address && port && !/:\d+$/.test(address) ? `${address}:${port}` : address;
+  };
+
+  // Same body the production app sends to /connect_to_source and
+  // /disconnect_source (sourceConnectionSchema).
+  const buildSourcePayload = (state = modeState, defaults = sourceDefaults, mode = activeMode) => {
+    const isStorage = state.sourceAddressType === 'storage';
+    const brokerAddress = sanitizeConnectionValue(state.brokerAddress);
+    const storageAddress = resolveStorageAddress(state, defaults);
+    const address = isStorage ? storageAddress : brokerAddress;
 
     return {
-      addressType: modeState.sourceAddressType,
-      address: activeAddress,
-      broker: brokerAddress,
-      storage: storageAddress,
+      addressType: state.sourceAddressType,
+      address,
+      broker: isStorage ? '' : brokerAddress,
       hdfs: storageAddress,
-      storage_use_default: modeState.storageUseDefault !== false,
-      storage_type: storageType,
-      storage_port: sanitizeConnectionValue(modeState.storagePort),
-      storage_database: sanitizeIdentifier(modeState.storageDatabase),
-      storage_path: sanitizeConnectionValue(modeState.storagePath),
-      storage_table: sanitizeIdentifier(modeState.storageTable),
-      topic,
-      session_id: sourceSessionId,
+      storage: storageAddress,
+      topic: state.sourceAddressType === 'broker' ? sanitizeKafkaTopic(state.topic) : null,
+      mode: mode === SOURCE_MODES.REALTIME ? 'realtime' : 'batch',
+      session_id: normalizeWindowSessionId(windowItem),
     };
   };
 
-  const buildToolConnectPayload = () => ({
-    tool_name: 'neo4j',
-    url: sanitizeConnectionValue(modeState.toolUrl),
-    username: sanitizeIdentifier(modeState.toolUsername),
-    password: sanitizeSecret(modeState.toolPassword),
-    database: sanitizeIdentifier(modeState.toolDatabase),
-    source_id: normalizeWindowSessionId(windowItem),
-  });
+  const buildToolDisconnectPayload = () => {
+    const sourceSessionId = normalizeWindowSessionId(windowItem);
+    return { tool_name: sourceDefaults.tool.name || 'neo4j', source_id: sourceSessionId, session_id: sourceSessionId };
+  };
 
-  const buildToolDisconnectPayload = () => ({
-    tool_name: 'neo4j',
-    source_id: normalizeWindowSessionId(windowItem),
-  });
+  // Storage / Elastic pages keep their connection form collapsed; problems
+  // are reported in the page message (shown below the results) with a hint
+  // to open the form, never by expanding it on the analyst's behalf.
+  const isStorageInput = activeMode === SOURCE_MODES.BATCH && ['storage', 'search'].includes(modeState.selectedConnectionType);
+  const OPEN_FORM_HINT = ' Open the connection form (chevron in the header) to review it.';
 
-  const handleSourceAction = async () => {
+  const handleSourceAction = async ({ auto = false } = {}) => {
     setValidationMessage('');
     const isDisconnecting = modeState.sourceStatus === SOURCE_STATUSES.CONNECTED;
     const validationError = isDisconnecting ? '' : validateSourcePayload();
     if (validationError) {
-      setValidationMessage(validationError);
+      setValidationMessage(validationError + (auto && isStorageInput ? OPEN_FORM_HINT : ''));
       return;
     }
+    if (auto) log.info('Auto-connecting storage with the configured default');
 
     const pendingStatus = isDisconnecting ? SOURCE_STATUSES.DISCONNECTING : SOURCE_STATUSES.CONNECTING;
     patchModeState({ sourceStatus: pendingStatus, sourceMessage: displaySourceMessage(pendingStatus) });
+    const tracked = trackRequest(windowItem.id);
+    const { signal } = tracked;
 
     try {
       if (isDisconnecting && modeState.toolStatus === TOOL_STATUSES.CONNECTED) {
         patchModeState({ toolStatus: TOOL_STATUSES.DISCONNECTING, toolMessage: displayToolMessage(TOOL_STATUSES.DISCONNECTING) });
-        await disconnectTool(appConfig.apiUrl, token, buildToolDisconnectPayload());
+        await disconnectTool(apiFetch, buildToolDisconnectPayload(), { signal });
+        if (signal.aborted) return;
       }
 
       const request = isDisconnecting ? disconnectSource : connectSource;
-      const result = await request(appConfig.apiUrl, token, buildSourcePayload());
+      const result = await request(apiFetch, buildSourcePayload(), { signal });
+      // Cancelled from the load screen: cancelBusyAction already reset state.
+      if (signal.aborted) return;
       const nextStatus = !result.ok
         ? SOURCE_STATUSES.FAILED
         : isDisconnecting
@@ -1712,70 +757,744 @@ export default function SourceWindowBody({ windowItem }) {
           : sourceStatusFromMessage(result.message || 'Connection established!');
       patchModeState({
         sourceStatus: nextStatus,
-        sourceMessage: displaySourceMessage(nextStatus),
+        sourceMessage: result.ok ? displaySourceMessage(nextStatus) : result.message,
+        connectedKind: result.ok && !isDisconnecting ? connectionKindOf(modeState) : '',
+        ...(result.ok ? { ...STALE_DATAFRAME_PATCH, ...STORAGE_SEARCH_RESET_PATCH } : {}),
         ...(isDisconnecting ? { toolStatus: TOOL_STATUSES.IDLE, toolMessage: displayToolMessage(TOOL_STATUSES.IDLE), step: activeMode === SOURCE_MODES.BATCH ? 'upload' : 'connect' } : {}),
       });
+      if (!result.ok && auto) {
+        setValidationMessage(isStorageInput
+          ? `Automatic connection to the default storage failed${result.message ? ': ' + result.message : '.'}${OPEN_FORM_HINT}`
+          : `Automatic connection failed${result.message ? ': ' + result.message : '.'} Review the values and press Connect.`);
+      }
       notify({
-        title: isDisconnecting ? 'Source disconnected' : 'Source connected',
-        message: isDisconnecting ? 'The source connection was closed.' : 'The source connection is ready.',
+        title: !result.ok ? (isDisconnecting ? 'Source disconnect failed' : 'Source connection failed') : isDisconnecting ? 'Source disconnected' : 'Source connected',
+        message: !result.ok ? result.message : isDisconnecting ? 'The source connection was closed.' : 'The source connection is ready.',
         level: nextStatus === SOURCE_STATUSES.FAILED ? 'error' : 'success',
         source: windowItem.title,
       });
     } catch (error) {
-      console.error('Source connection action failed', { status: error?.status });
+      if (signal.aborted) return;
+      log.error('Source connection action failed', { status: error?.status });
       patchModeState({ sourceStatus: SOURCE_STATUSES.FAILED, sourceMessage: displaySourceMessage(SOURCE_STATUSES.FAILED) });
+      if (auto && isStorageInput) setValidationMessage(`Automatic connection to the default storage failed.${OPEN_FORM_HINT}`);
       notify({
         title: 'Source connection failed',
         message: 'The source connection could not be completed. Please review the values and try again.',
         level: 'error',
         source: windowItem.title,
       });
+    } finally {
+      tracked.release();
     }
   };
 
+  // Connects the tool for one mode using the latest state (also used by the
+  // upload pipeline's automatic connect). Returns { ok, message }.
+  // Pass `signal` when part of a larger tracked action; otherwise it tracks
+  // its own request so the load screen can cancel it.
+  const runToolConnect = async (key = modeKey, { quiet = false, signal: outerSignal } = {}) => {
+    const state = sourceStateRef.current[key];
+    const built = buildToolConnectPayload({
+      sourceSessionId: normalizeWindowSessionId(windowItem),
+      toolName: sourceDefaults.tool.name || 'neo4j',
+      url: sanitizeConnectionValue(state.toolUrl),
+      username: sanitizeIdentifier(state.toolUsername),
+      // A typed password wins; otherwise the saved-secret marker + ref.
+      password: getSecret(windowItem.id, key) || (isMaskedSecret(state.toolPassword) ? state.toolPassword : ''),
+      passwordRef: getSecret(windowItem.id, key) ? '' : state.toolPasswordRef,
+      database: sanitizeIdentifier(state.toolDatabase),
+    });
+    if (!built.ok) {
+      patchModeState({ toolStatus: TOOL_STATUSES.FAILED, toolMessage: built.message }, key);
+      return { ok: false, message: built.message };
+    }
+
+    patchModeState({ toolStatus: TOOL_STATUSES.CONNECTING, toolMessage: displayToolMessage(TOOL_STATUSES.CONNECTING) }, key);
+    // A saved-secret reference survives the round trip; a typed password is
+    // dropped from window state once used.
+    const keptPassword = { toolPasswordTyped: false, ...(state.toolPasswordRef ? { toolPassword: '***' } : { toolPassword: '' }) };
+    const tracked = outerSignal ? null : trackRequest(windowItem.id);
+    const signal = outerSignal || tracked.signal;
+    let result;
+    try {
+      result = await connectTool(apiFetch, built.payload, { signal });
+    } finally {
+      tracked?.release();
+    }
+    if (signal.aborted) return { ok: false, cancelled: true, message: 'Cancelled.' };
+    const nextStatus = result.ok ? toolStatusFromMessage(result.message) : TOOL_STATUSES.FAILED;
+    patchModeState({
+      toolStatus: nextStatus,
+      toolMessage: result.ok ? displayToolMessage(nextStatus) : result.message,
+      ...(result.ok ? keptPassword : {}),
+    }, key);
+    // Realtime: save the credentials to this source session (production
+    // persistRealtimeToolConfigurationForWindow) while the typed password is
+    // still available; the realtime start guard checks the result.
+    if (result.ok && key === 'realtime' && nextStatus === TOOL_STATUSES.CONNECTED) {
+      const sourceSessionId = normalizeWindowSessionId(windowItem);
+      const persisted = await persistRealtimeToolConfiguration(apiFetch, {
+        sourceSessionId,
+        sessionConfiguration: configuration,
+        tool: {
+          url: sanitizeConnectionValue(state.toolUrl),
+          username: sanitizeIdentifier(state.toolUsername),
+          database: sanitizeIdentifier(state.toolDatabase),
+          password: getSecret(windowItem.id, key),
+        },
+      });
+      patchModeState(persisted.ok
+        ? { realtimeConfigSavedFor: sourceSessionId, realtimeConfigMessage: '', ...(persisted.passwordRef ? { toolPasswordRef: persisted.passwordRef, toolPassword: '***' } : {}) }
+        : { realtimeConfigSavedFor: '', realtimeConfigMessage: persisted.message }, key);
+      if (!persisted.ok) notify({ title: 'Neo4j credentials not saved', message: persisted.message, level: 'warning', source: windowItem.title });
+    }
+    // A typed password is dropped once used successfully.
+    if (result.ok) setSecret(windowItem.id, key, '');
+    if (!quiet || !result.ok) {
+      notify({
+        title: result.ok ? 'Tool connected' : 'Tool connection failed',
+        message: result.ok ? 'The tool is ready for this source window.' : result.message,
+        level: result.ok ? 'success' : 'error',
+        source: windowItem.title,
+      });
+    }
+    return { ok: result.ok && nextStatus === TOOL_STATUSES.CONNECTED, message: result.message };
+  };
+
   const handleToolAction = async () => {
-    setValidationMessage('');
+    setToolValidationMessage('');
     const isDisconnecting = modeState.toolStatus === TOOL_STATUSES.CONNECTED;
     const validationError = isDisconnecting ? '' : validateToolPayload();
     if (validationError) {
-      setValidationMessage(validationError);
+      setToolValidationMessage(validationError);
       return;
     }
 
-    const pendingStatus = isDisconnecting ? TOOL_STATUSES.DISCONNECTING : TOOL_STATUSES.CONNECTING;
-    patchModeState({ toolStatus: pendingStatus, toolMessage: displayToolMessage(pendingStatus) });
+    if (!isDisconnecting) {
+      // Failures are reported by runToolConnect (status text + notification).
+      await runToolConnect(modeKey);
+      return;
+    }
+
+    patchModeState({ toolStatus: TOOL_STATUSES.DISCONNECTING, toolMessage: displayToolMessage(TOOL_STATUSES.DISCONNECTING) });
+    const tracked = trackRequest(windowItem.id);
+    let result;
+    try {
+      result = await disconnectTool(apiFetch, buildToolDisconnectPayload(), { signal: tracked.signal });
+    } finally {
+      tracked.release();
+    }
+    if (tracked.signal.aborted) return;
+    patchModeState({
+      toolStatus: result.ok ? TOOL_STATUSES.DISCONNECTED : TOOL_STATUSES.FAILED,
+      toolMessage: result.ok ? displayToolMessage(TOOL_STATUSES.DISCONNECTED) : result.message,
+      ...(result.ok ? { step: activeMode === SOURCE_MODES.BATCH ? 'upload' : 'connect' } : {}),
+    });
+    notify({
+      title: result.ok ? 'Tool disconnected' : 'Tool disconnect failed',
+      message: result.ok ? 'The tool connection was closed.' : result.message,
+      level: result.ok ? 'success' : 'error',
+      source: windowItem.title,
+    });
+  };
+
+  // Continue on the input step: (upload files ->) (connect tool ->) create_DF,
+  // then move to the dataframe step. Mirrors the production page I -> III path.
+  const prepareDataframe = async () => {
+    const key = modeKey;
+    const flow = getDataframeFlow(activeMode, modeState);
+    const sourceSessionId = normalizeWindowSessionId(windowItem);
+    const read = () => sourceStateRef.current[key];
+    const patch = (values) => patchModeState(values, key);
+    const failDataframe = (message) => {
+      patch({ dataframeStatus: DATAFRAME_STATUSES.FAILED, dataframeMessage: message, preparing: '' });
+      notify({ title: 'Dataframe not created', message, level: 'error', source: windowItem.title });
+    };
+
+    if (!sourceSessionId) {
+      setValidationMessage('Source session is not ready yet.');
+      return;
+    }
+    setValidationMessage('');
+    setToolValidationMessage('');
+    const request = trackRequest(windowItem.id);
+    // Upload and storage flows connect the tool on the analyst's behalf.
+    const ensureToolConnected = async () => {
+      if (read().toolStatus === TOOL_STATUSES.CONNECTED) return true;
+      patch({ preparing: 'Connecting tool…' });
+      const tool = await runToolConnect(key, { quiet: true, signal: request.signal });
+      if (request.signal.aborted) return false;
+      if (!tool.ok) {
+        patch({ preparing: '' });
+        return false;
+      }
+      return true;
+    };
 
     try {
-      const request = isDisconnecting ? disconnectTool : connectTool;
-      const payload = isDisconnecting ? buildToolDisconnectPayload() : buildToolConnectPayload();
-      const result = await request(appConfig.apiUrl, token, payload);
-      const nextStatus = !result.ok
-        ? TOOL_STATUSES.FAILED
-        : isDisconnecting
-          ? TOOL_STATUSES.DISCONNECTED
-          : toolStatusFromMessage(result.message || 'Connected!');
-      patchModeState({
-        toolStatus: nextStatus,
-        toolMessage: displayToolMessage(nextStatus),
-        ...(!isDisconnecting ? { toolPassword: '' } : {}),
-        ...(isDisconnecting ? { step: activeMode === SOURCE_MODES.BATCH ? 'upload' : 'connect' } : {}),
+      let payload;
+      if (flow === 'files') {
+        const names = read().selectedFiles || [];
+        const uploaded = read().uploadedFiles || [];
+        const alreadyUploaded = uploaded.length === names.length && names.every((name, index) => uploaded[index] === name);
+
+        if (!alreadyUploaded) {
+          const files = getStagedFiles(windowItem.id);
+          if (files.length === 0 || files.length !== names.length) {
+            setValidationMessage('The staged files are no longer available. Select them again.');
+            return;
+          }
+          patch({ uploadStatus: UPLOAD_STATUSES.UPLOADING, preparing: 'Uploading files…' });
+          const upload = await uploadBatchFiles(apiFetch, { sourceSessionId, files, signal: request.signal });
+          if (request.signal.aborted) return;
+          if (!upload.ok) {
+            patch({ uploadStatus: UPLOAD_STATUSES.FAILED, sourceMessage: upload.message, preparing: '' });
+            notify({ title: 'Upload failed', message: upload.message, level: 'error', source: windowItem.title });
+            return;
+          }
+          patch({
+            uploadStatus: UPLOAD_STATUSES.UPLOADED,
+            uploadedFiles: names,
+            sourceStatus: SOURCE_STATUSES.UPLOADED,
+            sourceMessage: 'Dataset uploaded.',
+          });
+        }
+
+        if (!(await ensureToolConnected())) return;
+        payload = buildArrayDataframePayload({ sourceSessionId, kind: 'files', items: names });
+      } else if (flow === 'hdfs') {
+        const items = (read().selectedStorageFiles || []).map(toStorageFileItem);
+        if (items.length === 0) {
+          setValidationMessage('Select at least one file from the storage search.');
+          return;
+        }
+        if (!(await ensureToolConnected())) return;
+        payload = buildArrayDataframePayload({ sourceSessionId, kind: 'hdfs', items });
+      } else if (flow === 'hybrid') {
+        const items = (read().selectedSearchFiles || []).map((item) => toHybridResultItem(item));
+        if (items.length === 0) {
+          setValidationMessage('Select at least one Elasticsearch result.');
+          return;
+        }
+        if (!(await ensureToolConnected())) return;
+        payload = buildArrayDataframePayload({ sourceSessionId, kind: 'hybrid', items });
+      } else {
+        const state = read();
+        payload = buildAddressDataframePayload({
+          sourceSessionId,
+          addressType: state.sourceAddressType,
+          address: sanitizeConnectionValue(state.brokerAddress),
+          topic: state.sourceAddressType === 'broker' ? sanitizeKafkaTopic(state.topic) : null,
+        });
+      }
+
+      patch({ dataframeStatus: DATAFRAME_STATUSES.CREATING, dataframeMessage: '', preparing: 'Creating dataframe…' });
+      const result = await createDataframe(apiFetch, payload, {
+        signal: request.signal,
+        onQueued: ({ jobId }) => setActiveJob(windowItem.id, 'dataframe', jobId),
+      });
+      if (request.signal.aborted) return;
+      if (!result.ok) {
+        failDataframe(formatDataframeFailureMessage(result.data, 'The dataframe could not be created from this source. Please check it and try again.'));
+        return;
+      }
+
+      const info = { ...result.info };
+      if (key === 'realtime' && read().sourceAddressType === 'broker') info.totalRows = 'Live';
+      const state = read();
+      // Same option lists the Dataframe step offers.
+      const ruleOptions = info.rules.length
+        ? info.rules
+        : (sourceDefaults.dataframe.rules.length ? sourceDefaults.dataframe.rules : sourceDefaults.dataframe.builtinRules);
+      const columnOptions = info.columns.length ? info.columns : sourceDefaults.dataframe.fetchColumns;
+      const columnHas = (column) => Boolean(column) && columnOptions.includes(column);
+      patch({
+        dataframeStatus: DATAFRAME_STATUSES.READY,
+        dataframeInfo: info,
+        dataframeMessage: '',
+        preparing: '',
+        step: 'dataframe',
+        // Keep earlier picks this dataframe still offers; otherwise preselect
+        // the configured defaults that exist in it (or clear the pick).
+        ...(!ruleOptions.includes(state.rule) ? { rule: ruleOptions[0] || '' } : {}),
+        ...(!columnHas(state.sourceColumn) ? { sourceColumn: columnHas(sourceDefaults.dataframe.sourceColumn) ? sourceDefaults.dataframe.sourceColumn : '' } : {}),
+        ...(!columnHas(state.targetColumn) ? { targetColumn: columnHas(sourceDefaults.dataframe.targetColumn) ? sourceDefaults.dataframe.targetColumn : '' } : {}),
+        ...(!state.relationship && sourceDefaults.dataframe.relationship ? { relationship: sourceDefaults.dataframe.relationship } : {}),
       });
       notify({
-        title: isDisconnecting ? 'Tool disconnected' : 'Tool connected',
-        message: isDisconnecting ? 'The tool connection was closed.' : 'The tool is ready for this source window.',
-        level: nextStatus === TOOL_STATUSES.FAILED ? 'error' : 'success',
+        title: 'Dataframe created',
+        message: `${info.totalRows} rows · ${info.totalColumns} columns ready for analysis.`,
+        level: 'success',
         source: windowItem.title,
       });
     } catch (error) {
-      console.error('Tool connection action failed', { status: error?.status });
-      patchModeState({ toolStatus: TOOL_STATUSES.FAILED, toolMessage: displayToolMessage(TOOL_STATUSES.FAILED), toolPassword: '' });
+      if (error?.name === 'AbortError' || request.signal.aborted) return;
+      log.error('Dataframe preparation failed', { status: error?.status, jobStatus: error?.jobStatus });
+      if (read().uploadStatus === UPLOAD_STATUSES.UPLOADING) {
+        patch({ uploadStatus: UPLOAD_STATUSES.FAILED, preparing: '' });
+      }
+      failDataframe(formatDataframeFailureMessage(error, 'The dataframe could not be created right now. Please try again in a moment.'));
+    } finally {
+      request.release();
+      setActiveJob(windowItem.id, 'dataframe', null);
+    }
+  };
+
+  // One paged-search runner for both searches (same /live_batch_files
+  // request). `kind` picks the state fields and request details:
+  //   storage: raw HDFS file search (production's Search page, Files radio)
+  //   elastic: hybrid Elastic + Hive search with strict_mood / search_column
+  // A new search replaces the list; `more` pages on with the same context.
+  // The context object identifies the search: any reset (new search,
+  // disconnect, domain change) replaces it, so late replies are dropped.
+  const SEARCH_KINDS = {
+    storage: {
+      fields: { status: 'storageSearchStatus', results: 'storageSearchResults', hasMore: 'storageSearchHasMore', message: 'storageSearchMessage', last: 'storageSearchLast' },
+      preparing: 'Searching storage…',
+      emptyKeyword: 'Type a keyword to search the storage files.',
+      failure: 'The storage search failed. Please try again.',
+      readInput: (state) => ({
+        keyword: sanitizeText(state.storageSearchQuery || '', { maxLength: 500 }).trim(),
+        date: String(state.storageSearchDate || '').trim(),
+      }),
+      request: () => ({ hybrid: false }),
+      mapItem: (item) => toStorageFileItem(item),
+      emptyMessage: ({ keyword, date }) => `No files matched "${keyword}"${date ? ' on ' + date : ''}`,
+      onEmpty: (response) => {
+        // Where the backend looked (storage paths, raw errors) is internal:
+        // only administrators see it, as a notification.
+        const { basePath, errors } = response.diagnostics;
+        const errorText = errors ? (Array.isArray(errors) ? errors.join('\n') : String(errors)) : '';
+        if (can('users:manage') && (basePath || errorText)) {
+          notify({
+            title: 'No storage files found',
+            message: [basePath && `Searched in ${basePath}`, errorText].filter(Boolean).join('\n'),
+            level: errorText ? 'warning' : 'info',
+            source: windowItem.title,
+          });
+        }
+      },
+    },
+    elastic: {
+      fields: { status: 'elasticSearchStatus', results: 'elasticSearchResults', hasMore: 'elasticSearchHasMore', message: 'elasticSearchMessage', last: 'elasticSearchLast' },
+      preparing: 'Searching Elasticsearch…',
+      emptyKeyword: 'Type a keyword to search.',
+      failure: 'The Elasticsearch search failed. Please try again.',
+      readInput: (state) => {
+        const strict = state.searchMode === 'strict';
+        const columnList = strict ? sourceDefaults.search.strictColumns : sourceDefaults.search.fuzzyColumns;
+        return {
+          keyword: sanitizeText(state.searchQuery || '', { maxLength: 500 }).trim(),
+          dateFrom: String(state.elasticSearchDateFrom || '').trim(),
+          dateTo: String(state.elasticSearchDateTo || '').trim(),
+          strict,
+          column: columnList.includes(state.elasticColumn) ? state.elasticColumn : '',
+        };
+      },
+      validate: ({ strict, column, dateFrom, dateTo }) => {
+        if (strict && !column) return 'Strict Elasticsearch search requires selecting a search column.';
+        if (dateFrom && dateTo && dateFrom > dateTo) return 'The start date must be on or before the end date.';
+        return '';
+      },
+      request: ({ strict, column, dateFrom, dateTo }) => ({ hybrid: true, strictMode: strict, searchColumn: column, dateFrom, dateTo }),
+      mapItem: (item, { strict, column }) => toHybridResultItem(item, { strict, column }),
+      emptyMessage: ({ keyword, dateFrom, dateTo, column }) => {
+        const range = dateFrom && dateTo
+          ? (dateFrom === dateTo ? ` on ${dateFrom}` : ` between ${dateFrom} and ${dateTo}`)
+          : dateFrom ? ` from ${dateFrom}` : dateTo ? ` up to ${dateTo}` : '';
+        return `No results matched "${keyword}"${column ? ` in ${column.replace(/_/g, ' ')}` : ''}${range}`;
+      },
+    },
+  };
+
+  const runPagedSearch = async (kind, { more = false } = {}) => {
+    const config = SEARCH_KINDS[kind];
+    const { fields } = config;
+    const key = modeKey;
+    const read = () => sourceStateRef.current[key] || {};
+    const patch = (values) => patchModeState(values, key);
+    const state = read();
+    const last = state[fields.last] || {};
+    const input = more ? last : config.readInput(state);
+    const sourceSessionId = normalizeWindowSessionId(windowItem);
+
+    if (!input.keyword) {
+      setValidationMessage(config.emptyKeyword);
+      return;
+    }
+    const invalid = config.validate?.(input);
+    if (invalid) {
+      setValidationMessage(invalid);
+      return;
+    }
+    if (!sourceSessionId) {
+      setValidationMessage('Source session is not ready yet.');
+      return;
+    }
+    setValidationMessage('');
+    const context = more ? last : { ...input, nextOffset: 0 };
+    const offset = more ? (Number.isFinite(last.nextOffset) ? last.nextOffset : (state[fields.results] || []).length) : 0;
+    patch(more
+      ? { [fields.status]: 'loading_more' }
+      : {
+        [fields.status]: 'loading',
+        [fields.results]: [],
+        [fields.hasMore]: false,
+        [fields.message]: '',
+        [fields.last]: context,
+        preparing: config.preparing,
+      });
+
+    const request = trackRequest(windowItem.id);
+    try {
+      const response = await searchSourceFiles(apiFetch, {
+        sourceSessionId,
+        keyword: context.keyword,
+        date: context.date,
+        offset,
+        ...config.request(context),
+        signal: request.signal,
+        onQueued: ({ jobId }) => setActiveJob(windowItem.id, 'search', jobId),
+      });
+      if (request.signal.aborted || read()[fields.last] !== context) return;
+      const items = response.results.map((item) => config.mapItem(item, context)).filter((item) => item.name);
+      const nextOffset = response.nextOffset ?? offset + response.results.length;
+      const results = more ? [...(read()[fields.results] || []), ...items] : items;
+      let message = '';
+      if (results.length === 0) {
+        message = config.emptyMessage(context);
+        config.onEmpty?.(response);
+      } else if (response.message === 'Result out of bound!') {
+        message = response.message;
+      }
+      patch({
+        [fields.status]: 'done',
+        [fields.last]: { ...context, nextOffset },
+        [fields.results]: results,
+        [fields.hasMore]: response.hasMore && response.results.length > 0,
+        [fields.message]: message,
+        ...(more ? {} : { preparing: '' }),
+      });
+    } catch (error) {
+      if (error?.name === 'AbortError' || request.signal.aborted || read()[fields.last] !== context) return;
+      log.error(`${kind} search failed`, { status: error?.status, jobStatus: error?.jobStatus });
+      const message = sanitizeBackendUserMessage(error?.data?.message || error?.message, config.failure);
+      patch({
+        [fields.status]: more ? 'done' : 'error',
+        [fields.message]: message,
+        ...(more ? {} : { preparing: '' }),
+      });
+      notify({ title: 'Search failed', message, level: 'error', source: windowItem.title });
+    } finally {
+      request.release();
+      setActiveJob(windowItem.id, 'search', null);
+    }
+  };
+
+  const runStorageSearch = (options) => runPagedSearch('storage', options);
+  const runElasticSearch = (options) => runPagedSearch('elastic', options);
+
+  // The session domain changed (Configuration window, or another Source
+  // window) while this mode was connected: the old connection points at the
+  // previous domain's endpoints, so disconnect and reconnect with the new
+  // domain's defaults. Fields the analyst typed by hand are kept.
+  const reconnectAfterDomainChange = async (key, previousDefaults, nextDefaults) => {
+    const before = sourceStateRef.current[key];
+    const mode = key === 'realtime' ? SOURCE_MODES.REALTIME : SOURCE_MODES.BATCH;
+    const label = formatDomainLabel(nextDefaults.domain);
+    const refreshed = domainDefaultsPatch(before, previousDefaults, nextDefaults);
+    const after = { ...before, ...refreshed };
+    const what = before.sourceAddressType === 'storage' ? 'storage' : 'source';
+
+    // A stream reads from the connection being replaced: close it first.
+    const streamWasActive = isStreamActive(before);
+    if (streamWasActive) {
+      const streamJob = windowRef(windowItem.id, 'streamJob').current;
+      if (streamJob) {
+        streamJob.terminateRequested = true;
+        streamJob.controller.abort();
+      }
+      appendStreamLog(windowItem.id, `Domain changed to ${label}: ending the running stream.`, 'warn');
+      finishTask(streamTaskRef.current, TASK_STATUSES.TERMINATED, { message: `Domain changed to ${label}.` });
+      endAbandonedStream(apiFetch, windowItem.id, { reason: 'domain_changed' }).then((ended) => {
+        appendStreamLog(windowItem.id, ended?.ok ? 'Stream ended on the backend.' : (ended?.message || 'The stream end could not be confirmed.'), ended?.ok ? 'info' : 'warn');
+      });
+    }
+
+    const tracked = trackRequest(windowItem.id);
+    const { signal } = tracked;
+    patchModeState({
+      ...(streamWasActive ? { streamStatus: STREAM_STATUSES.TERMINATED, streamLogFile: '' } : {}),
+      ...refreshed,
+      ...STALE_DATAFRAME_PATCH,
+      ...STORAGE_SEARCH_RESET_PATCH,
+      preparing: `Domain changed to ${label}: reconnecting the ${what}…`,
+      domainReconnect: true,
+      sourceStatus: SOURCE_STATUSES.DISCONNECTING,
+      sourceMessage: displaySourceMessage(SOURCE_STATUSES.DISCONNECTING),
+    }, key);
+    try {
+      if (before.toolStatus === TOOL_STATUSES.CONNECTED) {
+        await disconnectTool(apiFetch, buildToolDisconnectPayload(), { signal }).catch(() => null);
+        if (signal.aborted) return;
+      }
+      await disconnectSource(apiFetch, buildSourcePayload(before, previousDefaults, mode), { signal }).catch(() => null);
+      if (signal.aborted) return;
+      patchModeState({
+        sourceStatus: SOURCE_STATUSES.CONNECTING,
+        sourceMessage: displaySourceMessage(SOURCE_STATUSES.CONNECTING),
+        toolStatus: TOOL_STATUSES.IDLE,
+        toolMessage: displayToolMessage(TOOL_STATUSES.IDLE),
+      }, key);
+      const validationError = validateSourcePayload(after, nextDefaults);
+      const result = validationError
+        ? { ok: false, message: validationError }
+        : await connectSource(apiFetch, buildSourcePayload(after, nextDefaults, mode), { signal });
+      if (signal.aborted) return;
+      if (!result.ok) {
+        patchModeState({ preparing: '', domainReconnect: false, sourceStatus: SOURCE_STATUSES.DISCONNECTED, sourceMessage: result.message || displaySourceMessage(SOURCE_STATUSES.DISCONNECTED) }, key);
+        notify({
+          title: 'Disconnected after domain change',
+          message: `The session moved to the ${label} domain and the ${what} could not reconnect (${result.message || 'connection failed'}). Review the values and connect again.`,
+          level: 'warning',
+          source: windowItem.title,
+        });
+        return;
+      }
+      const nextStatus = sourceStatusFromMessage(result.message || 'Connection established!');
+      patchModeState({ preparing: '', domainReconnect: false, sourceStatus: nextStatus, sourceMessage: displaySourceMessage(nextStatus) }, key);
       notify({
-        title: 'Tool connection failed',
-        message: 'The tool connection could not be completed. Please review the values and try again.',
+        title: `Reconnected to ${label}`,
+        message: `The session domain changed, so the ${what} connection was re-established with the ${label} endpoints${nextDefaults.storage.path && what === 'storage' ? ` (${nextDefaults.storage.path})` : ''}. Previous search results and dataframes were cleared.`,
+        level: 'info',
+        source: windowItem.title,
+      });
+    } catch (error) {
+      if (signal.aborted) return;
+      log.error('Reconnect after domain change failed', { status: error?.status });
+      patchModeState({ preparing: '', domainReconnect: false, sourceStatus: SOURCE_STATUSES.DISCONNECTED, sourceMessage: displaySourceMessage(SOURCE_STATUSES.DISCONNECTED) }, key);
+      notify({
+        title: 'Disconnected after domain change',
+        message: `The session moved to the ${label} domain and the ${what} could not reconnect. Connect again to continue.`,
+        level: 'warning',
+        source: windowItem.title,
+      });
+    } finally {
+      tracked.release();
+    }
+  };
+
+  // Storage / Elastic pages connect on their own with the configured default
+  // storage (the form starts collapsed). Once per input visit: a manual
+  // disconnect, a failure or a custom target is never retried automatically.
+  const autoConnectRef = windowRef(windowItem.id, 'storageAutoConnect', { kind: '' });
+  const handleSourceActionRef = useRef(handleSourceAction);
+  handleSourceActionRef.current = handleSourceAction;
+  const storageAutoConnectKind = isStorageInput && modeState.step === 'upload' ? modeState.selectedConnectionType : '';
+  useEffect(() => {
+    if (!storageAutoConnectKind) {
+      autoConnectRef.current.kind = '';
+      return;
+    }
+    if (autoConnectRef.current.kind === storageAutoConnectKind) return;
+    const state = sourceStateRef.current.batch || {};
+    const ready = hasConfiguration && Boolean(normalizeWindowSessionId(windowItem));
+    if (!ready || isSourceBusy(state) || state.preparing) return;
+    autoConnectRef.current.kind = storageAutoConnectKind;
+    // Every visit starts with the form collapsed (also for windows opened
+    // before this default existed).
+    if (!state.storageToolbarCollapsed) patchModeState({ storageToolbarCollapsed: true }, 'batch');
+    if (state.sourceStatus === SOURCE_STATUSES.CONNECTED) return;
+    if (state.storageUseDefault === false) {
+      setValidationMessage(`A custom storage target is set, so it was not connected automatically.${OPEN_FORM_HINT}`);
+      return;
+    }
+    if (!sourceDefaults.storage.address) {
+      setValidationMessage(`No default storage address is configured, so the storage was not connected automatically.${OPEN_FORM_HINT}`);
+      return;
+    }
+    handleSourceActionRef.current({ auto: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storageAutoConnectKind, hasConfiguration, sourceDefaults.storage.address, windowItem.sourceSessionId]);
+
+  // Message broker page (batch broker input and realtime connect): connect
+  // the configured Kafka broker / REST API, then the tool, on the analyst's
+  // behalf. Once per visit, like the storage pages; a manual disconnect or a
+  // failure is never retried automatically.
+  const brokerAutoConnectRef = windowRef(windowItem.id, 'brokerAutoConnect', { visit: '' });
+  const brokerAutoConnectVisit = (activeMode === SOURCE_MODES.BATCH && modeState.step === 'upload' && modeState.selectedConnectionType === 'broker')
+    || (activeMode === SOURCE_MODES.REALTIME && modeState.step === 'connect')
+    ? modeKey
+    : '';
+  const runToolConnectRef = useRef(runToolConnect);
+  runToolConnectRef.current = runToolConnect;
+  useEffect(() => {
+    if (!brokerAutoConnectVisit) {
+      brokerAutoConnectRef.current.visit = '';
+      return;
+    }
+    if (brokerAutoConnectRef.current.visit === brokerAutoConnectVisit) return;
+    const key = brokerAutoConnectVisit;
+    const initial = sourceStateRef.current[key] || {};
+    const ready = hasConfiguration && Boolean(normalizeWindowSessionId(windowItem));
+    if (!ready || isSourceBusy(initial) || isToolBusy(initial) || initial.preparing) return;
+    brokerAutoConnectRef.current.visit = key;
+
+    const isKafka = initial.sourceAddressType !== 'api';
+    const label = isKafka ? 'Kafka broker' : 'REST API';
+    const toolLabel = (sourceDefaults.tool.name || 'neo4j') === 'neo4j' ? 'Neo4j' : sourceDefaults.tool.name;
+
+    // Tool: only with complete saved credentials (a typed password or the
+    // configuration's saved-secret reference).
+    const autoConnectTool = async () => {
+      const state = sourceStateRef.current[key] || {};
+      if (!isSourceReady(state) || state.toolStatus === TOOL_STATUSES.CONNECTED || isToolBusy(state)) return;
+      const hasPassword = Boolean(getSecret(windowItem.id, key)) || (isMaskedSecret(state.toolPassword) && Boolean(state.toolPasswordRef));
+      if (!state.toolUrl || !state.toolUsername || !hasPassword) {
+        setToolValidationMessage(`${toolLabel} was not connected automatically: complete its ${!state.toolUrl ? 'URL' : !state.toolUsername ? 'username' : 'password'}, then connect the tool.`);
+        return;
+      }
+      await runToolConnectRef.current(key);
+    };
+
+    (async () => {
+      if (initial.sourceStatus !== SOURCE_STATUSES.CONNECTED) {
+        if (!initial.brokerAddress || (isKafka && !initial.topic)) {
+          setValidationMessage(`No default ${label}${isKafka ? ' address and topic are' : ' address is'} configured, so it was not connected automatically. Enter ${isKafka ? 'them' : 'it'} and press Connect.`);
+          return;
+        }
+        await handleSourceActionRef.current({ auto: true });
+      }
+      await autoConnectTool();
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [brokerAutoConnectVisit, hasConfiguration, windowItem.sourceSessionId]);
+
+  const reconnectAfterDomainChangeRef = useRef(reconnectAfterDomainChange);
+  reconnectAfterDomainChangeRef.current = reconnectAfterDomainChange;
+  const lastDefaultsRef = useRef(sourceDefaults);
+  useEffect(() => {
+    const previous = lastDefaultsRef.current;
+    lastDefaultsRef.current = sourceDefaults;
+    if (!previous?.domain || !sourceDefaults.domain || previous.domain === sourceDefaults.domain) return;
+    ['batch', 'realtime'].forEach((key) => {
+      const state = sourceStateRef.current[key];
+      if (state?.sourceStatus === SOURCE_STATUSES.CONNECTED) {
+        reconnectAfterDomainChangeRef.current(key, previous, sourceDefaults);
+      } else if (state) {
+        // Not connected: refresh default-held fields, and drop a dataframe
+        // built under the old domain's rules and columns.
+        const hasDataframe = state.dataframeStatus && state.dataframeStatus !== DATAFRAME_STATUSES.NONE;
+        const refreshed = domainDefaultsPatch(state, previous, sourceDefaults);
+        if (hasDataframe || Object.keys(refreshed).length) {
+          patchModeState({ ...refreshed, ...(hasDataframe ? { ...STALE_DATAFRAME_PATCH, ...STORAGE_SEARCH_RESET_PATCH } : {}) }, key);
+        }
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sourceDefaults]);
+
+  // Session-wide domain switch (same request as production's Configuration
+  // window). The backend re-projects storage path, tables and defaults from the
+  // domain; every window reads the new configuration from the session.
+  const switchDomain = async (domain) => {
+    const nextDomain = String(domain || '').trim();
+    if (!nextDomain || nextDomain === sourceDefaults.domain) return;
+    if (!mainSessionId) {
+      setValidationMessage('Session is still initializing. Please try again in a moment.');
+      return;
+    }
+    setValidationMessage('');
+    patchModeState({ preparing: `Switching domain to ${formatDomainLabel(nextDomain)}…` });
+    const request = trackRequest(windowItem.id);
+    try {
+      const switched = await switchSessionDomain(apiFetch, mainSessionId, nextDomain, { signal: request.signal });
+      if (request.signal.aborted) {
+        if (switched?.configuration && Object.keys(switched.configuration).length) setConfiguration(switched.configuration);
+        return;
+      }
+      if (!isSuccessResponse(switched.data)) {
+        const message = sanitizeBackendUserMessage(switched.data?.message || switched.data?.error, `Could not switch to ${formatDomainLabel(nextDomain)}.`);
+        patchModeState({ preparing: '' });
+        notify({ title: 'Domain switch failed', message, level: 'warning', source: windowItem.title });
+        return;
+      }
+      let nextConfiguration = switched.configuration;
+      if (!nextConfiguration || typeof nextConfiguration !== 'object' || !nextConfiguration.domain_connections) {
+        nextConfiguration = (await loadSessionConfiguration(apiFetch, mainSessionId)).configuration;
+        if (request.signal.aborted) return;
+      }
+      setConfiguration({
+        ...(nextConfiguration || {}),
+        active_domain: nextConfiguration?.active_domain || nextDomain,
+        domain: nextConfiguration?.domain || nextDomain,
+      });
+      patchModeState({ preparing: '', ...STORAGE_SEARCH_RESET_PATCH, ...STALE_DATAFRAME_PATCH });
+      notify({
+        title: 'Domain switched',
+        message: `The session now uses the ${formatDomainLabel(nextDomain)} domain. Storage path and defaults were updated.`,
+        level: 'success',
+        source: windowItem.title,
+      });
+    } catch (error) {
+      if (error?.name === 'AbortError' || request.signal.aborted) {
+        // The backend may already have switched (there is no job cancel yet,
+        // backend request B-7): reload so the UI matches the session again.
+        loadSessionConfiguration(apiFetch, mainSessionId)
+          .then(({ configuration: reloaded }) => {
+            if (reloaded && typeof reloaded === 'object' && Object.keys(reloaded).length) setConfiguration(reloaded);
+          })
+          .catch(() => {});
+        return;
+      }
+      log.error('Domain switch failed', { status: error?.status });
+      patchModeState({ preparing: '' });
+      notify({
+        title: 'Domain switch failed',
+        message: sanitizeBackendUserMessage(error?.data?.message || error?.message, 'Failed to switch the domain. Please try again.'),
         level: 'error',
         source: windowItem.title,
       });
+    } finally {
+      request.release();
     }
+  };
+
+  // "Esc or click here to cancel" on the load screen: abort whatever is in
+  // flight for this window and roll the busy statuses back. Queued backend jobs
+  // have no cancel endpoint, so their result is simply ignored.
+  const cancelBusyAction = () => {
+    abortSourceRequests(windowItem.id);
+    // Requests of both modes share the window's controllers, so roll back
+    // every mode that was busy (e.g. a domain reconnect running for both).
+    ['batch', 'realtime'].forEach((key) => {
+      const state = sourceStateRef.current[key] || {};
+      const sourcePatch = state.domainReconnect
+        ? { domainReconnect: false, connectedKind: '', sourceStatus: SOURCE_STATUSES.DISCONNECTED, sourceMessage: 'Disconnected: the domain changed. Connect again to use the new domain.' }
+        : state.sourceStatus === SOURCE_STATUSES.CONNECTING
+          ? { sourceStatus: SOURCE_STATUSES.IDLE, sourceMessage: displaySourceMessage(SOURCE_STATUSES.IDLE) }
+          : state.sourceStatus === SOURCE_STATUSES.DISCONNECTING
+            ? { sourceStatus: SOURCE_STATUSES.CONNECTED, sourceMessage: displaySourceMessage(SOURCE_STATUSES.CONNECTED) }
+            : {};
+      const toolPatch = state.toolStatus === TOOL_STATUSES.CONNECTING
+        ? { toolStatus: TOOL_STATUSES.IDLE, toolMessage: displayToolMessage(TOOL_STATUSES.IDLE) }
+        : state.toolStatus === TOOL_STATUSES.DISCONNECTING
+          ? { toolStatus: TOOL_STATUSES.CONNECTED, toolMessage: displayToolMessage(TOOL_STATUSES.CONNECTED) }
+          : {};
+      patchModeState({
+        preparing: '',
+        ...sourcePatch,
+        ...toolPatch,
+        ...(state.uploadStatus === UPLOAD_STATUSES.UPLOADING ? { uploadStatus: UPLOAD_STATUSES.IDLE } : {}),
+        ...(state.storageSearchStatus === 'loading' ? { storageSearchStatus: 'idle', storageSearchLast: null } : {}),
+        ...(state.storageSearchStatus === 'loading_more' ? { storageSearchStatus: 'done' } : {}),
+        ...(state.elasticSearchStatus === 'loading' ? { elasticSearchStatus: 'idle', elasticSearchLast: null } : {}),
+        ...(state.elasticSearchStatus === 'loading_more' ? { elasticSearchStatus: 'done' } : {}),
+        ...(state.dataframeStatus === DATAFRAME_STATUSES.CREATING ? { dataframeStatus: DATAFRAME_STATUSES.NONE, dataframeMessage: '' } : {}),
+      }, key);
+    });
+    notify({ title: 'Cancelled', message: 'The running action was stopped.', level: 'info', source: windowItem.title });
   };
 
   if (isChoosing) {
@@ -1783,6 +1502,8 @@ export default function SourceWindowBody({ windowItem }) {
       <div className="workspace_window_body source_window_body">
         <ModeChooser
           sourceSessionId={normalizeWindowSessionId(windowItem)}
+          initialMode={sourceState.lastMode}
+          initialConnectionType={sourceState.lastMode === SOURCE_MODES.REALTIME ? 'broker' : sourceState.batch.selectedConnectionType}
           onSelectMode={selectMode}
           onOpenConfiguration={openConfigurationWindow}
           onCopySession={copySessionId}
@@ -1795,12 +1516,17 @@ export default function SourceWindowBody({ windowItem }) {
     <div className="workspace_window_body source_window_body">
       <div className="source_window_workspace">
         <header className="source_window_choose_header">
-          <SourceModeIcon type={modeState.step === 'upload' ? modeState.selectedConnectionType === 'storage' ? 'storage' : modeState.selectedConnectionType === 'search' ? 'search' : 'upload' : activeMode === SOURCE_MODES.REALTIME ? 'realtime' : 'source'} />
-          <div>
-            <h2>Analysis Source</h2>
-            <p>{activeWorkflowStep?.value || 'Continue configuring this source window.'}</p>
+          <SourceWindowHeading
+            icon={modeState.step === 'upload' ? ({ storage: 'hadoop', search: 'elastic', broker: 'kafka' })[modeState.selectedConnectionType] || 'upload' : activeMode === SOURCE_MODES.REALTIME ? 'realtime' : 'source'}
+            title="Analysis Source"
+            subtitle={(activeWorkflowStep?.label ? activeWorkflowStep.label + ' · ' : '') + (activeWorkflowStep?.value || 'Continue configuring this source window.')}
+            tags={[
+              { label: modeLabels[activeMode] || 'Source' },
+              { label: 'Step ' + (Math.max(activeStepIndex, 0) + 1) + ' of ' + workflowSteps.length, tone: 'muted' },
+            ]}
+          >
             <SessionBadge sessionId={normalizeWindowSessionId(windowItem)} onCopySession={copySessionId} />
-          </div>
+          </SourceWindowHeading>
         </header>
         <div className="source_window_workflow_shell">
           <WorkflowTimeline
@@ -1814,11 +1540,18 @@ export default function SourceWindowBody({ windowItem }) {
           modeState={modeState}
           windowId={windowItem.id}
           validationMessage={validationMessage}
-          handlers={{ onSourceAction: handleSourceAction, onToolAction: handleToolAction }}
+          toolValidationMessage={toolValidationMessage}
+          toolOptions={sourceDefaults.tool.options}
+          defaults={sourceDefaults}
+          handlers={{ onSourceAction: handleSourceAction, onToolAction: handleToolAction, onStorageSearch: runStorageSearch, onElasticSearch: runElasticSearch, onSwitchDomain: switchDomain }}
+          sessionId={normalizeWindowSessionId(windowItem)}
+          streamLogLines={streamLogLines}
           onPatchModeState={patchModeState}
           onOpenConfiguration={openConfigurationWindow}
+          onOpenLibrary={openLibrariesWindow}
         />
         </div>
+        {busyLabel ? <WindowLoadScreen overlay label={busyLabel} onCancel={cancelBusyAction} /> : null}
         <footer className="source_window_choose_footer">
           <span>
             <svg className="window_footer_info_icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1826,11 +1559,36 @@ export default function SourceWindowBody({ windowItem }) {
               <line x1="12" y1="16" x2="12" y2="12" />
               <line x1="12" y1="8" x2="12.01" y2="8" />
             </svg>
-            {workflowFooterMessage}
+            {footerMessage}
           </span>
           <div>
-            <button type="button" onClick={goBackInWorkflow}>Back</button>
-            <button type="button" disabled={!canContinueWorkflow} onClick={continueWorkflow}>{continueButtonLabel}</button>
+            {continueBlockers.length > 0 && (
+              <span className="source_window_continue_blockers" role="status" aria-live="polite">
+                <span className="source_window_required_badge_dot" aria-hidden="true" />
+                <span className="source_window_continue_blockers_label">To continue</span>
+                {continueBlockers.map((blocker) => <b key={blocker}>{blocker}</b>)}
+              </span>
+            )}
+            {isStreamStep && (isStreamRunning || isStreamTerminating) ? (
+              <button type="button" className="source_window_terminate_btn" disabled={isStreamTerminating} onClick={terminateStream}>
+                {isStreamTerminating ? 'Terminating…' : 'Terminate'}
+              </button>
+            ) : (
+              <button type="button" disabled={isPreparing} onClick={goBackInWorkflow}>Back</button>
+            )}
+            <span
+              className={continueBlockedHint ? 'source_window_continue_wrap linkx_tooltip_anchor' : 'source_window_continue_wrap'}
+              data-tooltip={continueBlockedHint || undefined}
+            >
+              <button
+                type="button"
+                className={hasStreamRun ? 'source_window_show_results_btn' : undefined}
+                disabled={primaryActionDisabled}
+                onClick={handlePrimaryAction}
+              >
+                {continueButtonLabel}
+              </button>
+            </span>
           </div>
         </footer>
       </div>

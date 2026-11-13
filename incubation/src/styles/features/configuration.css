@@ -1,0 +1,472 @@
+/* Configuration window content (shell reuses the Settings window layout).
+   Imported after main.css (src/app/App.jsx); order matters. */
+
+/* ── Configuration window ─────────────────────────────────────────────
+   Shell reuses the Settings window layout (header, tab rail, surface,
+   footer); these rules cover the configuration-specific content. */
+.configuration_window_body {
+	position: relative;
+}
+
+.config_window_surface {
+	gap: 16px;
+}
+
+.config_window_chips {
+	display: inline-flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.config_window_section {
+	gap: 14px;
+}
+
+.config_window_section_header {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 12px;
+}
+
+.config_window_section_header h4 {
+	margin: 0;
+	color: var(--settings-text);
+	font-size: 15px;
+	font-weight: 600;
+}
+
+.config_window_section_header p {
+	margin: 4px 0 0;
+	color: var(--settings-text-secondary);
+	font-size: 12px;
+	line-height: 1.45;
+}
+
+.config_window_section_actions,
+.config_window_inline_actions {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+}
+
+.config_window_inline_actions.is-end {
+	justify-content: flex-end;
+}
+
+.config_window_grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+	gap: 12px 14px;
+	align-items: start;
+}
+
+.config_window_grid.is-compact {
+	grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+
+.config_window_field {
+	display: grid;
+	gap: 6px;
+	min-width: 0;
+}
+
+.config_window_field.is-wide {
+	grid-column: 1 / -1;
+}
+
+.config_window_field_label {
+	color: var(--linkx-form-label, var(--settings-text-secondary));
+	font-size: 12px;
+}
+
+.config_window_field_hint {
+	color: var(--settings-text-muted);
+	font-size: 11px;
+	line-height: 1.4;
+}
+
+.config_window_field .settings_input,
+.config_window_option_row .settings_input,
+.config_window_table .settings_input,
+.config_window_threshold_row .settings_input {
+	width: 100%;
+	min-width: 0;
+	box-sizing: border-box;
+}
+
+.config_window_option_row {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+	gap: 8px;
+	align-items: center;
+}
+
+.config_window_option_row > .settings_button {
+	justify-self: start;
+}
+
+.config_window_textarea {
+	min-height: 58px;
+	padding: 8px 12px;
+	resize: vertical;
+	font-family: inherit;
+	line-height: 1.45;
+}
+
+.config_window_file {
+	padding: 7px 10px;
+}
+
+.config_window_toggle {
+	justify-self: start;
+	width: fit-content;
+}
+
+.config_window_notes {
+	margin: 0;
+	padding-left: 18px;
+	color: var(--settings-text-secondary);
+	font-size: 12px;
+	line-height: 1.7;
+}
+
+/* Domain pillar card */
+.config_window_domain_card {
+	display: grid;
+	gap: 10px;
+	padding: 12px 14px;
+	border: 1px solid var(--settings-card-border);
+	border-left: 3px solid var(--settings-accent);
+	border-radius: 4px;
+}
+
+.config_window_domain_card.is-unconfigured {
+	border-left-color: var(--settings-danger-text);
+}
+
+.config_window_domain_card_header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 10px;
+	color: var(--settings-text);
+	font-size: 13px;
+}
+
+.config_window_domain_card_header span {
+	color: var(--settings-accent-text);
+	font-size: 11px;
+	font-weight: 600;
+}
+
+.config_window_domain_card.is-unconfigured .config_window_domain_card_header span {
+	color: var(--settings-danger-text);
+}
+
+.config_window_domain_meta {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+	gap: 8px 14px;
+	margin: 0;
+}
+
+.config_window_domain_meta div {
+	display: grid;
+	gap: 2px;
+	min-width: 0;
+}
+
+.config_window_domain_meta dt {
+	color: var(--settings-text-muted);
+	font-size: 11px;
+}
+
+.config_window_domain_meta dd {
+	margin: 0;
+	overflow: hidden;
+	color: var(--settings-text);
+	font-size: 12px;
+	font-weight: 600;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.config_window_domain_tables {
+	margin: 0;
+	overflow: hidden;
+	color: var(--settings-text-secondary);
+	font-size: 12px;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.config_window_domain_tables span {
+	color: var(--settings-text-muted);
+}
+
+/* Tables */
+.config_window_table_wrap {
+	max-width: 100%;
+	overflow-x: auto;
+	border: 1px solid var(--settings-card-border);
+	border-radius: 4px;
+}
+
+.config_window_table_wrap.is-scroll {
+	max-height: 220px;
+	overflow-y: auto;
+}
+
+.config_window_table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 12px;
+}
+
+.config_window_table th,
+.config_window_table td {
+	padding: 6px 8px;
+	border-bottom: 1px solid var(--settings-card-border);
+	color: var(--settings-text);
+	text-align: left;
+	vertical-align: middle;
+}
+
+.config_window_table th {
+	position: sticky;
+	top: 0;
+	z-index: 1;
+	background: var(--settings-card-bg);
+	color: var(--settings-text-secondary);
+	font-weight: 600;
+	white-space: nowrap;
+}
+
+.config_window_table tr:last-child td {
+	border-bottom: 0;
+}
+
+.config_window_table .settings_input {
+	min-height: 30px;
+	padding: 0 8px;
+	font-size: 12px;
+}
+
+.config_window_table_index {
+	width: 28px;
+	color: var(--settings-text-muted) !important;
+}
+
+.config_window_table_actions {
+	width: 1%;
+	white-space: nowrap;
+}
+
+.config_window_table_actions .settings_button {
+	min-height: 28px;
+	font-size: 12px;
+}
+
+.config_window_table_empty {
+	padding: 14px 8px !important;
+	color: var(--settings-text-muted) !important;
+	text-align: center !important;
+}
+
+.config_window_table_snippet {
+	max-width: 240px;
+	overflow: hidden;
+	font-size: 11px;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.config_window_pass {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 11px;
+	font-weight: 600;
+	white-space: nowrap;
+}
+
+.config_window_pass input {
+	accent-color: var(--settings-accent);
+}
+
+.config_window_pass.is-passing {
+	color: var(--linkx-success-text);
+}
+
+.config_window_pass.is-restricted {
+	color: var(--settings-danger-text, #c62828);
+}
+
+.config_window_status {
+	display: inline-block;
+	padding: 1px 8px;
+	border: 1px solid var(--settings-card-border);
+	border-radius: 999px;
+	font-size: 11px;
+}
+
+.config_window_status.is-succeeded,
+.config_window_status.is-success,
+.config_window_status.is-completed {
+	border-color: var(--linkx-success-border);
+	color: var(--linkx-success-text);
+}
+
+.config_window_status.is-failed,
+.config_window_status.is-error {
+	border-color: var(--linkx-danger-border);
+	color: var(--settings-danger-text, #c62828);
+}
+
+/* Detection sensitivity */
+.config_window_slider_grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+	gap: 6px 18px;
+}
+
+.config_window_slider {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) minmax(90px, 1fr) 32px;
+	align-items: center;
+	gap: 10px;
+	font-size: 12px;
+}
+
+.config_window_slider span {
+	overflow: hidden;
+	color: var(--settings-text-secondary);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.config_window_slider input {
+	accent-color: var(--settings-accent);
+}
+
+.config_window_slider b {
+	color: var(--settings-text);
+	text-align: right;
+}
+
+.config_window_threshold_row {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-end;
+	gap: 10px;
+}
+
+.config_window_threshold_row label {
+	display: grid;
+	flex: 1 1 140px;
+	gap: 4px;
+	color: var(--settings-text-secondary);
+	font-size: 12px;
+}
+
+.config_window_threshold_row small {
+	align-self: center;
+	color: var(--settings-text-muted);
+	font-size: 11px;
+	white-space: nowrap;
+}
+
+.config_window_add_row {
+	justify-self: start;
+	width: fit-content;
+}
+
+/* Save highlight when there is something to save */
+.settings_window_footer button.settings_button.is-primary:not(:disabled) {
+	border-color: var(--window-footer-btn-hover-border, #FCC676) !important;
+	background-image: linear-gradient(180deg, var(--window-footer-btn-hover-bg-top, rgba(252, 198, 118, 0.35)), var(--window-footer-btn-hover-bg-bottom, rgba(252, 198, 118, 0.18))) !important;
+}
+
+/* Encrypted import / export dialog */
+.config_window_dialog_backdrop {
+	position: absolute;
+	inset: 0;
+	z-index: 30;
+	display: grid;
+	place-items: center;
+	padding: 16px;
+	background: var(--linkx-overlay-bg);
+	backdrop-filter: blur(2px);
+}
+
+.config_window_dialog {
+	display: grid;
+	gap: 12px;
+	width: min(420px, 100%);
+	max-height: 100%;
+	overflow: auto;
+	padding: 18px;
+	border: 1px solid var(--settings-card-border);
+	border-radius: 6px;
+	background: var(--settings-card-bg);
+	box-shadow: 0 18px 48px var(--panel-shadow, rgba(0, 0, 0, 0.25));
+	box-sizing: border-box;
+}
+
+.config_window_dialog header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 10px;
+}
+
+.config_window_dialog h4 {
+	margin: 0;
+	color: var(--settings-text);
+	font-size: 15px;
+}
+
+.config_window_dialog_close {
+	border: 0;
+	background: transparent;
+	color: var(--settings-text-secondary);
+	font-size: 14px;
+	cursor: pointer;
+}
+
+.config_window_file_badge {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 8px 10px;
+	border: 1px solid var(--settings-card-border);
+	border-radius: 4px;
+	font-size: 12px;
+}
+
+.config_window_file_badge span {
+	flex: 1;
+	overflow: hidden;
+	color: var(--settings-text);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.config_window_file_badge small {
+	color: var(--settings-text-muted);
+}
+
+.config_window_file_badge button {
+	border: 0;
+	background: transparent;
+	color: var(--settings-text-secondary);
+	cursor: pointer;
+}
+
+@media (max-width: 720px) {
+	.configuration_window_body .settings_window_workflow_shell {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}

@@ -1,0 +1,153 @@
+/* Linkx window load screen (Suspense fallback + busy overlay with cancel).
+   Imported after main.css (src/app/App.jsx); order matters. */
+
+/* ---- Window load screen (Linkx logo animation) ---- */
+.linkx_window_loader {
+	position: relative;
+	--loader-ink: var(--settings-accent, var(--accent, #152f4a));
+	--loader-cycle: 1.6s;
+	flex: 1;
+	min-height: 80px;
+	height: 100%;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	color: var(--loader-ink);
+	user-select: none;
+}
+
+/* Wordmark with a light sweep passing through it. */
+.linkx_window_loader_word {
+	font-size: 18px;
+	font-weight: 400;
+	font-style: italic;
+	letter-spacing: 0.2px;
+	line-height: 1;
+	color: var(--loader-ink);
+	background: linear-gradient(
+		100deg,
+		var(--loader-ink) 0%,
+		var(--loader-ink) 40%,
+		color-mix(in srgb, var(--loader-ink) 25%, transparent) 50%,
+		var(--loader-ink) 60%,
+		var(--loader-ink) 100%
+	);
+	background-size: 250% 100%;
+	-webkit-background-clip: text;
+	background-clip: text;
+	-webkit-text-fill-color: transparent;
+	animation: linkx-loader-sweep var(--loader-cycle) linear infinite;
+}
+
+/* Slim indeterminate bar under the mark. */
+.linkx_window_loader_track {
+	position: relative;
+	width: 64px;
+	height: 2px;
+	border-radius: 2px;
+	overflow: hidden;
+	background: color-mix(in srgb, var(--loader-ink) 15%, transparent);
+}
+
+.linkx_window_loader_track::after {
+	content: '';
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 40%;
+	height: 100%;
+	border-radius: 2px;
+	background: var(--loader-ink);
+	animation: linkx-loader-slide var(--loader-cycle) ease-in-out infinite;
+}
+
+/* Covers the window body during long-running actions. Fades in after a short
+   delay so quick requests don't flash it. */
+.linkx_window_loader.is-overlay {
+	position: absolute;
+	inset: 0;
+	z-index: 20;
+	min-height: 0;
+	height: auto;
+	background: color-mix(in srgb, var(--linkx-window-body-bg, #ffffff) 82%, transparent);
+	backdrop-filter: blur(2px);
+	opacity: 0;
+	animation: linkx-loader-fade-in 0.2s ease-out 0.25s forwards;
+}
+
+@keyframes linkx-loader-fade-in {
+	to { opacity: 1; }
+}
+
+.linkx_window_loader_footer {
+	/* Cancel strip pinned to the bottom of the overlay: its own container
+	   with a softly broken (off-white in NBE Daylight) background. */
+	position: absolute;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	min-height: 48px;
+	padding: 10px 12px;
+	box-sizing: border-box;
+	background: var(--loader-footer-bg, color-mix(in srgb, var(--linkx-window-body-bg, #ffffff) 96%, var(--muted-text, #8896a6)));
+}
+
+.linkx_window_loader_cancel {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 3px 8px;
+	border: 0;
+	background: none;
+	font: inherit;
+	font-size: 11px;
+	letter-spacing: 0.3px;
+	color: var(--loader-footer-text, var(--muted-text, #8896a6));
+	opacity: 0.75;
+	cursor: pointer;
+	white-space: nowrap;
+	transition: opacity 0.15s ease;
+}
+
+.linkx_window_loader_cancel:hover,
+.linkx_window_loader_cancel:focus-visible {
+	opacity: 1;
+	text-decoration: underline;
+}
+
+/* "Esc": bold only, same colour as the rest of the line. */
+.linkx_window_loader_key {
+	font: inherit;
+	font-weight: 700;
+	color: inherit;
+}
+
+.linkx_window_loader_label {
+	margin: 0;
+	font-size: 11px;
+	letter-spacing: 0.3px;
+	color: var(--muted-text, #8896a6);
+}
+
+@keyframes linkx-loader-sweep {
+	from { background-position: 100% 0; }
+	to { background-position: -50% 0; }
+}
+
+@keyframes linkx-loader-slide {
+	0% { transform: translateX(-100%); }
+	100% { transform: translateX(250%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.linkx_window_loader_word,
+	.linkx_window_loader_track::after {
+		animation: none;
+	}
+	.linkx_window_loader_word { -webkit-text-fill-color: var(--loader-ink); }
+}

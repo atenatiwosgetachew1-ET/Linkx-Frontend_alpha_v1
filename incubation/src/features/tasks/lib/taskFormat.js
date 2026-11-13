@@ -1,0 +1,71 @@
+import { TASK_ORIGINS, TASK_STATUSES } from './taskRegistry.js';
+
+export const TASK_FILTERS = Object.freeze([
+  { id: 'all', label: 'All' },
+  { id: 'active', label: 'Active' },
+  { id: 'completed', label: 'Completed' },
+  { id: 'stopped', label: 'Stopped / failed' },
+]);
+
+export const matchesTaskFilter = (task, filter) => {
+  if (filter === 'active') return task.status === TASK_STATUSES.STARTING || task.status === TASK_STATUSES.RUNNING;
+  if (filter === 'completed') return task.status === TASK_STATUSES.COMPLETED;
+  if (filter === 'stopped') return task.status === TASK_STATUSES.TERMINATED || task.status === TASK_STATUSES.FAILED;
+  return true;
+};
+
+export const taskStatusLabel = (task) => ({
+  [TASK_STATUSES.STARTING]: task.origin === TASK_ORIGINS.SOURCE ? 'Queued' : 'Starting',
+  [TASK_STATUSES.RUNNING]: 'Running',
+  [TASK_STATUSES.COMPLETED]: 'Completed',
+  [TASK_STATUSES.TERMINATED]: 'Stopped',
+  [TASK_STATUSES.FAILED]: 'Failed',
+})[task.status] || task.status;
+
+export const taskOriginLabel = (task) => (task.origin === TASK_ORIGINS.QUICK
+  ? 'Quick analysis panel'
+  : task.windowTitle || 'Source window');
+
+// 0:42 · 3m 05s · 1h 02m
+export const formatDuration = (ms) => {
+  const total = Math.max(0, Math.floor((Number(ms) || 0) / 1000));
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const seconds = total % 60;
+  if (hours) return `${hours}h ${String(minutes).padStart(2, '0')}m`;
+  if (minutes) return `${minutes}m ${String(seconds).padStart(2, '0')}s`;
+  return `${seconds}s`;
+};
+
+export const taskDuration = (task, now = Date.now()) => formatDuration((task.endedAt || now) - task.startedAt);
+
+const pad = (value) => String(value).padStart(2, '0');
+
+export const formatClock = (timestamp) => {
+  if (!timestamp) return '—';
+  const date = new Date(timestamp);
+  return `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+};
+
+export const formatDateTime = (timestamp) => {
+  if (!timestamp) return '—';
+  const date = new Date(timestamp);
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${formatClock(timestamp)}`;
+};
+
+// "Rule: R1" / "account_from → account_to [HAS_RELATIONSHIP]"
+export const taskParameters = (task) => {
+  const rows = [];
+  if (task.rule) rows.push(['Rule', task.rule]);
+  if (task.sourceColumn || task.targetColumn) {
+    rows.push(['Columns', `${task.sourceColumn || '?'} → ${task.targetColumn || '?'}`]);
+  }
+  if (task.relationship) rows.push(['Relationship', task.relationship]);
+  return rows;
+};
+
+export const taskLogFileName = (task) => {
+  const stamp = formatDateTime(task.startedAt).replace(/[-: ]/g, '').slice(0, 14);
+  const who = task.sourceSessionId || task.origin;
+  return `linkx-task-${String(who).replace(/[^\w.-]+/g, '_')}-${stamp}.log`;
+};
