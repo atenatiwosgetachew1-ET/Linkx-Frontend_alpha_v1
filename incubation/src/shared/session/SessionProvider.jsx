@@ -7,6 +7,7 @@ import { createBackendSocket, waitForSocketId } from '../socket/createSocket.js'
 import { useNotifications } from '../notifications/useNotifications.js';
 import { fetchSessionPolicy, patchSessionPolicy } from '../../services/configurationApi.js';
 import { DEFAULT_IDLE_SETTINGS, normalizeIdleSettings, normalizeSessionPolicyResponse } from './idlePolicy.js';
+import { normalizeLoadedConfiguration } from '../../features/configuration/lib/configModel.js';
 import { createLogger } from '../../shared/logger.js';
 
 const log = createLogger('session');
@@ -16,6 +17,23 @@ const ALL_POLICY_FIELDS = ['idle_warning_ms', 'idle_lock_ms', 'max_idle_timeout_
 // Paths whose 401 means the sign-in itself is no longer valid (same list the
 // production app logs out on). Other 401s are surfaced as notices only.
 const LOGOUT_ON_UNAUTHORIZED_PATHS = new Set(['/auth/me', '/auth/verify', '/init']);
+
+// Production socket protocol for the main session: backend notices and the
+// STR report receiver (str_report_register_receiver) are bound to it.
+const STR_REPORT_EVENT_LINK_ANALYSIS = 'str_report_link_analysis';
+const STR_REPORT_REGISTER_RECEIVER = 'str_report_register_receiver';
+
+// Lock / unlock / logout requests must not trigger the 401 sign-out or the
+// 423 lock handlers themselves (production passes the same flags).
+const QUIET_AUTH_REQUEST = { suppressUnauthorizedHandler: true, suppressLockedHandler: true };
+const isMissingEndpoint = (error) => [404, 405].includes(Number(error?.status));
+
+// The /init configuration is normalised like production
+// (normalizeLoadedConfiguration): secrets given as objects keep their
+// password_ref, address lists are merged.
+const toSessionConfiguration = (value) => (
+  value && typeof value === 'object' ? normalizeLoadedConfiguration(value) : {}
+);
 
 // Owns everything "backend session" for the authenticated workspace:
 // the shared apiFetch, the Socket.IO connection, the main session id and the
@@ -55,6 +73,7 @@ export function SessionProvider({ apiUrl, token, onLogout, onLocked, onIdleSetti
     getToken: () => tokenRef.current,
     onUnauthorized: (_data, meta) => {
       if (LOGOUT_ON_UNAUTHORIZED_PATHS.has(meta.path)) {
+        handlersRef.current.notify({ title: 'Session expired', message: 'Your session expired. Please sign in again.', source: 'Auth', level: 'warning' });
         handlersRef.current.onLogout?.();
         return;
       }
@@ -119,7 +138,7 @@ export function SessionProvider({ apiUrl, token, onLogout, onLocked, onIdleSetti
       .then(({ sessionId, configuration: nextConfiguration }) => {
         if (cancelled) return;
         if (sessionId) setMainSessionId(sessionId);
-        setConfiguration(nextConfiguration && typeof nextConfiguration === 'object' ? nextConfiguration : {});
+        setConfiguration(toSessionConfiguration(nextConfiguration));
         setSessionError(sessionId ? '' : 'Session initialization returned no session id.');
         setIsSessionReady(Boolean(sessionId));
       })
@@ -131,6 +150,86 @@ export function SessionProvider({ apiUrl, token, onLogout, onLocked, onIdleSetti
       cancelled = true;
     };
   }, [apiFetch, socket, token]);
+
+  // Main session on the socket (production registerStrReportSocketReceiver):
+  // after /init and again on every reconnect.
+  useEffect(() => {
+    if (!socket || !mainSessionId || !isSessionReady) return undefined;
+    const register = () => {
+      socket.emit('notification_subscribe', { session_id: mainSessionId });
+      socket.emit(STR_REPORT_REGISTER_RECEIVER, { session_id: mainSessionId, socket_id: socket.id });
+    };
+    if (socket.connected) register();
+    socket.on('connect', register);
+    // An STR report analysis is routed here. Its graph view arrives with the
+    // Graph window (analysis-results-plan Phase 2); until then it is announced.
+    const handleStrReport = (payload = {}) => {
+      const analysisSessionId = String(payload.session_id ?? payload.analysis_session_id ?? payload.analysisSessionId ?? '').trim();
+      if (!analysisSessionId) return;
+      handlersRef.current.notify({
+        title: 'STR Report Analysis',
+        message: `Analysis session ${analysisSessionId} is ready.`,
+        source: 'Socket',
+        level: 'info',
+      });
+    };
+    socket.on(STR_REPORT_EVENT_LINK_ANALYSIS, handleStrReport);
+    return () => {
+      socket.off('connect', register);
+      socket.off(STR_REPORT_EVENT_LINK_ANALYSIS, handleStrReport);
+    };
+  }, [socket, mainSessionId, isSessionReady]);
+
+  // ---- Backend session lifecycle (production App.jsx 11880-11943, 17216-17395)
+
+  // Re-binds the existing main session after an unlock and re-applies its
+  // configuration.
+  const reinitializeSession = useCallback(async () => {
+    const { sessionId, configuration: nextConfiguration } = await initializeMainSession(apiFetch, {
+      socketId: socket?.id || null,
+      requestOptions: { suppressLockedHandler: true },
+    });
+    if (sessionId) setMainSessionId(sessionId);
+    if (nextConfiguration && Object.keys(nextConfiguration).length) setConfiguration(toSessionConfiguration(nextConfiguration));
+    return sessionId;
+  }, [apiFetch, socket]);
+
+  const lockBackendSession = useCallback(() => {
+    apiFetch('/auth/lock', { method: 'POST', body: { id: 'lock_session', reason: 'idle_lock' } }).catch((error) => {
+      if (!isMissingEndpoint(error)) log.warn('Idle lock notification failed', { status: error?.status });
+    });
+  }, [apiFetch]);
+
+  // Throws when the backend refuses the unlock (the caller signs out).
+  // Returns a refreshed token when the backend issues one.
+  const unlockBackendSession = useCallback(async ({ reason = 'idle_lock', quiet = false } = {}) => {
+    try {
+      const data = await apiFetch('/auth/unlock', { method: 'POST', body: { id: 'unlock_session', reason }, ...QUIET_AUTH_REQUEST });
+      return data?.results?.token || data?.token || data?.access_token || '';
+    } catch (error) {
+      if (quiet || isMissingEndpoint(error)) {
+        if (!isMissingEndpoint(error)) log.warn('Unlock failed', { status: error?.status });
+        return '';
+      }
+      throw error;
+    }
+  }, [apiFetch]);
+
+  const notifyBackendLogout = useCallback(async (reason = 'user_logout') => {
+    try {
+      await apiFetch('/auth/logout', { method: 'POST', body: { id: 'logout', reason }, ...QUIET_AUTH_REQUEST });
+    } catch (error) {
+      if (!isMissingEndpoint(error)) log.warn('Backend logout notification failed', { status: error?.status });
+    }
+  }, [apiFetch]);
+
+  const notifyIdleTimeout = useCallback(async () => {
+    try {
+      await apiFetch('/auth/idle-timeout', { method: 'POST', body: { id: 'idle_timeout', reason: 'max_idle_expired', cleanup: true }, ...QUIET_AUTH_REQUEST });
+    } catch (error) {
+      log.warn('Idle timeout notification failed', { status: error?.status });
+    }
+  }, [apiFetch]);
 
   const applyIdlePolicy = useCallback((data) => {
     const normalized = normalizeSessionPolicyResponse(data, idleSettingsRef.current);
@@ -207,7 +306,12 @@ export function SessionProvider({ apiUrl, token, onLogout, onLocked, onIdleSetti
     idlePolicyMeta,
     updateIdleSettings,
     refreshIdlePolicy,
-  }), [apiUrl, apiFetch, socket, isSocketConnected, mainSessionId, configuration, updateConfiguration, sessionError, isSessionReady, idleSettings, idlePolicyMeta, updateIdleSettings, refreshIdlePolicy]);
+    reinitializeSession,
+    lockBackendSession,
+    unlockBackendSession,
+    notifyBackendLogout,
+    notifyIdleTimeout,
+  }), [apiUrl, apiFetch, socket, isSocketConnected, mainSessionId, configuration, updateConfiguration, sessionError, isSessionReady, idleSettings, idlePolicyMeta, updateIdleSettings, refreshIdlePolicy, reinitializeSession, lockBackendSession, unlockBackendSession, notifyBackendLogout, notifyIdleTimeout]);
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
 }

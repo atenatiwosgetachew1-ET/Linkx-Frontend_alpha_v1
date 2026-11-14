@@ -1,5 +1,7 @@
 import React, { useState, useRef, useEffect, useSyncExternalStore } from 'react';
 import { WORKSPACE_WINDOW_TYPES } from '../state/workspaceTypes.js';
+import { useCan } from '../../auth/useCan.js';
+import { SOURCE_PERMISSIONS } from '../../auth/permissions.js';
 import {
   TASK_ORIGINS,
   TASK_STATUSES,
@@ -293,6 +295,11 @@ function WorkspaceHome({ openWindowsCount = 0, onOpenWindow, onOpenTask, onRepor
   const handleCancelRef = useRef(null); // Tasks window "Terminate" on the live task
   const [resultTaskId, setResultTaskId] = useState(null);
   const isSessionLimitReached = Boolean(sessionUsage && sessionUsage.available <= 0);
+  const can = useCan();
+  // Running an analysis needs analysis:run (production RBAC); opening the
+  // network view needs graph:create.
+  const canRunAnalysis = can(SOURCE_PERMISSIONS.ANALYSIS_RUN);
+  const canOpenGraph = can(SOURCE_PERMISSIONS.GRAPH_CREATE);
   const [reportsCount, setReportsCount] = useState(0);
   const [analysisStatus, setAnalysisStatus] = useState('');
   const [analysisProgress, setAnalysisProgress] = useState(0);
@@ -443,7 +450,7 @@ function WorkspaceHome({ openWindowsCount = 0, onOpenWindow, onOpenTask, onRepor
   };
 
   // A new quick analysis needs a free analysis session (max 3).
-  const isAnalyzeDisabled = isAnalyzing || isSessionLimitReached;
+  const isAnalyzeDisabled = isAnalyzing || isSessionLimitReached || !canRunAnalysis;
 
   const QUICK_STEPS = [
     [450, 20, 'Establishing connections'],
@@ -1022,7 +1029,12 @@ function WorkspaceHome({ openWindowsCount = 0, onOpenWindow, onOpenTask, onRepor
                   <><ShockIcon /> {analyzeButtonLabelText}{uploadedFiles.length > 0 ? ` (${uploadedFiles.length} file${uploadedFiles.length > 1 ? 's' : ''})` : ''}</>
                 )}
               </button>
-              {isSessionLimitReached && !isAnalyzing && (
+              {!canRunAnalysis && !isAnalyzing && (
+                <p className="workspace_home_session_limit" role="status">
+                  You need analysis:run to run an analysis.
+                </p>
+              )}
+              {canRunAnalysis && isSessionLimitReached && !isAnalyzing && (
                 <p className="workspace_home_session_limit" role="status">
                   {sessionLimitMessage(sessionUsage)}{' '}
                   <button type="button" onClick={() => onOpenTask && onOpenTask(null)}>Open Tasks</button>
@@ -1116,6 +1128,8 @@ function WorkspaceHome({ openWindowsCount = 0, onOpenWindow, onOpenTask, onRepor
               <button
                 type="button"
                 className="workspace_home_findings_btn is-network"
+                disabled={!canOpenGraph}
+                title={canOpenGraph ? undefined : 'You need graph:create to open the network view.'}
                 onClick={() => onOpenWindow && onOpenWindow(WORKSPACE_WINDOW_TYPES.GRAPH)}
               >
                 <GraphIcon /> Explore network

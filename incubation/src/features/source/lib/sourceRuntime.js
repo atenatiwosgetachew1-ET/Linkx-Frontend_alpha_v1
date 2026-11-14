@@ -80,3 +80,9 @@ export const disposeSourceRuntime = (windowId) => {
   entry.disposers.forEach((dispose) => { try { dispose(); } catch { /* ignore */ } });
   registry.delete(key);
 };
+
+// Signed out: window ids are reused by the next workspace, so no typed
+// password, staged file or job may survive into it.
+export const disposeAllSourceRuntimes = () => {
+  [...registry.keys()].forEach(disposeSourceRuntime);
+};

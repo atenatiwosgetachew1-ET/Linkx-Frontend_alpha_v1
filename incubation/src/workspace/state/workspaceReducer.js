@@ -65,8 +65,16 @@ export function workspaceReducer(state, action) {
       const isMultiInstance = MULTI_INSTANCE_WINDOW_TYPES.has(windowType);
       const existingWindow = state.windows.find((windowItem) => windowItem.type === windowType);
       if (!isMultiInstance && existingWindow) {
+        // Single windows are focused; a request's metadata (e.g. Reports
+        // opened for a Vigilance run) is merged into the open window.
+        const metadata = action.payload?.metadata;
         return {
           ...state,
+          windows: metadata && typeof metadata === 'object'
+            ? state.windows.map((windowItem) => (windowItem.id === existingWindow.id
+              ? { ...windowItem, metadata: { ...windowItem.metadata, ...metadata } }
+              : windowItem))
+            : state.windows,
           activeWindowId: existingWindow.id,
           contextTab: action.payload?.contextTab || state.contextTab,
         };

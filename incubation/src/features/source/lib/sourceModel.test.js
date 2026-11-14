@@ -8,6 +8,7 @@ import {
   canStream,
   connectionKindOf,
   defaultSourceState,
+  configDefaultsPatch,
   domainDefaultsPatch,
   formatStreamLog,
   getAccessibleSteps,
@@ -149,5 +150,35 @@ describe('formatStreamLog', () => {
       { at: '2026-11-13 12:05:00', level: 'warn', message: 'Terminating' },
     ]);
     expect(text).toBe('[2026-11-13 12:04:55] Analyze requested.\n[09:04:56] [Info] - Injection started\n[2026-11-13 12:05:00] WARN Terminating');
+  });
+});
+
+describe('configDefaultsPatch', () => {
+  const prev = { autoFill: true, broker: { address: 'k:9092', topic: 't' }, tool: { url: 'bolt://a', username: 'neo', database: 'db', passwordRef: 'r1' } };
+  const next = { autoFill: true, broker: { address: 'k:9092', topic: 't' }, tool: { url: 'bolt://b', username: 'neo', database: 'db', passwordRef: 'r2' } };
+  const saved = { toolUrl: 'bolt://a', toolUsername: 'neo', toolDatabase: 'db', toolPassword: '***', toolPasswordRef: 'r1' };
+
+  it('moves the tool URL and the saved password ref after a configuration save', () => {
+    expect(configDefaultsPatch(saved, prev, next, { onlyChanged: true })).toEqual({ toolUrl: 'bolt://b', toolPasswordRef: 'r2', toolPassword: '***' });
+  });
+
+  it('drops the saved ref when the password was cleared', () => {
+    const cleared = { ...next, tool: { ...next.tool, passwordRef: '' } };
+    expect(configDefaultsPatch(saved, prev, cleared)).toMatchObject({ toolPasswordRef: '', toolPassword: '' });
+  });
+
+  it('keeps a typed password, a window-saved realtime ref and typed values', () => {
+    expect(configDefaultsPatch(saved, prev, next, { hasTypedPassword: true })).not.toHaveProperty('toolPasswordRef');
+    expect(configDefaultsPatch({ ...saved, toolPasswordRef: 'own' }, prev, next)).not.toHaveProperty('toolPasswordRef');
+    expect(configDefaultsPatch({ ...saved, toolUrl: 'bolt://mine' }, prev, next)).not.toHaveProperty('toolUrl');
+  });
+
+  it('leaves empty fields empty when autofill is off', () => {
+    const off = { ...next, autoFill: false };
+    expect(configDefaultsPatch({ toolUrl: '' }, prev, off)).toEqual({});
+  });
+
+  it('changes nothing when the configuration is unchanged', () => {
+    expect(configDefaultsPatch(saved, prev, prev, { onlyChanged: true })).toEqual({});
   });
 });

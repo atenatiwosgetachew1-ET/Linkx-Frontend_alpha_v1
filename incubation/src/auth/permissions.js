@@ -25,3 +25,16 @@ export const USER_PERMISSION_DISPLAY_GROUPS = Object.freeze([
   { label: 'Reports', items: ['reports:read'] },
   { label: 'Users', items: ['users:manage', 'auth:verify'] },
 ]);
+
+// Production's PERMISSIONS map (src/App.jsx) for window and launcher actions.
+export const SOURCE_PERMISSIONS = Object.freeze({
+  SOURCE_CREATE: 'source:create',
+  SOURCE_CONNECT: 'source:connect',
+  SOURCE_DISCONNECT: 'source:disconnect',
+  BATCH_UPLOAD: 'batch:upload',
+  BATCH_QUERY: 'batch:query',
+  ANALYSIS_RUN: 'analysis:run',
+  GRAPH_CREATE: 'graph:create',
+  GRAPH_LINK: 'graph:link',
+  CONFIG_READ: 'config:read',
+});

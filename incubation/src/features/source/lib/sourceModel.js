@@ -278,6 +278,42 @@ export const domainDefaultsPatch = (state, previousDefaults, nextDefaults) => {
   return patch;
 };
 
+// The session configuration changed (Configuration save / reset / import,
+// or a domain switch): fields still holding the previous defaults move to the
+// new ones, and so does the saved Neo4j password reference, unless the
+// analyst typed a password or the mode holds its own saved realtime ref.
+export const configDefaultsPatch = (state, previousDefaults, nextDefaults, { hasTypedPassword = false, onlyChanged = false } = {}) => {
+  const patch = domainDefaultsPatch(state, previousDefaults, nextDefaults);
+  // Same domain: only defaults that actually changed move (a field the
+  // analyst cleared is not refilled when the window remounts).
+  if (onlyChanged) {
+    const defaultsOf = (defaults) => ({
+      brokerAddress: defaults.broker.address,
+      topic: defaults.broker.topic,
+      toolUrl: defaults.tool.url,
+      toolUsername: defaults.tool.username,
+      toolDatabase: defaults.tool.database,
+    });
+    const before = defaultsOf(previousDefaults);
+    const after = defaultsOf(nextDefaults);
+    Object.keys(patch).forEach((field) => { if (before[field] === after[field]) delete patch[field]; });
+  }
+  // With autofill off, empty fields stay empty: only values that came from
+  // the previous defaults move.
+  if (!nextDefaults.autoFill) {
+    Object.keys(patch).forEach((field) => { if (!state[field]) delete patch[field]; });
+  }
+  const previousRef = previousDefaults.tool.passwordRef || '';
+  const nextRef = nextDefaults.tool.passwordRef || '';
+  const stateRef = state.toolPasswordRef || '';
+  const holdsConfigRef = stateRef ? stateRef === previousRef : Boolean(nextDefaults.autoFill);
+  if (!hasTypedPassword && stateRef !== nextRef && holdsConfigRef) {
+    patch.toolPasswordRef = nextRef;
+    patch.toolPassword = nextRef ? '***' : '';
+  }
+  return patch;
+};
+
 export const mergeSourceState = (sourceState = {}) => ({
   ...defaultSourceState,
   ...sourceState,

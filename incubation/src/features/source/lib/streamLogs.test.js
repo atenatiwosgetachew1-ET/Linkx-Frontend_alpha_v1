@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   appendStreamLog,
+  bindStreamLogSocket,
+  disposeAllStreamLogs,
   disposeStreamLog,
   getStreamLogFile,
   getStreamLogLines,
@@ -66,5 +68,30 @@ describe('stream logs', () => {
     appendStreamLog('w1', 'local note');
     vi.advanceTimersByTime(250);
     expect(getStreamLogLines('w1').map((line) => line.message)).toEqual(['local note']);
+  });
+});
+
+describe('stream logs across sockets and sign-out', () => {
+  afterEach(() => disposeAllStreamLogs());
+
+  it('moves running streams to a re-created socket (token renewal)', () => {
+    vi.useFakeTimers();
+    const first = fakeSocket();
+    plugStreamLog('w2', { socket: first, sessionId: '1_7', filename: 'a.log' });
+    const second = fakeSocket();
+    bindStreamLogSocket(second);
+    expect(second.emitted).toContainEqual(['log_stream_plug', { session_id: '1_7', filename: 'a.log' }]);
+    second.receive('stream_logs', { session_id: '1_7', data: 'after renewal' });
+    vi.advanceTimersByTime(250);
+    expect(getStreamLogLines('w2').map((line) => line.message)).toContain('after renewal');
+    vi.useRealTimers();
+  });
+
+  it('forgets every window log on sign-out', () => {
+    appendStreamLog('w3', 'secret run');
+    appendStreamLog('w4', 'other run');
+    disposeAllStreamLogs();
+    expect(getStreamLogLines('w3')).toEqual([]);
+    expect(getStreamLogLines('w4')).toEqual([]);
   });
 });

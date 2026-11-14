@@ -7,6 +7,8 @@ const SourceWindowBody = lazy(() => import('../../features/source/components/Sou
 const SettingsWindowBody = lazy(() => import('../../features/settings/components/SettingsWindowBody.jsx'));
 const ConfigurationWindowBody = lazy(() => import('../../features/configuration/components/ConfigurationWindowBody.jsx'));
 const TasksWindowBody = lazy(() => import('../../features/tasks/components/TasksWindowBody.jsx'));
+const ReportsWindowBody = lazy(() => import('../../features/reports/components/ReportsWindowBody.jsx'));
+const LibrariesWindowBody = lazy(() => import('../../features/libraries/components/LibrariesWindowBody.jsx'));
 
 const bodyFallback = (
   <div className="workspace_window_body">
@@ -39,6 +41,14 @@ function WorkspaceWindowBody({ windowItem }) {
 
   if (windowItem.type === WORKSPACE_WINDOW_TYPES.TASKS) {
     return <Suspense fallback={bodyFallback}><TasksWindowBody windowItem={windowItem} /></Suspense>;
+  }
+
+  if (windowItem.type === WORKSPACE_WINDOW_TYPES.REPORTS) {
+    return <Suspense fallback={bodyFallback}><ReportsWindowBody windowItem={windowItem} /></Suspense>;
+  }
+
+  if (windowItem.type === WORKSPACE_WINDOW_TYPES.LIBRARIES) {
+    return <Suspense fallback={bodyFallback}><LibrariesWindowBody windowItem={windowItem} /></Suspense>;
   }
 
   if (windowItem.type === WORKSPACE_WINDOW_TYPES.SETTINGS) {

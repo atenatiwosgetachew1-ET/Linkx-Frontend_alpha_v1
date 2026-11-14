@@ -34,8 +34,9 @@ export const readStoredSessionId = () => normalizeSessionId(
 
 // POST /init — creates or resumes the main analysis session. `socketId` lets
 // the backend route socket events (logs, graph status) to this browser.
-export const initializeMainSession = async (apiFetch, { socketId = null } = {}) => {
+export const initializeMainSession = async (apiFetch, { socketId = null, requestOptions = {} } = {}) => {
   const data = await apiFetch('/init', {
+    ...requestOptions,
     method: 'POST',
     body: {
       id: 'init',

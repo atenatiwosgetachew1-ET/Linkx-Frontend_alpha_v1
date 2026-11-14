@@ -5,6 +5,7 @@ import { act, cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
 
+import { AuthContext } from '../../../auth/authContext.js';
 import { NotificationProvider } from '../../../shared/notifications/NotificationContext.jsx';
 import { WorkspaceProvider } from '../../../workspace/state/WorkspaceContext.jsx';
 import { useWorkspace } from '../../../workspace/hooks/useWorkspace.js';
@@ -32,13 +33,21 @@ function Probe() {
   return null;
 }
 
-const renderTasks = () => render(
-  <NotificationProvider>
-    <WorkspaceProvider>
-      <Probe />
-      <TasksWindowBody />
-    </WorkspaceProvider>
-  </NotificationProvider>,
+const authWith = (permissions = null) => ({
+  user: { username: 'analyst' },
+  hasRole: () => false,
+  hasPermission: (permission) => (permissions ? permissions.includes(permission) : true),
+});
+
+const renderTasks = ({ permissions = null } = {}) => render(
+  <AuthContext.Provider value={authWith(permissions)}>
+    <NotificationProvider>
+      <WorkspaceProvider>
+        <Probe />
+        <TasksWindowBody />
+      </WorkspaceProvider>
+    </NotificationProvider>
+  </AuthContext.Provider>,
 );
 
 describe('TasksWindowBody', () => {
@@ -85,6 +94,14 @@ describe('TasksWindowBody', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /Show chart/ }));
     expect(workspaceRef.windows.filter((windowItem) => windowItem.type === 'chart')).toHaveLength(1);
+  });
+
+  it('keeps Show graph disabled without graph:create (production gate)', () => {
+    const id = createTask({ title: 'Link Analysis', sourceSessionId: 's7' });
+    act(() => markTaskRunning(id));
+    renderTasks({ permissions: ['analysis:run'] });
+    expect(screen.getByRole('button', { name: /Show graph/ })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Show chart/ })).toBeEnabled();
   });
 
   it('terminates a running task through its handler', async () => {
@@ -135,7 +152,8 @@ describe('TasksWindowBody', () => {
     expect(toggle).toHaveAttribute('aria-expanded', 'true');
     await userEvent.click(toggle);
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
-    expect(toggle).toHaveTextContent('Link Analysis · Batch · HDFS');
+    expect(toggle).toHaveTextContent('Link Analysis');
+    expect(toggle).toHaveTextContent('Batch · HDFS');
     await userEvent.click(toggle);
   });
 

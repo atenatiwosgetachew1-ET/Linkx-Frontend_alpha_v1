@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 
 import { useCan } from '../../../auth/useCan.js';
 import { useSession } from '../../../shared/session/useSession.js';
@@ -18,16 +18,17 @@ import {
   normalizeLoadedConfiguration,
   preserveDomainRegistry,
 } from '../lib/configModel.js';
+import { getConfigurationDraft, keepConfigurationDraft, rebaseConfigurationDraft } from '../lib/configDraft.js';
+import { getKnownBuiltinRules, subscribeKnownBuiltinRules } from '../../libraries/lib/rulesLibrary.js';
+import { WORKSPACE_WINDOW_TYPES } from '../../../workspace/state/workspaceTypes.js';
 import {
   exportEncryptedConfiguration,
   getLxacErrorMessage,
   importEncryptedConfiguration,
   loadConfiguration,
   loadDefaultConfiguration,
-  removeRule,
   saveConfiguration,
   switchDomain,
-  uploadRule,
   verifyLxacFile,
 } from '../../../services/configurationApi.js';
 
@@ -42,7 +43,6 @@ const TABS = [
 // Tabs whose fields belong to the session configuration draft (Save/Reset).
 const DRAFT_TABS = new Set(['system', 'connections', 'tools', 'rules']);
 
-const RULE_KEYS = ['rules', 'rule_names', 'active_rule', 'builtin_rules', 'custom_rules', 'uploaded_rules'];
 
 const payloadKey = (config) => {
   try {
@@ -53,7 +53,6 @@ const payloadKey = (config) => {
 };
 
 const isAbort = (error) => error?.name === 'AbortError';
-const EMPTY_RULE_UPLOAD = { file: null, name: '', inputKey: 0 };
 
 export default function ConfigurationWindowBody({ windowItem }) {
   const canAccess = useCan();
@@ -80,18 +79,43 @@ export default function ConfigurationWindowBody({ windowItem }) {
   const [activeTab, setActiveTab] = useState(visibleTabs.some((tab) => tab.id === storedTab) ? storedTab : 'system');
   const activeTabMeta = visibleTabs.find((tab) => tab.id === activeTab) || visibleTabs[0];
 
-  const [draft, setDraft] = useState(() => normalizeLoadedConfiguration(configuration));
+  // Unsaved edits survive the body unmounting (docked tabs): they are kept per
+  // window in configDraft.js and rebased onto the current session config.
+  const windowId = windowItem?.id;
+  const [initialState] = useState(() => {
+    const session = normalizeLoadedConfiguration(configuration);
+    const stored = getConfigurationDraft(windowId);
+    if (stored && stored.sessionId === mainSessionId) {
+      const rebased = preserveDomainRegistry(stored.draft, rebaseConfigurationDraft(stored.draft, stored.base, session));
+      return { draft: rebased, base: session, restored: true };
+    }
+    keepConfigurationDraft(windowId, null);
+    return { draft: session, base: session, restored: false };
+  });
+  const [draft, setDraft] = useState(initialState.draft);
   const draftRef = useRef(draft);
   draftRef.current = draft;
-  const [baseline, setBaseline] = useState(() => payloadKey(normalizeLoadedConfiguration(configuration)));
+  // The configuration the draft was taken from (what "unsaved" compares to).
+  const baseRef = useRef(initialState.base);
+  const [baseline, setBaseline] = useState(() => payloadKey(initialState.base));
   const isDirty = useMemo(() => payloadKey(draft) !== baseline, [baseline, draft]);
   const dirtyRef = useRef(isDirty);
   dirtyRef.current = isDirty;
+  const configurationRef = useRef(configuration);
+  configurationRef.current = configuration;
+
+  // Keep (or forget) the unsaved draft for this window. Module memory only:
+  // it can hold a typed password, so it never goes into workspace metadata.
+  useEffect(() => {
+    keepConfigurationDraft(windowId, isDirty ? { draft, base: baseRef.current, sessionId: mainSessionId } : null);
+  }, [windowId, draft, isDirty, mainSessionId]);
 
   const [busy, setBusy] = useState(null); // { label, cancellable }
-  const [isLoaded, setIsLoaded] = useState(false);
-  const [knownBuiltinRules, setKnownBuiltinRules] = useState(() => new Set());
-  const [ruleUpload, setRuleUpload] = useState(EMPTY_RULE_UPLOAD);
+  // A restored unsaved draft is not overwritten by a reload on remount.
+  const [isLoaded, setIsLoaded] = useState(initialState.restored);
+  // Rule upload / removal live in the Libraries window; built-in rules it
+  // learned about are shared so the active-rule picker marks them too.
+  const knownBuiltinRules = useSyncExternalStore(subscribeKnownBuiltinRules, getKnownBuiltinRules);
   const [lxac, setLxac] = useState(null); // { mode, file }
   const importInputRef = useRef(null);
   const controllerRef = useRef(null);
@@ -100,6 +124,18 @@ export default function ConfigurationWindowBody({ windowItem }) {
     mountedRef.current = false;
     controllerRef.current?.abort();
   }, []);
+
+  // Opened again with a tab request (e.g. Libraries → "Choose active rule")
+  // while already open: switch to it.
+  const requestSeq = windowItem?.metadata?.configurationRequest?.seq;
+  const lastRequestSeq = useRef(requestSeq);
+  useEffect(() => {
+    if (!requestSeq || requestSeq === lastRequestSeq.current) return;
+    lastRequestSeq.current = requestSeq;
+    const tab = windowItem?.metadata?.configurationRequest?.tab;
+    if (visibleTabs.some((item) => item.id === tab)) setActiveTab(tab);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requestSeq]);
 
   const selectTab = (tabId) => {
     setActiveTab(tabId);
@@ -110,20 +146,26 @@ export default function ConfigurationWindowBody({ windowItem }) {
   // the session configuration every Source window reads its defaults from.
   const adoptConfiguration = useCallback((normalized) => {
     const merged = preserveDomainRegistry(draftRef.current, normalized);
+    baseRef.current = merged;
     setDraft(merged);
     setBaseline(payloadKey(merged));
     setConfiguration((current) => preserveDomainRegistry(current, merged));
   }, [setConfiguration]);
 
   // Keep the draft in step with session changes made elsewhere (e.g. a Source
-  // window domain switch) as long as there are no unsaved edits.
+  // window domain switch). With unsaved edits, untouched keys and the domain
+  // follow the session and the edited keys stay, so the header, Detection
+  // sensitivity and the next save never carry a stale domain (production edits
+  // one shared configuration, so its save is always current).
   useEffect(() => {
-    if (dirtyRef.current) return;
     const next = normalizeLoadedConfiguration(configuration);
     if (!Object.keys(next).length) return;
-    const merged = preserveDomainRegistry(draftRef.current, next);
+    const merged = dirtyRef.current
+      ? preserveDomainRegistry(draftRef.current, rebaseConfigurationDraft(draftRef.current, baseRef.current, next))
+      : preserveDomainRegistry(draftRef.current, next);
+    baseRef.current = preserveDomainRegistry(baseRef.current, next);
     setDraft(merged);
-    setBaseline(payloadKey(merged));
+    setBaseline(payloadKey(baseRef.current));
   }, [configuration]);
 
   // Runs one backend action behind the load screen; Esc/click cancels it.
@@ -195,49 +237,20 @@ export default function ConfigurationWindowBody({ windowItem }) {
     return loaded?.ok ? { ...result, configuration: loaded.configuration, returned: true } : result;
   }), [apiFetch, mainSessionId]);
 
-  // Rule changes must not discard unrelated unsaved edits: when the draft is
-  // dirty only the rule catalogue is taken from the server.
-  const adoptRules = useCallback((configuration) => {
-    if (!dirtyRef.current) {
-      adoptConfiguration(configuration);
-      return;
-    }
-    const pick = (source) => RULE_KEYS.reduce((acc, key) => (source?.[key] !== undefined ? { ...acc, [key]: source[key] } : acc), {});
-    setDraft((current) => ({ ...current, ...pick(configuration) }));
-    setConfiguration((current) => ({ ...current, ...pick(configuration) }));
-  }, [adoptConfiguration, setConfiguration]);
-
   const handleChange = useCallback((name, value) => {
     setDraft((current) => applyConfigurationChange(current, name, value));
   }, []);
 
-  const handleRuleUpload = useCallback(async () => {
-    if (!ruleUpload.file || !requirePermission('config:write', 'rule uploads') || !requireSession()) return;
-    try {
-      const fields = { ...buildConfigurationSavePayload(draftRef.current) };
-      const result = await runBusy('Uploading rule…', (signal) => mutateAndLoad(signal, () => uploadRule(apiFetch, mainSessionId, { file: ruleUpload.file, ruleName: ruleUpload.name, fields }, { signal })), { cancellable: false });
-      if (!result) return;
-      if (!result.ok) {
-        notify({ title: 'Rule upload', message: result.message, level: 'warning', source: 'Configuration' });
-        return;
-      }
-      setRuleUpload((current) => ({ ...EMPTY_RULE_UPLOAD, inputKey: current.inputKey + 1 }));
-      notify({ title: 'Rule uploaded', message: 'Rule uploaded successfully.', level: 'success', source: 'Configuration' });
-      if (result.returned) adoptRules(result.configuration);
-    } catch (error) {
-      notify({ title: 'Rule upload failed', message: getConfigurationErrorMessage(error, 'Rule upload failed.'), level: 'error', source: 'Configuration' });
-    }
-  }, [adoptRules, apiFetch, mainSessionId, mutateAndLoad, notify, requirePermission, requireSession, ruleUpload, runBusy]);
-
   const handleSave = useCallback(async () => {
     if (!requirePermission('config:write', 'configuration changes') || !requireSession()) return;
-    // Production: a pending rule file turns Save into the multipart rule upload.
-    if (ruleUpload.file) {
-      await handleRuleUpload();
-      return;
-    }
     try {
       const payload = buildConfigurationSavePayload(draftRef.current);
+      // The session domain is switched by its own request; a save never
+      // sends an older domain back.
+      const sessionConfig = normalizeLoadedConfiguration(configurationRef.current);
+      ['domain', 'active_domain'].forEach((key) => {
+        if (sessionConfig[key]) payload[key] = sessionConfig[key];
+      });
       // Saves are not cancellable: an abort could hide a committed change.
       const result = await runBusy('Saving configuration…', (signal) => mutateAndLoad(signal, () => saveConfiguration(apiFetch, mainSessionId, payload, { signal })), { cancellable: false });
       if (!result) return;
@@ -245,19 +258,28 @@ export default function ConfigurationWindowBody({ windowItem }) {
         notify({ title: 'Configuration notice', message: result.message, level: 'warning', source: 'Configuration' });
         return;
       }
-      notify({ title: 'Configuration saved', message: 'Configuration saved successfully.', level: 'success', source: 'Configuration' });
-      if (result.returned) adoptConfiguration(result.configuration);
-      else {
-        // No configuration came back and the reload failed: the saved draft
-        // is the best known state, so share it with the session.
+      if (result.returned) {
+        notify({ title: 'Configuration saved', message: 'Configuration saved successfully.', level: 'success', source: 'Configuration' });
+        adoptConfiguration(result.configuration);
+      } else {
+        // Saved, but no configuration came back and the reload failed. The
+        // draft (which may hold a typed raw password) never becomes the
+        // session configuration: Source windows keep the last confirmed one
+        // until a reload succeeds.
         const saved = draftRef.current;
+        baseRef.current = saved;
         setBaseline(payloadKey(saved));
-        setConfiguration((current) => preserveDomainRegistry(current, saved));
+        notify({
+          title: 'Configuration saved',
+          message: 'Saved, but the updated configuration could not be loaded. Use Reload before connecting Source windows.',
+          level: 'warning',
+          source: 'Configuration',
+        });
       }
     } catch (error) {
       notify({ title: 'Configuration error', message: getConfigurationErrorMessage(error), level: 'error', source: 'Configuration' });
     }
-  }, [adoptConfiguration, apiFetch, handleRuleUpload, mainSessionId, mutateAndLoad, notify, requirePermission, requireSession, ruleUpload.file, runBusy, setConfiguration]);
+  }, [adoptConfiguration, apiFetch, mainSessionId, mutateAndLoad, notify, requirePermission, requireSession, runBusy]);
 
   const handleReset = useCallback(async () => {
     // Reset replaces the session configuration every Source window uses.
@@ -281,32 +303,6 @@ export default function ConfigurationWindowBody({ windowItem }) {
       notify({ title: 'Configuration error', message: getConfigurationErrorMessage(error, 'Could not reset configuration. Try again.'), level: 'error', source: 'Configuration' });
     }
   }, [adoptConfiguration, apiFetch, mainSessionId, notify, requestConfirmation, requirePermission, requireSession, runBusy]);
-
-  const handleRemoveRule = useCallback(async (ruleName) => {
-    if (!requirePermission('config:write', 'rule removal') || !requireSession()) return;
-    const markBuiltin = (message) => {
-      const match = message.match(/rule\s+'([^']+)'/i);
-      const names = [match?.[1], ruleName].filter(Boolean).map((name) => name.trim());
-      setKnownBuiltinRules((current) => new Set([...current, ...names, ...names.map((name) => name.toLowerCase())]));
-    };
-    const warn = (message) => {
-      const builtin = /built-?in/i.test(message);
-      if (builtin) markBuiltin(message);
-      notify({ title: builtin ? 'Built-in rule' : 'Rule removal', message, level: 'warning', source: 'Configuration' });
-    };
-    try {
-      const result = await runBusy(`Removing rule “${ruleName}”…`, (signal) => mutateAndLoad(signal, () => removeRule(apiFetch, mainSessionId, ruleName, { signal })), { cancellable: false });
-      if (!result) return;
-      if (!result.ok) {
-        warn(result.message);
-        return;
-      }
-      notify({ title: 'Rule removed', message: `Rule “${ruleName}” was removed.`, level: 'success', source: 'Configuration' });
-      if (result.returned) adoptRules(result.configuration);
-    } catch (error) {
-      warn(getConfigurationErrorMessage(error, 'Could not remove the selected rule. Try again.'));
-    }
-  }, [adoptRules, apiFetch, mainSessionId, mutateAndLoad, notify, requirePermission, requireSession, runBusy]);
 
   const handleSwitchDomain = useCallback(async (domain) => {
     const current = getActiveDomainKey(draftRef.current);
@@ -437,10 +433,7 @@ export default function ConfigurationWindowBody({ windowItem }) {
         canEditEntities={canWrite}
         canWrite={canWrite}
         knownBuiltinRules={knownBuiltinRules}
-        ruleUpload={ruleUpload}
-        onRuleUploadChange={(patch) => setRuleUpload((current) => ({ ...current, ...patch }))}
-        onUploadRule={handleRuleUpload}
-        onRemoveRule={handleRemoveRule}
+        onManageRules={() => workspace.openWindow(WORKSPACE_WINDOW_TYPES.LIBRARIES, { metadata: { librariesUi: { activeTab: 'rules' }, librariesRequest: { tab: 'rules', seq: Date.now() } } })}
         onNotice={notify}
       />
     );
@@ -517,7 +510,7 @@ export default function ConfigurationWindowBody({ windowItem }) {
             <button type="button" className="settings_button" disabled={!canRead || Boolean(busy)} onClick={openExport} title="Export an encrypted configuration file">Export</button>
             <button type="button" className="settings_button" disabled={!canWrite || Boolean(busy)} onClick={pickImportFile} title="Import an encrypted configuration file">Import</button>
             {showDraftActions ? (
-              <button type="button" className={`settings_button${isDirty || ruleUpload.file ? ' is-primary' : ''}`} disabled={!canWrite || Boolean(busy)} onClick={handleSave}>Save</button>
+              <button type="button" className={`settings_button${isDirty ? ' is-primary' : ''}`} disabled={!canWrite || Boolean(busy)} onClick={handleSave}>Save</button>
             ) : null}
           </div>
           <input ref={importInputRef} type="file" accept=".lxac,.Lxac" hidden onChange={handleImportFileChange} />

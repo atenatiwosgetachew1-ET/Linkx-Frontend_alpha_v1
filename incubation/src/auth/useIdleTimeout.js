@@ -8,6 +8,9 @@ export function useIdleTimeout({
   lockMs = 15 * 60 * 1000,
   timeoutMs = 30 * 60 * 1000,
   isLocked = false,
+  // Changing it restarts the idle clock (production idleResetSeq: unlock,
+  // logout and a fresh session start counting from now).
+  resetKey = 0,
   onWarn,
   onLock,
   onTimeout,
@@ -20,6 +23,12 @@ export function useIdleTimeout({
 
   useEffect(() => {
     if (!enabled) return undefined;
+    // Unlocked (or reset): count from now, otherwise the time spent locked
+    // re-locks the workspace on the next tick.
+    if (!isLocked) {
+      lastActivityRef.current = Date.now();
+      hasWarnedRef.current = false;
+    }
 
     const handleActivity = () => {
       if (!isLocked) {
@@ -57,5 +66,5 @@ export function useIdleTimeout({
       });
       clearInterval(intervalId);
     };
-  }, [enabled, isLocked, warningMs, lockMs, timeoutMs]);
+  }, [enabled, isLocked, warningMs, lockMs, timeoutMs, resetKey]);
 }

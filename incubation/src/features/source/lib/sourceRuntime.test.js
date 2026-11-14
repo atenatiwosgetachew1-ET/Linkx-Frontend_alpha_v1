@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { disposeSourceRuntime, windowRef } from './sourceRuntime.js';
+import { disposeAllSourceRuntimes, disposeSourceRuntime, getSecret, setSecret, windowRef } from './sourceRuntime.js';
 
 describe('windowRef', () => {
   it('keeps one ref per window, shared across component instances', () => {
@@ -16,5 +16,15 @@ describe('windowRef', () => {
     windowRef('win-c', 'sourceState').current = { step: 'stream' };
     disposeSourceRuntime('win-c');
     expect(windowRef('win-c', 'sourceState').current).toBeNull();
+  });
+});
+
+describe('disposeAllSourceRuntimes', () => {
+  it('forgets typed passwords of every window (sign-out; window ids are reused)', () => {
+    setSecret('source-1', 'batch', 'hunter2');
+    setSecret('source-2', 'realtime', 'pw');
+    disposeAllSourceRuntimes();
+    expect(getSecret('source-1', 'batch')).toBe('');
+    expect(getSecret('source-2', 'realtime')).toBe('');
   });
 });

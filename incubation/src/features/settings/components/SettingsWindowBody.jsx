@@ -33,12 +33,19 @@ export default function SettingsWindowBody({ windowItem }) {
   const { apiFetch, configuration, mainSessionId } = useSession();
   const activeDomain = getActiveDomainKey(configuration);
   const isCdr = activeDomain === 'cdr';
+  // Reports is a single window: when it is already open, the new metadata
+  // is merged into it and openSeq tells it to re-apply the tab / run window.
+  const canOpenReports = canAccess('graph:create'); // production gates Reports with graph:create
   const openFindings = useCallback((detail = {}) => {
+    if (!canOpenReports) {
+      notify({ title: 'Permission denied', message: 'You need graph:create to use Reports.', source: 'RBAC', level: 'warning' });
+      return;
+    }
     workspace.openWindow(WORKSPACE_WINDOW_TYPES.REPORTS, {
       customTitle: 'Vigilance findings',
-      metadata: { reportsTab: detail.tab || 'xvigilance', vigilanceRun: detail.run_id ? detail : null },
+      metadata: { reportsTab: detail.tab || 'xvigilance', vigilanceRun: detail.run_id ? detail : null, openSeq: Date.now() },
     });
-  }, [workspace]);
+  }, [workspace, canOpenReports, notify]);
   // Every tab stays visible; tabs the account can't use explain why inside.
   const visibleTabs = settingsTabs;
   const activeTabMeta = visibleTabs.find((tab) => tab.id === activeTab) || visibleTabs[0] || settingsTabs[0];

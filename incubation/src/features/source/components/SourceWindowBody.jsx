@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState, useSyncExternalStore } fro
 
 import WindowLoadScreen from '../../../shared/components/WindowLoadScreen.jsx';
 import { useCan } from '../../../auth/useCan.js';
+import { SOURCE_PERMISSIONS } from '../../../auth/permissions.js';
 import { isSuccessResponse } from '../../../services/apiClient.js';
 import { sanitizeBackendUserMessage } from '../../../services/apiErrors.js';
 import { loadSessionConfiguration, switchSessionDomain } from '../../../services/sessionApi.js';
@@ -50,6 +51,7 @@ import {
   DATAFRAME_STATUSES,
   displaySourceMessage,
   displayToolMessage,
+  configDefaultsPatch,
   domainDefaultsPatch,
   formatDomainLabel,
   getAccessibleSteps,
@@ -95,12 +97,15 @@ import {
   unplugStreamLog,
 } from '../lib/streamLogs.js';
 import { endAbandonedStream, markStreamActive, markStreamEnded, setActiveStreamLogFile } from '../lib/activeStreams.js';
+import { watchStreamTask } from '../lib/backgroundStreams.js';
 import {
   TASK_ORIGINS,
   TASK_STATUSES,
   createTask,
   finishTask,
   freezeWindowTaskLogs,
+  getTask,
+  isTaskActive,
   markTaskRunning,
   requestTaskFocus,
   setTaskHandlers,
@@ -125,6 +130,16 @@ export default function SourceWindowBody({ windowItem }) {
   const can = useCan();
   const [validationMessage, setValidationMessage] = useState('');
   const [toolValidationMessage, setToolValidationMessage] = useState('');
+  // Production's per-action RBAC (getWindowActionPermission + requirePermission):
+  // the action is refused with a "Permission denied" notice and an inline
+  // reason. UI gating only; the backend enforces the same permissions.
+  const requirePermission = (permission, actionName, { setMessage = setValidationMessage } = {}) => {
+    if (can(permission)) return true;
+    const message = `You need ${permission} to ${actionName}.`;
+    setMessage(message);
+    notify({ title: 'Permission denied', message, level: 'warning', source: 'RBAC' });
+    return false;
+  };
   // Memoised so derived values (accessible steps, defaults merge) only
   // recompute when this window's state actually changes.
   const sourceState = useMemo(() => mergeSourceState(windowItem.sourceState), [windowItem.sourceState]);
@@ -283,6 +298,7 @@ export default function SourceWindowBody({ windowItem }) {
   const openLibrariesWindow = () => {
     workspace.openWindow(WORKSPACE_WINDOW_TYPES.LIBRARIES, {
       customTitle: 'Rules library',
+      metadata: { librariesUi: { activeTab: 'rules' }, librariesRequest: { tab: 'rules', seq: Date.now() } },
     });
   };
 
@@ -450,6 +466,7 @@ export default function SourceWindowBody({ windowItem }) {
     const state = sourceStateRef.current[key];
     // One stream per window: a second start would orphan the running job.
     if (!canStream(state) || isStreamActive(state)) return;
+    if (!requirePermission(SOURCE_PERMISSIONS.ANALYSIS_RUN, 'run the analysis')) return;
     const sourceSessionId = normalizeWindowSessionId(windowItem);
     if (!sourceSessionId) {
       setValidationMessage('Source session is not ready yet.');
@@ -524,6 +541,8 @@ export default function SourceWindowBody({ windowItem }) {
     streamTaskRef.current = taskId;
     // Stopped from the Tasks window: the same path as this window's Terminate.
     setTaskHandlers(taskId, { terminate: () => terminateStreamRef.current?.() });
+    // Completion must not depend on this body being mounted (docked tabs).
+    watchStreamTask(windowItem.id, taskId);
 
     const request = trackRequest(windowItem.id);
     let started;
@@ -546,6 +565,16 @@ export default function SourceWindowBody({ windowItem }) {
     if (request.signal.aborted) {
       finishTask(taskId, TASK_STATUSES.TERMINATED, { message: 'Start request cancelled.' });
       endAbandonedStream(apiFetch, windowItem.id, { reason: 'start_cancelled' });
+      return;
+    }
+    // Terminated (from Tasks, or by closing the window) while the start
+    // request was in flight: the backend may have just accepted it, so close
+    // that stream again instead of following it.
+    if (!isTaskActive(getTask(taskId))) {
+      if (started.accepted) {
+        endStreamRequest(apiFetch, { sourceSessionId: normalizeWindowSessionId(windowItem), logFile: started.logFile || '' })
+          .catch(() => null);
+      }
       return;
     }
     if (!started.accepted) {
@@ -573,6 +602,7 @@ export default function SourceWindowBody({ windowItem }) {
       // The queued job resolves when the ingestion has finished.
       const logFile = resolveStreamLogFile(result) || started.logFile;
       setActiveStreamLogFile(windowItem.id, logFile);
+      if (logFile) updateTask(taskId, { logFile });
       if (logFile && !sourceStateRef.current[key]?.streamLogFile) plugStreamLog(windowItem.id, { socket, sessionId: normalizeWindowSessionId(windowItem), filename: logFile });
       completeStream(key);
     } catch (error) {
@@ -589,6 +619,7 @@ export default function SourceWindowBody({ windowItem }) {
     const key = modeKey;
     const state = sourceStateRef.current[key];
     if (!isStreamActive(state)) return;
+    if (!requirePermission(SOURCE_PERMISSIONS.ANALYSIS_RUN, 'terminate the analysis')) return;
     const sourceSessionId = normalizeWindowSessionId(windowItem);
     const logFile = state.streamLogFile || getStreamLogFile(windowItem.id);
     if (streamJobRef.current) {
@@ -644,6 +675,7 @@ export default function SourceWindowBody({ windowItem }) {
 
   const continueWorkflow = () => {
     if (!canContinueWorkflow) return;
+    if (!requirePermission(SOURCE_PERMISSIONS.BATCH_QUERY, 'prepare the dataframe')) return;
     if (runsDataframePipeline) {
       prepareDataframe();
       return;
@@ -727,6 +759,11 @@ export default function SourceWindowBody({ windowItem }) {
   const handleSourceAction = async ({ auto = false } = {}) => {
     setValidationMessage('');
     const isDisconnecting = modeState.sourceStatus === SOURCE_STATUSES.CONNECTED;
+    // Production gates the analyst's connect / disconnect, not auto_connect.
+    if (!auto && !requirePermission(
+      isDisconnecting ? SOURCE_PERMISSIONS.SOURCE_DISCONNECT : SOURCE_PERMISSIONS.SOURCE_CONNECT,
+      isDisconnecting ? 'disconnect the source' : 'connect the source',
+    )) return;
     const validationError = isDisconnecting ? '' : validateSourcePayload();
     if (validationError) {
       setValidationMessage(validationError + (auto && isStorageInput ? OPEN_FORM_HINT : ''));
@@ -865,6 +902,11 @@ export default function SourceWindowBody({ windowItem }) {
   const handleToolAction = async () => {
     setToolValidationMessage('');
     const isDisconnecting = modeState.toolStatus === TOOL_STATUSES.CONNECTED;
+    if (!requirePermission(
+      isDisconnecting ? SOURCE_PERMISSIONS.SOURCE_DISCONNECT : SOURCE_PERMISSIONS.SOURCE_CONNECT,
+      isDisconnecting ? 'disconnect the tool' : 'connect the tool',
+      { setMessage: setToolValidationMessage },
+    )) return;
     const validationError = isDisconnecting ? '' : validateToolPayload();
     if (validationError) {
       setToolValidationMessage(validationError);
@@ -945,6 +987,7 @@ export default function SourceWindowBody({ windowItem }) {
             setValidationMessage('The staged files are no longer available. Select them again.');
             return;
           }
+          if (!requirePermission(SOURCE_PERMISSIONS.BATCH_UPLOAD, 'upload files')) return;
           patch({ uploadStatus: UPLOAD_STATUSES.UPLOADING, preparing: 'Uploading files…' });
           const upload = await uploadBatchFiles(apiFetch, { sourceSessionId, files, signal: request.signal });
           if (request.signal.aborted) return;
@@ -1373,24 +1416,43 @@ export default function SourceWindowBody({ windowItem }) {
 
   const reconnectAfterDomainChangeRef = useRef(reconnectAfterDomainChange);
   reconnectAfterDomainChangeRef.current = reconnectAfterDomainChange;
-  const lastDefaultsRef = useRef(sourceDefaults);
+  // The defaults this window last applied. Kept per window (not per mount):
+  // in docked mode the body is unmounted while another tab is active, and a
+  // change made meanwhile must still be applied when it comes back.
+  const lastDefaultsRef = windowRef(windowItem.id, 'lastAppliedDefaults', sourceDefaults);
   useEffect(() => {
     const previous = lastDefaultsRef.current;
     lastDefaultsRef.current = sourceDefaults;
-    if (!previous?.domain || !sourceDefaults.domain || previous.domain === sourceDefaults.domain) return;
+    if (!previous || previous === sourceDefaults || !sourceDefaults.domain) return;
+    const hasTypedPassword = (key) => Boolean(getSecret(windowItem.id, key)) || Boolean(sourceStateRef.current[key]?.toolPasswordTyped);
+    if (previous.domain && previous.domain !== sourceDefaults.domain) {
+      ['batch', 'realtime'].forEach((key) => {
+        const state = sourceStateRef.current[key];
+        if (state?.sourceStatus === SOURCE_STATUSES.CONNECTED) {
+          reconnectAfterDomainChangeRef.current(key, previous, sourceDefaults);
+          const ref = configDefaultsPatch(state, previous, sourceDefaults, { hasTypedPassword: hasTypedPassword(key) });
+          if ('toolPasswordRef' in ref) patchModeState({ toolPasswordRef: ref.toolPasswordRef, toolPassword: ref.toolPassword }, key);
+        } else if (state) {
+          // Not connected: refresh default-held fields, and drop a dataframe
+          // built under the old domain's rules and columns.
+          const hasDataframe = state.dataframeStatus && state.dataframeStatus !== DATAFRAME_STATUSES.NONE;
+          const refreshed = configDefaultsPatch(state, previous, sourceDefaults, { hasTypedPassword: hasTypedPassword(key) });
+          if (hasDataframe || Object.keys(refreshed).length) {
+            patchModeState({ ...refreshed, ...(hasDataframe ? { ...STALE_DATAFRAME_PATCH, ...STORAGE_SEARCH_RESET_PATCH } : {}) }, key);
+          }
+        }
+      });
+      return;
+    }
+    // Same domain, configuration saved / reset / imported: move fields still
+    // holding the old defaults (tool URL, user, database, saved password
+    // ref, broker, topic) to the new ones. A live connection is kept; the
+    // new values apply on the next connect.
     ['batch', 'realtime'].forEach((key) => {
       const state = sourceStateRef.current[key];
-      if (state?.sourceStatus === SOURCE_STATUSES.CONNECTED) {
-        reconnectAfterDomainChangeRef.current(key, previous, sourceDefaults);
-      } else if (state) {
-        // Not connected: refresh default-held fields, and drop a dataframe
-        // built under the old domain's rules and columns.
-        const hasDataframe = state.dataframeStatus && state.dataframeStatus !== DATAFRAME_STATUSES.NONE;
-        const refreshed = domainDefaultsPatch(state, previous, sourceDefaults);
-        if (hasDataframe || Object.keys(refreshed).length) {
-          patchModeState({ ...refreshed, ...(hasDataframe ? { ...STALE_DATAFRAME_PATCH, ...STORAGE_SEARCH_RESET_PATCH } : {}) }, key);
-        }
-      }
+      if (!state) return;
+      const refreshed = configDefaultsPatch(state, previous, sourceDefaults, { hasTypedPassword: hasTypedPassword(key), onlyChanged: true });
+      if (Object.keys(refreshed).length) patchModeState(refreshed, key);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sourceDefaults]);

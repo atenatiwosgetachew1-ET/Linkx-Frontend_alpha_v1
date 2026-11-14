@@ -215,6 +215,8 @@ Enforce minimum strength for the export password on the server, and document whe
 **Also:** confirm `end_session` returns `message: "success"` only when a stream was stopped. The frontend now treats any other reply (e.g. "No streaming found") as not stopped.
 
 ### B-20. Analysis task list (Tasks window)
+> **Superseded by H-2** in `docs/backend-handoff-analysis-results.md`.
+
 **Background:** the new Tasks window records every analysis run (Source window streams and quick-panel analyses), with status, parameters, log and timings. "Show results" now opens it, and it opens the run's Graph or Chart. Streams can keep running in the background after their Source window is closed. The list is held in the browser only, so it is lost on reload, and a reload also ends background streams (the page sends `end_session` on `pagehide`).
 
 **Request:**
@@ -226,6 +228,8 @@ Enforce minimum strength for the export password on the server, and document whe
 **Frontend behaviour until then:** tasks are in memory only. A background stream's backend source session stays open until its stream completes, fails or is terminated, and `/close_source_window` is sent then.
 
 ### B-21. Analysis verdict in the stream log
+> **Superseded by H-7** in `docs/backend-handoff-analysis-results.md`.
+
 **Background:** the Tasks window shows each run's verdict next to its actions: **Clean**, **Suspicious** with the flagged rules and their counts, **Analysing** while it runs, or **Not determined** when the run was stopped or failed. It reads the backend's per-batch summary lines (`src/features/tasks/lib/taskFlags.js`):
 `[Info] Incremental analysis for batch <id> flags: {'FUND_FLOW': 9, 'LATE_NIGHT_TX': 417, ...}` and the identical `[Info] Live analysis batch <n> flags: {...}`.
 The counts are treated as running totals (they only grow from batch to batch), so the latest value per rule is shown.
@@ -234,3 +238,6 @@ The counts are treated as running totals (they only grow from batch to batch), s
 1. The counts are cumulative for the run (not per batch). If they are per batch, the frontend must add them up instead.
 2. A run with no flags logs `flags: {}` (or all zeros), so it can be shown as **Clean** with certainty rather than "no flags reported".
 3. The summary line format is stable. Better still, include the final `flags` dict in the job result (`/jobs/:id`) and in B-20's job list.
+
+### B-22. Analysis tasks, evidence records and parent alert feedback
+Tracked as a separate handoff: `docs/backend-handoff-analysis-results.md` (H-1…H-9: one evidence record shape, persisted tasks, parent alert assignment, start analysis and send feedback for an alert, save runs as evidence, verdict and flags in job results, session limit, permissions). Frontend plan: `docs/analysis-results-plan.md`.

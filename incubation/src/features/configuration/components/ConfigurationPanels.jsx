@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 
 import { DraftInput, Field, ListTextarea, OptionField, Section } from '../../../shared/components/form/FormFields.jsx';
 import {
@@ -385,41 +385,12 @@ export function RulesPanel({
   canEditEntities,
   canWrite,
   knownBuiltinRules,
-  ruleUpload,
-  onRuleUploadChange,
-  onUploadRule,
-  onRemoveRule,
+  onManageRules,
   onNotice,
 }) {
   const isCdr = getActiveDomainKey(draft) === 'cdr';
   const ruleNames = useMemo(() => getRuleNames(draft), [draft]);
   const activeRule = normalizeActiveRuleValue(draft?.active_rule);
-  const [selectedRule, setSelectedRule] = useState('');
-  const [removeArmed, setRemoveArmed] = useState(false);
-
-  useEffect(() => {
-    setSelectedRule(activeRule || getRuleItemName(ruleNames[0]) || '');
-    setRemoveArmed(false);
-  }, [activeRule, ruleNames]);
-
-  useEffect(() => {
-    if (!removeArmed) return undefined;
-    const timer = setTimeout(() => setRemoveArmed(false), 6000);
-    return () => clearTimeout(timer);
-  }, [removeArmed]);
-
-  const handleRemove = () => {
-    if (!selectedRule) {
-      onNotice({ title: 'Rule removal', message: 'Select a rule before removing.', level: 'warning' });
-      return;
-    }
-    if (!removeArmed) {
-      setRemoveArmed(true);
-      return;
-    }
-    setRemoveArmed(false);
-    onRemoveRule(selectedRule);
-  };
 
   const columnMapping = useMemo(() => normalizeColumnMappingEntries(draft?.column_mapping, { preserveEmpty: true }), [draft?.column_mapping]);
   const setColumnMapping = (entries) => onChange('column_mapping', entries);
@@ -448,17 +419,17 @@ export function RulesPanel({
 
   return (
     <WriteGate canWrite={canWrite}>
-      <Section title="Analysis rules" description={`Loaded rules: ${ruleNames.length}`}>
+      <Section
+        title="Active rule"
+        description={`The rule this session applies by default. ${ruleNames.length} rule${ruleNames.length === 1 ? '' : 's'} loaded.`}
+        actions={<button type="button" className="settings_button" onClick={onManageRules} title="Upload or remove rules in the Libraries window">Manage rules</button>}
+      >
         <div className="config_window_option_row">
           <select
             className="settings_input"
+            aria-label="Active rule"
             value={activeRule}
-            onChange={(event) => {
-              const next = sanitizeText(event.target.value, { maxLength: 120 });
-              setSelectedRule(next);
-              setRemoveArmed(false);
-              onChange('active_rule', next);
-            }}
+            onChange={(event) => onChange('active_rule', sanitizeText(event.target.value, { maxLength: 120 }))}
           >
             {ruleNames.length === 0 ? <option value="">No rules loaded</option> : null}
             {ruleNames.map((ruleItem) => {
@@ -467,38 +438,8 @@ export function RulesPanel({
               return <option key={name} value={name}>{builtin && !/\(built-in\)$/i.test(name) ? `${name} (Built-in)` : name}</option>;
             })}
           </select>
-          <button type="button" className="settings_button is-danger" disabled={!canWrite || !selectedRule} onClick={handleRemove}>
-            {removeArmed ? 'Confirm remove' : 'Remove'}
-          </button>
         </div>
-        {removeArmed ? <p className="settings_hint">Click “Confirm remove” to permanently remove “{selectedRule}”.</p> : null}
-
-        <div className="config_window_grid">
-          <Field label="Upload rules (JSON)">
-            <input
-              key={ruleUpload.inputKey}
-              type="file"
-              accept=".json,application/json"
-              className="settings_input config_window_file"
-              disabled={!canWrite}
-              onChange={(event) => onRuleUploadChange({ file: event.target.files?.[0] || null })}
-            />
-          </Field>
-          <Field label="Rule name">
-            <input
-              className="settings_input"
-              value={ruleUpload.name}
-              placeholder="Rule name"
-              maxLength={120}
-              disabled={!canWrite}
-              onChange={(event) => onRuleUploadChange({ name: sanitizeText(event.target.value, { maxLength: 120 }) })}
-            />
-          </Field>
-        </div>
-        <div className="config_window_inline_actions">
-          <button type="button" className="settings_button" disabled={!canWrite || !ruleUpload.file} onClick={onUploadRule}>Upload rule</button>
-          <a className="settings_link" href={`${import.meta.env.BASE_URL}temp_rules/Linkx_Rules_Template.zip`} download>Get the latest rule template</a>
-        </div>
+        <p className="settings_hint">Rule sets are uploaded and removed in Libraries → Rules.</p>
       </Section>
 
       <Section

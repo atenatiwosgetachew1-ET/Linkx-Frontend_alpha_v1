@@ -27,6 +27,30 @@ export const STREAM_FINISHED_RE = /Injection finished for action/i;
 // copying the log into the task.
 const RELEASE_DELAY_MS = 400;
 
+// Follows a stream's backend log for its task, whether or not its Source
+// window body is mounted (docked mode mounts only the active tab): the first
+// backend line marks the task running, "Injection finished" completes it.
+// Stops by itself when the task ends.
+export const watchStreamTask = (windowId, taskId) => {
+  const check = () => {
+    if (!isTaskActive(getTask(taskId))) return;
+    const backend = getStreamLogLines(windowId).filter((line) => line.source === 'backend');
+    if (backend.some((line) => STREAM_FINISHED_RE.test(line.message))) {
+      markStreamEnded(windowId);
+      finishTask(taskId, TASK_STATUSES.COMPLETED);
+    } else if (backend.length) {
+      markTaskRunning(taskId);
+    }
+  };
+  const stopLog = subscribeStreamLog(windowId, check);
+  const stopEnd = onTaskEnded((task) => {
+    if (task.id !== taskId) return;
+    stopLog();
+    stopEnd();
+  });
+  return () => { stopLog(); stopEnd(); };
+};
+
 export const continueStreamInBackground = ({ windowId, taskId, apiFetch, release }) => {
   if (!isTaskActive(getTask(taskId))) return false;
   setTaskBackground(taskId, true);

@@ -71,6 +71,15 @@ const attachSocket = (socket) => {
   socket.on('connect', replugAll);
 };
 
+// The session socket is re-created when the token changes (sign-in, token
+// renewal). Running streams move to the new socket and are plugged again as
+// soon as it connects, so their live log does not freeze.
+export const bindStreamLogSocket = (socket) => {
+  if (!socket || boundSocket === socket) return;
+  attachSocket(socket);
+  if (socket.connected) replugAll();
+};
+
 export const plugStreamLog = (windowId, { socket, sessionId, filename }) => {
   if (!filename || !sessionId) return;
   attachSocket(socket);
@@ -123,4 +132,10 @@ export const disposeStreamLog = (windowId) => {
   const entry = streams.get(key);
   if (entry?.timer) clearTimeout(entry.timer);
   streams.delete(key);
+};
+
+// Signed out: window ids are reused by the next workspace, so no log may
+// survive into it.
+export const disposeAllStreamLogs = () => {
+  [...streams.keys()].forEach(disposeStreamLog);
 };

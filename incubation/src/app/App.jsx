@@ -8,6 +8,7 @@ import '../styles/features/configuration.css';
 import '../styles/features/settings.css';
 import '../styles/features/source.css';
 import '../styles/features/tasks.css';
+import '../styles/features/reports.css';
 import '../styles/features/window-controls.css';
 import { AuthProvider } from '../auth/AuthContext.jsx';
 import { useAuth } from '../auth/useAuth.js';
@@ -21,9 +22,7 @@ import { ThemeProvider, useTheme } from '../shared/theme/ThemeContext.jsx';
 import { appConfig } from './config.js';
 import TooltipLayer from '../shared/components/TooltipLayer.jsx';
 
-import WorkspaceLockOverlay from '../auth/WorkspaceLockOverlay.jsx';
-import { useIdleTimeout } from '../auth/useIdleTimeout.js';
-import { DEFAULT_IDLE_SETTINGS } from '../shared/session/idlePolicy.js';
+import SessionLifecycle from './SessionLifecycle.jsx';
 
 const VisualElementPicker = lazy(() => import('../shared/theme/VisualElementPicker.jsx'));
 
@@ -42,30 +41,8 @@ const loginLogo = import.meta.env.BASE_URL + 'site_images/Linkx square Icon (256
 
 function IncubationShell() {
   const { user, token, logout } = useAuth();
+  // Set by the idle timer and by any 423 answer (SessionProvider onLocked).
   const [isWorkspaceLocked, setIsWorkspaceLocked] = useState(false);
-  const [isUnlocking, setIsUnlocking] = useState(false);
-  // Follows the backend session policy once SessionProvider has loaded it.
-  const [idleSettings, setIdleSettings] = useState(DEFAULT_IDLE_SETTINGS);
-
-  useIdleTimeout({
-    enabled: Boolean(token) && idleSettings.enabled,
-    warningMs: idleSettings.warningMs,
-    lockMs: idleSettings.lockMs,
-    timeoutMs: idleSettings.timeoutMs,
-    isLocked: isWorkspaceLocked,
-    onWarn: () => {},
-    onLock: () => setIsWorkspaceLocked(true),
-    onTimeout: () => logout(),
-  });
-
-  const handleUnlock = () => {
-    setIsUnlocking(true);
-    setTimeout(() => {
-      setIsWorkspaceLocked(false);
-      setIsUnlocking(false);
-    }, 350);
-  };
-
 
   return (
     <SessionProvider
@@ -73,21 +50,13 @@ function IncubationShell() {
       token={token}
       onLogout={logout}
       onLocked={() => setIsWorkspaceLocked(true)}
-      onIdleSettingsChange={setIdleSettings}
     >
     <WorkspaceProvider>
-      <SessionWorkspaceFrame user={user} token={token} onSignOut={logout} />
-      {isWorkspaceLocked && (
-        <WorkspaceLockOverlay
-          user={user}
-          isUnlocking={isUnlocking}
-          lockMinutes={Math.max(1, Math.round(idleSettings.lockMs / 60000))}
-          logoutMinutes={Math.max(1, Math.round(idleSettings.timeoutMs / 60000))}
-          onUnlock={handleUnlock}
-          onLogout={logout}
-          logoSrc={loginLogo}
-        />
-      )}
+      <SessionLifecycle isLocked={isWorkspaceLocked} setLocked={setIsWorkspaceLocked} loginLogo={loginLogo}>
+        {(performLogout) => (
+          <SessionWorkspaceFrame user={user} token={token} onSignOut={() => performLogout('user_logout')} />
+        )}
+      </SessionLifecycle>
     </WorkspaceProvider>
     </SessionProvider>
   );

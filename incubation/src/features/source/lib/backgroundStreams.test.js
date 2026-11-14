@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { TASK_STATUSES, createTask, getTask, resetTasks, terminateTask } from '../../tasks/lib/taskRegistry.js';
 import { getActiveStream, markStreamActive, markStreamEnded } from './activeStreams.js';
-import { continueStreamInBackground } from './backgroundStreams.js';
+import { continueStreamInBackground, watchStreamTask } from './backgroundStreams.js';
 import { disposeStreamLog } from './streamLogs.js';
 
 // Backend lines reach the log through the socket; a fake socket feeds them.
@@ -62,5 +62,26 @@ describe('continueStreamInBackground', () => {
       body: expect.objectContaining({ id: 'end_session', session_id: 's1' }),
     }));
     expect(getTask(taskId).status).toBe(TASK_STATUSES.TERMINATED);
+  });
+});
+
+describe('watchStreamTask', () => {
+  it('completes a stream task without its Source window mounted', async () => {
+    vi.useFakeTimers();
+    const { plugStreamLog } = await import('./streamLogs.js');
+    const socket = makeSocket();
+    plugStreamLog('w9', { socket, sessionId: 's1', filename: 'ingest.log' });
+    markStreamActive('w9', { sourceSessionId: 's1' });
+    const taskId = createTask({ origin: 'source', title: 'Link Analysis', windowId: 'w9' });
+    watchStreamTask('w9', taskId);
+
+    socket.push('[10:00:00] [Info] - batch 1 loaded\n');
+    vi.advanceTimersByTime(250);
+    expect(getTask(taskId).status).toBe(TASK_STATUSES.RUNNING);
+
+    socket.push('[10:05:00] [Info] - Injection finished for action Link Analysis\n');
+    vi.advanceTimersByTime(250);
+    expect(getTask(taskId).status).toBe(TASK_STATUSES.COMPLETED);
+    expect(getActiveStream('w9')).toBeFalsy();
   });
 });

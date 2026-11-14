@@ -770,6 +770,7 @@
    this lived on .tasks_figures itself, which a container query cannot
    style, so the row never went to six.) */
 .tasks_figures {
+	flex: none;
 	display: grid;
 	grid-template-columns: minmax(0, 1fr);
 	overflow: hidden;
@@ -908,17 +909,16 @@
 .tasks_props_toggle {
 	display: flex;
 	align-items: center;
-	gap: 6px;
+	gap: 8px;
 	width: 100%;
 	min-width: 0;
-	min-height: 34px;
-	padding: 0 12px;
+	min-height: 40px;
+	padding: 0 10px 0 8px;
 	border: 0;
 	background: transparent;
 	color: var(--tasks-text);
 	font: inherit;
 	font-size: var(--fs-xs, 11px);
-	font-weight: 700;
 	text-align: left;
 	cursor: pointer;
 }
@@ -932,6 +932,92 @@
 	outline-offset: -2px;
 }
 
+.tasks_props_icon {
+	display: inline-grid;
+	flex: none;
+	place-items: center;
+	width: 24px;
+	height: 24px;
+	border-radius: 6px;
+	background: color-mix(in srgb, var(--tasks-heading-icon) 15%, transparent);
+	color: var(--tasks-heading-icon);
+}
+
+.tasks_props_icon .tasks_window_icon {
+	width: 13px;
+	height: 13px;
+}
+
+.tasks_props_title {
+	flex: none;
+	font-size: 12px;
+	font-weight: 700;
+	white-space: nowrap;
+}
+
+/* Collapsed: a one-line summary of the run. */
+.tasks_props_peek {
+	display: flex;
+	flex: 1 1 auto;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+	margin-left: 4px;
+	padding-left: 10px;
+	overflow: hidden;
+	border-left: 1px solid var(--tasks-hairline);
+	white-space: nowrap;
+}
+
+.tasks_props_peek_action {
+	flex: none;
+	max-width: 45%;
+	height: 20px;
+	padding: 0 8px;
+	overflow: hidden;
+	border-radius: var(--radius-pill, 999px);
+	background: color-mix(in srgb, var(--tasks-heading-icon) 14%, transparent);
+	color: var(--tasks-text);
+	font-size: 10.5px;
+	font-weight: 700;
+	line-height: 20px;
+	text-overflow: ellipsis;
+}
+
+.tasks_props_peek_text {
+	min-width: 0;
+	overflow: hidden;
+	color: var(--tasks-muted-text);
+	font-weight: 500;
+	text-overflow: ellipsis;
+}
+
+.tasks_props_peek_meta {
+	flex: none;
+	color: var(--tasks-muted-text);
+	font-variant-numeric: tabular-nums;
+	font-weight: 600;
+}
+
+.tasks_props_peek_meta::before {
+	content: '·';
+	margin-right: 8px;
+	opacity: 0.6;
+}
+
+.tasks_props_peek_meta:first-child::before {
+	display: none;
+}
+
+.tasks_props_state {
+	flex: none;
+	margin-left: auto;
+	color: var(--tasks-muted-text);
+	font-size: 10.5px;
+	font-weight: 600;
+	white-space: nowrap;
+}
+
 .tasks_props_chevron {
 	width: 13px;
 	height: 13px;
@@ -942,16 +1028,6 @@
 
 .tasks_props.is-open .tasks_props_chevron {
 	transform: rotate(90deg);
-}
-
-.tasks_props_peek {
-	min-width: 0;
-	margin-left: 4px;
-	overflow: hidden;
-	color: var(--tasks-muted-text);
-	font-weight: 500;
-	text-overflow: ellipsis;
-	white-space: nowrap;
 }
 
 .tasks_props_body {

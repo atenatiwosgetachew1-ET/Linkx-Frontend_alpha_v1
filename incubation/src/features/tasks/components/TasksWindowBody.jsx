@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 
 import { useWorkspace } from '../../../workspace/hooks/useWorkspace.js';
+import { useCan } from '../../../auth/useCan.js';
+import { SOURCE_PERMISSIONS } from '../../../auth/permissions.js';
 import { WORKSPACE_WINDOW_TYPES } from '../../../workspace/state/workspaceTypes.js';
 import { formatStreamLog } from '../../source/lib/sourceModel.js';
 import LogLines from '../../../shared/logs/LogLines.jsx';
@@ -52,6 +54,8 @@ const ICONS = {
   copy: ['M9 9h11v11H9z', 'M5 15H4V4h11v1'],
   check: 'm5 12.5 4.5 4.5L19 7',
   chevron: 'm9 6 6 6-6 6',
+  // Clipboard with lines: the run's details.
+  details: ['M9 4h6a1 1 0 0 1 1 1v1H8V5a1 1 0 0 1 1-1Z', 'M8 5H6.5A1.5 1.5 0 0 0 5 6.5v13A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5v-13A1.5 1.5 0 0 0 17.5 5H16', 'M8.5 11h7M8.5 14.5h7M8.5 18h4'],
   timer: ['M12 8v5l3 2', 'M10 2h4', 'M12 22a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z'],
   calendar: ['M4 6.5A1.5 1.5 0 0 1 5.5 5h13A1.5 1.5 0 0 1 20 6.5v12a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18.5v-12Z', 'M4 10h16M8 3v4M16 3v4'],
   realtime: 'M13 3 5 13.5h6L10 21l8-10.5h-6L13 3Z',
@@ -251,34 +255,6 @@ function TaskSummary({ task }) {
 
   return (
     <div className="tasks_summary">
-      <div className={`tasks_figures${frame ? ' has-frame' : ''}`}>
-        <section className="tasks_figures_group" aria-label="Run">
-          <dl className="tasks_figures_row">
-            <Figure icon={ICONS.calendar} label="Started" value={formatClock(task.startedAt)} hint={formatDateTime(task.startedAt).slice(0, 10)} />
-            <Figure
-              icon={task.mode === 'realtime' ? ICONS.realtime : ICONS.batch}
-              label="Mode"
-              value={modeLabel}
-              hint={task.mode === 'realtime' ? 'Continuous stream' : task.mode ? 'One-off ingestion' : ''}
-            />
-          </dl>
-        </section>
-        {frame ? (
-          <section className="tasks_figures_group" aria-label="Dataframe figures">
-              <dl className="tasks_figures_row" aria-label="Dataframe">
-              <Figure icon={ICONS.rows} label="Rows" value={formatCount(frame.totalRows)} />
-              <Figure
-                icon={ICONS.columns}
-                label="Columns"
-                value={formatCount(frame.totalColumns ?? columnNames(frame).length)}
-                hint={columnNames(frame).join(', ') || 'Fields'}
-              />
-              <Figure icon={ICONS.tool} label="Tool" value={frame.tool || '—'} />
-            </dl>
-          </section>
-        ) : null}
-      </div>
-
       <section className={`tasks_props${detailsOpen ? ' is-open' : ''}`} aria-label="Run details">
         <h4 className="tasks_props_header">
           <button
@@ -288,11 +264,19 @@ function TaskSummary({ task }) {
             aria-controls={`tasks-props-${task.id}`}
             onClick={toggleDetails}
           >
-            <Icon d={ICONS.chevron} className="tasks_props_chevron" />
-            Run details
+            <span className="tasks_props_icon"><Icon d={ICONS.details} /></span>
+            <span className="tasks_props_title">Run details</span>
             {!detailsOpen && (
-              <span className="tasks_props_peek">{[task.action, task.input].filter(Boolean).join(' · ')}</span>
+              <span className="tasks_props_peek">
+                {task.action ? <span className="tasks_props_peek_action">{task.action}</span> : null}
+                {task.input ? <span className="tasks_props_peek_text" title={task.input}>{task.input}</span> : null}
+                {frame?.totalRows != null && String(frame.totalRows).trim() !== '' ? (
+                  <span className="tasks_props_peek_meta">{formatCount(frame.totalRows)} rows</span>
+                ) : null}
+              </span>
             )}
+            <span className="tasks_props_state">{detailsOpen ? 'Hide' : 'Show'}</span>
+            <Icon d={ICONS.chevron} className="tasks_props_chevron" />
           </button>
         </h4>
         {detailsOpen && (
@@ -329,6 +313,33 @@ function TaskSummary({ task }) {
                   {task.relationship ? `Relationship ${task.relationship}` : 'No column mapping for this action'}
                 </span>
               )}
+            </div>
+            <div className={`tasks_figures${frame ? ' has-frame' : ''}`}>
+              <section className="tasks_figures_group" aria-label="Run">
+                <dl className="tasks_figures_row">
+                  <Figure icon={ICONS.calendar} label="Started" value={formatClock(task.startedAt)} hint={formatDateTime(task.startedAt).slice(0, 10)} />
+                  <Figure
+                    icon={task.mode === 'realtime' ? ICONS.realtime : ICONS.batch}
+                    label="Mode"
+                    value={modeLabel}
+                    hint={task.mode === 'realtime' ? 'Continuous stream' : task.mode ? 'One-off ingestion' : ''}
+                  />
+                </dl>
+              </section>
+              {frame ? (
+                <section className="tasks_figures_group" aria-label="Dataframe figures">
+                    <dl className="tasks_figures_row" aria-label="Dataframe">
+                    <Figure icon={ICONS.rows} label="Rows" value={formatCount(frame.totalRows)} />
+                    <Figure
+                      icon={ICONS.columns}
+                      label="Columns"
+                      value={formatCount(frame.totalColumns ?? columnNames(frame).length)}
+                      hint={columnNames(frame).join(', ') || 'Fields'}
+                    />
+                    <Figure icon={ICONS.tool} label="Tool" value={frame.tool || '—'} />
+                  </dl>
+                </section>
+              ) : null}
             </div>
             <dl className="tasks_props_tiles">
               <PropTile icon={ICONS.origin} label="Origin">
@@ -553,6 +564,8 @@ function TaskRow({ task, now, isSelected, onSelect }) {
 }
 
 function TaskDetail({ task, now, windows, workspace }) {
+  // Production opens Graph windows only with graph:create (launcher gate).
+  const canCreateGraph = useCan()(SOURCE_PERMISSIONS.GRAPH_CREATE);
   const lines = useTaskLog(task);
   // Remounted per task (key), so this state never leaks between tasks.
   const [isTerminating, setIsTerminating] = useState(false);
@@ -641,8 +654,8 @@ function TaskDetail({ task, now, windows, workspace }) {
           <button
             type="button"
             className="tasks_action is-primary linkx_tooltip_anchor"
-            disabled={!task.hasResults}
-            data-tooltip={resultsHint || 'Open the analysis graph'}
+            disabled={!task.hasResults || !canCreateGraph}
+            data-tooltip={!canCreateGraph ? 'You need graph:create to open graphs.' : (resultsHint || 'Open the analysis graph')}
             onClick={() => openResultWindow(WORKSPACE_WINDOW_TYPES.GRAPH)}
           >
             <Icon d={ICONS.graph} /> Show graph
