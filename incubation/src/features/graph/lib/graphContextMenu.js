@@ -62,6 +62,23 @@ export const AVAILABLE_ACTIONS = new Set([
   // G2.3 analysis tools
   'path_finder', 'find_all_paths', 'link_traversal', 'cut_points', 'clear_path',
   'apply_community_detection', 'visual_degree', 'visual_property', 'filter_elements', 'reset_node_styles',
+  // G2.4 alerts
+  'toggle_alert_rules', 'configure_alert_rules', 'run_alert_scan',
+  // G2.4 pinned evidence
+  'pin_evidence', 'unpin_evidence', 'show_pinned_evidence', 'clear_pinned_evidence',
+  // G2.4 saved views
+  'save_view', 'load_view', 'remove_saved_views',
+  // G3.1 graph editing
+  'add_node', 'delete', 'link', 'unlink', 'unlinks', 'copy', 'paste', 'bring_to_front',
+  // G3.3 annotations
+  'add_label', 'add_comment_box', 'add_text_block', 'add_event_frame', 'add_theme_line', 'add_ole_object',
+  // G3.4 group / merge
+  'group', 'ungroup', 'merge_nodes',
+  // G3.5 edge bundling
+  'toggle_edge_bundling', 'configure_edge_bundling',
+  // G3.6 selection tools (after i2 Analyst's Notebook; not in production)
+  'select_all', 'invert_selection', 'select_by_type', 'select_by_property', 'select_link_ends', 'show_hidden',
+  'select_linked', 'select_same_type', 'hide_selected',
 ]);
 
 const item = (action, label, { disabled = false } = {}) => {
@@ -91,21 +108,24 @@ export const edgeMenuHeader = (edge = {}, { isCdr = false } = {}) => ({
 const CANVAS_GROUPS = [
   [null, ['paste']],
   ['Add', ['add_node', 'add_label', 'add_comment_box', 'add_text_block', 'add_event_frame', 'add_theme_line', 'add_ole_object']],
+  ['Select', ['select_all', 'invert_selection', 'select_by_type', 'select_by_property', 'select_link_ends', 'show_hidden']],
   ['Analyze', ['visual_degree', 'visual_property', 'filter_elements', 'apply_community_detection', 'link_traversal', 'cut_points', 'reset_node_styles']],
   [null, ['clear_path']],
-  ['Views', ['save_view', 'load_view']],
+  ['Views', ['save_view', 'load_view', 'remove_saved_views']],
   ['Edge Bundling', ['toggle_edge_bundling', 'configure_edge_bundling']],
   ['Alert Rules', ['toggle_alert_rules', 'configure_alert_rules', 'run_alert_scan']],
   ['Pinned Evidence', ['show_pinned_evidence', 'clear_pinned_evidence']],
 ];
 const NODE_GROUPS = [
   [null, ['expand_neighborhood', 'collapse_neighborhood']],
+  ['Select', ['select_linked', 'select_same_type', 'hide_selected']],
   ['Edit', ['copy', 'delete', 'ungroup', 'unlink', 'bring_to_front']],
   ['Evidence', ['pin_evidence', 'unpin_evidence']],
   ['Analyze', ['link_traversal', 'cut_points']],
   [null, ['clear_path']],
 ];
 const SELECTION_GROUPS = [
+  ['Select', ['select_linked', 'select_same_type', 'hide_selected']],
   ['Edit', ['copy', 'link', 'unlinks', 'group', 'merge_nodes', 'add_theme_line']],
   ['Paths', ['path_finder', 'find_all_paths']],
   ['Evidence', ['pin_evidence', 'unpin_evidence']],
@@ -155,6 +175,16 @@ export const contextMenuItems = ({
   selectionFullyLinked = false,
   pathHighlighted = false,
   nodeStylesChanged = false,
+  // Pinned evidence: how many are pinned on the device, and whether the
+  // targets (node or selection) include unpinned / pinned items.
+  pinnedCount = 0,
+  canPin = true,
+  canUnpin = true,
+  // Selection tools: whether links are selected, how many nodes this
+  // window has hidden in the current view, whether anything is drawn.
+  edgeSelectionCount = 0,
+  hiddenCount = 0,
+  drawnCount = 0,
 } = {}) => {
   if (kind === 'edge') return { header: edgeMenuHeader(edge || {}, { isCdr }), items: [] };
 
@@ -169,20 +199,31 @@ export const contextMenuItems = ({
       item('add_event_frame', 'Event Frame'),
       item('add_theme_line', 'Theme Line', { disabled: selection.length < 2 }),
       item('add_ole_object', 'OLE Object'),
+      item('select_all', 'Select All', { disabled: drawnCount === 0 }),
+      item('invert_selection', 'Invert Selection', { disabled: drawnCount === 0 }),
+      item('select_by_type', 'Select by Type…', { disabled: drawnCount === 0 }),
+      item('select_by_property', 'Select by Property…', { disabled: drawnCount === 0 }),
+      item('select_link_ends', 'Select Link Ends', { disabled: edgeSelectionCount === 0 }),
+      item('show_hidden', hiddenCount ? `Show Hidden Nodes (${hiddenCount})` : 'Show Hidden Nodes', { disabled: hiddenCount === 0 }),
       item('visual_degree', 'Visualize by Degree'),
       item('visual_property', 'Visualize by Property'),
       item('filter_elements', 'Filter Elements'),
       item('save_view', 'Save View'),
     );
-    if (savedViewCount > 0) items.push(item('load_view', 'Load View'));
+    if (savedViewCount > 0) {
+      items.push(item('load_view', 'Load View'));
+      // Production offered removal inside Load View's list.
+      items.push(item('remove_saved_views', 'Remove Saved Views'));
+    }
     items.push(
       item('toggle_edge_bundling', `${edgeBundling ? 'Disable' : 'Enable'} Edge Bundling`),
       item('configure_edge_bundling', 'Configure Edge Bundling'),
       item('toggle_alert_rules', `${alertRules ? 'Disable' : 'Enable'} Alert Rules`),
       item('configure_alert_rules', 'Configure Alert Rules'),
-      item('run_alert_scan', 'Run Alert Scan'),
-      item('show_pinned_evidence', 'Show Pinned Evidence'),
-      item('clear_pinned_evidence', 'Clear Pinned Evidence'),
+      // Nothing to scan while the rules are off (production ran an empty scan).
+      item('run_alert_scan', 'Run Alert Scan', { disabled: !alertRules }),
+      item('show_pinned_evidence', 'Show Pinned Evidence', { disabled: pinnedCount === 0 }),
+      item('clear_pinned_evidence', 'Clear Pinned Evidence', { disabled: pinnedCount === 0 }),
       item('apply_community_detection', 'Detect Communities'),
       item('link_traversal', 'Link Traversal (5 degrees)', { disabled: selection.length === 0 }),
       item('cut_points', 'Cut Points'),
@@ -194,6 +235,11 @@ export const contextMenuItems = ({
   }
 
   // Node: the right-clicked node is part of `selection` (GraphCanvas selects it).
+  items.push(
+    item('select_linked', 'Select Linked'),
+    item('select_same_type', 'Select Same Type'),
+    item('hide_selected', selection.length > 1 ? 'Hide Selected Nodes' : 'Hide Node'),
+  );
   if (selection.length <= 1) {
     items.push(item('copy', 'Copy'), item('delete', 'Delete Node'));
     if (String(nodeId ?? selection[0]).startsWith('Group')) items.push(item('ungroup', 'Ungroup'));
@@ -202,8 +248,8 @@ export const contextMenuItems = ({
       item('expand_neighborhood', 'Expand Neighborhood'),
       item('collapse_neighborhood', 'Collapse Neighborhood'),
       item('bring_to_front', 'Bring to Front'),
-      item('pin_evidence', 'Pin Evidence'),
-      item('unpin_evidence', 'Unpin Evidence'),
+      item('pin_evidence', 'Pin Evidence', { disabled: !canPin }),
+      item('unpin_evidence', 'Unpin Evidence', { disabled: !canUnpin }),
     );
   } else {
     items.push(
@@ -216,8 +262,8 @@ export const contextMenuItems = ({
     if (selection.length === 2) items.push(item('path_finder', 'Find Shortest Path'));
     items.push(
       item('find_all_paths', 'Find All Paths', { disabled: selection.length !== 2 }),
-      item('pin_evidence', 'Pin Evidence'),
-      item('unpin_evidence', 'Unpin Evidence'),
+      item('pin_evidence', 'Pin Evidence', { disabled: !canPin }),
+      item('unpin_evidence', 'Unpin Evidence', { disabled: !canUnpin }),
     );
   }
   items.push(item('link_traversal', 'Link Traversal (5 degrees)'), item('cut_points', 'Cut Points'));

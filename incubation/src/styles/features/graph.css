@@ -89,6 +89,68 @@
 	border-color: var(--graph-accent);
 }
 
+.graph_window_icon_button.is-active {
+	border-color: var(--graph-accent);
+	color: var(--graph-accent);
+}
+
+/* Toolbar ▸ On-graph components (styled like the right-click menu). */
+.graph_overlay_menu {
+	position: relative;
+	display: inline-flex;
+}
+
+.graph_overlay_menu_list {
+	position: absolute;
+	top: calc(100% + 4px);
+	right: 0;
+	z-index: 6;
+	display: flex;
+	flex-direction: column;
+	min-width: 180px;
+	padding: 4px;
+	border: 1px solid var(--graph-border);
+	border-radius: 6px;
+	background: var(--graph-toolbar-bg);
+	color: var(--graph-text);
+	font-size: 12px;
+}
+
+.graph_overlay_menu_list strong {
+	padding: 4px 8px 6px;
+	color: var(--graph-muted-text);
+	font-size: 10.5px;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+}
+
+.graph_overlay_menu_item {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 5px 8px;
+	border: 0;
+	border-radius: 4px;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+
+.graph_overlay_menu_item:hover,
+.graph_overlay_menu_item:focus-visible {
+	background: color-mix(in srgb, var(--graph-accent) 12%, transparent);
+	outline: none;
+}
+
+.graph_overlay_menu_check {
+	width: 12px;
+	color: var(--graph-accent);
+	font-weight: 700;
+}
+
 .graph_window_icon_button:disabled {
 	opacity: 0.45;
 	cursor: default;
@@ -630,4 +692,812 @@
 .graph_dialog_actions .graph_window_button.is-primary {
 	margin-top: 0;
 	padding: 3px 12px;
+}
+
+/* Node / edge adjust box (production #nodeAdjustBox / #edgeAdjustBox):
+   beside the clicked element, inside the canvas. */
+.graph_adjust_box {
+	position: absolute;
+	z-index: 3;
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	width: 280px;
+	padding: 8px;
+	border: 1px solid var(--graph-border);
+	border-radius: 6px;
+	background: var(--graph-toolbar-bg);
+	color: var(--graph-text);
+	font-size: 11px;
+	box-sizing: border-box;
+}
+
+.graph_adjust_header {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding-bottom: 6px;
+	border-bottom: 1px solid var(--graph-border);
+}
+
+.graph_adjust_label {
+	flex: 1 1 auto;
+	min-width: 0;
+	height: 24px;
+	padding: 0 6px;
+	border: 1px solid var(--graph-border);
+	border-radius: 4px;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	font-size: 12px;
+}
+
+.graph_adjust_close {
+	flex: none;
+	width: 18px;
+	height: 18px;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	color: var(--graph-muted-text);
+	font-size: 15px;
+	line-height: 1;
+	cursor: pointer;
+}
+
+.graph_adjust_close:hover {
+	color: var(--graph-text);
+}
+
+.graph_adjust_row {
+	display: flex;
+	align-items: stretch;
+	gap: 6px;
+}
+
+.graph_adjust_column {
+	display: flex;
+	flex: 1 1 0;
+	flex-direction: column;
+	justify-content: space-around;
+	gap: 4px;
+	min-width: 0;
+}
+
+.graph_adjust_icon {
+	flex: none;
+	display: grid;
+	place-items: center;
+	width: 44px;
+	height: 44px;
+	padding: 4px;
+	border: 1px dashed var(--graph-border);
+	border-radius: 4px;
+	background: transparent;
+	color: var(--graph-muted-text);
+	font-size: 18px;
+	cursor: pointer;
+}
+
+.graph_adjust_icon:hover,
+.graph_adjust_icon.is-open {
+	border-color: var(--graph-accent);
+}
+
+.graph_adjust_icon img {
+	width: 100%;
+	height: 100%;
+	object-fit: contain;
+}
+
+.graph_adjust_note {
+	flex: 1 1 auto;
+	min-width: 0;
+	height: 44px;
+	padding: 4px 6px;
+	border: 1px solid var(--graph-border);
+	border-radius: 4px;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	resize: none;
+	box-sizing: border-box;
+}
+
+.graph_adjust_label:focus,
+.graph_adjust_note:focus,
+.graph_adjust_box select:focus,
+.graph_adjust_width input:focus {
+	border-color: var(--graph-accent);
+	outline: none;
+}
+
+.graph_adjust_album {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(28px, 1fr));
+	gap: 4px;
+	max-height: 132px;
+	padding: 4px;
+	overflow-y: auto;
+	border: 1px solid var(--graph-border);
+	border-radius: 4px;
+	scrollbar-width: thin;
+}
+
+.graph_adjust_album_icon {
+	display: grid;
+	place-items: center;
+	height: 28px;
+	padding: 3px;
+	border: 1px solid transparent;
+	border-radius: 4px;
+	background: transparent;
+	color: var(--graph-text);
+	cursor: pointer;
+}
+
+.graph_adjust_album_icon:hover {
+	border-color: var(--graph-accent);
+}
+
+.graph_adjust_album_icon img,
+.graph_adjust_album_icon svg {
+	width: 100%;
+	height: 100%;
+	object-fit: contain;
+}
+
+.graph_adjust_album_icon svg {
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 1.8;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+
+.graph_adjust_color {
+	flex: none;
+	width: 44px;
+	height: 44px;
+	padding: 0;
+	border: 1px solid var(--graph-border);
+	border-radius: 4px;
+	background: transparent;
+	cursor: pointer;
+}
+
+.graph_adjust_swatches,
+.graph_adjust_sizes {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 3px;
+}
+
+.graph_adjust_swatch {
+	width: 14px;
+	height: 10px;
+	padding: 0;
+	border: 1px solid var(--graph-border);
+	border-radius: 2px;
+	cursor: pointer;
+}
+
+.graph_adjust_size {
+	padding: 0;
+	border: 1.5px solid var(--graph-muted-text);
+	border-radius: 50%;
+	background: transparent;
+	cursor: pointer;
+}
+
+.graph_adjust_swatch:hover,
+.graph_adjust_size:hover {
+	border-color: var(--graph-accent);
+}
+
+.graph_adjust_box select,
+.graph_adjust_width input {
+	width: 100%;
+	height: 20px;
+	padding: 0 4px;
+	border: 1px solid var(--graph-border);
+	border-radius: 4px;
+	background: var(--graph-toolbar-bg);
+	color: inherit;
+	font: inherit;
+	font-size: 10.5px;
+	box-sizing: border-box;
+}
+
+.graph_adjust_width {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+}
+
+.graph_adjust_width span {
+	color: var(--graph-muted-text);
+}
+
+/* Annotation boxes (production .annotationAdjustBox): labelled rows. */
+.graph_adjust_title {
+	flex: 1 1 auto;
+	font-size: 12px;
+	font-weight: 600;
+}
+
+.graph_adjust_field {
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+}
+
+.graph_adjust_field > span {
+	color: var(--graph-muted-text);
+	font-size: 10.5px;
+}
+
+.graph_adjust_field input[type='text'],
+.graph_adjust_field input[type='datetime-local'],
+.graph_adjust_field input[type='file'],
+.graph_adjust_field textarea,
+.graph_adjust_inline select,
+.graph_adjust_inline input[type='number'] {
+	width: 100%;
+	min-width: 0;
+	height: 24px;
+	padding: 0 6px;
+	border: 1px solid var(--graph-border);
+	border-radius: 4px;
+	background: var(--graph-toolbar-bg);
+	color: inherit;
+	font: inherit;
+	box-sizing: border-box;
+}
+
+.graph_adjust_field input[type='file'] {
+	padding: 2px 4px;
+}
+
+.graph_adjust_field textarea {
+	height: 64px;
+	padding: 4px 6px;
+	resize: vertical;
+}
+
+.graph_adjust_field input:focus,
+.graph_adjust_field textarea:focus,
+.graph_adjust_inline select:focus {
+	border-color: var(--graph-accent);
+	outline: none;
+}
+
+.graph_adjust_inline {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+}
+
+.graph_adjust_inline .graph_adjust_color {
+	width: 28px;
+	height: 24px;
+}
+
+.graph_adjust_inline input[type='number'] {
+	flex: 0 0 56px;
+}
+
+.graph_adjust_checks {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 3px 8px;
+}
+
+.graph_adjust_checks label {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+}
+
+.graph_adjust_preview img,
+.graph_adjust_preview video,
+.graph_adjust_preview audio {
+	display: block;
+	width: 100%;
+	max-height: 140px;
+	border-radius: 4px;
+	object-fit: contain;
+}
+
+.graph_adjust_buttons {
+	display: flex;
+	justify-content: flex-end;
+	gap: 6px;
+}
+
+/* Zoom to area (after i2 Analyst's Notebook): a layer over the canvas
+   while the tool is on; the dragged box; a hint at the top. Below the
+   overlay cards and the minimap (z-index 2), so they stay usable. */
+.graph_zoom_box_layer {
+	position: absolute;
+	inset: 0;
+	z-index: 1;
+	cursor: crosshair;
+	touch-action: none;
+	user-select: none;
+}
+
+.graph_zoom_box {
+	position: absolute;
+	border: 1px dashed var(--graph-accent);
+	background: color-mix(in srgb, var(--graph-accent) 10%, transparent);
+	pointer-events: none;
+}
+
+.graph_zoom_box_hint {
+	position: absolute;
+	top: 8px;
+	left: 50%;
+	transform: translateX(-50%);
+	padding: 3px 8px;
+	border: 1px solid var(--graph-border);
+	border-radius: 4px;
+	background: var(--graph-toolbar-bg);
+	color: var(--graph-muted-text);
+	font-size: 11px;
+	white-space: nowrap;
+	pointer-events: none;
+}
+
+/* Minimap (not in production): top-right of the canvas while part of the
+   graph is outside the view; the visible part as a rectangle. */
+.graph_minimap {
+	position: absolute;
+	top: 0;
+	right: 0;
+	z-index: 2;
+	border: 1px solid var(--graph-border);
+	border-radius: 6px;
+	background: color-mix(in srgb, var(--graph-toolbar-bg) 92%, transparent);
+	overflow: hidden;
+	box-sizing: content-box;
+}
+
+.graph_minimap_surface {
+	position: relative;
+	cursor: crosshair;
+	touch-action: none;
+}
+
+.graph_minimap_surface canvas {
+	display: block;
+}
+
+.graph_minimap_view {
+	position: absolute;
+	top: 0;
+	left: 0;
+	border-radius: 2px;
+	background: color-mix(in srgb, var(--graph-accent) 18%, transparent);
+	pointer-events: none;
+}
+
+/* Overlay cards (GraphOverlayPanel: Graph Alerts, Pinned Evidence), after
+   production's #alerts-overlay. They stack bottom-right in a canvas-sized dock;
+   a dragged card leaves the stack (.is-moved) and is placed by left / top. */
+.graph_overlay_dock {
+	position: absolute;
+	inset: 0;
+	z-index: 2;
+	display: flex;
+	flex-direction: column;
+	justify-content: flex-end;
+	align-items: flex-end;
+	gap: 6px;
+	padding: 0;
+	overflow: hidden;
+	pointer-events: none;
+	box-sizing: border-box;
+}
+
+.graph_overlay_panel {
+	position: relative;
+	display: flex;
+	flex: 0 1 auto;
+	flex-direction: column;
+	width: 260px;
+	height: 360px;
+	min-width: 210px;
+	min-height: 130px;
+	max-width: 100%;
+	max-height: 85%;
+	overflow: hidden;
+	resize: both;
+	border: 1px solid var(--graph-border);
+	border-radius: 6px;
+	background: var(--graph-toolbar-bg);
+	color: var(--graph-text);
+	box-shadow: none;
+	font-size: 11px;
+	line-height: 1.35;
+	box-sizing: border-box;
+	pointer-events: auto;
+	z-index: 1;
+}
+
+/* The card last clicked or focused is drawn above the other. */
+.graph_overlay_panel.is-front {
+	z-index: 2;
+}
+
+.graph_overlay_panel.is-moved {
+	position: absolute;
+	max-width: 100%;
+}
+
+/* Folded to its header. !important wins over the size a resize writes inline. */
+.graph_overlay_panel.is-collapsed {
+	flex-shrink: 0;
+	height: auto !important;
+	min-height: 0;
+	resize: none;
+}
+
+.graph_overlay_header {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 6px;
+	padding: 6px 8px;
+	border-bottom: 1px solid var(--graph-border);
+	cursor: move;
+	user-select: none;
+	touch-action: none;
+}
+
+.graph_overlay_panel.is-collapsed .graph_overlay_header {
+	border-bottom: 0;
+}
+
+.graph_overlay_heading {
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+	min-width: 0;
+}
+
+.graph_overlay_heading strong {
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	font-size: 12px;
+}
+
+.graph_overlay_heading svg {
+	width: 13px;
+	height: 13px;
+	flex-shrink: 0;
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 1.6;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+
+.graph_overlay_heading span {
+	color: var(--graph-muted-text);
+	font-size: 10px;
+}
+
+.graph_overlay_header_actions {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+}
+
+.graph_overlay_fold,
+.graph_overlay_close {
+	display: inline-grid;
+	place-items: center;
+	width: 18px;
+	height: 18px;
+	padding: 0;
+	border: 0;
+	background: none;
+	color: var(--graph-muted-text);
+	font-size: 16px;
+	line-height: 1;
+	cursor: pointer;
+}
+
+.graph_overlay_fold:hover,
+.graph_overlay_close:hover {
+	color: var(--graph-text);
+}
+
+.graph_overlay_fold svg {
+	width: 14px;
+	height: 14px;
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 2;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+
+.graph_overlay_name {
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	padding: 4px 8px;
+	border-bottom: 1px solid var(--graph-border);
+}
+
+.graph_overlay_name span {
+	color: var(--graph-muted-text);
+	font-size: 10px;
+	white-space: nowrap;
+}
+
+.graph_overlay_name select {
+	flex: 1 1 auto;
+	min-width: 0;
+	height: 20px;
+	padding: 0 4px;
+	border: 1px solid var(--graph-border);
+	border-radius: 5px;
+	background: var(--graph-toolbar-bg);
+	color: var(--graph-text);
+	font: inherit;
+	font-size: 10.5px;
+}
+
+.graph_overlay_name select:focus {
+	border-color: var(--graph-field-focus-border);
+	outline: none;
+}
+
+.graph_overlay_list {
+	display: flex;
+	flex: 1 1 auto;
+	flex-direction: column;
+	gap: 4px;
+	min-height: 0;
+	padding: 6px 8px;
+	overflow-y: auto;
+	scrollbar-width: thin;
+}
+
+.graph_overlay_card {
+	--card-color: var(--graph-alert-medium);
+	display: flex;
+	flex-direction: column;
+	flex-shrink: 0;
+	gap: 2px;
+	padding: 4px 6px;
+	border: 0;
+	border-left: 3px solid var(--card-color);
+	border-radius: 0 6px 6px 0;
+	background: color-mix(in srgb, var(--graph-text) 4%, transparent);
+	color: var(--graph-text);
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+
+.graph_overlay_card.is-high {
+	--card-color: var(--graph-alert-high);
+}
+
+.graph_overlay_card.is-pinned {
+	--card-color: var(--graph-pinned);
+	flex-direction: row;
+	align-items: flex-start;
+	gap: 6px;
+	cursor: default;
+}
+
+.graph_overlay_card.is-group,
+.graph_overlay_card.is-merged {
+	--card-color: var(--graph-group);
+	flex-direction: row;
+	align-items: flex-start;
+	gap: 6px;
+	cursor: default;
+}
+
+.graph_overlay_card.is-merged {
+	--card-color: var(--graph-merged);
+}
+
+.graph_overlay_card:hover,
+.graph_overlay_card:focus-visible,
+.graph_overlay_card:focus-within {
+	background: color-mix(in srgb, var(--graph-text) 9%, transparent);
+	outline: none;
+}
+
+.graph_overlay_card_main {
+	display: flex;
+	flex: 1 1 auto;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+	padding: 0;
+	border: 0;
+	background: none;
+	color: inherit;
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+
+.graph_overlay_card_main:focus-visible {
+	outline: none;
+}
+
+.graph_overlay_card_action {
+	flex-shrink: 0;
+	padding: 0 2px;
+	border: 0;
+	background: none;
+	color: var(--graph-muted-text);
+	font-size: 15px;
+	line-height: 1;
+	cursor: pointer;
+}
+
+.graph_overlay_card_action.is-text {
+	padding: 1px 6px;
+	border: 1px solid var(--graph-border);
+	border-radius: 4px;
+	font-size: 10px;
+}
+
+.graph_overlay_card_action:hover {
+	color: var(--graph-text);
+}
+
+.graph_overlay_card_top {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 6px;
+}
+
+.graph_overlay_card_top strong {
+	color: var(--card-color);
+	font-size: 11px;
+	word-break: break-word;
+}
+
+.graph_overlay_badge {
+	flex-shrink: 0;
+	padding: 0 5px;
+	border-radius: 10px;
+	background: var(--card-color);
+	color: #fff;
+	font-size: 8.5px;
+	font-weight: 700;
+	letter-spacing: 0.4px;
+}
+
+.graph_overlay_category {
+	color: var(--graph-muted-text);
+	font-size: 9.5px;
+	font-weight: 600;
+	letter-spacing: 0.3px;
+	text-transform: uppercase;
+}
+
+.graph_overlay_detail {
+	line-height: 1.35;
+}
+
+.graph_overlay_note {
+	margin: 0;
+	color: var(--graph-muted-text);
+	font-size: 10px;
+	font-style: italic;
+}
+
+.graph_overlay_empty {
+	margin: 0;
+	color: var(--graph-muted-text);
+	font-style: italic;
+	line-height: 1.4;
+}
+
+.graph_overlay_loading {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 8px;
+	padding: 16px 0;
+	color: var(--graph-muted-text);
+	font-size: 11px;
+}
+
+.graph_overlay_footer {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 6px;
+	padding: 5px 14px 8px 8px;
+	border-top: 1px solid var(--graph-border);
+}
+
+.graph_overlay_footer > span {
+	color: var(--graph-muted-text);
+	font-size: 10px;
+}
+
+.graph_overlay_footer .graph_window_button.is-compact {
+	padding: 2px 6px;
+	font-size: 11px;
+}
+
+.graph_overlay_footer .graph_window_button svg {
+	width: 12px;
+	height: 12px;
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 1.9;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+
+/* Edge semantic legend (production #semantic-legend): bottom-left, takes no
+   clicks. Lines use the edge colour; the node-flag sample is production's
+   orange. */
+.graph_semantic_legend {
+	position: absolute;
+	bottom: 10px;
+	left: 10px;
+	z-index: 1;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding: 7px 9px;
+	border: 1px solid var(--graph-border);
+	border-radius: 6px;
+	background: color-mix(in srgb, var(--graph-toolbar-bg) 90%, transparent);
+	color: var(--graph-text);
+	box-shadow: none;
+	font-size: 11px;
+	line-height: 1.25;
+	pointer-events: none;
+}
+
+.graph_semantic_legend strong {
+	margin-bottom: 2px;
+	font-size: 11px;
+}
+
+.graph_semantic_legend_row {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.graph_semantic_legend_row svg {
+	flex-shrink: 0;
+	overflow: visible;
+}
+
+.graph_semantic_legend_row path {
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 1.5;
+}
+
+.graph_semantic_legend_row polygon {
+	fill: currentColor;
+	stroke: none;
+}
+
+.graph_semantic_legend_row.is-flag {
+	color: var(--graph-node-flag);
 }

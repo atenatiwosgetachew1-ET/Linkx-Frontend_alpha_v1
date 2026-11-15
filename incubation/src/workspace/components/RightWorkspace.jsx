@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import WorkspaceContextTabs, { contextTabs } from './right/WorkspaceContextTabs.jsx';
 import WorkspaceRightCollapsedRail from './right/WorkspaceRightCollapsedRail.jsx';
 import WorkspaceOverviewTab from './right/WorkspaceOverviewTab.jsx';
@@ -7,6 +7,7 @@ import GraphInfoTab from './right/GraphInfoTab.jsx';
 import GraphFilterTab from './right/GraphFilterTab.jsx';
 import WorkspaceSettingsTab from './right/WorkspaceSettingsTab.jsx';
 import { WORKSPACE_WINDOW_TYPES } from '../state/workspaceTypes.js';
+import { subscribeContextTabRequests } from '../state/contextTabRequests.js';
 
 function ChevronIcon({ isCollapsed }) {
   return (
@@ -69,6 +70,11 @@ function RightWorkspace({ displayName, workspace, logoSrc, isRightCollapsed = fa
       onToggleCollapse();
     }
   };
+
+  // Windows can ask for a tab (e.g. Info after focusing a graph alert).
+  const selectTabRef = useRef(handleSelectTab);
+  selectTabRef.current = handleSelectTab;
+  useEffect(() => subscribeContextTabRequests((tabId) => selectTabRef.current(tabId)), []);
 
   return (
     <aside

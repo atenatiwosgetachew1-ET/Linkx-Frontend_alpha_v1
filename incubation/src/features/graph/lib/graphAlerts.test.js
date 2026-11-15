@@ -1,0 +1,153 @@
+import { describe, expect, it } from 'vitest';
+
+import {
+  DEFAULT_ALERT_RULES,
+  alertFocusNode,
+  alertNodeName,
+  alertPropertyKeys,
+  alertSummary,
+  describeGraphAlert,
+  generateGraphAlerts,
+  getPercentile,
+  normalizeAlertRules,
+} from './graphAlerts.js';
+import { createGraphStore } from './graphStore.js';
+// Seeded graphs with the answers of production's own generateGraphAlerts
+// (graphs_adjuster.js run in Node), across six rule configurations.
+import productionCases from './__fixtures__/graphAlerts.production.json';
+
+const build = (nodes, edges) => {
+  const store = createGraphStore();
+  store.replace({ nodes: nodes.map((node) => (typeof node === 'object' ? node : { id: node })), edges });
+  return store.graph();
+};
+
+describe('alert rules configuration (GA normalizeAlertRulesConfig)', () => {
+  it('defaults are production’s', () => {
+    expect(normalizeAlertRules()).toEqual({
+      enableHighDegree: true,
+      highDegreeMin: 3,
+      highSeverityDegree: 8,
+      maxHighDegreeAlerts: 5,
+      enableHeavyEdge: true,
+      heavyEdgePercentile: 95,
+      heavyEdgeMinSamples: 4,
+      maxHeavyEdgeAlerts: 5,
+      heavyEdgeMinValue: 0,
+    });
+    expect(normalizeAlertRules()).toEqual(DEFAULT_ALERT_RULES);
+  });
+
+  it('clamps to the ranges, parses text, falls back on junk', () => {
+    const rules = normalizeAlertRules({
+      enableHighDegree: 'false',
+      highDegreeMin: 0,
+      highSeverityDegree: '12',
+      maxHighDegreeAlerts: 5000,
+      enableHeavyEdge: 'maybe',
+      heavyEdgePercentile: 10,
+      heavyEdgeMinSamples: 'x',
+      maxHeavyEdgeAlerts: 2.9,
+      heavyEdgeMinValue: -5,
+    });
+    expect(rules).toEqual({
+      enableHighDegree: false,
+      highDegreeMin: 1,
+      highSeverityDegree: 12,
+      maxHighDegreeAlerts: 1000,
+      enableHeavyEdge: true,
+      heavyEdgePercentile: 50,
+      heavyEdgeMinSamples: 4,
+      maxHeavyEdgeAlerts: 2,
+      heavyEdgeMinValue: 0,
+    });
+    expect(normalizeAlertRules({ heavyEdgePercentile: 100 }).heavyEdgePercentile).toBe(99.99);
+  });
+
+  it('percentile interpolates linearly (GA getPercentile)', () => {
+    expect(getPercentile([], 0.5)).toBe(1);
+    expect(getPercentile([10, 20, 30, 40], 0.5)).toBe(25);
+    expect(getPercentile([10, 20, 30, 40], 0.95)).toBeCloseTo(38.5);
+    expect(getPercentile([5], 0.95)).toBe(5);
+  });
+});
+
+describe('generateGraphAlerts matches production', () => {
+  productionCases.cases.forEach((testCase, index) => {
+    it(`case ${index + 1}: ${testCase.expected.length} alert(s)`, () => {
+      const graph = build(testCase.nodes, testCase.edges);
+      const found = generateGraphAlerts(graph, {
+        nodeIds: testCase.visibleNodes,
+        edgeIds: testCase.visibleEdges.map((id) => `id:${id}`),
+      }, testCase.config);
+      const comparable = found.map((alert) => (alert.type === 'high_degree'
+        ? { type: alert.type, severity: alert.severity, nodeId: alert.nodeId, message: alert.message }
+        : { type: alert.type, severity: alert.severity, edgeId: alert.edgeId.replace(/^id:/, ''), value: alert.value }));
+      const expected = testCase.expected.map((alert) => (alert.type === 'high_degree'
+        ? alert
+        : { type: alert.type, severity: alert.severity, edgeId: alert.edgeId, value: Number(/weight\s+(\S+)$/.exec(alert.message)[1]) }));
+      expect(comparable).toEqual(expected);
+    });
+  });
+});
+
+describe('generateGraphAlerts rules', () => {
+  // hub connected to 9 leaves; one heavy edge among weighted ones
+  const leaves = Array.from({ length: 9 }, (_, i) => `l${i}`);
+  const graph = build(['hub', ...leaves], leaves.map((leaf, i) => ({ id: `e${i}`, from: 'hub', to: leaf, weight: i === 4 ? 900 : 10 + i })));
+  const view = { nodeIds: graph.nodes(), edgeIds: graph.edges() };
+
+  it('a hub at or above the HIGH degree is high severity; leaves stay under the minimum', () => {
+    const [hub, ...rest] = generateGraphAlerts(graph, view);
+    expect(hub).toMatchObject({ type: 'high_degree', severity: 'high', nodeId: 'hub', degree: 9 });
+    expect(rest.every((alert) => alert.type === 'heavy_edge')).toBe(true);
+    expect(generateGraphAlerts(graph, view, { highSeverityDegree: 10 })[0].severity).toBe('medium');
+  });
+
+  it('the heaviest edge is flagged; theme lines and the minimum value are respected', () => {
+    const heavy = generateGraphAlerts(graph, view, { enableHighDegree: false });
+    expect(heavy).toEqual([{ type: 'heavy_edge', severity: 'medium', edgeId: 'id:e4', value: 900, message: 'Edge id:e4 has high weight 900' }]);
+    expect(generateGraphAlerts(graph, view, { enableHighDegree: false, heavyEdgeMinValue: 1000 })).toEqual([]);
+  });
+
+  it('only visible neighbours count, and nothing is flagged on an empty view', () => {
+    const few = generateGraphAlerts(graph, { nodeIds: ['hub', 'l0', 'l1'], edgeIds: [] });
+    expect(few).toEqual([]);
+    expect(generateGraphAlerts(graph, { nodeIds: [], edgeIds: view.edgeIds })).toEqual([]);
+  });
+});
+
+describe('alert panel wording (GA describeGraphAlert)', () => {
+  const graph = build(
+    [{ id: 'a', label: 'Alpha', size: 30, account: 'ACC-1\nsecond line', bank: 'NBE' }, { id: 'b', name: 'Bravo' }, { id: 'c' }],
+    [{ id: 'x', from: 'b', to: 'a', weight: 5 }],
+  );
+
+  it('names a node by the chosen key, else its first property with a value', () => {
+    expect(alertNodeName(graph, 'a')).toBe('label : Alpha');
+    expect(alertNodeName(graph, 'a', 'account')).toBe('account : ACC-1');
+    expect(alertNodeName(graph, 'a', 'missing')).toBe('label : Alpha');
+    expect(alertNodeName(graph, 'c')).toBe('c');
+    expect(alertNodeName(graph, 'gone')).toBe('gone');
+  });
+
+  it('describes both alert types and points heavy edges at their source', () => {
+    const hub = describeGraphAlert(graph, { type: 'high_degree', severity: 'high', nodeId: 'a', degree: 9 }, 'bank');
+    expect(hub).toEqual({
+      name: 'bank : NBE',
+      category: 'Highly connected',
+      severity: 'high',
+      detail: 'Connected to 9 other nodes — a hub that can signal structuring, layering, or a shared intermediary. Review its neighbours.',
+      short: 'Hub linked to 9 nodes.',
+    });
+    const edgeAlert = { type: 'heavy_edge', severity: 'medium', edgeId: 'id:x', value: 5 };
+    expect(describeGraphAlert(graph, edgeAlert)).toMatchObject({ name: 'name : Bravo', category: 'High-value link', short: 'Unusually high value: 5.' });
+    expect(alertFocusNode(graph, edgeAlert)).toBe('b');
+    expect(alertPropertyKeys(graph, [edgeAlert])).toEqual(['name', 'label', 'account', 'bank']);
+  });
+
+  it('summarises counts as production', () => {
+    expect(alertSummary([])).toBe('No alerts — graph looks clean.');
+    expect(alertSummary([{ severity: 'high' }, { severity: 'medium' }, { severity: 'medium' }])).toBe('3 alerts · 1 high · 2 medium');
+  });
+});

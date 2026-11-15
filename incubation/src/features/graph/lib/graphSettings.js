@@ -40,6 +40,13 @@ export const DEFAULT_GRAPH_SETTINGS = Object.freeze({
   // Production creates every Graph window with performance mood ON
   // (setIframePerformanceMood(... [id]: true), src/App.jsx ~13240).
   performance: true,
+  // Alert rules on / off (production currentSettings.alertRules, on unless
+  // turned off; toggled from the right-click menu).
+  alertRules: true,
+  // Edge bundling (production currentSettings.edgeBundling, off by default)
+  // and its minimum group (production EDGE_BUNDLING_STATE.minGroupSize, 2).
+  edgeBundling: false,
+  edgeBundleMin: 2,
 });
 
 const clampInt = (value, min, max) => Math.max(min, Math.min(max, Math.floor(Number(value) || 0)));
@@ -86,6 +93,9 @@ export const normalizeGraphSettings = (input = {}) => {
       layerKey: text(input.layout?.layerKey),
     },
     performance: input.performance === undefined ? d.performance : bool(input.performance),
+    alertRules: input.alertRules === undefined ? d.alertRules : bool(input.alertRules),
+    edgeBundling: input.edgeBundling === undefined ? d.edgeBundling : bool(input.edgeBundling),
+    edgeBundleMin: Math.max(2, parseInt(input.edgeBundleMin, 10) || d.edgeBundleMin),
   };
 };
 
@@ -144,6 +154,16 @@ export const applyPerformancePolicy = (settings, visibleCount = 0) => {
     layout: { ...s.layout, type: large && s.layout.type === 'hierarchical' ? 'layered' : s.layout.type },
   };
 };
+
+// Positions are reused while the layout settings stay the same (GraphCanvas).
+export const layoutSignatureOf = (layout = DEFAULT_GRAPH_SETTINGS.layout) => {
+  const { type, direction, sortMethod, layerMode, layerKey } = layout;
+  return JSON.stringify([type, direction, sortMethod, layerMode, layerKey]);
+};
+
+// Which plain view expand / collapse edits belong to: the limit, the
+// renderer's cap and the search (GraphWindowBody).
+export const viewKeyOf = (limit, cap, search) => JSON.stringify([limit, cap, search || null]);
 
 // Visible-node cap for a renderer (plan §5.3).
 export const visibleCapFor = (renderer) => (renderer === 'webgl' ? GRAPH_LIMITS.WEBGL_HARD_CAP : GRAPH_LIMITS.CANVAS_HARD_CAP);

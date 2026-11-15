@@ -70,6 +70,16 @@ const SEMANTIC_TOOLTIPS = {
   grouping: { cdr: 'Analytical grouping — shared tower / device', nbe: 'Analytical grouping — shared property (not a transfer)' },
 };
 
+// The canvas legend (graphs_basic.html #semantic-legend, worded by
+// updateGraphDomainTerminology): one entry per edge semantic, drawn as
+// production drew its line samples.
+export const semanticLegend = (isCdr = false) => [
+  { id: 'observed_flow', dash: null, arrow: true, opacity: 1, text: isCdr ? 'Observed call / communication session' : 'Observed financial transfer' },
+  { id: 'temporal_sequence', dash: '4,4', arrow: true, opacity: 0.85, text: isCdr ? 'Time-ordered call sequence' : 'Time-ordered sequence (not a transfer)' },
+  { id: 'grouping', dash: '6,3', arrow: false, opacity: 0.7, text: isCdr ? 'Analytical grouping (shared tower / device)' : 'Analytical grouping (shared property)' },
+  { id: 'node_flag', dash: '2,2', arrow: false, opacity: 1, flag: true, text: isCdr ? 'Node flag (property of call record)' : 'Node flag (property of transaction)' },
+];
+
 // Returns renderer-neutral style for an edge payload:
 // { arrow: bool, dashes: false | [dash, gap], width, color, semantic, tooltip }.
 // Order as production: defaults, then rule-label styling, then semantic

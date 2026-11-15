@@ -6,14 +6,16 @@ import React, { useEffect, useRef, useState } from 'react';
 //
 // dialog: { title, description?, okText?, fields: [
 //   { name, label, type: 'select', options: [{ value, label }], value }
-//   { name, label, type: 'number', min, max, value }
+//   { name, label, type: 'number', min, max, step?, value }
+//   { name, label, type: 'text', value }
 //   { name, label, type: 'checkbox', value }
 //   { name, label, type: 'checkboxes', options: [{ value, label, description? }], value: [] }
 // ] }
 // onSubmit(values) / onCancel(). Enter submits, Escape cancels.
 export default function GraphDialog({ dialog, onSubmit, onCancel }) {
   const ref = useRef(null);
-  const [values, setValues] = useState(() => Object.fromEntries(dialog.fields.map((field) => [field.name, field.value])));
+  const fields = dialog.fields || []; // none: a confirmation
+  const [values, setValues] = useState(() => Object.fromEntries(fields.map((field) => [field.name, field.value])));
   const set = (name, value) => setValues((current) => ({ ...current, [name]: value }));
 
   useEffect(() => {
@@ -35,7 +37,7 @@ export default function GraphDialog({ dialog, onSubmit, onCancel }) {
       <form ref={ref} className="graph_dialog" role="dialog" aria-modal="true" aria-label={dialog.title} onSubmit={submit}>
         <strong className="graph_dialog_title">{dialog.title}</strong>
         {dialog.description ? <p className="graph_dialog_text">{dialog.description}</p> : null}
-        {dialog.fields.map((field) => {
+        {fields.map((field) => {
           if (field.type === 'checkbox') {
             return (
               <label key={field.name} className="graph_dialog_check">
@@ -71,11 +73,14 @@ export default function GraphDialog({ dialog, onSubmit, onCancel }) {
                 <select value={values[field.name]} onChange={(event) => set(field.name, event.target.value)}>
                   {field.options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                 </select>
+              ) : field.type === 'text' ? (
+                <input type="text" value={values[field.name]} maxLength={120} onChange={(event) => set(field.name, event.target.value)} />
               ) : (
                 <input
                   type="number"
                   min={field.min}
                   max={field.max}
+                  step={field.step ?? 1}
                   value={values[field.name]}
                   onChange={(event) => set(field.name, event.target.value)}
                 />

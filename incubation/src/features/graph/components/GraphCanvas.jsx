@@ -2,12 +2,13 @@ import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } f
 import cytoscape from 'cytoscape';
 
 import { buildElements, buildStylesheet, edgeCurveFor } from '../lib/graphElements.js';
-import { GRAPH_LIMITS } from '../lib/graphSettings.js';
+import { GRAPH_LIMITS, layoutSignatureOf } from '../lib/graphSettings.js';
 import { requestLayout, startPhysics } from '../lib/layoutClient.js';
 import { neighbourIndex, placeNear } from '../lib/layouts.js';
 import { getNodeValue } from '../lib/graphModel.js';
 import { RENDERERS } from '../lib/rendererPreference.js';
 import { subscribeIconThemes } from '../lib/graphIcons.js';
+import GraphMinimap from './GraphMinimap.jsx';
 
 // The only file that knows the rendering library (graph-chart-plan §3.2).
 // Cytoscape draws on canvas by default; WebGL is opt-in. Lessons from G0
@@ -22,6 +23,13 @@ const THEME_TOKENS = {
   label: '--graph-label',
   edge: '--graph-edge',
   selected: '--graph-selected',
+  // Node badge colours (G3.6).
+  glyphAlert: '--graph-alert-high',
+  glyphPinned: '--graph-pinned',
+  glyphFlag: '--graph-node-flag',
+  glyphNote: '--graph-muted-text',
+  glyphGroup: '--graph-group',
+  glyphMerged: '--graph-merged',
 };
 
 const readGraphTheme = (container) => {
@@ -67,9 +75,11 @@ const releaseGraph = (cy) => {
   });
 };
 
-const GraphCanvas = forwardRef(function GraphCanvas({ windowId, store, view, settings, renderer, isCdr, onRendererFailed, onLayoutState, onContextMenu, onNodeDoubleClick }, ref) {
+const GraphCanvas = forwardRef(function GraphCanvas({ windowId, store, view, settings, renderer, isCdr, onRendererFailed, onLayoutState, onContextMenu, onNodeDoubleClick, onElementTap, showMinimap = true, showGlyphs = true }, ref) {
   const containerRef = useRef(null);
   const cyRef = useRef(null);
+  // The same instance as state, for the minimap (follows renderer switches).
+  const [cyInstance, setCyInstance] = useState(null);
   const themeRef = useRef(null);
   const needsFitRef = useRef(true);
   const curveRef = useRef('bezier');
@@ -84,8 +94,8 @@ const GraphCanvas = forwardRef(function GraphCanvas({ windowId, store, view, set
   // Bumped when a theme change or a recoloured icon needs the elements redrawn.
   const [themeVersion, setThemeVersion] = useState(0);
   useEffect(() => subscribeIconThemes(() => setThemeVersion((value) => value + 1)), []);
-  const callbacksRef = useRef({ onRendererFailed, onLayoutState, onContextMenu, onNodeDoubleClick });
-  callbacksRef.current = { onRendererFailed, onLayoutState, onContextMenu, onNodeDoubleClick };
+  const callbacksRef = useRef({ onRendererFailed, onLayoutState, onContextMenu, onNodeDoubleClick, onElementTap });
+  callbacksRef.current = { onRendererFailed, onLayoutState, onContextMenu, onNodeDoubleClick, onElementTap };
 
   const visibleCount = view.nodeIds.length;
   const fast = renderer === RENDERERS.CANVAS && visibleCount > GRAPH_LIMITS.CANVAS_FAST_ABOVE;
@@ -101,6 +111,39 @@ const GraphCanvas = forwardRef(function GraphCanvas({ windowId, store, view, set
       const eles = ids?.length ? cy.collection(ids.map((id) => cy.getElementById(String(id))).filter((ele) => ele.nonempty())) : undefined;
       cy.animate({ fit: { eles, padding: 30 } }, { duration: 300 });
     },
+    // Centres one node at a zoom level (production network.focus, scale 1.2).
+    focus: (id, scale = 1.2) => {
+      const cy = cyRef.current;
+      const node = cy?.getElementById(String(id));
+      if (!node || node.empty()) return;
+      cy.animate({ center: { eles: node }, zoom: scale }, { duration: 300 });
+    },
+    // Production saved views: the view's centre in graph coordinates and the
+    // zoom (network.getViewPosition / getScale), and what is selected.
+    getCamera: () => {
+      const cy = cyRef.current;
+      if (!cy) return null;
+      const zoom = cy.zoom();
+      const pan = cy.pan();
+      return {
+        position: { x: (cy.width() / 2 - pan.x) / zoom, y: (cy.height() / 2 - pan.y) / zoom },
+        scale: zoom,
+        selectedNodes: cy.nodes(':selected').map((node) => node.id()),
+        selectedEdges: cy.edges(':selected').map((edge) => edge.id()),
+      };
+    },
+    // Production network.moveTo({ position, scale }).
+    moveTo: ({ position, scale }) => {
+      const cy = cyRef.current;
+      if (!cy || !position || !Number.isFinite(scale)) return;
+      cy.animate({ zoom: scale, pan: { x: cy.width() / 2 - position.x * scale, y: cy.height() / 2 - position.y * scale } }, { duration: 280 });
+    },
+    // What is selected now (production network.getSelectedNodes / Edges).
+    selectedIds: () => {
+      const cy = cyRef.current;
+      if (!cy) return { nodes: [], edges: [] };
+      return { nodes: cy.nodes(':selected').map((node) => node.id()), edges: cy.edges(':selected').map((edge) => edge.id()) };
+    },
     // Replaces the selection (production network.selectNodes).
     select: (ids) => {
       const cy = cyRef.current;
@@ -109,6 +152,32 @@ const GraphCanvas = forwardRef(function GraphCanvas({ windowId, store, view, set
         cy.elements(':selected').unselect();
         ids.forEach((id) => cy.getElementById(String(id)).select());
       });
+    },
+    // A point on the canvas (pixels) in graph coordinates (production
+    // network.DOMtoCanvas), e.g. where a node is added or pasted.
+    toGraphPosition: ({ x, y }) => {
+      const cy = cyRef.current;
+      if (!cy) return { x: 0, y: 0 };
+      const zoom = cy.zoom();
+      const pan = cy.pan();
+      return { x: (x - pan.x) / zoom, y: (y - pan.y) / zoom };
+    },
+    // Zoom to area (after i2 Analyst's Notebook): fits the box drawn on the
+    // canvas, in canvas pixels { x1, y1, x2, y2 }, to the view.
+    zoomToRect: (box) => {
+      const cy = cyRef.current;
+      if (!cy) return;
+      const width = Math.abs(box.x2 - box.x1);
+      const height = Math.abs(box.y2 - box.y1);
+      if (width < 1 || height < 1) return;
+      const zoom = cy.zoom();
+      const pan = cy.pan();
+      const centre = {
+        x: ((box.x1 + box.x2) / 2 - pan.x) / zoom,
+        y: ((box.y1 + box.y2) / 2 - pan.y) / zoom,
+      };
+      const level = Math.min(cy.maxZoom(), Math.max(cy.minZoom(), zoom * Math.min(cy.width() / width, cy.height() / height)));
+      cy.animate({ zoom: level, pan: { x: cy.width() / 2 - centre.x * level, y: cy.height() / 2 - centre.y * level } }, { duration: 280 });
     },
     zoomBy: (factor) => {
       const cy = cyRef.current;
@@ -148,10 +217,12 @@ const GraphCanvas = forwardRef(function GraphCanvas({ windowId, store, view, set
         ...(hideEdgesWhileMoving ? { hideEdgesOnViewport: true } : {}),
       });
     } catch (error) {
+      setCyInstance(null);
       if (renderer === RENDERERS.WEBGL) callbacksRef.current.onRendererFailed?.(error);
       return undefined;
     }
     cyRef.current = cy;
+    setCyInstance(cy);
     needsFitRef.current = !viewport;
     if (viewport) cy.viewport(viewport);
     cy.on('viewport', () => store.setViewport({ zoom: cy.zoom(), pan: { ...cy.pan() } }));
@@ -238,6 +309,7 @@ const GraphCanvas = forwardRef(function GraphCanvas({ windowId, store, view, set
         kind,
         id: kind === 'canvas' ? null : target.id(),
         selection: cy.nodes(':selected').map((node) => node.id()),
+        edgeSelection: cy.edges(':selected').map((edge) => edge.id()),
         x: event.renderedPosition.x,
         y: event.renderedPosition.y,
       });
@@ -245,6 +317,17 @@ const GraphCanvas = forwardRef(function GraphCanvas({ windowId, store, view, set
     cy.on('tap viewport', () => callbacksRef.current.onContextMenu?.(null));
     // Production doubleClick (GB:2536): expand one hidden neighbour.
     cy.on('dbltap', 'node', (event) => callbacksRef.current.onNodeDoubleClick?.(event.target.id()));
+    // Production click (GB:2374): a node or edge opens its adjust box (by
+    // the node, or where the edge was clicked); the background closes it.
+    cy.on('tap', (event) => {
+      const target = event.target;
+      if (target === cy) {
+        callbacksRef.current.onElementTap?.(null);
+        return;
+      }
+      const at = target.isNode() ? target.renderedPosition() : event.renderedPosition;
+      callbacksRef.current.onElementTap?.({ kind: target.isNode() ? 'node' : 'edge', id: target.id(), x: at.x, y: at.y });
+    });
 
     const onContextLost = (event) => {
       event.preventDefault();
@@ -315,6 +398,16 @@ const GraphCanvas = forwardRef(function GraphCanvas({ windowId, store, view, set
       iconMode,
       edgeWeight: settings.edgeWeight,
       showTitles: settings.showTitles,
+      edgeBundling: settings.edgeBundling,
+      edgeBundleMin: settings.edgeBundleMin,
+      glyphColors: showGlyphs && themeRef.current ? {
+        alert: themeRef.current.glyphAlert,
+        pinned: themeRef.current.glyphPinned,
+        flag: themeRef.current.glyphFlag,
+        note: themeRef.current.glyphNote,
+        group: themeRef.current.glyphGroup,
+        merged: themeRef.current.glyphMerged,
+      } : null,
     });
     const edgePairs = edges.map((edge) => [edge.data.source, edge.data.target]);
     const stopPhysics = () => {
@@ -384,6 +477,12 @@ const GraphCanvas = forwardRef(function GraphCanvas({ windowId, store, view, set
       });
       if (fit && positioned.length) {
         cy.fit(undefined, 30);
+        // vis-network's fit never zoomed past 1 (one node, or a few close
+        // together, would otherwise fill the canvas).
+        if (cy.zoom() > 1) {
+          cy.zoom(1);
+          cy.center();
+        }
         needsFitRef.current = false;
       }
     };
@@ -392,7 +491,7 @@ const GraphCanvas = forwardRef(function GraphCanvas({ windowId, store, view, set
     // view is then laid out again, as production re-applies its layout) or
     // some visible node has none yet.
     const { type, direction, sortMethod, layerMode, layerKey } = settings.layout;
-    const signature = JSON.stringify([type, direction, sortMethod, layerMode, layerKey]);
+    const signature = layoutSignatureOf(settings.layout);
     const relayout = store.getLayoutSignature() !== signature;
     const unplaced = relayout ? nodes : nodes.filter((node) => !node.position);
     // Nodes joining a drawn view (expand, double-click) are placed beside
@@ -450,12 +549,13 @@ const GraphCanvas = forwardRef(function GraphCanvas({ windowId, store, view, set
       cancelled = true;
       stopPhysics();
     };
-  }, [store, view, settings.showLabels, settings.labels, settings.edgeWeight, settings.showTitles, settings.physics, settings.layout, isCdr, windowId, renderer, fast, hideEdgesWhileMoving, themeVersion]);
+  }, [store, view, settings.showLabels, settings.labels, settings.edgeWeight, settings.showTitles, settings.edgeBundling, settings.edgeBundleMin, settings.physics, settings.layout, showGlyphs, isCdr, windowId, renderer, fast, hideEdgesWhileMoving, themeVersion]);
 
   return (
     <>
       <div ref={containerRef} className="graph_canvas" role="img" aria-label="Graph" />
       <div ref={tooltipRef} className="graph_canvas_tooltip" role="tooltip" hidden />
+      {showMinimap ? <GraphMinimap cy={cyInstance} /> : null}
     </>
   );
 });

@@ -1309,6 +1309,12 @@ export const THEME_COMPONENT_CATEGORIES = [
       { key: '--graph-primary-bg', label: 'Primary Action (Create new graph) — Background', type: 'color', default: '#131E2A' },
       { key: '--graph-primary-text', label: 'Primary Action — Text', type: 'color', default: '#AE874F' },
       { key: '--graph-primary-border', label: 'Primary Action — Border', type: 'color', default: '#AE874F' },
+      { key: '--graph-alert-high', label: 'Alert — High Severity', type: 'color', default: '#e74c3c' },
+      { key: '--graph-alert-medium', label: 'Alert — Medium Severity', type: 'color', default: '#f39c12' },
+      { key: '--graph-pinned', label: 'Pinned Evidence — Accent', type: 'color', default: '#f59e0b' },
+      { key: '--graph-group', label: 'Merged & Grouped — Group Accent', type: 'color', default: '#6366f1' },
+      { key: '--graph-merged', label: 'Merged & Grouped — Merged Accent', type: 'color', default: '#0d9488' },
+      { key: '--graph-node-flag', label: 'Legend — Node Flag', type: 'color', default: '#f39c12' },
     ],
   },
   {

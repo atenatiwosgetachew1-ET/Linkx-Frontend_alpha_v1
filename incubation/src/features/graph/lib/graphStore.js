@@ -14,6 +14,17 @@ import { searchNodeIds } from './graphSearch.js';
 
 export const MARKER_KINDS = ['path', 'traversal', 'alert', 'pinned'];
 export const HIGHLIGHT_FLASH_MS = 1000;
+// Production GRAPH_HISTORY_MAX / GRAPH_HISTORY_SNAPSHOT_LIMIT (GA:1336).
+export const HISTORY_MAX = 50;
+export const HISTORY_ELEMENT_LIMIT = 4500;
+
+const cloneDeep = (value) => {
+  try {
+    return structuredClone(value);
+  } catch {
+    return JSON.parse(JSON.stringify(value));
+  }
+};
 
 // Production skips sorting above this many nodes (GA:5466).
 const SORT_SKIP_ABOVE = 10000;
@@ -38,7 +49,7 @@ export const createGraphStore = () => {
   let status = { state: 'idle', message: '', source: '' };
   // What the window currently shows (for the right panel's counts).
   let viewStats = { nodes: 0, edges: 0, searched: false };
-  let snapshot = { version: 0, nodes: 0, edges: 0, danglingEdges: 0, selection: [], status, viewStats };
+  let snapshot = { version: 0, nodes: 0, edges: 0, danglingEdges: 0, selection: [], status, viewStats, history: { canUndo: false, canRedo: false } };
   // Laid-out positions (kept across remounts; a docked tab switch must not
   // re-run the layout) and the selected node ids (read by the right panel).
   let positions = new Map();
@@ -62,6 +73,16 @@ export const createGraphStore = () => {
   let markers = emptyMarkers();
   // Original values of patched node attributes: id -> { key: value | undefined }.
   let originals = new Map();
+  // Undo / redo (production GRAPH_HISTORY, GA:1336-1556): whole-state
+  // snapshots taken before each recorded action, 50 each way, off above
+  // 4 500 nodes + edges. `context` is what the window keeps outside the
+  // store (its settings), handed back on undo / redo.
+  let history = { undo: [], redo: [] };
+  // Window UI that must survive the body remounting (docked <-> floating,
+  // docked tab switches): the overlay cards' state. Not data: no version
+  // bump, kept across new data, gone with the store.
+  const ui = new Map();
+  const historyState = () => ({ canUndo: history.undo.length > 0, canRedo: history.redo.length > 0 });
   // The expand / collapse highlight is a flash: shown, then the elements go
   // back to their own style (analyst decision; production kept it).
   let flashTimer = null;
@@ -82,7 +103,7 @@ export const createGraphStore = () => {
   const emit = () => {
     version += 1;
     propertyKeysCache = null;
-    snapshot = { version, nodes: graph.order, edges: graph.size, danglingEdges, selection, status, viewStats };
+    snapshot = { version, nodes: graph.order, edges: graph.size, danglingEdges, selection, status, viewStats, history: historyState() };
     listeners.forEach((listener) => listener());
   };
 
@@ -130,6 +151,8 @@ export const createGraphStore = () => {
   };
 
   const reset = () => {
+    // New data starts a new history (production resetGraphHistoryBuffer).
+    history = { undo: [], redo: [] };
     graph = new MultiDirectedGraph({ allowSelfLoops: true });
     anonymousEdgeCounts = new Map();
     danglingEdges = 0;
@@ -390,6 +413,460 @@ export const createGraphStore = () => {
     return { added: visible.size - before, skipped };
   };
 
+  // Production loadSavedView: the view shows exactly `targetIds` (those in
+  // the graph), recorded as edits of the plain view `baseIds` of `viewKey`.
+  const restoreVisibility = (viewKey, baseIds = [], targetIds = []) => {
+    const target = [...new Set(targetIds.map(String))].filter((id) => graph.hasNode(id));
+    const wanted = new Set(target);
+    const base = new Set(baseIds.map(String));
+    visibility = {
+      viewKey,
+      added: target.filter((id) => !base.has(id)),
+      removed: new Set([...base].filter((id) => !wanted.has(id))),
+    };
+    emit();
+    return target.length;
+  };
+
+  /* ── Authoring (G3.1; production GA:2777-3310, GA:5859-5975) ───────── */
+
+  // Production createUniqueNodeId / createUniqueEdgeId: `${prefix}_${now}`,
+  // a random suffix while taken. Edge ids are backend-style ids (key `id:…`).
+  const uniqueNodeId = (prefix = 'node') => {
+    let candidate = `${prefix}_${Date.now()}`;
+    while (graph.hasNode(candidate)) candidate = `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    return candidate;
+  };
+  const uniqueEdgeId = (prefix = 'edge') => {
+    let candidate = `${prefix}_${Date.now()}`;
+    while (graph.hasEdge(`id:${candidate}`)) candidate = `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    return candidate;
+  };
+
+  // Shown in the current view even past the limit (production added them to
+  // VISIBLE_STATE and set limitOverridden; a new limit drops them from view
+  // again, as production's applyLimit did).
+  const showAuthored = (ids, viewKey, visibleIds) => {
+    if (viewKey === undefined) return;
+    const edit = editVisibility(viewKey);
+    const visible = new Set((visibleIds || []).map(String));
+    ids.forEach((id) => makeVisible(edit, id, visible));
+  };
+
+  // Production handleAddNode / createAnnotationNode. `node` holds the
+  // attributes (id made here unless given); `position` is in graph
+  // coordinates. -> the new id
+  const addNode = (node, { position, viewKey, visibleIds, prefix = 'node' } = {}) => {
+    const id = node?.id != null && !graph.hasNode(String(node.id)) ? String(node.id) : uniqueNodeId(prefix);
+    const attributes = typeof node === 'function' ? node(id) : { ...node };
+    graph.addNode(id, { ...attributes, id });
+    if (position) positions.set(id, { x: position.x, y: position.y });
+    showAuthored([id], viewKey, visibleIds);
+    emit();
+    return id;
+  };
+
+  // Production createGraphEdge (GA:2969): none between a node and itself.
+  // -> the edge key, or null
+  const addEdgeInternal = (from, to, patch = {}) => {
+    const a = String(from);
+    const b = String(to);
+    if (a === b || !graph.hasNode(a) || !graph.hasNode(b)) return null;
+    const id = patch.id != null ? String(patch.id) : uniqueEdgeId('edge');
+    const key = `id:${id}`;
+    if (graph.hasEdge(key)) return null;
+    graph.addEdgeWithKey(key, a, b, { ...patch, id, from: a, to: b });
+    return key;
+  };
+  const addEdge = (from, to, patch) => {
+    const key = addEdgeInternal(from, to, patch);
+    if (key) emit();
+    return key;
+  };
+
+  // Drops removed ids from what the store keeps about them.
+  const forgetNodes = (ids) => {
+    ids.forEach((id) => {
+      positions.delete(id);
+      originals.delete(id);
+      visibility.removed.delete(id);
+    });
+    const gone = new Set(ids);
+    visibility.added = visibility.added.filter((id) => !gone.has(id));
+    selection = selection.filter((id) => !gone.has(id));
+    MARKER_KINDS.forEach((kind) => ids.forEach((id) => markers[kind].nodes.delete(id)));
+  };
+  const forgetEdges = (keys) => {
+    MARKER_KINDS.forEach((kind) => keys.forEach((key) => markers[kind].edges.delete(key)));
+  };
+
+  // Production removeFullGraphNode: the node and its links. -> nodes removed
+  const removeNodes = (ids) => {
+    const present = [...new Set(ids.map(String))].filter((id) => graph.hasNode(id));
+    if (!present.length) return 0;
+    const edges = new Set();
+    present.forEach((id) => graph.forEachEdge(id, (key) => edges.add(key)));
+    forgetEdges([...edges]);
+    present.forEach((id) => graph.dropNode(id));
+    forgetNodes(present);
+    emit();
+    return present.length;
+  };
+
+  // -> edges removed
+  const removeEdges = (keys) => {
+    const present = [...new Set(keys.map(String))].filter((key) => graph.hasEdge(key));
+    if (!present.length) return 0;
+    present.forEach((key) => graph.dropEdge(key));
+    forgetEdges(present);
+    emit();
+    return present.length;
+  };
+
+  // Production handleLinkNodes: an edge for each pair of the nodes not yet
+  // linked either way. -> edges made
+  const linkNodes = (ids) => {
+    const nodes = [...new Set(ids.map(String))].filter((id) => graph.hasNode(id));
+    let made = 0;
+    for (let i = 0; i < nodes.length; i += 1) {
+      for (let j = i + 1; j < nodes.length; j += 1) {
+        if (!graph.areNeighbors(nodes[i], nodes[j]) && addEdgeInternal(nodes[i], nodes[j], { label: '', width: 1, arrows: 'to', dashes: false })) made += 1;
+      }
+    }
+    if (made) emit();
+    return made;
+  };
+
+  // Production handleUnlinkNode: every link of the node. -> edges removed
+  const unlinkNode = (id) => {
+    const key = String(id);
+    if (!graph.hasNode(key)) return 0;
+    return removeEdges(graph.edges(key));
+  };
+
+  // Production handleUnlinkNodes: links between two of the nodes. -> removed
+  const unlinkNodes = (ids) => {
+    const set = new Set(ids.map(String));
+    if (set.size < 2) return 0;
+    const keys = [];
+    graph.forEachEdge((key, attributes, source, target) => {
+      if (set.has(source) && set.has(target)) keys.push(key);
+    });
+    return removeEdges(keys);
+  };
+
+  // Production copyNodes: the nodes (with where they are) and the links
+  // among them, in production's clipboard shape { nodes, edges }.
+  const copyNodes = (ids) => {
+    const wanted = [...new Set(ids.map(String))].filter((id) => graph.hasNode(id));
+    const set = new Set(wanted);
+    const nodes = wanted.map((id) => {
+      const at = positions.get(id);
+      return { ...cloneDeep(graph.getNodeAttributes(id)), id, ...(at ? { x: at.x, y: at.y } : {}) };
+    });
+    const edges = [];
+    graph.forEachEdge((key, attributes, source, target) => {
+      if (set.has(source) && set.has(target)) edges.push({ ...cloneDeep(attributes), from: source, to: target });
+    });
+    return { nodes, edges };
+  };
+
+  // Production pasteNodes: new ids ("Group…" nodes stay groups), placed from
+  // `position` 20 apart, links among them remapped. -> the new node ids
+  const pasteNodes = (clip, { position = { x: 0, y: 0 }, viewKey, visibleIds } = {}) => {
+    const nodes = Array.isArray(clip?.nodes) ? clip.nodes : [];
+    if (!nodes.length) return [];
+    const idMap = new Map();
+    const pasted = [];
+    nodes.forEach((raw, i) => {
+      const group = String(raw?.id ?? '').startsWith('Group');
+      const id = uniqueNodeId(group ? 'Group' : 'node');
+      idMap.set(String(raw?.id), id);
+      const { x: _x, y: _y, ...attributes } = raw || {};
+      graph.addNode(id, { ...cloneDeep(attributes), id });
+      positions.set(id, { x: position.x + i * 20, y: position.y + i * 20 });
+      pasted.push(id);
+    });
+    (Array.isArray(clip?.edges) ? clip.edges : []).forEach((edge, index) => {
+      const from = idMap.get(String(edge?.from ?? edge?.source));
+      const to = idMap.get(String(edge?.to ?? edge?.target));
+      if (!from || !to) return;
+      addEdgeInternal(from, to, { ...cloneDeep(edge), id: uniqueEdgeId(`paste_edge_${index}`) });
+    });
+    showAuthored(pasted, viewKey, visibleIds);
+    emit();
+    return pasted;
+  };
+
+  /* ── Group / ungroup / merge (G3.4; GA:3311, GA:3356, GA:3559) ─────── */
+
+  const centreOf = (ids) => {
+    const placed = ids.map((id) => positions.get(id)).filter(Boolean);
+    if (!placed.length) return null;
+    return {
+      x: placed.reduce((sum, at) => sum + at.x, 0) / placed.length,
+      y: placed.reduce((sum, at) => sum + at.y, 0) / placed.length,
+    };
+  };
+
+  // Production handleGroupNodes: the nodes become one "Group" node (size 40,
+  // at their centre) holding them (`members`) and the links among them
+  // (`edges`). Production also dropped their links to the rest of the graph;
+  // here those move to the group node and are kept (`externalEdges`), so
+  // ungrouping brings them back. -> the group id, or null
+  const groupNodes = (ids, { color, viewKey, visibleIds } = {}) => {
+    const members = [...new Set(ids.map(String))].filter((id) => graph.hasNode(id));
+    if (members.length < 2) return null;
+    const set = new Set(members);
+    let groupId = `Group ${Date.now()}`;
+    while (graph.hasNode(groupId)) groupId = `Group ${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const centre = centreOf(members) || { x: 0, y: 0 };
+    const memberNodes = members.map((id) => {
+      const at = positions.get(id);
+      return { ...cloneDeep(graph.getNodeAttributes(id)), id, ...(at ? { x: at.x, y: at.y } : {}) };
+    });
+    const memberEdges = [];
+    const externalEdges = [];
+    graph.forEachEdge((key, attributes, source, target) => {
+      const inside = set.has(source) && set.has(target);
+      if (inside) memberEdges.push({ ...cloneDeep(attributes), from: source, to: target });
+      else if (set.has(source) || set.has(target)) externalEdges.push({ key, attributes: cloneDeep(attributes), from: source, to: target });
+    });
+    graph.addNode(groupId, {
+      id: groupId, label: 'Group', size: 40, color, isGroup: true, members: memberNodes, edges: memberEdges, externalEdges, groupedAt: centre,
+    });
+    positions.set(groupId, centre);
+    externalEdges.forEach((edge, index) => {
+      const from = set.has(edge.from) ? groupId : edge.from;
+      const to = set.has(edge.to) ? groupId : edge.to;
+      if (from === to) return;
+      addEdgeInternal(from, to, { ...cloneDeep(edge.attributes), id: uniqueEdgeId(`group_edge_${index}`), groupedEdge: edge.key });
+    });
+    forgetEdges([...memberEdges, ...externalEdges].map((edge) => edge.key).filter(Boolean));
+    members.forEach((id) => graph.dropNode(id));
+    forgetNodes(members);
+    showAuthored([groupId], viewKey, visibleIds);
+    emit();
+    return groupId;
+  };
+
+  // Production handleUngroupNode: the members come back (a new id if theirs
+  // is taken), with the links among them (skipping pairs already linked),
+  // and here also their links to the rest. Members keep their place,
+  // moved along with the group. -> the restored ids
+  const ungroupNode = (groupId, { viewKey, visibleIds } = {}) => {
+    const id = String(groupId);
+    if (!graph.hasNode(id)) return [];
+    const group = graph.getNodeAttributes(id);
+    if (!group.isGroup) return [];
+    const now = positions.get(id);
+    const then = group.groupedAt;
+    const shift = now && then ? { x: now.x - then.x, y: now.y - then.y } : { x: 0, y: 0 };
+    graph.dropNode(id);
+    forgetNodes([id]);
+    const idMap = new Map();
+    const restored = [];
+    (group.members || []).forEach((member) => {
+      const original = String(member.id);
+      const newId = graph.hasNode(original) ? uniqueNodeId('restored') : original;
+      idMap.set(original, newId);
+      const { x, y, ...attributes } = member;
+      graph.addNode(newId, { ...cloneDeep(attributes), id: newId });
+      if (Number.isFinite(x) && Number.isFinite(y)) positions.set(newId, { x: x + shift.x, y: y + shift.y });
+      else if (now) positions.set(newId, { ...now });
+      restored.push(newId);
+    });
+    const linked = new Set();
+    graph.forEachEdge((key, attributes, source, target) => linked.add([source, target].sort().join('--')));
+    (group.edges || []).forEach((edge) => {
+      const from = idMap.get(String(edge.from)) || String(edge.from);
+      const to = idMap.get(String(edge.to)) || String(edge.to);
+      if (from === to) return;
+      const pair = [from, to].sort().join('--');
+      if (linked.has(pair)) return;
+      linked.add(pair);
+      addEdgeInternal(from, to, { ...cloneDeep(edge), id: uniqueEdgeId('restored_edge') });
+    });
+    (group.externalEdges || []).forEach((edge) => {
+      const from = idMap.get(edge.from) || edge.from;
+      const to = idMap.get(edge.to) || edge.to;
+      if (!graph.hasNode(from) || !graph.hasNode(to) || graph.hasEdge(edge.key)) return;
+      graph.addEdgeWithKey(edge.key, from, to, { ...cloneDeep(edge.attributes), from, to });
+    });
+    showAuthored(restored, viewKey, visibleIds);
+    emit();
+    return restored;
+  };
+
+  // Production mergeSelectedNodes: the first node stays (at the centre of
+  // all), records merged_from / merge_count, takes the others' properties
+  // as `<prefix>_<key>` (`keys`: which, null for all), and their links.
+  // -> the kept id, or null
+  const MERGE_SKIP_KEYS = new Set([
+    'id', 'label', 'title', 'x', 'y', 'vx', 'vy', 'fx', 'fy', 'size', 'shape', 'image', 'icon', 'iconPath',
+    'color', 'font', 'borderWidth', 'borderWidthSelected', 'shadow', 'hidden', 'physics', 'fixed', 'chosen', 'group', 'level', 'mass',
+  ]);
+  const mergeKeys = (ids) => {
+    const keys = new Set();
+    ids.forEach((id) => {
+      if (!graph.hasNode(id)) return;
+      Object.entries(graph.getNodeAttributes(id)).forEach(([key, value]) => {
+        if (MERGE_SKIP_KEYS.has(key) || value === undefined || value === null || value === '') return;
+        keys.add(key);
+      });
+    });
+    return [...keys].sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+  };
+  const mergeNodes = (ids, { keys = null, prefix = 'merged', viewKey, visibleIds } = {}) => {
+    const nodes = [...new Set(ids.map(String))].filter((id) => graph.hasNode(id));
+    if (nodes.length < 2) return null;
+    const [kept, ...others] = nodes;
+    const allowed = keys ? new Set(keys) : null;
+    const node = { ...graph.getNodeAttributes(kept) };
+    node.merged_from = [...new Set([...(node.merged_from || []), ...others])];
+    node.merge_count = (node.merge_count || 1) + others.length;
+    others.forEach((id) => {
+      Object.entries(graph.getNodeAttributes(id)).forEach(([key, value]) => {
+        if (MERGE_SKIP_KEYS.has(key) || (allowed && !allowed.has(key)) || value === undefined) return;
+        const base = `${prefix}_${key}`;
+        let derived = base;
+        let counter = 2;
+        while (Object.prototype.hasOwnProperty.call(node, derived)) {
+          derived = `${base}_${counter}`;
+          counter += 1;
+        }
+        node[derived] = cloneDeep(value);
+      });
+    });
+    const centre = centreOf(nodes);
+    const set = new Set(nodes);
+    // Links of the merged nodes move to the kept one; links among them go.
+    const moved = [];
+    graph.forEachEdge((key, attributes, source, target) => {
+      if (!set.has(source) && !set.has(target)) return;
+      if (source === kept && target === kept) return;
+      if ((source === kept || !set.has(source)) && (target === kept || !set.has(target))) return;
+      moved.push({ key, attributes: { ...attributes }, from: set.has(source) ? kept : source, to: set.has(target) ? kept : target });
+    });
+    graph.replaceNodeAttributes(kept, node);
+    if (centre) positions.set(kept, centre);
+    others.forEach((id) => graph.dropNode(id));
+    forgetNodes(others);
+    moved.forEach(({ key, attributes, from, to }) => {
+      if (from === to) return;
+      graph.addEdgeWithKey(key, from, to, { ...attributes, from, to });
+    });
+    showAuthored([kept], viewKey, visibleIds);
+    emit();
+    return kept;
+  };
+
+  // Adjust-box edits (G3.2; production persistNodeChange /
+  // persistEdgeChange): merged into the attributes, not kept as originals
+  // (Reset Node Styles is for the visual tools; edits are undone instead).
+  // entries: [[id | key, patch]]. -> how many changed
+  const updateNodes = (entries) => {
+    let changed = 0;
+    entries.forEach(([rawId, patch]) => {
+      const id = String(rawId);
+      if (!graph.hasNode(id) || !patch) return;
+      graph.mergeNodeAttributes(id, patch);
+      changed += 1;
+    });
+    if (changed) emit();
+    return changed;
+  };
+  const updateEdges = (entries) => {
+    let changed = 0;
+    entries.forEach(([key, patch]) => {
+      if (!graph.hasEdge(key) || !patch) return;
+      graph.mergeEdgeAttributes(key, patch);
+      changed += 1;
+    });
+    if (changed) emit();
+    return changed;
+  };
+
+  /* ── Hide / show (G3.6 selection tools, after i2) ──────────────────── */
+
+  // Hides drawn nodes in this view (a visibility edit, like collapse).
+  // -> how many were hidden
+  const hideNodes = (ids, { viewKey, visibleIds = [] } = {}) => {
+    const visible = new Set(visibleIds.map(String));
+    const targets = [...new Set(ids.map(String))].filter((id) => visible.has(id));
+    if (!targets.length) return 0;
+    const edit = editVisibility(viewKey);
+    targets.forEach((id) => {
+      const index = edit.added.indexOf(id);
+      if (index >= 0) edit.added.splice(index, 1);
+      else edit.removed.add(id);
+    });
+    emit();
+    return targets.length;
+  };
+  // Nodes hidden in this view (by Hide or Collapse Neighbourhood).
+  const hiddenCount = (viewKey) => (visibility.viewKey === viewKey ? [...visibility.removed].filter((id) => graph.hasNode(id)).length : 0);
+  // Brings them back. -> how many
+  const showHidden = (viewKey) => {
+    const count = hiddenCount(viewKey);
+    if (!count) return 0;
+    visibility.removed = new Set();
+    emit();
+    return count;
+  };
+
+  /* ── History (production captureGraphHistorySnapshot / apply…) ──────── */
+  const historyAllowed = () => graph.order + graph.size <= HISTORY_ELEMENT_LIMIT;
+  const copyMarker = (marker) => ({ nodes: [...marker.nodes], edges: [...marker.edges], viewKey: marker.viewKey });
+  const takeSnapshot = (context) => ({
+    graph: cloneDeep(graph.export()),
+    positions: [...positions].map(([id, position]) => [id, { ...position }]),
+    layoutSignature,
+    originals: cloneDeep([...originals]),
+    visibility: { viewKey: visibility.viewKey, added: [...visibility.added], removed: [...visibility.removed] },
+    // Path and traversal highlights; alerts and pinned items are worked out
+    // again from the rules and the pinned list.
+    path: copyMarker(markers.path),
+    traversal: copyMarker(markers.traversal),
+    selection: [...selection],
+    context: cloneDeep(context ?? null),
+  });
+  const restoreSnapshot = (taken) => {
+    clearTimeout(flashTimer);
+    flashTimer = null;
+    graph.clear();
+    graph.import(cloneDeep(taken.graph));
+    positions = new Map(taken.positions.map(([id, position]) => [id, { ...position }]));
+    layoutSignature = taken.layoutSignature;
+    originals = new Map(cloneDeep(taken.originals));
+    visibility = { viewKey: taken.visibility.viewKey, added: [...taken.visibility.added], removed: new Set(taken.visibility.removed) };
+    const marker = (saved) => ({ nodes: new Set(saved.nodes), edges: new Set(saved.edges), ...(saved.viewKey !== undefined ? { viewKey: saved.viewKey } : {}) });
+    markers.path = marker(taken.path);
+    markers.traversal = marker(taken.traversal);
+    selection = [...taken.selection];
+  };
+  const pushLimited = (stack, entry) => {
+    stack.push(entry);
+    if (stack.length > HISTORY_MAX) stack.splice(0, stack.length - HISTORY_MAX);
+  };
+  // Before a recorded action. -> false when the graph is too large
+  const recordHistory = (context) => {
+    if (!historyAllowed()) return false;
+    pushLimited(history.undo, takeSnapshot(context));
+    history.redo = [];
+    emit();
+    return true;
+  };
+  // -> { context, selection } of the restored state, or null if none
+  const stepHistory = (from, to, context) => {
+    if (!history[from].length) return null;
+    const target = history[from].pop();
+    if (historyAllowed()) pushLimited(history[to], takeSnapshot(context));
+    restoreSnapshot(target);
+    emit();
+    return { context: target.context, selection: target.selection };
+  };
+
   /* ── Node style patches (production MODIFIED_NODES / persistNodeChange) ─ */
 
   // Visualize by degree / property and communities change node attributes
@@ -458,6 +935,31 @@ export const createGraphStore = () => {
     // expansion was made on: it goes when the view resets (a deliberate
     // change from production, where it stayed until the next expand).
     revealNodes,
+    restoreVisibility,
+    addNode,
+    addEdge,
+    removeNodes,
+    removeEdges,
+    linkNodes,
+    unlinkNode,
+    unlinkNodes,
+    copyNodes,
+    pasteNodes,
+    updateNodes,
+    updateEdges,
+    hideNodes,
+    hiddenCount,
+    showHidden,
+    groupNodes,
+    ungroupNode,
+    mergeNodes,
+    mergeKeys,
+    getUi: (key, fallback) => (ui.has(key) ? ui.get(key) : fallback),
+    setUi: (key, value) => { ui.set(key, value); },
+    recordHistory,
+    undo: (context) => stepHistory('undo', 'redo', context),
+    redo: (context) => stepHistory('redo', 'undo', context),
+    historyAllowed,
     patchNodes,
     restoreNodePatches,
     hasNodePatches: () => originals.size > 0,

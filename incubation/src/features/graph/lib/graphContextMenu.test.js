@@ -21,12 +21,23 @@ describe('context menu items (production GB:2096)', () => {
   it('one node: expand / collapse and the analysis tools available, the rest pending', () => {
     const menu = contextMenuItems({ kind: 'node', nodeId: 'Group_1', selection: ['Group_1'], nodeHasEdges: true });
     expect(labels(menu)).toEqual([
-      'Expand Neighborhood', 'Collapse Neighborhood', 'Copy', 'Delete Node', 'Ungroup', 'Unlink Node',
+      'Expand Neighborhood', 'Collapse Neighborhood', 'Select Linked', 'Select Same Type', 'Hide Node', 'Copy', 'Delete Node', 'Ungroup', 'Unlink Node',
       'Bring to Front', 'Pin Evidence', 'Unpin Evidence', 'Link Traversal (5 degrees)', 'Cut Points',
     ]);
     const enabled = flattenMenuItems(menu.items).filter((entry) => entry.enabled).map((entry) => entry.label);
-    expect(enabled).toEqual(['Expand Neighborhood', 'Collapse Neighborhood', 'Link Traversal (5 degrees)', 'Cut Points']);
-    expect(flattenMenuItems(menu.items).find((entry) => entry.action === 'pin_evidence').pending).toMatch(/pinned evidence/);
+    expect(enabled).toEqual([
+      'Expand Neighborhood', 'Collapse Neighborhood', 'Select Linked', 'Select Same Type', 'Hide Node', 'Copy', 'Delete Node', 'Ungroup', 'Unlink Node',
+      'Bring to Front', 'Pin Evidence', 'Unpin Evidence', 'Link Traversal (5 degrees)', 'Cut Points',
+    ]);
+    // G3.5: every production item is ported; nothing is left pending.
+    const canvasItems = flattenMenuItems(contextMenuItems({ kind: 'canvas', hasClipboard: true, savedViewCount: 1, selection: ['a', 'b'] }).items);
+    expect(canvasItems.filter((entry) => entry.pending)).toEqual([]);
+    expect(canvasItems.find((entry) => entry.action === 'toggle_edge_bundling').label).toBe('Enable Edge Bundling');
+    expect(flattenMenuItems(contextMenuItems({ kind: 'canvas', edgeBundling: true }).items).find((entry) => entry.action === 'toggle_edge_bundling').label).toBe('Disable Edge Bundling');
+    // Pin / Unpin follow what is already pinned.
+    const pinnedOnly = flattenMenuItems(contextMenuItems({ kind: 'node', nodeId: 'a', selection: ['a'], canPin: false }).items);
+    expect(pinnedOnly.find((entry) => entry.action === 'pin_evidence').enabled).toBe(false);
+    expect(pinnedOnly.find((entry) => entry.action === 'unpin_evidence').enabled).toBe(true);
   });
 
   it('several nodes: link or unlink, shortest path only for two', () => {
@@ -39,12 +50,14 @@ describe('context menu items (production GB:2096)', () => {
 
   it('groups into submenus so the menu stays short (production order kept inside)', () => {
     const canvas = contextMenuItems({ kind: 'canvas', hasClipboard: true });
-    expect(topLevel(canvas)).toEqual(['Paste', 'Add', 'Analyze', 'Views', 'Edge Bundling', 'Alert Rules', 'Pinned Evidence']);
+    expect(topLevel(canvas)).toEqual(['Paste', 'Add', 'Select', 'Analyze', 'Views', 'Edge Bundling', 'Alert Rules', 'Pinned Evidence']);
     expect(canvas.items[1].items.map((entry) => entry.label)).toEqual(['Add Node', 'Label', 'Comment Box', 'Text Block', 'Event Frame', 'Theme Line', 'OLE Object']);
-    expect(canvas.items[1]).toMatchObject({ group: 'add', enabled: false, pending: 'Coming with graph editing.' });
+    // G3.1 / G3.3: everything under Add works; Theme Line needs two selected nodes.
+    expect(canvas.items[1]).toMatchObject({ group: 'add', enabled: true });
+    expect(canvas.items[1].items.filter((entry) => entry.enabled).map((entry) => entry.label)).toEqual(['Add Node', 'Label', 'Comment Box', 'Text Block', 'Event Frame', 'OLE Object']);
     const node = contextMenuItems({ kind: 'node', selection: ['a'], pathHighlighted: true });
-    expect(topLevel(node)).toEqual(['Expand Neighborhood', 'Collapse Neighborhood', 'Edit', 'Evidence', 'Analyze', 'Clear Path Highlight']);
-    expect(topLevel(contextMenuItems({ kind: 'node', selection: ['a', 'b'] }))).toEqual(['Edit', 'Paths', 'Evidence', 'Analyze']);
+    expect(topLevel(node)).toEqual(['Expand Neighborhood', 'Collapse Neighborhood', 'Select', 'Edit', 'Evidence', 'Analyze', 'Clear Path Highlight']);
+    expect(topLevel(contextMenuItems({ kind: 'node', selection: ['a', 'b'] }))).toEqual(['Select', 'Edit', 'Paths', 'Evidence', 'Analyze']);
   });
 
   it('edge: the information block only', () => {

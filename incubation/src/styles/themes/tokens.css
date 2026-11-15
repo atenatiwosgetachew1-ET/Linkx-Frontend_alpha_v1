@@ -110,6 +110,12 @@
   --graph-primary-bg: var(--primary-action-bg);
   --graph-primary-text: var(--primary-action-text);
   --graph-primary-border: var(--primary-action-border);
+  --graph-alert-high: #e74c3c; /* production alert card colours */
+  --graph-alert-medium: #f39c12;
+  --graph-pinned: #f59e0b; /* production pinned marker colour */
+  --graph-group: #6366f1; /* Merged & Grouped card: group nodes */
+  --graph-merged: #0d9488; /* Merged & Grouped card: merged nodes */
+  --graph-node-flag: #f39c12; /* production node-flag edge and legend colour */
   --reports-card-type: #2563eb;
   --reports-card-source: #7e22ce;
   --reports-json-bg: color-mix(in srgb, var(--app-bg) 70%, var(--input-bg));

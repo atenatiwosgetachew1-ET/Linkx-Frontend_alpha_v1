@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { buildElements, edgeCurveFor, isDefaultEdgeColor, isDefaultNodeColor, toCyEdge, toCyNode, zoomedWidths } from './graphElements.js';
 import { recolorSvgForDarkMode, resolveIconUrl } from './graphIcons.js';
+import { semanticLegend } from './graphModel.js';
 import { concentricLayout, layoutRadius, neighbourIndex } from './layouts.js';
 import { createGraphStore } from './graphStore.js';
 import { RENDERERS, decideRenderer, isGpuAllowedBySystem } from './rendererPreference.js';
@@ -111,5 +112,16 @@ describe('renderer choice (GPU off by default)', () => {
     expect(isGpuAllowedBySystem({})).toBe(true);
     expect(isGpuAllowedBySystem({ graph_gpu_allowed: false })).toBe(false);
     expect(isGpuAllowedBySystem({ graph_gpu_allowed: 'false' })).toBe(false);
+  });
+});
+
+describe('semantic legend wording (graphs_basic.html updateGraphDomainTerminology)', () => {
+  it('words the four entries for NBE and CDR as production', () => {
+    expect(semanticLegend(false).map((entry) => entry.text)).toEqual([
+      'Observed financial transfer', 'Time-ordered sequence (not a transfer)', 'Analytical grouping (shared property)', 'Node flag (property of transaction)',
+    ]);
+    expect(semanticLegend(true).map((entry) => entry.text)).toEqual([
+      'Observed call / communication session', 'Time-ordered call sequence', 'Analytical grouping (shared tower / device)', 'Node flag (property of call record)',
+    ]);
   });
 });
