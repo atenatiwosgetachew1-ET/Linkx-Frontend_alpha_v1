@@ -9,6 +9,7 @@ import '../styles/features/settings.css';
 import '../styles/features/source.css';
 import '../styles/features/tasks.css';
 import '../styles/features/reports.css';
+import '../styles/features/graph.css';
 import '../styles/features/window-controls.css';
 import { AuthProvider } from '../auth/AuthContext.jsx';
 import { useAuth } from '../auth/useAuth.js';

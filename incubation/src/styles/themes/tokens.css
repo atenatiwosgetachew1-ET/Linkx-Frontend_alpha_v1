@@ -88,6 +88,28 @@
   --reports-band-high: #c2410c;
   --reports-band-critical: #dc2626;
   --reports-band-fatal: #7f1d1d;
+  /* Graph window (canvas colours are read by GraphCanvas through the cascade;
+     production defaults: hollow nodes, #555 borders, #111 labels, black edges) */
+  /* Opaque (production's graph was a solid page): --window-bg is translucent,
+     which let the animated workspace background show through the graph. */
+  --graph-bg: var(--input-bg);
+  --graph-canvas-bg: var(--input-bg);
+  --graph-border: var(--panel-border);
+  --graph-text: var(--app-text);
+  --graph-muted-text: var(--muted-text);
+  --graph-toolbar-bg: var(--input-bg);
+  --graph-node-fill: transparent;
+  --graph-node-border: var(--muted-text);
+  --graph-label: var(--app-text);
+  --graph-edge: var(--app-text);
+  --graph-selected: var(--accent-strong);
+  --graph-accent: var(--accent-strong);
+  --graph-warning-text: var(--status-warning-text, #b45309);
+  --graph-gpu-text: var(--accent-strong);
+  --graph-field-focus-border: var(--accent);
+  --graph-primary-bg: var(--primary-action-bg);
+  --graph-primary-text: var(--primary-action-text);
+  --graph-primary-border: var(--primary-action-border);
   --reports-card-type: #2563eb;
   --reports-card-source: #7e22ce;
   --reports-json-bg: color-mix(in srgb, var(--app-bg) 70%, var(--input-bg));

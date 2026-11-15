@@ -528,3 +528,49 @@
 .libraries_pending p {
 	margin: 0;
 }
+
+.libraries_switch {
+	display: flex;
+	align-items: flex-start;
+	gap: 10px;
+	cursor: pointer;
+}
+
+.libraries_switch input {
+	margin-top: 3px;
+}
+
+.libraries_switch span {
+	display: grid;
+	gap: 2px;
+}
+
+.libraries_switch strong {
+	color: var(--settings-text);
+}
+
+.libraries_switch small,
+.libraries_reasons {
+	color: var(--settings-text-muted);
+}
+
+.libraries_current {
+	margin: 10px 0 0;
+	color: var(--settings-text-secondary);
+}
+
+.libraries_verdict {
+	margin: 0 0 4px;
+	font-weight: 600;
+	color: var(--settings-text);
+}
+
+.libraries_verdict.is-capable {
+	color: var(--settings-accent-text);
+}
+
+.libraries_reasons {
+	margin: 0;
+	padding-left: 18px;
+	font-size: 12px;
+}

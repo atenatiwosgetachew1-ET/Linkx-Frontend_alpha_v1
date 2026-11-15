@@ -42,11 +42,13 @@ function usePrefersReducedMotion() {
  * Animates only when background animations are enabled, motion is allowed
  * and the tab is visible; otherwise a single static frame is drawn.
  */
-function NetworkBackground() {
+// `paused`: hold a still frame (e.g. while a Graph window is active, so the
+// background does not compete with the graph for frames).
+function NetworkBackground({ paused = false }) {
   const canvasRef = useRef(null);
   const { areBackgroundAnimationsEnabled } = useBackgroundAnimations();
   const prefersReducedMotion = usePrefersReducedMotion();
-  const shouldAnimate = areBackgroundAnimationsEnabled && !prefersReducedMotion;
+  const shouldAnimate = areBackgroundAnimationsEnabled && !prefersReducedMotion && !paused;
 
   useEffect(() => {
     const canvas = canvasRef.current;

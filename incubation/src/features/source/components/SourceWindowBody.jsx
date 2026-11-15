@@ -98,6 +98,7 @@ import {
 } from '../lib/streamLogs.js';
 import { endAbandonedStream, markStreamActive, markStreamEnded, setActiveStreamLogFile } from '../lib/activeStreams.js';
 import { watchStreamTask } from '../lib/backgroundStreams.js';
+import { markGraphSessionTerminated } from '../../graph/lib/graphStatus.js';
 import {
   TASK_ORIGINS,
   TASK_STATUSES,
@@ -628,6 +629,9 @@ export default function SourceWindowBody({ windowItem }) {
     }
     markStreamEnded(windowItem.id); // this request is the closing request
     unplugStreamLog(windowItem.id);
+    // Production (A:16448): Graph windows linked to this session unlink and
+    // its relationships clear; what they show is kept.
+    markGraphSessionTerminated(sourceSessionId);
     patchModeState({ streamStatus: STREAM_STATUSES.TERMINATING }, key);
     appendStreamLog(windowItem.id, 'Terminating the stream…');
     const result = await endStreamRequest(apiFetch, { sourceSessionId, logFile });

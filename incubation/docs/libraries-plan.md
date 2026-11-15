@@ -36,7 +36,7 @@ Example: GPU rendering is used only if the system allows it, this device is capa
 |---|---|---|---|
 | **Rules** | System | Loaded rules with Built-in / Custom badges and the active one marked, with a filter; upload a rule (JSON + name, with the template link); remove a rule (confirm). Viewing needs `config:read`; changes need `config:write`. | **L1 (done)** |
 | Rules: catalog per domain | System | What each rule does, per domain (`/api/v1/rules/catalog`). Its response shape is unverified, so it waits for L-B3. | L2 |
-| **Graph rendering** | Device (+ System policy) | GPU switch, capability status (capable / not capable / unknown) with **Check again**, and why it is off (device, policy or not capable) | L2, with graph G1 |
+| **Graph rendering** | Device (+ System policy) | GPU switch, capability status (capable / not capable / unknown) with **Check again**, and why it is off (device, policy or not capable) | **L2 (done 2026-11-14)** |
 | **Graph defaults** | Personal | Default layout, visible-node limit, labels / titles, physics, edge weight | L2, with G1–G2 |
 | **Charts** | Personal | Default colour schema, full graph vs visible view for metrics | L3, with G5 |
 | **Icon sets** | System | Built-in `graph_icons`, later uploaded sets | L3, with G3 |

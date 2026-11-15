@@ -1,0 +1,238 @@
+// Production right-click menu (graphs_basic.html GB:2096 "oncontext"), item
+// for item and in the same order. Items whose feature has not been ported
+// yet are listed but unavailable, with the slice that brings them, so the
+// menu already shows everything production offers.
+//
+// contextMenuItems({ kind, nodeId, selection, ... }) -> { header?, items }
+//   kind: 'canvas' | 'node' | 'edge'
+//   items: [{ action, label, enabled, pending? }]  (pending: why not yet)
+//          or groups { group, label, items: [...], enabled, pending? }
+//          shown as submenus (see CANVAS_GROUPS).
+
+const PENDING = {
+  analysis: 'Coming with the analysis tools.',
+  review: 'Coming with alerts, pinned evidence and saved views.',
+  editing: 'Coming with graph editing.',
+};
+
+// Which slice brings each action (docs/graph-chart-plan.md §4).
+const ACTION_PHASE = {
+  paste: 'editing',
+  add_node: 'editing',
+  add_label: 'editing',
+  add_comment_box: 'editing',
+  add_text_block: 'editing',
+  add_event_frame: 'editing',
+  add_theme_line: 'editing',
+  add_ole_object: 'editing',
+  copy: 'editing',
+  delete: 'editing',
+  ungroup: 'editing',
+  unlink: 'editing',
+  unlinks: 'editing',
+  link: 'editing',
+  group: 'editing',
+  merge_nodes: 'editing',
+  bring_to_front: 'editing',
+  toggle_edge_bundling: 'editing',
+  configure_edge_bundling: 'editing',
+  visual_degree: 'analysis',
+  visual_property: 'analysis',
+  filter_elements: 'analysis',
+  path_finder: 'analysis',
+  find_all_paths: 'analysis',
+  link_traversal: 'analysis',
+  cut_points: 'analysis',
+  clear_path: 'analysis',
+  apply_community_detection: 'analysis',
+  save_view: 'review',
+  load_view: 'review',
+  toggle_alert_rules: 'review',
+  configure_alert_rules: 'review',
+  run_alert_scan: 'review',
+  show_pinned_evidence: 'review',
+  clear_pinned_evidence: 'review',
+  pin_evidence: 'review',
+  unpin_evidence: 'review',
+};
+
+// Actions this build can run. Grows slice by slice.
+export const AVAILABLE_ACTIONS = new Set([
+  'expand_neighborhood', 'collapse_neighborhood',
+  // G2.3 analysis tools
+  'path_finder', 'find_all_paths', 'link_traversal', 'cut_points', 'clear_path',
+  'apply_community_detection', 'visual_degree', 'visual_property', 'filter_elements', 'reset_node_styles',
+]);
+
+const item = (action, label, { disabled = false } = {}) => {
+  const ported = AVAILABLE_ACTIONS.has(action);
+  return {
+    action,
+    label,
+    enabled: ported && !disabled,
+    ...(ported ? {} : { pending: PENDING[ACTION_PHASE[action]] || PENDING.analysis }),
+  };
+};
+
+// Production edge information block (edge right-click).
+export const edgeMenuHeader = (edge = {}, { isCdr = false } = {}) => ({
+  title: 'Edge Information',
+  rows: [
+    ['Semantic', edge.edge_semantic || 'N/A'],
+    [isCdr ? 'Call Session Flow' : 'Financial Flow', edge.financial_flow ? 'Yes' : 'No'],
+    ['Directed Display', edge.directed_display ? 'Yes' : 'No'],
+    ...(edge.reason ? [['Reason', String(edge.reason)]] : []),
+  ],
+});
+
+// Nested grouping (analyst decision 2026-11-14: production's flat list
+// needed a scrollbar). Items keep production's order inside each group;
+// `null` groups stay at the top level.
+const CANVAS_GROUPS = [
+  [null, ['paste']],
+  ['Add', ['add_node', 'add_label', 'add_comment_box', 'add_text_block', 'add_event_frame', 'add_theme_line', 'add_ole_object']],
+  ['Analyze', ['visual_degree', 'visual_property', 'filter_elements', 'apply_community_detection', 'link_traversal', 'cut_points', 'reset_node_styles']],
+  [null, ['clear_path']],
+  ['Views', ['save_view', 'load_view']],
+  ['Edge Bundling', ['toggle_edge_bundling', 'configure_edge_bundling']],
+  ['Alert Rules', ['toggle_alert_rules', 'configure_alert_rules', 'run_alert_scan']],
+  ['Pinned Evidence', ['show_pinned_evidence', 'clear_pinned_evidence']],
+];
+const NODE_GROUPS = [
+  [null, ['expand_neighborhood', 'collapse_neighborhood']],
+  ['Edit', ['copy', 'delete', 'ungroup', 'unlink', 'bring_to_front']],
+  ['Evidence', ['pin_evidence', 'unpin_evidence']],
+  ['Analyze', ['link_traversal', 'cut_points']],
+  [null, ['clear_path']],
+];
+const SELECTION_GROUPS = [
+  ['Edit', ['copy', 'link', 'unlinks', 'group', 'merge_nodes', 'add_theme_line']],
+  ['Paths', ['path_finder', 'find_all_paths']],
+  ['Evidence', ['pin_evidence', 'unpin_evidence']],
+  ['Analyze', ['link_traversal', 'cut_points']],
+  [null, ['clear_path']],
+];
+
+// -> [item | { group, label, items, enabled, pending? }]
+const groupItems = (items, layout) => {
+  const byAction = new Map(items.map((entry) => [entry.action, entry]));
+  const result = [];
+  layout.forEach(([label, actions]) => {
+    const members = actions.map((action) => byAction.get(action)).filter(Boolean);
+    actions.forEach((action) => byAction.delete(action));
+    if (!members.length) return;
+    if (!label) {
+      result.push(...members);
+      return;
+    }
+    const enabled = members.some((entry) => entry.enabled);
+    result.push({
+      group: label.toLowerCase().replace(/\s+/g, '_'),
+      label,
+      items: members,
+      enabled,
+      ...(enabled ? {} : { pending: members.find((entry) => entry.pending)?.pending || '' }),
+    });
+  });
+  byAction.forEach((entry) => result.push(entry)); // anything not laid out
+  return result;
+};
+
+// Every leaf item, groups flattened (order kept).
+export const flattenMenuItems = (items) => items.flatMap((entry) => (entry.items ? entry.items : [entry]));
+
+export const contextMenuItems = ({
+  kind,
+  nodeId = null,
+  selection = [],
+  edge = null,
+  isCdr = false,
+  hasClipboard = false,
+  savedViewCount = 0,
+  edgeBundling = false,
+  alertRules = false,
+  nodeHasEdges = false,
+  selectionFullyLinked = false,
+  pathHighlighted = false,
+  nodeStylesChanged = false,
+} = {}) => {
+  if (kind === 'edge') return { header: edgeMenuHeader(edge || {}, { isCdr }), items: [] };
+
+  const items = [];
+  if (kind === 'canvas') {
+    if (hasClipboard) items.push(item('paste', 'Paste'));
+    items.push(
+      item('add_node', 'Add Node'),
+      item('add_label', 'Label'),
+      item('add_comment_box', 'Comment Box'),
+      item('add_text_block', 'Text Block'),
+      item('add_event_frame', 'Event Frame'),
+      item('add_theme_line', 'Theme Line', { disabled: selection.length < 2 }),
+      item('add_ole_object', 'OLE Object'),
+      item('visual_degree', 'Visualize by Degree'),
+      item('visual_property', 'Visualize by Property'),
+      item('filter_elements', 'Filter Elements'),
+      item('save_view', 'Save View'),
+    );
+    if (savedViewCount > 0) items.push(item('load_view', 'Load View'));
+    items.push(
+      item('toggle_edge_bundling', `${edgeBundling ? 'Disable' : 'Enable'} Edge Bundling`),
+      item('configure_edge_bundling', 'Configure Edge Bundling'),
+      item('toggle_alert_rules', `${alertRules ? 'Disable' : 'Enable'} Alert Rules`),
+      item('configure_alert_rules', 'Configure Alert Rules'),
+      item('run_alert_scan', 'Run Alert Scan'),
+      item('show_pinned_evidence', 'Show Pinned Evidence'),
+      item('clear_pinned_evidence', 'Clear Pinned Evidence'),
+      item('apply_community_detection', 'Detect Communities'),
+      item('link_traversal', 'Link Traversal (5 degrees)', { disabled: selection.length === 0 }),
+      item('cut_points', 'Cut Points'),
+    );
+    // Not in production (it had undo): restores what the visual tools changed.
+    if (nodeStylesChanged) items.push(item('reset_node_styles', 'Reset Node Styles'));
+    if (pathHighlighted) items.push(item('clear_path', 'Clear Path Highlight'));
+    return { items: groupItems(items, CANVAS_GROUPS) };
+  }
+
+  // Node: the right-clicked node is part of `selection` (GraphCanvas selects it).
+  if (selection.length <= 1) {
+    items.push(item('copy', 'Copy'), item('delete', 'Delete Node'));
+    if (String(nodeId ?? selection[0]).startsWith('Group')) items.push(item('ungroup', 'Ungroup'));
+    if (nodeHasEdges) items.push(item('unlink', 'Unlink Node'));
+    items.push(
+      item('expand_neighborhood', 'Expand Neighborhood'),
+      item('collapse_neighborhood', 'Collapse Neighborhood'),
+      item('bring_to_front', 'Bring to Front'),
+      item('pin_evidence', 'Pin Evidence'),
+      item('unpin_evidence', 'Unpin Evidence'),
+    );
+  } else {
+    items.push(
+      item('copy', 'Copy Nodes/Edges'),
+      selectionFullyLinked ? item('unlinks', 'Unlink Nodes') : item('link', 'Link Nodes'),
+      item('group', 'Group Nodes'),
+      item('merge_nodes', 'Merge Nodes'),
+      item('add_theme_line', 'Theme Line'),
+    );
+    if (selection.length === 2) items.push(item('path_finder', 'Find Shortest Path'));
+    items.push(
+      item('find_all_paths', 'Find All Paths', { disabled: selection.length !== 2 }),
+      item('pin_evidence', 'Pin Evidence'),
+      item('unpin_evidence', 'Unpin Evidence'),
+    );
+  }
+  items.push(item('link_traversal', 'Link Traversal (5 degrees)'), item('cut_points', 'Cut Points'));
+  if (pathHighlighted) items.push(item('clear_path', 'Clear Path Highlight'));
+  return { items: groupItems(items, selection.length <= 1 ? NODE_GROUPS : SELECTION_GROUPS) };
+};
+
+// Production areAllSelectedNodesLinked: every pair of the selection has an
+// edge (either direction).
+export const allPairsLinked = (graph, ids) => {
+  for (let i = 0; i < ids.length; i += 1) {
+    for (let j = i + 1; j < ids.length; j += 1) {
+      if (!graph.hasNode(ids[i]) || !graph.hasNode(ids[j])) return false;
+      if (!graph.areNeighbors(ids[i], ids[j])) return false;
+    }
+  }
+  return ids.length > 1;
+};

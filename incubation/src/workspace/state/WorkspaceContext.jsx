@@ -5,8 +5,11 @@ import { WORKSPACE_ACTIONS, getWindowLimitBlock } from './workspaceTypes.js';
 import { WorkspaceActionsContext, WorkspaceContext } from './workspaceContext.js';
 import { useNotifications } from '../../shared/notifications/useNotifications.js';
 
-function createWorkspaceActions(dispatch, { getWindows, onLimitReached }) {
+function createWorkspaceActions(dispatch, { getWindows, getNextWindowIndex, onLimitReached }) {
   return {
+    // The id the next opened window of `type` will get (reducer buildWindowId),
+    // for flows that must act on a window right after opening it.
+    nextWindowId: (type) => `${type}-${getNextWindowIndex()}`,
     // Returns false when the per-type cap blocked a new window (the reducer
     // then focuses the most recent window of that type instead).
     openWindow: (type, options = {}) => {
@@ -58,11 +61,14 @@ export function WorkspaceProvider({ children }) {
   const { notify } = useNotifications();
   const windowsRef = useRef(state.windows);
   windowsRef.current = state.windows;
+  const nextIndexRef = useRef(state.nextWindowIndex);
+  nextIndexRef.current = state.nextWindowIndex;
   const notifyRef = useRef(notify);
   notifyRef.current = notify;
 
   const actions = useMemo(() => createWorkspaceActions(dispatch, {
     getWindows: () => windowsRef.current,
+    getNextWindowIndex: () => nextIndexRef.current,
     onLimitReached: ({ limit, label }) => {
       notifyRef.current({
         title: label + ' window limit reached',

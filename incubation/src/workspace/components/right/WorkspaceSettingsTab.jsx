@@ -3,8 +3,13 @@ import { useTheme } from '../../../shared/theme/ThemeContext.jsx';
 import ThemePicker from '../../../shared/theme/ThemePicker.jsx';
 import { useBackgroundAnimations } from '../../../utils/backgroundAnimations.js';
 import { useGlassEffects } from '../../../utils/glassEffects.js';
+import { useActiveGraph } from '../../../features/graph/lib/useActiveGraph.js';
+import { ChartPanelPending, GraphSettingsPanel } from '../../../features/graph/components/panel/GraphPanels.jsx';
 
-export default function WorkspaceSettingsTab() {
+// Right panel → Settings: "This graph" (or chart) first, then Appearance &
+// Theme (graph-chart-plan §3.11).
+export default function WorkspaceSettingsTab({ workspace }) {
+  const graph = useActiveGraph(workspace);
   const {
     theme,
     customOverrides,
@@ -66,6 +71,14 @@ export default function WorkspaceSettingsTab() {
 
   return (
     <div className="workspace_context_settings_wrapper">
+      {graph.windowItem ? <GraphSettingsPanel graph={graph} /> : null}
+      {graph.isChart ? (
+        <section className="workspace_context_section" aria-label="This chart">
+          <h2>This chart</h2>
+          <ChartPanelPending />
+        </section>
+      ) : null}
+
       {/* Theme Studio Picker Grid Section */}
       <section className="workspace_context_section" aria-label="Theme settings">
         <h2>Appearance & Theme</h2>
@@ -142,26 +155,6 @@ export default function WorkspaceSettingsTab() {
         </div>
       </section>
 
-      {/* Graph Physics & Engine Settings Section */}
-      <section className="workspace_context_section" aria-label="Graph settings">
-        <h2>Graph Settings</h2>
-        <div className="workspace_context_form_stack">
-          <label className="workspace_context_switch">
-            <input type="checkbox" disabled />
-            <span>Show node labels</span>
-          </label>
-          <label className="workspace_context_switch">
-            <input type="checkbox" disabled />
-            <span>Enable graph physics</span>
-          </label>
-          <label>
-            <span>Layout algorithm</span>
-            <select disabled defaultValue="directed">
-              <option value="directed">Force Directed</option>
-            </select>
-          </label>
-        </div>
-      </section>
     </div>
   );
 }

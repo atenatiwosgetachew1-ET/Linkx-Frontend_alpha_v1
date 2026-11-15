@@ -1,0 +1,633 @@
+/* Graph window (docs/graph-chart-plan.md). Controls live in the right
+   workspace panel; the window holds the canvas, a toolbar and the
+   relationship strip. */
+.graph_window_body {
+	background: var(--graph-bg);
+	color: var(--graph-text);
+}
+
+/* The single child of the window body (which stretches it to full size);
+   toolbar and relationship strip keep their own height, the stage takes
+   the rest. */
+.graph_window {
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	overflow: hidden;
+}
+
+.graph_window_toolbar {
+	flex: none;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 6px 10px;
+	border-bottom: 1px solid var(--graph-border);
+	background: var(--graph-toolbar-bg);
+	font-size: 12px;
+}
+
+.graph_window_counts {
+	margin: 0;
+	flex: 1 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--graph-muted-text);
+}
+
+.graph_window_counts strong {
+	color: var(--graph-text);
+}
+
+.graph_window_hint {
+	color: var(--graph-muted-text);
+}
+
+.graph_window_flag {
+	flex: none;
+	padding: 1px 8px;
+	border: 1px solid var(--graph-border);
+	border-radius: 999px;
+	color: var(--graph-muted-text);
+	font-size: 11px;
+	font-weight: 600;
+	white-space: nowrap;
+}
+
+.graph_window_flag.is-warning {
+	color: var(--graph-warning-text);
+	border-color: color-mix(in srgb, var(--graph-warning-text) 40%, transparent);
+}
+
+.graph_window_flag.is-gpu {
+	color: var(--graph-gpu-text);
+	border-color: color-mix(in srgb, var(--graph-gpu-text) 45%, transparent);
+}
+
+.graph_window_tools {
+	flex: none;
+	display: flex;
+	gap: 4px;
+}
+
+.graph_window_icon_button {
+	display: inline-grid;
+	place-items: center;
+	width: 28px;
+	height: 28px;
+	padding: 0;
+	border: 1px solid var(--graph-border);
+	border-radius: 6px;
+	background: transparent;
+	color: var(--graph-text);
+	cursor: pointer;
+}
+
+.graph_window_icon_button:hover:not(:disabled) {
+	border-color: var(--graph-accent);
+}
+
+.graph_window_icon_button:disabled {
+	opacity: 0.45;
+	cursor: default;
+}
+
+.graph_window_icon_button svg {
+	width: 16px;
+	height: 16px;
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 1.8;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+
+.graph_window_stage {
+	position: relative;
+	flex: 1 1 auto;
+	min-height: 0;
+	background: var(--graph-canvas-bg);
+}
+
+.graph_canvas {
+	position: absolute;
+	inset: 0;
+}
+
+.graph_window_state {
+	position: absolute;
+	inset: 0;
+	display: grid;
+	place-content: center;
+	justify-items: center;
+	gap: 6px;
+	padding: 24px;
+	text-align: center;
+	color: var(--graph-muted-text);
+	background: color-mix(in srgb, var(--graph-canvas-bg) 82%, transparent);
+	pointer-events: none;
+}
+
+.graph_window_state > * {
+	margin: 0;
+	max-width: 420px;
+}
+
+.graph_window_state h4 {
+	color: var(--graph-text);
+	font-size: 14px;
+}
+
+.graph_window_state button {
+	pointer-events: auto;
+}
+
+.graph_window_state.is-error h4 {
+	color: var(--graph-warning-text);
+}
+
+
+
+.graph_window_spinner {
+	width: 22px;
+	height: 22px;
+	border: 2px solid color-mix(in srgb, var(--graph-accent) 25%, transparent);
+	border-top-color: var(--graph-accent);
+	border-radius: 50%;
+	animation: graph_window_spin 0.8s linear infinite;
+}
+
+@keyframes graph_window_spin {
+	to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.graph_window_spinner { animation-duration: 2.4s; }
+}
+
+.graph_window_button {
+	padding: 4px 12px;
+	border: 1px solid var(--graph-border);
+	border-radius: 6px;
+	background: transparent;
+	color: var(--graph-text);
+	cursor: pointer;
+}
+
+.graph_window_button:hover {
+	border-color: var(--graph-accent);
+}
+
+.graph_window_relationships {
+	flex: none;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-height: 34px;
+	padding: 4px 10px;
+	border-top: 1px solid var(--graph-border);
+	background: var(--graph-toolbar-bg);
+	font-size: 12px;
+	overflow-x: auto;
+}
+
+/* ── Right workspace panel: controls for the active Graph window ─────── */
+.graph_panel_target {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	margin: 0 0 8px;
+	font-size: 12px;
+	font-weight: 600;
+	color: var(--right-card-title-color, var(--graph-text));
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.graph_panel_target span {
+	color: var(--graph-accent);
+	font-size: 9px;
+}
+
+.graph_panel_props {
+	display: grid;
+	gap: 2px;
+	margin: 0 0 8px;
+	font-size: 12px;
+}
+
+.graph_panel_props > div {
+	display: grid;
+	grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+	gap: 8px;
+	padding: 3px 0;
+	border-bottom: 1px solid var(--right-card-border, var(--graph-border));
+}
+
+.graph_panel_props dt {
+	color: var(--right-form-label-color, var(--graph-muted-text));
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.graph_panel_props dd {
+	margin: 0;
+	color: var(--right-form-input-text, var(--graph-text));
+	overflow-wrap: anywhere;
+}
+
+.graph_panel_subheading {
+	margin: 6px 0 0;
+	font-size: 11px;
+	font-weight: 700;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: var(--right-form-label-color, var(--graph-muted-text));
+}
+
+.graph_panel_range {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 8px;
+}
+
+.graph_panel_range input {
+	width: 100%;
+	box-sizing: border-box;
+}
+
+.graph_panel_actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.graph_panel_results {
+	margin: 8px 0;
+	font-size: 12px;
+}
+
+.graph_panel_warning {
+	color: var(--graph-warning-text);
+}
+
+.graph_panel_keys {
+	display: grid;
+	gap: 4px;
+	max-height: 240px;
+	overflow: auto;
+	margin: 8px 0 0;
+	padding: 6px 8px;
+	border: 1px solid var(--right-card-border, var(--graph-border));
+	border-radius: 6px;
+}
+
+.graph_panel_keys legend {
+	padding: 0 4px;
+	font-size: 11px;
+	font-weight: 600;
+	color: var(--right-form-label-color, var(--graph-muted-text));
+}
+
+.graph_panel_link {
+	justify-self: start;
+	padding: 0;
+	border: 0;
+	background: none;
+	color: var(--graph-accent);
+	cursor: pointer;
+	text-decoration: underline;
+}
+
+/* Link controls and relationship chips (production "Graph Relationships"). */
+.graph_window_button.is-compact {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 3px 8px;
+	font-size: 12px;
+}
+
+.graph_window_button svg {
+	width: 14px;
+	height: 14px;
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 1.8;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+
+.graph_window_button:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+.graph_window_link {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+}
+
+/* Same field as the Reports search (.reports_search), in graph tokens. */
+.graph_window_field {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	width: 180px;
+	height: 30px;
+	padding: 0 9px;
+	border: 1px solid var(--graph-border);
+	border-radius: 6px;
+	background: var(--graph-toolbar-bg);
+	color: var(--graph-muted-text);
+	box-sizing: border-box;
+}
+
+.graph_window_field:hover,
+.graph_window_field:focus-within {
+	border-color: var(--graph-field-focus-border);
+}
+
+.graph_window_field svg {
+	flex: none;
+	width: 14px;
+	height: 14px;
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 1.8;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+
+.graph_window_field input {
+	flex: 1 1 auto;
+	min-width: 0;
+	padding: 0;
+	border: 0;
+	outline: none;
+	background: transparent;
+	color: var(--graph-text);
+	font: inherit;
+}
+
+.graph_window_field input::placeholder {
+	color: var(--graph-muted-text);
+}
+
+.graph_window_link .graph_window_button {
+	height: 30px;
+}
+
+.graph_window_button.is-primary {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	margin-top: 6px;
+	padding: 6px 14px;
+	border-color: var(--graph-primary-border);
+	background: var(--graph-primary-bg);
+	color: var(--graph-primary-text);
+	font-weight: 600;
+}
+
+.graph_window_button.is-primary:hover {
+	border-color: var(--graph-primary-border);
+	filter: brightness(1.08);
+}
+
+.graph_window_button.is-primary svg {
+	width: 14px;
+	height: 14px;
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 2;
+	stroke-linecap: round;
+}
+
+.graph_relationship_chip {
+	flex: none;
+	padding: 2px 10px;
+	border: 2px solid transparent;
+	border-radius: 999px;
+	background: var(--chip-bg, transparent);
+	color: var(--chip-text, var(--graph-text));
+	font-size: 12px;
+	font-weight: 600;
+	white-space: nowrap;
+	cursor: pointer;
+}
+
+.graph_relationship_chip.is-all {
+	border-color: var(--graph-border);
+}
+
+.graph_relationship_chip.is-active {
+	border-color: var(--graph-selected);
+	box-shadow: 0 0 0 1px var(--graph-selected);
+}
+
+.graph_relationship_chip:disabled {
+	cursor: progress;
+	opacity: 0.75;
+}
+
+/* Hover titles (production "Show titles"). */
+.graph_canvas_tooltip {
+	position: absolute;
+	z-index: 2;
+	max-width: 320px;
+	/* Kept inside the canvas (positioned by GraphCanvas). */
+	max-height: calc(100% - 8px);
+	overflow: hidden;
+	padding: 8px 10px;
+	border: 1px solid var(--graph-border);
+	border-radius: 6px;
+	background: var(--graph-toolbar-bg);
+	color: var(--graph-text);
+	box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+	font-size: 12px;
+	line-height: 1.4;
+	white-space: pre-wrap;
+	pointer-events: none;
+}
+
+/* Right-click menu (production #customContextMenu), styled like the hover
+   title box (.graph_canvas_tooltip); groups open as submenus. */
+.graph_context_menu {
+	position: absolute;
+	z-index: 3;
+	display: flex;
+	flex-direction: column;
+	min-width: 170px;
+	max-width: 280px;
+	padding: 4px;
+	border: 1px solid var(--graph-border);
+	border-radius: 6px;
+	background: var(--graph-toolbar-bg);
+	color: var(--graph-text);
+	box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+	font-size: 12px;
+	line-height: 1.4;
+	outline: none;
+}
+
+.graph_context_menu.is-submenu {
+	z-index: 4;
+}
+
+.graph_context_menu_header {
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+	padding: 4px 6px;
+}
+
+.graph_context_menu_header strong {
+	margin-bottom: 2px;
+}
+
+.graph_context_menu_header b {
+	font-weight: 600;
+}
+
+.graph_context_menu_header + .graph_context_menu_item {
+	margin-top: 4px;
+	border-top: 1px solid var(--graph-border);
+}
+
+.graph_context_menu_item {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	padding: 4px 6px;
+	border: 0;
+	border-radius: 4px;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	text-align: left;
+	white-space: nowrap;
+	cursor: default;
+}
+
+.graph_context_menu_item:hover:not([aria-disabled='true']),
+.graph_context_menu_item:focus-visible,
+.graph_context_menu_item.is-open {
+	background: color-mix(in srgb, var(--graph-accent) 14%, transparent);
+	outline: none;
+}
+
+.graph_context_menu_item[aria-disabled='true'] {
+	color: var(--graph-muted-text);
+	opacity: 0.6;
+}
+
+.graph_context_menu_chevron {
+	flex: none;
+	width: 12px;
+	height: 12px;
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 2;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+
+/* Analysis dialogs (GraphDialog), styled like the right-click menu. */
+.graph_dialog_backdrop {
+	position: absolute;
+	inset: 0;
+	z-index: 5;
+	display: grid;
+	place-items: center;
+	padding: 12px;
+	background: color-mix(in srgb, var(--graph-canvas-bg) 45%, transparent);
+}
+
+.graph_dialog {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	width: min(320px, 100%);
+	max-height: 100%;
+	overflow-y: auto;
+	padding: 10px 12px;
+	border: 1px solid var(--graph-border);
+	border-radius: 6px;
+	background: var(--graph-toolbar-bg);
+	color: var(--graph-text);
+	box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+	font-size: 12px;
+	line-height: 1.4;
+	box-sizing: border-box;
+}
+
+.graph_dialog_title {
+	font-size: 13px;
+}
+
+.graph_dialog_text {
+	margin: 0;
+	color: var(--graph-muted-text);
+}
+
+.graph_dialog_field {
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+}
+
+.graph_dialog_field select,
+.graph_dialog_field input {
+	height: 28px;
+	padding: 0 6px;
+	border: 1px solid var(--graph-border);
+	border-radius: 6px;
+	background: var(--graph-toolbar-bg);
+	color: var(--graph-text);
+	font: inherit;
+}
+
+.graph_dialog_field select:focus,
+.graph_dialog_field input:focus {
+	border-color: var(--graph-field-focus-border);
+	outline: none;
+}
+
+.graph_dialog_group {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	margin: 0;
+	padding: 0;
+	border: 0;
+}
+
+.graph_dialog_group legend {
+	margin-bottom: 3px;
+	padding: 0;
+}
+
+.graph_dialog_check {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.graph_dialog_actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 6px;
+	margin-top: 2px;
+}
+
+.graph_dialog_actions .graph_window_button.is-primary {
+	margin-top: 0;
+	padding: 3px 12px;
+}

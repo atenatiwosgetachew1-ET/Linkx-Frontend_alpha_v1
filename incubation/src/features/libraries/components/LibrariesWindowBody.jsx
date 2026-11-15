@@ -16,13 +16,14 @@ import {
   rememberBuiltinRules,
 } from '../lib/rulesLibrary.js';
 import RulesLibraryPanel from './RulesLibraryPanel.jsx';
+import GraphRenderingPanel from './GraphRenderingPanel.jsx';
 
 // Sections of the Libraries window (docs/libraries-plan.md §3). Only Rules is
 // live; the others arrive with the Graph / Chart windows and are shown so the
 // analyst knows where those settings will be.
 const SECTIONS = [
   { id: 'rules', label: 'Rules', scope: 'System', description: 'Rule sets available to this session.' },
-  { id: 'graph_rendering', label: 'Graph rendering', scope: 'Device', description: 'GPU rendering for large graphs.', pending: 'Arrives with the Graph window.' },
+  { id: 'graph_rendering', label: 'Graph rendering', scope: 'Device', description: 'GPU rendering for large graphs.' },
   { id: 'graph_defaults', label: 'Graph defaults', scope: 'Personal', description: 'Default layout, limits and labels.', pending: 'Arrives with the Graph window.' },
   { id: 'charts', label: 'Charts', scope: 'Personal', description: 'Chart colours and metric scope.', pending: 'Arrives with the Chart window.' },
   { id: 'icons', label: 'Icon sets', scope: 'System', description: 'Node icon albums.', pending: 'Arrives with graph editing.' },
@@ -155,6 +156,8 @@ export default function LibrariesWindowBody({ windowItem }) {
         <p>{activeSection.description} {activeSection.pending}</p>
       </div>
     );
+  } else if (activeSection.id === 'graph_rendering') {
+    content = <GraphRenderingPanel configuration={configuration} />;
   } else {
     content = (
       <RulesLibraryPanel
@@ -216,7 +219,9 @@ export default function LibrariesWindowBody({ windowItem }) {
                 : 'Applies to your account.'}
           </span>
           <div className="settings_window_footer_actions">
-            <button type="button" className="settings_button" disabled={!canRead || Boolean(busy) || !mainSessionId} onClick={refreshRules}>Reload</button>
+            {activeSection.id === 'rules' ? (
+              <button type="button" className="settings_button" disabled={!canRead || Boolean(busy) || !mainSessionId} onClick={refreshRules}>Reload</button>
+            ) : null}
           </div>
         </footer>
       </div>

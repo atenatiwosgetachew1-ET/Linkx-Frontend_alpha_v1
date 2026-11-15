@@ -2,7 +2,7 @@
 
 **For:** the backend team / backend agent of the LinkX link-analysis service.
 **From:** the incubation frontend (`/var/www/linkx-frontend/incubation`).
-**Status:** proposal. The frontend will build against the shapes below; anything you change, tell us and we adapt. Items are numbered **H-1…H-16** so answers can refer to them.
+**Status:** proposal. The frontend will build against the shapes below; anything you change, tell us and we adapt. Items are numbered **H-1…H-17** so answers can refer to them.
 
 ---
 
@@ -250,6 +250,17 @@ The frontend now hides or disables actions with production's permission names (A
 - `analysis:run`
 
 Please confirm `/auth/me` (and `/auth/verify`) return them all, under the same keys as today, for every role. A permission missing from the payload now hides the action. The backend must still enforce every one of them.
+
+### H-17. Graph windows: link and session lifetime (P1, confirm)
+The incubation Graph window uses production's graph protocol unchanged:
+- `POST /graph_link { id: "link" | "unlink", source_id, graph_window_id }`, with `graph_window_id` the window number as production sends it;
+- `graph_status_subscribe` / `graph_status_unsubscribe` and `status` events;
+- `POST /get_graph { id: "relationship", source_id, relationship }` with `include_chunks` job polling.
+
+Please confirm:
+1. **Linking while streaming only.** Production blocks a link unless the source is starting or streaming. Is that a backend rule, or only a UI rule?
+2. **Finished sessions.** The Tasks window lets an analyst open the graph of a run that has already finished; it cannot be linked any more. That window subscribes to the session's status and calls `/get_graph` relationship for it. Does the backend keep answering both for a session whose stream finished normally (not terminated), and for how long?
+3. **Terminate and close.** After `end_session` (terminate) or `close_source_window`, the frontend unlinks the linked Graph windows (production behaviour). Should it also send `/graph_link unlink` for them, or does the backend drop those links itself?
 
 ---
 

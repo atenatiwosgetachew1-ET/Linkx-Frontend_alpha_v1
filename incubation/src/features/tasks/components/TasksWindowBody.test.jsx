@@ -6,6 +6,7 @@ import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
 
 import { AuthContext } from '../../../auth/authContext.js';
+import { SessionContext } from '../../../shared/session/sessionContext.js';
 import { NotificationProvider } from '../../../shared/notifications/NotificationContext.jsx';
 import { WorkspaceProvider } from '../../../workspace/state/WorkspaceContext.jsx';
 import { useWorkspace } from '../../../workspace/hooks/useWorkspace.js';
@@ -42,10 +43,12 @@ const authWith = (permissions = null) => ({
 const renderTasks = ({ permissions = null } = {}) => render(
   <AuthContext.Provider value={authWith(permissions)}>
     <NotificationProvider>
-      <WorkspaceProvider>
-        <Probe />
-        <TasksWindowBody />
-      </WorkspaceProvider>
+      <SessionContext.Provider value={{ apiFetch: async () => ({ message: 'success' }), configuration: {} }}>
+        <WorkspaceProvider>
+          <Probe />
+          <TasksWindowBody />
+        </WorkspaceProvider>
+      </SessionContext.Provider>
     </NotificationProvider>
   </AuthContext.Provider>,
 );

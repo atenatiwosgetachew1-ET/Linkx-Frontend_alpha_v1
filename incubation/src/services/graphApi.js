@@ -3,7 +3,7 @@
 // extractNodesEdges, buildEvidencePayload). The Graph window port extends
 // this module; the Reports window uses the evidence fetch today.
 
-import { JOB_CANCEL_STATUSES, JOB_FAILURE_STATUSES, getJobErrorMessage, getJobStatus, getQueuedPollPath, isQueuedJobResponse, pollJob } from './jobs.js';
+import { JOB_CANCEL_STATUSES, JOB_FAILURE_STATUSES, JOB_POLL_DEFAULT_INTERVAL_MS, JOB_SUCCESS_STATUSES, getJobErrorMessage, getJobStatus, getQueuedPollPath, isQueuedJobResponse, pollJob } from './jobs.js';
 
 const GRAPH_POLL_TIMEOUT_MS = 120 * 1000;
 
@@ -103,3 +103,132 @@ export const fetchGraph = async (apiFetch, payload, { signal, onQueued } = {}) =
   if (!hasGraphPayload(data)) throw new Error(getJobErrorMessage(data, 'Graph request failed'));
   return { data, ...extractNodesEdges(data) };
 };
+
+
+/* ── Progressive fetch (production pollGraphJob, src/App.jsx ~3213) ────
+   Queued graph jobs are polled with `include_chunks=1&after_event_id=N`
+   every second (120 s budget). Each poll's new chunks are handed to
+   `onChunk({ nodes, edges })` as they arrive, instead of re-sending the
+   whole graph each time (production). `onProgress({ current, total })`
+   uses the job's total_nodes + total_edges when the backend reports them. */
+
+const chunkEventId = (value) => {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : 0;
+};
+
+export const buildChunkPollPath = (pollPath, afterEventId) => {
+  const separator = String(pollPath).includes('?') ? '&' : '?';
+  return `${pollPath}${separator}include_chunks=1&after_event_id=${encodeURIComponent(String(afterEventId || 0))}`;
+};
+
+const abortError = () => {
+  const error = new Error('Graph request cancelled.');
+  error.name = 'AbortError';
+  return error;
+};
+
+const wait = (ms, signal) => new Promise((resolve, reject) => {
+  const timer = setTimeout(resolve, ms);
+  signal?.addEventListener('abort', () => {
+    clearTimeout(timer);
+    reject(abortError());
+  }, { once: true });
+});
+
+const failIfJobFailed = (data) => {
+  const status = getJobStatus(data);
+  if (JOB_FAILURE_STATUSES.has(status) || data?.error || data?.results?.error || data?.result?.error) {
+    throw new Error(JOB_CANCEL_STATUSES.has(status) ? 'Graph request cancelled.' : getJobErrorMessage(data, 'Graph request failed'));
+  }
+  return status;
+};
+
+export const fetchGraphProgressive = async (apiFetch, payload, {
+  signal,
+  onQueued,
+  onChunk,
+  onProgress,
+  intervalMs = JOB_POLL_DEFAULT_INTERVAL_MS,
+  timeoutMs = GRAPH_POLL_TIMEOUT_MS,
+} = {}) => {
+  const response = await apiFetch('/get_graph', { method: 'POST', body: payload, signal });
+
+  if (!isQueuedJobResponse(response)) {
+    failIfJobFailed(response);
+    if (!hasGraphPayload(response)) throw new Error(getJobErrorMessage(response, 'Graph request failed'));
+    const graph = extractNodesEdges(response);
+    onChunk?.(graph);
+    return { nodes: graph.nodes.length, edges: graph.edges.length, chunked: false };
+  }
+
+  const pollPath = getQueuedPollPath(response);
+  onQueued?.({ pollPath, response });
+  const startedAt = Date.now();
+  let afterEventId = 0;
+  let nodes = 0;
+  let edges = 0;
+  let chunks = 0;
+  while (Date.now() - startedAt < timeoutMs) {
+    if (signal?.aborted) throw abortError();
+    const job = await apiFetch(buildChunkPollPath(pollPath, afterEventId), { method: 'GET', signal });
+    const results = job?.results && typeof job.results === 'object' ? job.results : {};
+    (Array.isArray(results.chunks) ? results.chunks : []).forEach((chunk) => {
+      const eventId = chunkEventId(chunk?.event_id ?? chunk?.eventId);
+      if (eventId > afterEventId) afterEventId = eventId;
+      const chunkNodes = Array.isArray(chunk?.nodes) ? chunk.nodes.filter((node) => node && typeof node === 'object') : [];
+      const chunkEdges = Array.isArray(chunk?.edges) ? chunk.edges.filter((edge) => edge && typeof edge === 'object') : [];
+      chunks += 1;
+      nodes += chunkNodes.length;
+      edges += chunkEdges.length;
+      if (chunkNodes.length || chunkEdges.length) onChunk?.({ nodes: chunkNodes, edges: chunkEdges });
+    });
+    const cursor = chunkEventId(results.next_chunk_after_event_id ?? results.nextChunkAfterEventId);
+    if (cursor > afterEventId) afterEventId = cursor;
+    const summary = results.result && typeof results.result === 'object' ? results.result : {};
+    const totalNodes = Number(summary.total_nodes);
+    const totalEdges = Number(summary.total_edges);
+    onProgress?.({
+      current: nodes + edges,
+      total: Number.isFinite(totalNodes) && Number.isFinite(totalEdges) ? Math.max(1, totalNodes + totalEdges) : null,
+    });
+
+    const status = failIfJobFailed(job);
+    if (JOB_SUCCESS_STATUSES.has(status)) {
+      // A job that finished without chunks but carries the whole graph in its
+      // result (non-chunked backend) is used as one final chunk.
+      if (chunks === 0 && hasGraphPayload(job)) {
+        const graph = extractNodesEdges(job);
+        nodes = graph.nodes.length;
+        edges = graph.edges.length;
+        onChunk?.(graph);
+      }
+      return { nodes, edges, chunked: chunks > 0 };
+    }
+    await wait(intervalMs, signal);
+  }
+  throw new Error('Graph request timed out. Retry graph load.');
+};
+
+// POST /graph_link (production App.jsx ~16655 / ~16815). `graph_window_id`
+// is the Graph window's number, as production sends it.
+export const graphWindowBackendId = (windowId) => String(windowId || '').replace(/^graph-/, '').replace(/[^a-zA-Z0-9_.:-]/g, '').slice(0, 128);
+export const sanitizeGraphEndpointId = (value) => String(value || '').replace(/[^a-zA-Z0-9_.:-]/g, '').slice(0, 128);
+
+export const linkGraphWindow = (apiFetch, { sourceSessionId, graphWindowId, action = 'link' }) => apiFetch('/graph_link', {
+  method: 'POST',
+  body: { id: action, source_id: sanitizeGraphEndpointId(sourceSessionId), graph_window_id: graphWindowBackendId(graphWindowId) },
+});
+
+// Production sanitizeGraphRelationshipValue (A:407): "*" or [a-zA-Z0-9_.:-].
+export const sanitizeRelationship = (value) => {
+  const cleaned = String(value ?? '').trim();
+  if (cleaned === '*') return '*';
+  return cleaned.replace(/[^a-zA-Z0-9_.:-]/g, '').slice(0, 128);
+};
+
+export const buildRelationshipPayload = (sourceSessionId, relationship) => ({
+  id: 'relationship',
+  source_id: sanitizeGraphEndpointId(sourceSessionId),
+  relationship: sanitizeRelationship(relationship),
+});

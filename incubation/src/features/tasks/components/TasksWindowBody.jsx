@@ -3,6 +3,9 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import { useWorkspace } from '../../../workspace/hooks/useWorkspace.js';
 import { useCan } from '../../../auth/useCan.js';
 import { SOURCE_PERMISSIONS } from '../../../auth/permissions.js';
+import { useSession } from '../../../shared/session/useSession.js';
+import { useNotifications } from '../../../shared/notifications/useNotifications.js';
+import { isSessionStreaming, openLinkedGraphWindow } from '../../graph/lib/graphLinkFlow.js';
 import { WORKSPACE_WINDOW_TYPES } from '../../../workspace/state/workspaceTypes.js';
 import { formatStreamLog } from '../../source/lib/sourceModel.js';
 import LogLines from '../../../shared/logs/LogLines.jsx';
@@ -566,6 +569,8 @@ function TaskRow({ task, now, isSelected, onSelect }) {
 function TaskDetail({ task, now, windows, workspace }) {
   // Production opens Graph windows only with graph:create (launcher gate).
   const canCreateGraph = useCan()(SOURCE_PERMISSIONS.GRAPH_CREATE);
+  const { apiFetch } = useSession();
+  const { notify } = useNotifications();
   const lines = useTaskLog(task);
   // Remounted per task (key), so this state never leaks between tasks.
   const [isTerminating, setIsTerminating] = useState(false);
@@ -583,10 +588,27 @@ function TaskDetail({ task, now, windows, workspace }) {
   );
 
   // One Graph / Chart window per task: focus it when it is already open.
+  // While the run is streaming, a Graph window is linked to its session like
+  // production's Source "Open Graph" (/graph_link). Once it has finished the
+  // link is no longer possible (production rule), so the window is bound to
+  // the session without one and loads it from the relationships it knows.
   const openResultWindow = (type) => {
     const existing = windows.find((windowItem) => windowItem.type === type && windowItem.metadata?.taskId === task.id);
     if (existing) {
       workspace.focusWindow(existing.id);
+      return;
+    }
+    if (type === WORKSPACE_WINDOW_TYPES.GRAPH && task.sourceSessionId && isSessionStreaming(task.sourceSessionId)) {
+      openLinkedGraphWindow({
+        workspace,
+        apiFetch,
+        notify,
+        sourceSessionId: task.sourceSessionId,
+        title: 'Graph',
+        customTitle: `${task.title} #${task.number}`,
+        metadata: { taskId: task.id },
+        action: task.action,
+      });
       return;
     }
     workspace.openWindow(type, {

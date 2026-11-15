@@ -28,7 +28,7 @@ Production renders the graph inside same-origin iframes (about 11 700 lines of v
 
 ### 2.1 Ways a graph opens (all kept)
 1. **Launcher "New Graph"** (`graph:create`). Opens an empty graph showing the placeholder.
-2. **Source window "Open Graph"** after a stream starts, then links it to the source session.
+2. ~~**Source window "Open Graph"**~~ **Not ported (decision 2026-11-14):** the workflow is Source → **Tasks** → Graph or Chart. The Source window only offers "Show results", which opens the run in Tasks; Tasks "Show graph" opens and links the Graph window (production's link flow, entry 3).
 3. **Graph link form** to link or unlink a Source session: `POST /graph_link {id:"link"|"unlink", source_id, graph_window_id}`. Only allowed while that source is streaming (A:679, A:16607-16848).
 4. **Tasks "Show graph"** (already in incubation; opens with `metadata {taskId, graphLinkSource, graphLinkAction}`).
 5. **Reports "Show graph"**: `POST /get_graph {id:"evidence", trace_id, source_id, report_id?, external_reference_id?}`, using the evidence cache that already exists (`features/reports/lib/evidenceGraphs.js`).
@@ -57,7 +57,7 @@ Production renders the graph inside same-origin iframes (about 11 700 lines of v
   - Reset
   - Export: HTML, JSON, Generate report
 - **Canvas toolbar:** Undo, Fit, Redo.
-- **Split panel** (draggable; top part 75 %, between 5 % and 90 %), with three tabs:
+- **Split panel in production** (draggable; top part 75 %, between 5 % and 90 %). **Here these move to the right workspace panel, see §3.11.** The three tabs:
   - **Filters:**
     - keyword search, with the expression syntax: comparisons and ranges, e.g. `amount>1000`, `10..20`
     - "include linked nodes"
@@ -198,7 +198,7 @@ features/reports/lib/evidenceReport.js   evidence PDF without any DOM frame (§3
 ### 3.3 Layouts and physics
 - **Where layouts run:** all layouts run in `layout.worker.js` and return positions. The canvas animates to them, keeping existing coordinates (production's diff rendering).
 - **Engines:**
-  - Force: ForceAtlas2 (graphology-layout-forceatlas2 worker), stopped or resumed by the Physics setting.
+  - Force: production's own physics (vis-network barnesHut with graphs_basic.html STABLE_PHYSICS: gravitationalConstant −14500, springLength 12, springConstant 0.06, damping 0.85, maxVelocity 18, minVelocity 2.5, timestep 0.6, 350 stabilisation iterations then fit) ported to `lib/physics.js` and run in the layout worker. Dragging pins the node and the others follow live, as in vis. (G2.1 first used ForceAtlas2; the analyst found it unstable, so it was replaced 2026-11-14.) ForceAtlas2 stays only in the G0 bench.
   - Hierarchical and layered: ELK (elkjs, in its own worker), with direction UD/LR, sort directed/hubsize, and layer mode hop / node_identity / key.
   - Concentric, circle, grid, spiral, star and radial: small pure functions.
 - **Thresholds:** production's 300-node rule (physics off, hierarchical → layered) becomes a performance **policy** in one module (`graphSettings.js`), applied the same way everywhere. The threshold is set from the spike's numbers.
@@ -243,6 +243,19 @@ features/reports/lib/evidenceReport.js   evidence PDF without any DOM frame (§3
 - The canvas reads colours from theme tokens (`--graph-*` in `tokens.css`, a "Graph Window" category in `themeCategories.js`), so `theme:check` covers it, as for Tasks and Reports. Dark mode needs no colour rewriting.
 - CDR or NBE wording (legend, edge tooltips) comes from the active domain, as in Reports.
 
+### 3.11 Where the controls live: the right workspace panel (agreed 2026-11-14)
+Production puts Filters / Infos / Settings inside every Graph window (a split panel taking a quarter of the window). Here they live in the **right workspace panel**. Its Info / Filter / Settings tabs are enabled only while a Graph or Chart window is active; the panel exists only for Source, Graph and Chart windows.
+- **One inspector, bound to the active window.** The panel header names the window it controls (e.g. "Graph 2 · Evidence R-1042"). Switching windows switches the panel.
+- **State belongs to the window, not the panel.** Search, filters, selection and settings live in that window's graph store (§3.1). Collapsing the panel, docking or switching tabs never loses them, and each Graph window keeps its own.
+- **Graph: Info tab:** the linked session's info card (status, run id, totals, summary; production's `graph_info_placeholder`), then the selected node's properties (production "Infos", with the same hidden display-only keys).
+- **Graph: Filter tab:** keyword search with expressions, "include linked nodes", property keys, result counts (production "Filters").
+- **Graph: Settings tab:**
+  - **This graph** first: performance mode, limit by key / sort / range, label group and key, edge weight, titles, labels, physics, layout and its options (production's 15 settings).
+  - **Appearance & Theme** below: the existing theme, Theme Studio and visual-effects sections.
+  - Defaults for *new* graphs are in Libraries → Graph defaults.
+- **Chart: Info / Filter / Settings:** selected metric details; linked graph, full vs visible graph, metric choice; colour schema and display.
+- **Stays in the Graph window:** the canvas, the Undo / Fit / Redo toolbar, progress, and the **relationship chips** as a slim strip at the bottom (`*` plus one chip per relationship). The chips are the main way to load data, so they stay visible with the panel collapsed.
+
 ### 3.9 GPU capability: detect, suggest, never force
 - **Detection (`shared/device/gpuCapability.js`, run once per browser and cached):**
   - A WebGL2 context, falling back to WebGL1, created with `failIfMajorPerformanceCaveat: true`. If it fails, the browser would fall back to software rendering, so the device does **not qualify**.
@@ -280,13 +293,78 @@ The setting from §3.9, the graph defaults and the chart settings live in the **
 
 | Phase | Scope | Done when |
 |---|---|---|
-| **G0 Spike** (≈3 days) | sigma vs Cytoscape against the §3.2 acceptance criteria; ELK and ForceAtlas2 in workers; measure 1k / 5k / 20k | A short written result; renderer chosen; thresholds set |
-| **G1 Foundation** | `graphStore`, typed settings, canvas renderer (default), GPU capability detection and notice, a WebGL switch read from the Libraries setting (with a temporary local toggle until the Libraries window exists), `graphFetch` (chunks, cancel, progress), `graphStatus` socket service, Graph window shell (split panel, three tabs, relationships bar, session info card), canvas with select / hover / fit / zoom / undo-redo, limit / sort / range, performance policy, theme tokens. Entry points: launcher, Tasks, Reports evidence, Source "Open graph" and the link / unlink form. Permissions `graph:create`, `graph:read`, `graph:link` | Every way of opening from §2.1 (1–5) works; a 20k-node evidence graph opens; switching docked tabs keeps the view |
-| **G2 Analysis** | Search expressions and linked nodes, property keys, label-by, edge weights, all layouts and options, expand / collapse, shortest and all paths, traversal, cut points, communities, visualise by degree / property, alert rules and the Alerts panel, pinned evidence, saved views, semantic legend | Feature-for-feature with §2.3 analysis items, with tests on known graphs |
-| **G3 Authoring** | Node and edge editors, icon album and upload, context menu authoring (labels, comments, text blocks, event frames, theme lines, OLE objects), group / ungroup, merge, copy / paste (BroadcastChannel), delete, bring to front | Feature-for-feature with §2.3 authoring items |
+| **G0 Spike** ✅ | Cytoscape canvas vs WebGL; ELK and ForceAtlas2 in workers; 300 / 1k / 5k / 20k. **Done 2026-11-14**: results and limits in §5.2–5.3 | Renderer confirmed; limits set |
+| **G1 Foundation** ✅ (2026-11-14) | Delivered: per-window `graphStore` (graphology), typed settings (production defaults incl. performance mode on), Cytoscape canvas (standard by default, GPU opt-in via Libraries → Graph rendering, contexts released, fallback on failure), production icons and vis-network on-screen widths, chunked `/get_graph` fetch with progress and cancel, `graphStatus` socket service, relationship chips, link / unlink (`/graph_link`), right-panel Info / Filter (production search) / Settings (limit, order, range, labels, label-by, performance), evidence from Reports, Tasks "Show graph", one-time GPU suggestion. **Moved to G2:** undo / redo and hover titles. **Not ported (decision):** Source "Open graph" | Evidence, Tasks and link flows work; docked tab switches keep data, view and selection |
+| **G2 Analysis** (in progress) | **G2.1 ✅** layouts and options (manual layouts, ELK hierarchical, hub size, layered), production physics (`lib/physics.js`), edge weights, hover titles (kept inside the canvas). **G2.2 ✅** right-click menu with production's full item list (`lib/graphContextMenu.js`; unported items shown unavailable with the slice that brings them), edge information block, expand / collapse neighbourhood and double-click expand (store visibility edits keyed to the limit + search view, dropped when it changes, as production applyLimit), production marker overlays (path / traversal / alert / pinned; traversal used now). Expanded nodes are placed beside their neighbours: nothing drawn moves and the view is not refit (streamed chunks still get the full layout). Deviations (analyst decisions 2026-11-14): expand stops at the renderer's drawing cap and says how many were skipped; the expand / collapse / double-click highlight is a 1 s flash, then the elements return to their own style (production kept it until the next expand). Unported menu items stay listed, greyed out, until their slice lands. The menu is styled like the hover title box and grouped into submenus (canvas: Paste, Add, Analyze, Views, Edge Bundling, Alert Rules, Pinned Evidence; one node: Expand / Collapse, Edit, Evidence, Analyze; several: Edit, Paths, Evidence, Analyze), production order kept inside each group, so it never scrolls. Link source takes a typed window ID as production's form (window id, session id, title or backend window id), with streaming sources suggested. **G2.3 ✅** (`lib/graphAnalysis.js`, dialogs in `GraphDialog.jsx` instead of production's browser prompts, results as notifications instead of alerts): Find Shortest Path (hops / weighted, optionally directed and with theme lines; choice kept under production's `linkx_path_options_v1`), Find All Paths (depth 1–12, 400 paths), Link Traversal (5 degrees, highlight kept), Cut Points, Detect Communities (relationship-weighted label propagation, communities coloured and moved onto a ring), Visualize by Degree / Property, Filter Elements (`linkx_element_filters_v1`), Clear Path Highlight. Verified against production's own functions run on recorded graphs (`__fixtures__/graphAnalysis.production.json`: communities, cut points, shortest-path costs). Differences: heap Dijkstra (equal costs; equal-cost ties may pick another path); all-paths stops after 2 M steps and says so; iterative cut points; degree / property colours are real hex (production produced invalid "#hsl(…)"); "Reset Node Styles" restores what the visual tools changed until undo (G2.4); Clear Path Highlight also on the canvas menu; a community result is announced (production's parent ignored it). **Next:** G2.4 alerts, pinned evidence, saved views, undo / redo. Full scope: Undo / redo, hover titles, edge weights, all layouts and options, expand / collapse, shortest and all paths, traversal, cut points, communities, visualise by degree / property, alert rules and the Alerts panel, pinned evidence, saved views, semantic legend | Feature-for-feature with §2.3 analysis items, with tests on known graphs |
+| **G3 Authoring** | **The empty Graph window is the analyst's playground** (analyst decision 2026-11-14): with no source its placeholder offers **Create new graph** (done 2026-11-14: switches the window to a blank canvas, `metadata.graphBlank`); the canvas menu works on it and everything below can build a graph from nothing, kept in the window's store (export / save with G4). Node and edge editors, icon album and upload, context menu authoring (labels, comments, text blocks, event frames, theme lines, OLE objects), group / ungroup, merge, copy / paste (BroadcastChannel), delete, bring to front | Feature-for-feature with §2.3 authoring items |
 | **G4 Export and reports** | PNG, print, JSON export / import (production formats), production HTML import, Generate report, evidence report PDF, Reports "Download report" enabled | Same PDF sections as production; downloads complete or fail visibly |
 | **G5 Chart window** | ECharts (pinned, tree-shaken), linking to a graph, selection bus, all chart types and schemas, every metric computed in the worker, snapshot / print / reset; launcher entry (decision §9-1) | No random values; metrics checked against reference values |
 | **G6 STR and external** | `str_report_link_analysis` (prepare-receiver wait, `socket_emit` replay, session id rule), header trigger with allow-list; later replaced by the Phase 4 alert-task flow in `analysis-results-plan.md` | The STR event opens and binds a graph exactly once |
+
+### 5.1 G0 benchmark: how to run it
+- **Where:** `src/dev/graphBench/` (developer-only). Open the app with **`?graph-bench`**, e.g. `http://<dev-server>:7153/?graph-bench`. It needs no backend and no sign-in.
+- **Builds:** it is included in dev builds, and in production builds only when `VITE_GRAPH_BENCH=true`. A normal build leaves it out completely (`vite.config.js` strips it).
+- **Steps on each machine** (an ordinary analyst PC, and one with a dedicated GPU):
+  1. **Run full suite.** It covers render at 1k / 5k / 20k nodes in canvas and WebGL (WebGL only when the device qualifies), ForceAtlas2 and ELK layouts in workers, and a canvas→WebGL switch.
+  2. **Style sample** in each mode, then tick the visual checklist.
+  3. **Copy results (JSON)** and paste them back.
+- **Pinned versions:** cytoscape 3.34.4, graphology 0.26.0, graphology-layout-forceatlas2 0.10.1, elkjs 0.13.0.
+- **Known risk to confirm:** Cytoscape's WebGL edge shader draws solid lines only (straight and curved segments, and arrows), with no dash pattern. Dashed and dotted edges carry meaning in production (temporal sequence, grouping, node flag). If the checklist confirms they draw solid in WebGL, the GPU mode needs a fallback for those edges, e.g. drawing dashed and dotted edges on a canvas overlay, or encoding the meaning by colour and opacity with the legend updated. That decision follows from the results.
+
+### 5.2 G0 results: run 1 (2026-11-14)
+**Device:** Windows, Chrome 157, Intel Arc Pro **integrated** GPU, 22 threads, 32 GB, a 2× screen. GPU detection said "capable" (draw test 3 ms per frame). Three runs, consistent.
+
+| | 1k nodes / 3k edges | 5k / 15k | 20k / 62k |
+|---|---|---|---|
+| Canvas, no optimisations: pan/zoom fps (p95 frame) | 5–8 (300–430 ms) | 1 (≈1 s) | 1 (≈2.2 s) |
+| WebGL: pan/zoom fps (p95 frame) | **54–56 (17 ms)** | 30–39 (34–50 ms) | 6–11 (115–200 ms) |
+| First paint (either mode) | 0.25–0.34 s | 1.0–1.5 s | 3.9–6.6 s |
+| ForceAtlas2, 100 iterations, worker | 0.5–0.6 s | 2.5–3.0 s | 10.5–11.6 s |
+| ELK layered, worker | 4.5–6.3 s | **> 60 s (timed out)** | not run |
+| Canvas → WebGL switch, view and selection kept | | 1.7–1.9 s, kept | |
+
+Findings:
+1. **Cytoscape is confirmed.** The WebGL mode works. The analyst reported dashed and dotted edges, arrows, shapes, icons, parallel edges, click, box-select and labels all correct in both modes, which contradicts the solid-only reading of the WebGL edge shader; the analyst is asked to re-confirm. An integrated GPU like this one qualifies as "capable", so detection is not limited to dedicated cards.
+2. **WebGL:** smooth up to about 1k visible nodes, usable up to 5k, sluggish at 20k. A hard cap with a warning belongs around 20k.
+3. **Canvas was measured without Cytoscape's viewport optimisations** (cached texture while moving, edges hidden while moving, pixel ratio 1) on a 2× screen. Run 2 adds a "canvas-fast" mode and 300 nodes, production's practical ceiling, to set the default path's limits.
+4. **ELK is only for small graphs:** about 5 s at 1k nodes and over 60 s at 5k. Hierarchical layout uses ELK up to about 1k nodes (worker, progress, cancel). Above that, the fast layered layout from production (hop distance / identity / key layering), as production already does above 300 nodes.
+5. **Workers keep the UI free:** one 100–170 ms main-thread task per layout, from preparing the data. G1 sends typed arrays to keep this down.
+6. **PNG export must be bounded.** An unbounded 2× full-graph export produced 12–77 MB in 1–65 s. Exports and report snapshots cap the longest side (4096 px; run 2 measures this).
+7. **Memory:** 20k nodes cost about 300–520 MB of JS heap. Another reason for the hard cap.
+
+### 5.3 G0 results: run 2, and the limits that follow (2026-11-14)
+**Same device. WebGL had become unavailable in the browser between runs** (detection: "WebGL2 is not available"), so run 2 measured canvas only. The probable cause is the benchmark itself: Cytoscape's `destroy()` does not release its WebGL context, many contexts were created, and Chrome blocks WebGL for a site after repeated context losses until the browser restarts. The benchmark now releases contexts explicitly (v3). **The real Graph window must do the same**, and must treat "WebGL unavailable" as a normal state: detection reported it correctly and everything ran on canvas.
+
+| Canvas, pan/zoom fps (p95 frame) | 300 / 900 | 1k / 3k | 5k / 15k | 20k / 62k |
+|---|---|---|---|---|
+| Plain | 27 (50 ms) | 14 (133 ms) | 10 (400 ms) | (run 1: 1) |
+| "Fast" (texture on viewport, hide edges while moving, pixel ratio 1) | 21 (50 ms) | 20 (67 ms) | 12 (250 ms) | 1 (1.3 s) |
+| First paint, fast | 0.10 s | 0.25 s | 1.2 s | 5.4 s |
+| PNG, longest side capped at 4096 px | 0.5 s | 0.8–0.9 s | 2.5 s | 6.9 s |
+
+| Layout in a worker | 300 | 1k | 5k | 20k |
+|---|---|---|---|---|
+| ForceAtlas2 (100 iterations) | 0.05 s | 0.35 s | 3.0 s | 9.3 s |
+| ELK layered | 0.65 s | 3.7 s | (run 1: > 60 s) | |
+
+The FPS test zooms continuously on every frame, which is harsher than real use. Canvas numbers between runs 1 and 2 differ (1k: 5–8 vs 14–20 fps), so canvas is treated conservatively.
+
+**Limits set by G0** (to be confirmed later on an older office PC):
+
+| | Canvas (default) | WebGL (opt-in) |
+|---|---|---|
+| Visible-node default | 25 (production) | 25 |
+| Comfortable | ≤ 300 | ≤ 1 000 |
+| Warning ("may be slow") | > 300 (production's threshold confirmed) | > 5 000 |
+| Hard cap | 2 000. Above it, suggest GPU if capable, otherwise narrow the limit | 20 000 (memory ≈ 300–500 MB) |
+| Viewport optimisations ("fast" options) | On automatically above 300 visible nodes | n/a |
+| Suggest GPU rendering | When the limit is raised above 300 and the device is capable | n/a |
+
+- **Hierarchical layout:** ELK up to 500 nodes interactively; 500–1 000 with progress and cancel; above 1 000 the fast layered layout (production's behaviour above 300).
+- **Force layout:** ForceAtlas2 in a worker at every size, with progress above 1k. Data goes to the worker as typed arrays: run 2 saw a 1.4 s main-thread task at 5k from copying object arrays.
+- **PNG:** downloads capped at 4096 px, report snapshots at 2048 px.
+
+**G0 conclusion: done.** Cytoscape.js with canvas by default and WebGL opt-in, graphology for the model and algorithms, ForceAtlas2 and ELK (bounded) in workers. Open item for the analyst: re-confirm that dashed and dotted edges really draw dashed in WebGL mode. If not, G1 adds the fallback described in §5.1.
 
 G1 unblocks Reports (graph view), Tasks (Show graph) and Phase 3/4 of `analysis-results-plan.md`. G4 unblocks Reports "Download report".
 

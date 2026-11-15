@@ -1,23 +1,17 @@
 import React from 'react';
 
-export default function GraphInfoTab() {
+import { useActiveGraph } from '../../../features/graph/lib/useActiveGraph.js';
+import { ChartPanelPending, GraphInfoPanel } from '../../../features/graph/components/panel/GraphPanels.jsx';
+
+// Right panel → Info: the active Graph window's source, size and selected
+// node (graph-chart-plan §3.11).
+export default function GraphInfoTab({ workspace }) {
+  const graph = useActiveGraph(workspace);
+  if (graph.windowItem) return <GraphInfoPanel graph={graph} />;
   return (
     <section className="workspace_context_section" aria-label="Graph information">
-      <h2>Graph info</h2>
-      <dl className="workspace_context_pairs">
-        <div>
-          <dt>Selected graph</dt>
-          <dd>None</dd>
-        </div>
-        <div>
-          <dt>Nodes</dt>
-          <dd>0</dd>
-        </div>
-        <div>
-          <dt>Edges</dt>
-          <dd>0</dd>
-        </div>
-      </dl>
+      <h2>Info</h2>
+      {graph.isChart ? <ChartPanelPending /> : <p className="workspace_context_hint">Select a Graph window.</p>}
     </section>
   );
 }

@@ -15,6 +15,10 @@ import { clearReportsPages } from '../../features/reports/lib/reportsPageCache.j
 import { clearEvidenceGraphs } from '../../features/reports/lib/evidenceGraphs.js';
 import { clearConfigurationDrafts } from '../../features/configuration/lib/configDraft.js';
 import { clearKnownBuiltinRules } from '../../features/libraries/lib/rulesLibrary.js';
+import { clearGraphStores, disposeGraphStore } from '../../features/graph/lib/graphStore.js';
+import { forgetLayoutOwner } from '../../features/graph/lib/layoutClient.js';
+import { bindGraphStatusSocket, clearGraphStatus, markGraphSessionClosed, retainGraphStatus, setGraphStatusNotifier } from '../../features/graph/lib/graphStatus.js';
+import { streamingSessionIds } from '../../features/graph/lib/graphLinkFlow.js';
 import { endAbandonedStream, endAllAbandonedStreams, getActiveStream } from '../../features/source/lib/activeStreams.js';
 import { continueStreamInBackground } from '../../features/source/lib/backgroundStreams.js';
 import {
@@ -39,8 +43,8 @@ import { createLogger } from '../../shared/logger.js';
 
 // Signed out / workspace gone: the next workspace reuses window ids
 // (source-1, reports-4…), so nothing kept per window may survive into it:
-// typed passwords, stream logs, cached report pages, evidence graphs and
-// unsaved Configuration drafts.
+// typed passwords, stream logs, cached report pages, evidence graphs, graph
+// window stores and unsaved Configuration drafts.
 const clearWorkspaceSessionData = () => {
   resetTasks();
   disposeAllSourceRuntimes();
@@ -49,6 +53,8 @@ const clearWorkspaceSessionData = () => {
   clearEvidenceGraphs();
   clearConfigurationDrafts();
   clearKnownBuiltinRules();
+  clearGraphStores();
+  clearGraphStatus();
 };
 
 const log = createLogger('workspace');
@@ -96,8 +102,12 @@ export default function WorkspaceFrame({ user, token, mainSessionId, sessionErro
   // Production hides launcher items the user has no permission for.
   const visibleLauncherItems = useMemo(() => getVisibleLauncherItems(can), [can]);
   const { apiFetch, socket } = useSession();
-  // Token renewal re-creates the socket: move running stream logs onto it.
-  useEffect(() => { bindStreamLogSocket(socket); }, [socket]);
+  // Token renewal re-creates the socket: move running stream logs and graph
+  // status subscriptions onto it.
+  useEffect(() => {
+    bindStreamLogSocket(socket);
+    bindGraphStatusSocket(socket);
+  }, [socket]);
   const { notify } = useNotifications();
   const { tasks } = useSyncExternalStore(subscribeTasks, getTasksSnapshot);
   const activeTaskCount = useMemo(() => countActiveTasks(tasks), [tasks]);
@@ -109,6 +119,40 @@ export default function WorkspaceFrame({ user, token, mainSessionId, sessionErro
   // running quick analyses (taskRegistry.js getSessionUsage).
   // A Source window being opened (its /init request in flight) already holds
   // a session, so a quick analysis started meanwhile cannot exceed the cap.
+  // Graph status subscriptions (production graphStatusSessionIds, A:11390):
+  // every session a Graph window is linked to, and every streaming session
+  // (so its relationships are known before a graph links to it). They follow
+  // the windows and tasks, not which window body is on screen.
+  useEffect(() => {
+    setGraphStatusNotifier(notify);
+  }, [notify]);
+  const graphStatusKey = useMemo(() => {
+    const sessions = streamingSessionIds(tasks);
+    workspace.windows.forEach((windowItem) => {
+      if (windowItem.type === WORKSPACE_WINDOW_TYPES.GRAPH && windowItem.metadata?.graphLinkSource) {
+        sessions.add(String(windowItem.metadata.graphLinkSource));
+      }
+    });
+    return [...sessions].sort().join('|');
+  }, [tasks, workspace.windows]);
+  const graphStatusHoldsRef = useRef(new Map());
+  useEffect(() => {
+    const wanted = new Set(graphStatusKey.split('|').filter(Boolean));
+    const holds = graphStatusHoldsRef.current;
+    holds.forEach((release, sessionId) => {
+      if (wanted.has(sessionId)) return;
+      release();
+      holds.delete(sessionId);
+    });
+    wanted.forEach((sessionId) => {
+      if (!holds.has(sessionId)) holds.set(sessionId, retainGraphStatus(sessionId));
+    });
+  }, [graphStatusKey]);
+  useEffect(() => () => {
+    graphStatusHoldsRef.current.forEach((release) => release());
+    graphStatusHoldsRef.current.clear();
+  }, []);
+
   const sessionUsage = useMemo(
     () => getSessionUsage(openSourceCount + (isOpeningSource ? 1 : 0), tasks),
     [openSourceCount, isOpeningSource, tasks],
@@ -212,6 +256,8 @@ export default function WorkspaceFrame({ user, token, mainSessionId, sessionErro
     freezeWindowTaskLogs(windowId, peekStreamLogLines(windowId));
     disposeSourceRuntime(windowId);
     disposeStreamLog(windowId); // log_stream_unplug (production close behaviour)
+    // Production: Graph windows linked to this session reset to empty.
+    markGraphSessionClosed(targetWindow.sourceSessionId);
     if (token) {
       endStream.catch(() => null).then(() => releaseSourceSession(targetWindow, 'user_closed_window'));
     }
@@ -243,6 +289,11 @@ export default function WorkspaceFrame({ user, token, mainSessionId, sessionErro
   const handleCloseWindow = useCallback((windowId) => {
     const targetWindow = windowsRef.current.find((windowItem) => windowItem.id === windowId);
     if (targetWindow?.type !== WORKSPACE_WINDOW_TYPES.SOURCE) {
+      // A Graph window's data and layout requests go with it.
+      if (targetWindow?.type === WORKSPACE_WINDOW_TYPES.GRAPH) {
+        disposeGraphStore(windowId);
+        forgetLayoutOwner(windowId);
+      }
       closeWindow(windowId);
       return;
     }
@@ -357,7 +408,7 @@ export default function WorkspaceFrame({ user, token, mainSessionId, sessionErro
   return (
     <main className="workspace_shell">
       <div className="workspace_background_overlay" aria-hidden="true" />
-      <NetworkBackground />
+      <NetworkBackground paused={activeWindowType === WORKSPACE_WINDOW_TYPES.GRAPH} />
       <div className={`workspace_frame${isLauncherExpanded ? ' is-launcher-expanded' : ''}`}>
         <aside ref={launcherRef} className="workspace_zone workspace_zone_left" aria-label="Workspace launcher">
           <nav className="workspace_launcher" aria-label="Workspace launcher">

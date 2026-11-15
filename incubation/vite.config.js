@@ -8,12 +8,29 @@ import process from "node:process";
 // Production builds still call VITE_API_URL directly (see src/app/config.js).
 const DEV_API_PREFIX = "/backend";
 
+// The G0 graph benchmark page (src/dev/graphBench) is dev-only. In a normal
+// production build its import is dead code, but Vite would still emit its
+// worker files; resolving it to an empty module keeps them out of dist.
+// Build with VITE_GRAPH_BENCH=true to include it (e.g. to test on another PC).
+const stripGraphBench = (enabled) => ({
+  name: "linkx-strip-graph-bench",
+  apply: "build",
+  enforce: "pre",
+  resolveId(id) {
+    if (!enabled && id.includes("dev/graphBench/GraphBench")) return "\0linkx-empty-graph-bench";
+    return null;
+  },
+  load(id) {
+    return id === "\0linkx-empty-graph-bench" ? "export default null;" : null;
+  },
+});
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
   const apiTarget = String(env.VITE_API_URL || "").trim();
 
   return {
-    plugins: [react()],
+    plugins: [react(), stripGraphBench(env.VITE_GRAPH_BENCH === "true")],
     base: "/",
     // Unit tests (Vitest): pure model/service modules, Node environment.
     test: {

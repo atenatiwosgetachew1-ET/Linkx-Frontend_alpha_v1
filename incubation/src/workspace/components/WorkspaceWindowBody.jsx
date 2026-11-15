@@ -8,6 +8,7 @@ const SettingsWindowBody = lazy(() => import('../../features/settings/components
 const ConfigurationWindowBody = lazy(() => import('../../features/configuration/components/ConfigurationWindowBody.jsx'));
 const TasksWindowBody = lazy(() => import('../../features/tasks/components/TasksWindowBody.jsx'));
 const ReportsWindowBody = lazy(() => import('../../features/reports/components/ReportsWindowBody.jsx'));
+const GraphWindowBody = lazy(() => import('../../features/graph/components/GraphWindowBody.jsx'));
 const LibrariesWindowBody = lazy(() => import('../../features/libraries/components/LibrariesWindowBody.jsx'));
 
 const bodyFallback = (
@@ -45,6 +46,10 @@ function WorkspaceWindowBody({ windowItem }) {
 
   if (windowItem.type === WORKSPACE_WINDOW_TYPES.REPORTS) {
     return <Suspense fallback={bodyFallback}><ReportsWindowBody windowItem={windowItem} /></Suspense>;
+  }
+
+  if (windowItem.type === WORKSPACE_WINDOW_TYPES.GRAPH) {
+    return <Suspense fallback={bodyFallback}><GraphWindowBody windowItem={windowItem} /></Suspense>;
   }
 
   if (windowItem.type === WORKSPACE_WINDOW_TYPES.LIBRARIES) {

@@ -1,22 +1,17 @@
 import React from 'react';
 
-export default function GraphFilterTab() {
+import { useActiveGraph } from '../../../features/graph/lib/useActiveGraph.js';
+import { ChartPanelPending, GraphFilterPanel } from '../../../features/graph/components/panel/GraphPanels.jsx';
+
+// Right panel → Filter: search the active Graph window (production graph
+// search; graph-chart-plan §3.11).
+export default function GraphFilterTab({ workspace }) {
+  const graph = useActiveGraph(workspace);
+  if (graph.windowItem) return <GraphFilterPanel graph={graph} />;
   return (
     <section className="workspace_context_section" aria-label="Graph filters">
-      <h2>Graph filters</h2>
-      <div className="workspace_context_form_stack">
-        <label>
-          <span>Property</span>
-          <input type="text" placeholder="Select a graph first" disabled />
-        </label>
-        <label>
-          <span>Condition</span>
-          <select disabled defaultValue="contains">
-            <option value="contains">Contains</option>
-          </select>
-        </label>
-        <button type="button" disabled>Apply filter</button>
-      </div>
+      <h2>Filter</h2>
+      {graph.isChart ? <ChartPanelPending /> : <p className="workspace_context_hint">Select a Graph window.</p>}
     </section>
   );
 }
