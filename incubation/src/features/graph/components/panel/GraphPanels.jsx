@@ -344,6 +344,12 @@ export function GraphSettingsPanel({ graph }) {
           <input type="checkbox" checked={settings.showTitles} disabled={settings.performance} onChange={(event) => patch({ showTitles: event.target.checked })} />
           <span>Show titles on hover</span>
         </label>
+        {/* What the card shows is set per domain (Configuration ▸ Rules ▸
+            Profile mapping fields); here only whether this graph shows it. */}
+        <label className="workspace_context_switch" title="The card a node click shows; its details are set in Configuration ▸ Rules ▸ Profile mapping fields">
+          <input type="checkbox" checked={settings.actorProfile} onChange={(event) => patch({ actorProfile: event.target.checked })} />
+          <span>Show actor profile on node click</span>
+        </label>
 
         <h3 className="graph_panel_subheading">Edges</h3>
         <label>

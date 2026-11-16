@@ -1,4 +1,4 @@
-import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import cytoscape from 'cytoscape';
 
 import { buildElements, buildStylesheet, edgeCurveFor } from '../lib/graphElements.js';
@@ -63,6 +63,13 @@ const syncData = (element, next) => {
   element.data(next);
 };
 
+// A click zooms in first when the node is drawn narrower than this, or a
+// link is clicked below this zoom.
+const FAR_NODE_PX = 14;
+const FAR_EDGE_ZOOM = 0.6;
+// The zoom such a click goes to.
+const FAR_TAP_ZOOM = 0.5;
+
 const releaseGraph = (cy) => {
   if (!cy) return;
   const canvases = cy.container() ? [...cy.container().querySelectorAll('canvas')] : [];
@@ -75,7 +82,7 @@ const releaseGraph = (cy) => {
   });
 };
 
-const GraphCanvas = forwardRef(function GraphCanvas({ windowId, store, view, settings, renderer, isCdr, onRendererFailed, onLayoutState, onContextMenu, onNodeDoubleClick, onElementTap, showMinimap = true, showGlyphs = true }, ref) {
+const GraphCanvas = forwardRef(function GraphCanvas({ windowId, store, view, settings, renderer, isCdr, onRendererFailed, onLayoutState, onContextMenu, onNodeDoubleClick, onElementTap, tapZoomsTo, onEdgeSelection, onViewportChange, showMinimap = true, showGlyphs = true }, ref) {
   const containerRef = useRef(null);
   const cyRef = useRef(null);
   // The same instance as state, for the minimap (follows renderer switches).
@@ -87,15 +94,26 @@ const GraphCanvas = forwardRef(function GraphCanvas({ windowId, store, view, set
   const physicsRef = useRef(null);
   // True once the drawn positions are physics-settled: a re-run (labels,
   // theme…) then continues from them without refitting the view.
-  const physicsSettledRef = useRef(false);
+  // Kept in the window's store, so a remount (docked <-> floating, docked
+  // tab switch) neither re-stabilises nor refits.
+  const physicsSettledRef = useRef(store.getUi('canvasPhysicsSettled', false));
+  const setPhysicsSettled = useCallback((value) => {
+    physicsSettledRef.current = value;
+    store.setUi('canvasPhysicsSettled', value);
+  }, [store]);
+  // The largest zoom the next fit may reach (vis-network fitted up to 1; a
+  // restored view that showed the whole graph refits up to its own zoom).
+  const fitCapRef = useRef(1);
+  // The canvas size last seen, so resizes keep the view's centre.
+  const sizeRef = useRef(null);
   const tooltipRef = useRef(null);
   // Restyles for the current zoom (set by the renderer effect).
   const zoomStyleRef = useRef(() => {});
   // Bumped when a theme change or a recoloured icon needs the elements redrawn.
   const [themeVersion, setThemeVersion] = useState(0);
   useEffect(() => subscribeIconThemes(() => setThemeVersion((value) => value + 1)), []);
-  const callbacksRef = useRef({ onRendererFailed, onLayoutState, onContextMenu, onNodeDoubleClick, onElementTap });
-  callbacksRef.current = { onRendererFailed, onLayoutState, onContextMenu, onNodeDoubleClick, onElementTap };
+  const callbacksRef = useRef({ onRendererFailed, onLayoutState, onContextMenu, onNodeDoubleClick, onElementTap, tapZoomsTo, onEdgeSelection, onViewportChange });
+  callbacksRef.current = { onRendererFailed, onLayoutState, onContextMenu, onNodeDoubleClick, onElementTap, tapZoomsTo, onEdgeSelection, onViewportChange };
 
   const visibleCount = view.nodeIds.length;
   const fast = renderer === RENDERERS.CANVAS && visibleCount > GRAPH_LIMITS.CANVAS_FAST_ABOVE;
@@ -144,6 +162,16 @@ const GraphCanvas = forwardRef(function GraphCanvas({ windowId, store, view, set
       if (!cy) return { nodes: [], edges: [] };
       return { nodes: cy.nodes(':selected').map((node) => node.id()), edges: cy.edges(':selected').map((edge) => edge.id()) };
     },
+    // How an element is drawn now, from its render data (not the selection
+    // highlight): the Customize popup's preview. null colours are the theme's.
+    lookOf: (kind, id) => {
+      const element = cyRef.current?.getElementById(String(id));
+      if (!element || element.empty()) return null;
+      const data = element.data();
+      return kind === 'edge'
+        ? { color: data.color || null, arrow: data.arrow !== 'none' }
+        : { fill: data.fill || null, border: data.border || null };
+    },
     // Replaces the selection (production network.selectNodes).
     select: (ids) => {
       const cy = cyRef.current;
@@ -152,6 +180,21 @@ const GraphCanvas = forwardRef(function GraphCanvas({ windowId, store, view, set
         cy.elements(':selected').unselect();
         ids.forEach((id) => cy.getElementById(String(id)).select());
       });
+    },
+    // Focuses the given nodes (the timeline's Play step): fits them to the
+    // view, animated, zooming in no further than maxZoom so a lone node is
+    // not blown up.
+    focusOn: (ids, { duration = 300, maxZoom = 1.5, padding = 60 } = {}) => {
+      const cy = cyRef.current;
+      if (!cy || !ids?.length) return;
+      const nodes = cy.collection(ids.map((id) => cy.getElementById(String(id))).filter((ele) => ele.nonempty()));
+      if (nodes.empty()) return;
+      const box = nodes.boundingBox({ includeLabels: false, includeOverlays: false });
+      const fitZoom = Math.min((cy.width() - 2 * padding) / Math.max(box.w, 1), (cy.height() - 2 * padding) / Math.max(box.h, 1));
+      const level = Math.max(cy.minZoom(), Math.min(fitZoom, maxZoom, cy.maxZoom()));
+      const centre = { x: (box.x1 + box.x2) / 2, y: (box.y1 + box.y2) / 2 };
+      cy.stop();
+      cy.animate({ zoom: level, pan: { x: cy.width() / 2 - centre.x * level, y: cy.height() / 2 - centre.y * level } }, { duration });
     },
     // A point on the canvas (pixels) in graph coordinates (production
     // network.DOMtoCanvas), e.g. where a node is added or pasted.
@@ -196,8 +239,10 @@ const GraphCanvas = forwardRef(function GraphCanvas({ windowId, store, view, set
     themeRef.current = readGraphTheme(container);
     const previous = cyRef.current;
     // Previous renderer's view, else the view saved when the window was last
-    // shown (docked tab switch), else fit once the elements are in.
-    const viewport = previous ? { zoom: previous.zoom(), pan: { ...previous.pan() } } : store.getViewport();
+    // shown (docked <-> floating, docked tab switch), else fit once the
+    // elements are in.
+    const saved = previous ? null : store.getViewport();
+    const viewport = previous ? { zoom: previous.zoom(), pan: { ...previous.pan() } } : saved;
     releaseGraph(previous);
     let cy;
     try {
@@ -206,7 +251,10 @@ const GraphCanvas = forwardRef(function GraphCanvas({ windowId, store, view, set
         style: buildStylesheet(themeRef.current, { curve, zoom: 1 }),
         layout: { name: 'preset' },
         boxSelectionEnabled: true,
-        selectionType: 'additive',
+        // A click selects that node or link alone, moving the selection to
+        // it; Ctrl (or Cmd / Shift) + click adds to it (production vis
+        // multiselect; analyst decision 2026-11-16, was additive).
+        selectionType: 'single',
         ...(renderer === RENDERERS.WEBGL ? { renderer: { name: 'canvas', webgl: true } } : {}),
         // No textureOnViewport: it draws a cached snapshot while zooming and
         // fills around it with grey (visible when zooming out fast). Large
@@ -224,8 +272,23 @@ const GraphCanvas = forwardRef(function GraphCanvas({ windowId, store, view, set
     cyRef.current = cy;
     setCyInstance(cy);
     needsFitRef.current = !viewport;
-    if (viewport) cy.viewport(viewport);
-    cy.on('viewport', () => store.setViewport({ zoom: cy.zoom(), pan: { ...cy.pan() } }));
+    fitCapRef.current = 1;
+    if (saved?.whole) {
+      // The whole graph was in view: show it whole again in this canvas.
+      needsFitRef.current = true;
+      fitCapRef.current = Math.max(1, saved.zoom || 1);
+      cy.viewport({ zoom: saved.zoom, pan: saved.pan });
+    } else if (viewport) {
+      // The same point stays in the middle when the canvas size differs.
+      const shift = saved?.width && cy.width() ? { x: (cy.width() - saved.width) / 2, y: (cy.height() - saved.height) / 2 } : { x: 0, y: 0 };
+      cy.viewport({ zoom: viewport.zoom, pan: { x: viewport.pan.x + shift.x, y: viewport.pan.y + shift.y } });
+    }
+    sizeRef.current = { width: cy.width(), height: cy.height() };
+    cy.on('viewport', () => {
+      store.setViewport({ zoom: cy.zoom(), pan: { ...cy.pan() }, width: cy.width(), height: cy.height() });
+      // Things placed by an element (the actor profile) are let go.
+      callbacksRef.current.onViewportChange?.();
+    });
 
     // Constant on-screen border / minimum edge widths (vis-network): restyle
     // for the new zoom every frame on normal views, after the zoom settles on
@@ -257,6 +320,15 @@ const GraphCanvas = forwardRef(function GraphCanvas({ windowId, store, view, set
 
     const syncSelection = () => store.setSelection(cy.nodes(':selected').map((node) => node.id()));
     cy.on('select unselect', 'node', syncSelection);
+    // The selected links (the toolbar's Customize button follows them).
+    let edgeSync = 0;
+    cy.on('select unselect', 'edge', () => {
+      if (edgeSync) return;
+      edgeSync = requestAnimationFrame(() => {
+        edgeSync = 0;
+        if (!cy.destroyed()) callbacksRef.current.onEdgeSelection?.(cy.edges(':selected').map((edge) => edge.id()));
+      });
+    });
     // Production (vis) physics while dragging: the node is pinned at the
     // pointer and the others follow live; released, it settles with them.
     cy.on('grab', 'node', (event) => physicsRef.current?.moveNode(event.target.id(), { ...event.target.position() }, true));
@@ -297,6 +369,16 @@ const GraphCanvas = forwardRef(function GraphCanvas({ windowId, store, view, set
     // selection becomes the selection; the menu itself is the window's.
     const blockBrowserMenu = (event) => event.preventDefault();
     container.addEventListener('contextmenu', blockBrowserMenu);
+
+    // Cytoscape caches where the canvas is on the page and only forgets it on
+    // a resize, a scroll or a CSS transition. A workspace window dragged (or
+    // a docked layout shifting) moves the canvas without any of those, and
+    // clicks, the tap circle, wheel zoom and hover then landed off the
+    // pointer. Forget it whenever the pointer enters, presses or wheels
+    // (capture: before Cytoscape's own handlers read it).
+    const refreshPlace = () => cy.renderer()?.invalidateContainerClientCoordsCache?.();
+    const placeEvents = ['pointerenter', 'pointerdown', 'mousedown', 'touchstart', 'wheel'];
+    placeEvents.forEach((name) => container.addEventListener(name, refreshPlace, { capture: true, passive: true }));
     cy.on('cxttap', (event) => {
       hideTooltip();
       const target = event.target;
@@ -317,16 +399,41 @@ const GraphCanvas = forwardRef(function GraphCanvas({ windowId, store, view, set
     cy.on('tap viewport', () => callbacksRef.current.onContextMenu?.(null));
     // Production doubleClick (GB:2536): expand one hidden neighbour.
     cy.on('dbltap', 'node', (event) => callbacksRef.current.onNodeDoubleClick?.(event.target.id()));
-    // Production click (GB:2374): a node or edge opens its adjust box (by
-    // the node, or where the edge was clicked); the background closes it.
+    // Production click (GB:2374): an annotation opens its box (by the
+    // node); the background closes it. Plain nodes and links are customized
+    // from the toolbar instead (analyst decision 2026-11-16).
+    //
+    // Clicked from far out (the node a few pixels wide), the view first zooms
+    // in to an annotation (to zoom 0.5, centred; tapZoomsTo says which), and
+    // the box opens once there. Shift / Ctrl / Cmd clicks (adding to the
+    // selection) leave the view alone.
     cy.on('tap', (event) => {
       const target = event.target;
       if (target === cy) {
         callbacksRef.current.onElementTap?.(null);
         return;
       }
-      const at = target.isNode() ? target.renderedPosition() : event.renderedPosition;
-      callbacksRef.current.onElementTap?.({ kind: target.isNode() ? 'node' : 'edge', id: target.id(), x: at.x, y: at.y });
+      const isNode = target.isNode();
+      const report = () => {
+        if (cy.destroyed() || target.removed()) return;
+        const at = isNode ? target.renderedPosition() : { x: event.position.x * cy.zoom() + cy.pan().x, y: event.position.y * cy.zoom() + cy.pan().y };
+        callbacksRef.current.onElementTap?.({ kind: isNode ? 'node' : 'edge', id: target.id(), x: at.x, y: at.y, adding: Boolean(adding) });
+      };
+      const original = event.originalEvent;
+      const adding = original && (original.shiftKey || original.ctrlKey || original.metaKey);
+      const far = isNode ? target.renderedWidth() < FAR_NODE_PX : cy.zoom() < FAR_EDGE_ZOOM;
+      const wanted = callbacksRef.current.tapZoomsTo ? callbacksRef.current.tapZoomsTo({ kind: isNode ? 'node' : 'edge', id: target.id() }) : true;
+      if (adding || !far || !wanted) {
+        report();
+        return;
+      }
+      const zoom = Math.min(cy.maxZoom(), Math.max(cy.zoom(), FAR_TAP_ZOOM));
+      const point = isNode ? target.position() : event.position;
+      cy.stop();
+      cy.animate(
+        { zoom, pan: { x: cy.width() / 2 - point.x * zoom, y: cy.height() / 2 - point.y * zoom } },
+        { duration: 350, complete: report },
+      );
     });
 
     const onContextLost = (event) => {
@@ -341,15 +448,25 @@ const GraphCanvas = forwardRef(function GraphCanvas({ windowId, store, view, set
       clearTimeout(zoomTimer);
       canvases.forEach((canvas) => canvas.removeEventListener('webglcontextlost', onContextLost));
       container.removeEventListener('contextmenu', blockBrowserMenu);
+      placeEvents.forEach((name) => container.removeEventListener(name, refreshPlace, { capture: true }));
     };
     // `store` is per window and stable; elements are synced below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [renderer, fast, hideEdgesWhileMoving]);
 
   useEffect(() => () => {
-    releaseGraph(cyRef.current);
+    const cy = cyRef.current;
+    // Kept for the next mount: the view, the canvas size and whether the
+    // whole graph was in view.
+    if (cy && !cy.destroyed() && cy.nodes().length) {
+      const box = cy.nodes().boundingBox({ includeLabels: false, includeOverlays: false });
+      const extent = cy.extent();
+      const whole = box.x1 >= extent.x1 && box.y1 >= extent.y1 && box.x2 <= extent.x2 && box.y2 <= extent.y2;
+      store.setViewport({ zoom: cy.zoom(), pan: { ...cy.pan() }, width: cy.width(), height: cy.height(), whole });
+    }
+    releaseGraph(cy);
     cyRef.current = null;
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Cytoscape only follows browser-window resizes; the workspace window can
   // be resized, docked or maximised on its own.
@@ -359,7 +476,19 @@ const GraphCanvas = forwardRef(function GraphCanvas({ windowId, store, view, set
     let frame = 0;
     const observer = new ResizeObserver(() => {
       cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(() => cyRef.current?.resize());
+      frame = requestAnimationFrame(() => {
+        const cy = cyRef.current;
+        if (!cy || cy.destroyed()) return;
+        cy.resize();
+        // Keep the view's centre where it was (Cytoscape keeps the top-left).
+        const before = sizeRef.current;
+        const width = cy.width();
+        const height = cy.height();
+        if (before?.width && width && (before.width !== width || before.height !== height)) {
+          cy.panBy({ x: (width - before.width) / 2, y: (height - before.height) / 2 });
+        }
+        sizeRef.current = { width, height };
+      });
     });
     observer.observe(container);
     return () => {
@@ -414,7 +543,7 @@ const GraphCanvas = forwardRef(function GraphCanvas({ windowId, store, view, set
       physicsRef.current?.stop();
       physicsRef.current = null;
     };
-    if (!settings.physics) physicsSettledRef.current = false;
+    if (!settings.physics && physicsSettledRef.current) setPhysicsSettled(false);
 
     // Production physics (vis barnesHut, in the worker): 350 stabilisation
     // iterations, the view fitted to the result (stabilization.fit), then
@@ -436,12 +565,13 @@ const GraphCanvas = forwardRef(function GraphCanvas({ windowId, store, view, set
         });
       };
       const live = () => !cancelled && cyRef.current === cy;
-      physicsRef.current = startPhysics(windowId, { nodeIds: view.nodeIds, edgePairs, positions, stabilize: true }, {
+      // Settled positions continue live, without stabilising again.
+      physicsRef.current = startPhysics(windowId, { nodeIds: view.nodeIds, edgePairs, positions, stabilize: !physicsSettledRef.current }, {
         onStabilized: (next) => {
           if (!live()) return;
           draw(next);
           if (!physicsSettledRef.current) cy.fit(undefined, 30);
-          physicsSettledRef.current = true;
+          setPhysicsSettled(true);
         },
         onFrame: (next) => {
           if (live()) draw(next);
@@ -479,11 +609,12 @@ const GraphCanvas = forwardRef(function GraphCanvas({ windowId, store, view, set
         cy.fit(undefined, 30);
         // vis-network's fit never zoomed past 1 (one node, or a few close
         // together, would otherwise fill the canvas).
-        if (cy.zoom() > 1) {
-          cy.zoom(1);
+        if (cy.zoom() > fitCapRef.current) {
+          cy.zoom(fitCapRef.current);
           cy.center();
         }
         needsFitRef.current = false;
+        fitCapRef.current = 1;
       }
     };
 
@@ -530,7 +661,7 @@ const GraphCanvas = forwardRef(function GraphCanvas({ windowId, store, view, set
       .then((positions) => {
         if (cancelled || !positions || cyRef.current !== cy) return;
         const entries = Object.entries(positions);
-        physicsSettledRef.current = false;
+        setPhysicsSettled(false);
         store.setPositions(entries);
         store.setLayoutSignature(signature);
         apply(nodes.map((node) => ({ ...node, position: positions[node.data.id] || node.position || { x: 0, y: 0 } })), { fit: true });
@@ -549,7 +680,7 @@ const GraphCanvas = forwardRef(function GraphCanvas({ windowId, store, view, set
       cancelled = true;
       stopPhysics();
     };
-  }, [store, view, settings.showLabels, settings.labels, settings.edgeWeight, settings.showTitles, settings.edgeBundling, settings.edgeBundleMin, settings.physics, settings.layout, showGlyphs, isCdr, windowId, renderer, fast, hideEdgesWhileMoving, themeVersion]);
+  }, [store, view, settings.showLabels, settings.labels, settings.edgeWeight, settings.showTitles, settings.edgeBundling, settings.edgeBundleMin, settings.physics, settings.layout, showGlyphs, isCdr, windowId, renderer, fast, hideEdgesWhileMoving, themeVersion, setPhysicsSettled]);
 
   return (
     <>

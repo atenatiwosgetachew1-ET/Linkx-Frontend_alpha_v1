@@ -31,6 +31,17 @@ export default function GraphOverlayMenu({ prefs, onToggle }) {
     };
   }, [open]);
 
+  // "All": checked when every component shows, mixed when some do; a click
+  // shows them all, or hides them all when all already show.
+  const shownCount = OVERLAY_COMPONENTS.filter((item) => prefs[item.key]).length;
+  const allShown = shownCount === OVERLAY_COMPONENTS.length;
+  const toggleAll = () => {
+    OVERLAY_COMPONENTS.forEach((item) => {
+      if (Boolean(prefs[item.key]) === !allShown) return;
+      onToggle(item.key, !allShown);
+    });
+  };
+
   return (
     <div ref={rootRef} className="graph_overlay_menu">
       <button
@@ -47,6 +58,17 @@ export default function GraphOverlayMenu({ prefs, onToggle }) {
       {open ? (
         <div className="graph_overlay_menu_list" role="menu" aria-label="On-graph components">
           <strong>Show on the graph</strong>
+          <button
+            type="button"
+            role="menuitemcheckbox"
+            aria-checked={allShown ? true : shownCount ? 'mixed' : false}
+            className="graph_overlay_menu_item is-all"
+            title={allShown ? 'Hide every on-graph component' : 'Show every on-graph component'}
+            onClick={toggleAll}
+          >
+            <span className="graph_overlay_menu_check" aria-hidden="true">{allShown ? '✓' : shownCount ? '–' : ''}</span>
+            All
+          </button>
           {OVERLAY_COMPONENTS.map((item) => (
             <button
               key={item.key}

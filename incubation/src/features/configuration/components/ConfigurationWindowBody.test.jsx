@@ -12,10 +12,13 @@ import { WorkspaceProvider } from '../../../workspace/state/WorkspaceContext.jsx
 import { WORKSPACE_WINDOW_TYPES } from '../../../workspace/state/workspaceTypes.js';
 import { clearConfigurationDrafts } from '../lib/configDraft.js';
 import ConfigurationWindowBody from './ConfigurationWindowBody.jsx';
+import { getProfileSettings, resetProfileSettingsCache } from '../../graph/lib/nodeProfile.js';
 
 afterEach(() => {
   cleanup();
   clearConfigurationDrafts();
+  localStorage.clear();
+  resetProfileSettingsCache();
 });
 
 const BANK = { domain: 'bank', active_domain: 'bank', registered_domains: ['bank', 'cdr'], active_tool_url: 'bolt://bank', active_tool_username: 'neo' };
@@ -25,7 +28,7 @@ const auth = { hasRole: () => true, hasPermission: () => true, user: { username:
 const windowItem = { id: 'configuration-1', type: WORKSPACE_WINDOW_TYPES.CONFIGURATION, title: 'Configuration', metadata: { configurationUi: { activeTab: 'tools' } } };
 
 let sessionApi;
-function Harness({ apiFetch, mounted = true }) {
+function Harness({ apiFetch, mounted = true, item = windowItem }) {
   const [configuration, setConfiguration] = useState(BANK);
   sessionApi = { configuration, setConfiguration };
   const session = {
@@ -43,7 +46,7 @@ function Harness({ apiFetch, mounted = true }) {
       <NotificationProvider>
         <SessionContext.Provider value={session}>
           <WorkspaceProvider>
-            {mounted && <ConfigurationWindowBody windowItem={windowItem} />}
+            {mounted && <ConfigurationWindowBody windowItem={item} />}
           </WorkspaceProvider>
         </SessionContext.Provider>
       </NotificationProvider>
@@ -93,5 +96,28 @@ describe('ConfigurationWindowBody unsaved draft', () => {
     await userEvent.click(screen.getByRole('button', { name: /^save/i }));
     await screen.findByText(/could not be loaded/i);
     expect(sessionApi.configuration).toEqual(BANK);
+  });
+});
+
+describe('ConfigurationWindowBody profile mapping fields (Rules)', () => {
+  it('maps the portrait and details to node properties; saved as actor_profile and kept on the device', async () => {
+    const apiFetch = vi.fn(async (path, options) => ({ status: 'success', configuration: options?.body?.configuration || BANK }));
+    render(<Harness apiFetch={apiFetch} item={{ ...windowItem, metadata: { configurationUi: { activeTab: 'rules' } } }} />);
+    const table = screen.getByRole('table', { name: 'Profile mapping fields' });
+    expect(table).toHaveTextContent('Portrait');
+    expect(table).toHaveTextContent('ID');
+    await userEvent.type(screen.getByLabelText('Full name property'), 'FULL_NAME');
+    await userEvent.type(screen.getByLabelText('Portrait property'), 'PHOTO_URL');
+    await userEvent.click(screen.getByLabelText('Show Address'));
+    await userEvent.click(screen.getByRole('button', { name: /^save/i }));
+    await waitFor(() => expect(apiFetch.mock.calls.some(([, options]) => options?.body?.id === 'save')).toBe(true));
+    const body = apiFetch.mock.calls.find(([, options]) => options?.body?.id === 'save')[1].body;
+    expect(body.configuration.actor_profile).toMatchObject({
+      enabled: true,
+      portrait_property: 'PHOTO_URL',
+      fields: expect.arrayContaining([{ field: 'fullName', property: 'FULL_NAME', shown: true }, { field: 'address', property: '', shown: false }]),
+    });
+    // Until the backend keeps it (B-23), the Graph windows read the device copy.
+    await waitFor(() => expect(getProfileSettings('bank').fields[0]).toEqual({ key: 'fullName', source: 'FULL_NAME', shown: true }));
   });
 });

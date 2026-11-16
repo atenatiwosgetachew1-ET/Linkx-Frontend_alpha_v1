@@ -55,6 +55,35 @@ export const albumIconPath = (name) => `../graph_icons/${name}.svg`;
 
 /* ── Node patches ───────────────────────────────────────────────────── */
 
+const hexOf = (value) => (/^#[0-9a-f]{6}$/i.test(String(value || '')) ? String(value) : '');
+const CLEAR = 'rgba(0,0,0,0)';
+// A colour object with this border in every state.
+const withBorder = (color, border) => ({
+  ...color,
+  border,
+  hover: { ...(color.hover || {}), background: color.hover?.background || color.background, border },
+  highlight: { ...(color.highlight || {}), background: color.highlight?.background || color.background, border },
+});
+
+// Border alone (Customize popup, analyst decision 2026-11-16): kept as
+// `borderColor` so a later fill keeps it. '' goes back to the border worked
+// out from the fill (or the theme's, with no fill).
+export const nodeBorderPatch = (node = {}, border) => {
+  const color = node.color && typeof node.color === 'object' ? node.color : (typeof node.color === 'string' ? { background: node.color } : {});
+  if (!border) {
+    if (node.baseColor) return { color: buildNodeColor(node.baseColor), borderColor: null };
+    const background = color.background && color.background !== CLEAR ? color.background : '';
+    return { color: background ? withBorder(color, background) : null, borderColor: null };
+  }
+  return { color: withBorder({ ...color, background: color.background || CLEAR }, border), borderColor: border };
+};
+
+// Fill back to the theme's (the border kept if set on its own).
+export const nodeFillClearPatch = (node = {}) => ({
+  color: node.borderColor ? withBorder({ background: CLEAR }, node.borderColor) : null,
+  baseColor: null,
+});
+
 // The box's fields for a node (GB:2450-2470).
 export const nodeBoxValues = (node = {}) => ({
   label: node.label == null ? '' : String(node.label),
@@ -62,6 +91,11 @@ export const nodeBoxValues = (node = {}) => ({
   color: node.color?.background && /^#[0-9a-f]{6}$/i.test(node.color.background) ? node.color.background : '#000000',
   shape: { dot: 'dot', circularImage: 'dot', box: 'box', diamond: 'diamond' }[node.shape] || 'dot',
   colorBehavior: node.colorBehavior || 'individual',
+  size: Number(node.size) > 0 ? Math.round(Math.max(NODE_SIZES[0], Math.min(Number(node.size), NODE_SIZES[NODE_SIZES.length - 1]))) : 15,
+  // The Customize popup's fill and border, each on its own: a hex, or ''
+  // (fill: the theme's; border: worked out from the fill, production's).
+  fill: hexOf(node.color?.background ?? (typeof node.color === 'string' ? node.color : '')),
+  border: hexOf(node.borderColor),
   icon: String(node.iconPath || '').trim() || String(node.image || '').trim(),
 });
 
@@ -70,7 +104,7 @@ export const nodeBoxValues = (node = {}) => ({
 // colour too. `neighbours(id)` / `edges` cover the drawn view (production
 // read edgesData, the drawn edges).
 // -> { nodes: [[id, patch]], edges: [[key, patch]] }
-export const nodeColorPatches = (ids, baseColor, { behaviorOf, neighbours, edges }) => {
+export const nodeColorPatches = (ids, baseColor, { behaviorOf, neighbours, edges, borderOf }) => {
   const color = buildNodeColor(baseColor);
   const affected = new Set();
   ids.forEach((id) => {
@@ -79,7 +113,10 @@ export const nodeColorPatches = (ids, baseColor, { behaviorOf, neighbours, edges
   });
   const edgeColor = { color: color.background, hover: brightenColor(color.background, 15), highlight: brightenColor(color.background, 25) };
   return {
-    nodes: [...affected].map((id) => [id, { color, baseColor }]),
+    nodes: [...affected].map((id) => {
+      const border = borderOf?.(id);
+      return [id, { color: border ? withBorder(color, border) : color, baseColor }];
+    }),
     edges: edges.filter(([, from, to]) => affected.has(from) && affected.has(to))
       .map(([key]) => [key, { color: edgeColor, __edits: { color: color.background } }]),
   };
@@ -99,6 +136,10 @@ export const nodeShapePatch = (node = {}, shape) => {
 
 // GA:2474 applyNodeIcon (album path or uploaded data URL).
 export const nodeIconPatch = (iconPath) => ({ shape: 'circularImage', image: iconPath, imagePadding: 10, iconPath });
+// No icon (Customize ▸ Remove): a circle again, without the image.
+export const nodeIconClearPatch = (node = {}) => ({
+  shape: node.shape === 'circularImage' || node.shape === 'image' ? 'dot' : node.shape, image: null, iconPath: null,
+});
 
 /* ── Edge patches (GA:1854, 1918, 1968, 2012) ────────────────────────── */
 

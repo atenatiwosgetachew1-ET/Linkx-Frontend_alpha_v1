@@ -61,7 +61,10 @@ export const isDefaultEdgeColor = (color) => {
 const nodeColors = (color) => {
   if (isDefaultNodeColor(color)) return { fill: null, border: null };
   if (typeof color === 'string') return { fill: color, border: color };
-  return { fill: color.background || null, border: color.border || color.background || null };
+  // A clear fill with a border of its own (Customize ▸ border alone) keeps
+  // the theme's fill.
+  const clear = TRANSPARENT.has(token(color.background));
+  return { fill: clear ? null : color.background || null, border: color.border || (clear ? null : color.background) || null };
 };
 
 // Production labelNodesWith (GA:8311): nodes whose node_identity is the chosen

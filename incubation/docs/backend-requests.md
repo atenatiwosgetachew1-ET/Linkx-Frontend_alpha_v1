@@ -241,3 +241,40 @@ The counts are treated as running totals (they only grow from batch to batch), s
 
 ### B-22. Analysis tasks, evidence records and parent alert feedback
 Tracked as a separate handoff: `docs/backend-handoff-analysis-results.md` (H-1…H-9: one evidence record shape, persisted tasks, parent alert assignment, start analysis and send feedback for an alert, save runs as evidence, verdict and flags in job results, session limit, permissions). Frontend plan: `docs/analysis-results-plan.md`.
+
+### B-23. Keep the actor profile mapping (`actor_profile`) in the domain configuration
+**New frontend feature (2026-11-16, not in production):** clicking a node in a Graph window shows an **actor profile** card: a portrait beside the person's details (Full name, ID, Acc No., Tel, Address). Which node property fills each part is set per domain in **Configuration ▸ Rules ▸ Profile mapping fields**, so every graph of a domain shows the same card.
+
+**Today:** the frontend already sends the mapping with `POST /configuration {id: 'save', configuration}` as a new top-level key, `actor_profile`. As far as the frontend knows, the server does not keep unknown keys: after the save, the reloaded configuration has no `actor_profile`. As a stopgap, the frontend keeps a copy in the browser (`localStorage` `linkx_actor_profile_v1`, per domain). That copy does not follow the analyst to another browser or device, and other analysts never see it.
+
+**Request:**
+- Store `actor_profile` with the domain's configuration on `save`, and return it on `load` (and, once B-10 is done, in the save response).
+- Keep it per domain, like `column_mapping`: switching domain loads that domain's mapping.
+- `load_default` (Reset) may drop it or return the default below.
+- Shape (all strings are node property names, as they appear in the graph's node data; empty means not set):
+  ```json
+  "actor_profile": {
+    "enabled": true,
+    "portrait_property": "PHOTO_URL",
+    "fields": [
+      { "field": "fullName",      "property": "FULL_NAME",  "shown": true },
+      { "field": "idNumber",      "property": "ID_NUMBER",  "shown": true },
+      { "field": "accountNumber", "property": "ACCOUNT_NO", "shown": true },
+      { "field": "phone",         "property": "MSISDN",     "shown": true },
+      { "field": "address",       "property": "",           "shown": false }
+    ]
+  }
+  ```
+  - `field` is one of `fullName`, `idNumber`, `accountNumber`, `phone`, `address`. The frontend ignores unknown ones, so more can be added later.
+  - `portrait_property` points to a node property holding an `https://` or `data:image/` link. The frontend shows nothing else as a picture.
+  - Treat the property names as plain text, at most 120 characters each.
+- Permissions: the same as the rest of the configuration (`config:write` to save, B-1).
+
+**Later (not blocking):** the node data has no portrait or identity fields today. If the backend can add them to graph nodes (for example a portrait link and the ID number from the customer record), the mapping can point at them.
+
+**Verify:**
+1. Save a configuration with `actor_profile`, then `load` it: the same object comes back.
+2. Switch domain and back: each domain keeps its own `actor_profile`.
+3. Save without `actor_profile`: an existing one is kept, not wiped.
+
+**Frontend once done:** drop the browser copy (`linkx_actor_profile_v1`). The configuration's value is already used whenever the configuration has one.

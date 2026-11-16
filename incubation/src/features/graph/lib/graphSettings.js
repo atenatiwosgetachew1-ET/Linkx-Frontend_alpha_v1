@@ -47,6 +47,9 @@ export const DEFAULT_GRAPH_SETTINGS = Object.freeze({
   // and its minimum group (production EDGE_BUNDLING_STATE.minGroupSize, 2).
   edgeBundling: false,
   edgeBundleMin: 2,
+  // Actor profile card on node click, for this graph (analyst decision
+  // 2026-11-16; what it shows is the domain's, Configuration ▸ Rules).
+  actorProfile: true,
 });
 
 const clampInt = (value, min, max) => Math.max(min, Math.min(max, Math.floor(Number(value) || 0)));
@@ -96,6 +99,7 @@ export const normalizeGraphSettings = (input = {}) => {
     alertRules: input.alertRules === undefined ? d.alertRules : bool(input.alertRules),
     edgeBundling: input.edgeBundling === undefined ? d.edgeBundling : bool(input.edgeBundling),
     edgeBundleMin: Math.max(2, parseInt(input.edgeBundleMin, 10) || d.edgeBundleMin),
+    actorProfile: input.actorProfile === undefined ? d.actorProfile : bool(input.actorProfile),
   };
 };
 

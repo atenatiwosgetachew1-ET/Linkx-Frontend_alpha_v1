@@ -145,6 +145,13 @@
 	outline: none;
 }
 
+.graph_overlay_menu_item.is-all {
+	margin-bottom: 2px;
+	border-bottom: 1px solid var(--graph-border);
+	border-radius: 4px 4px 0 0;
+	font-weight: 600;
+}
+
 .graph_overlay_menu_check {
 	width: 12px;
 	color: var(--graph-accent);
@@ -240,19 +247,6 @@
 
 .graph_window_button:hover {
 	border-color: var(--graph-accent);
-}
-
-.graph_window_relationships {
-	flex: none;
-	display: flex;
-	align-items: center;
-	gap: 6px;
-	min-height: 34px;
-	padding: 4px 10px;
-	border-top: 1px solid var(--graph-border);
-	background: var(--graph-toolbar-bg);
-	font-size: 12px;
-	overflow-x: auto;
 }
 
 /* ── Right workspace panel: controls for the active Graph window ─────── */
@@ -471,31 +465,183 @@
 	stroke-linecap: round;
 }
 
-.graph_relationship_chip {
+.graph_relationship_tabs {
 	flex: none;
-	padding: 2px 10px;
-	border: 2px solid transparent;
-	border-radius: 999px;
-	background: var(--chip-bg, transparent);
-	color: var(--chip-text, var(--graph-text));
+	display: flex;
+	align-items: flex-end;
+	gap: 2px;
+	min-height: 32px;
+	padding: 4px 10px 0;
+	/* The bottom line is drawn as background, inside the scrolling box, so
+	   the drawn tab can cover it (a border would sit outside the clip). */
+	background:
+		linear-gradient(var(--graph-border), var(--graph-border)) bottom / 100% 1px no-repeat,
+		var(--graph-toolbar-bg);
+	overflow-x: auto;
+	scrollbar-width: none;
 	font-size: 12px;
-	font-weight: 600;
+}
+
+.graph_relationship_tabs::-webkit-scrollbar {
+	display: none;
+}
+
+.graph_relationship_tabs.is-waiting {
+	align-items: center;
+	padding-bottom: 4px;
+	color: var(--graph-muted-text);
+	font-style: italic;
+}
+
+.graph_relationship_tab {
+	position: relative;
+	flex: none;
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	height: 28px;
+	padding: 0 12px;
+	border: 1px solid transparent;
+	border-bottom: 0;
+	border-radius: 6px 6px 0 0;
+	background: transparent;
+	color: var(--graph-muted-text);
+	font: inherit;
+	font-weight: 500;
 	white-space: nowrap;
 	cursor: pointer;
 }
 
-.graph_relationship_chip.is-all {
-	border-color: var(--graph-border);
+/* A faint divider between neighbouring tabs (none beside the drawn one). */
+.graph_relationship_tab + .graph_relationship_tab::before {
+	content: "";
+	position: absolute;
+	left: -2px;
+	top: 8px;
+	bottom: 8px;
+	width: 1px;
+	background: color-mix(in srgb, var(--graph-border) 70%, transparent);
 }
 
-.graph_relationship_chip.is-active {
-	border-color: var(--graph-selected);
-	box-shadow: 0 0 0 1px var(--graph-selected);
+.graph_relationship_tab.is-active::before,
+.graph_relationship_tab.is-active + .graph_relationship_tab::before,
+.graph_relationship_tab:hover::before,
+.graph_relationship_tab:hover + .graph_relationship_tab::before {
+	display: none;
 }
 
-.graph_relationship_chip:disabled {
-	cursor: progress;
-	opacity: 0.75;
+.graph_relationship_tab:hover:not(.is-active) {
+	background: color-mix(in srgb, var(--chip-bg, var(--graph-accent)) 9%, transparent);
+	color: var(--graph-text);
+}
+
+.graph_relationship_tab:focus-visible {
+	outline: 2px solid var(--graph-selected);
+	outline-offset: -2px;
+}
+
+/* The tab dots pulse: a soft ring in their colour grows and fades
+   (staggered, so the row breathes rather than blinks). */
+.graph_relationship_tab .graph_relationship_dot:not(.is-loading) {
+	animation: graph_relationship_pulse 2.4s ease-out infinite;
+}
+
+.graph_relationship_tab:nth-child(3n + 2) .graph_relationship_dot:not(.is-loading) {
+	animation-delay: 0.8s;
+}
+
+.graph_relationship_tab:nth-child(3n) .graph_relationship_dot:not(.is-loading) {
+	animation-delay: 1.6s;
+}
+
+@keyframes graph_relationship_pulse {
+	0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--chip-bg, var(--graph-accent)) 55%, transparent); }
+	70% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--chip-bg, var(--graph-accent)) 0%, transparent); }
+	100% { box-shadow: 0 0 0 0 transparent; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.graph_relationship_tab .graph_relationship_dot:not(.is-loading) {
+		animation: none;
+	}
+}
+
+/* On the drawn (filled) tab, the dot keeps its backend colour inside a
+   white ring, and stays still. */
+.graph_relationship_tab.is-active .graph_relationship_dot:not(.is-loading) {
+	animation: none;
+	outline: 1.5px solid #fff;
+	outline-offset: 0;
+}
+
+/* The drawn tab joins the canvas below: filled with the backend's colour
+   pair (All: the canvas colour, with an accent bar). */
+.graph_relationship_tab.is-active {
+	border-color: var(--chip-bg, var(--graph-border));
+	background: var(--chip-bg, var(--graph-canvas-bg));
+	color: var(--chip-text, var(--graph-text));
+	font-weight: 600;
+}
+
+.graph_relationship_tab.is-active[style]::after {
+	display: none;
+}
+
+.graph_relationship_tab.is-active::after {
+	content: "";
+	position: absolute;
+	left: 8px;
+	right: 8px;
+	top: 0;
+	height: 2px;
+	border-radius: 0 0 2px 2px;
+	background: var(--chip-bg, var(--graph-accent));
+}
+
+/* Its colour, as a dot. */
+.graph_relationship_dot {
+	flex: none;
+	width: 10px;
+	height: 10px;
+	border-radius: 50%;
+	/* A darker core of the same colour inside. */
+	background: radial-gradient(circle, color-mix(in srgb, var(--chip-bg, var(--graph-muted-text)) 55%, #000) 0 2.5px, var(--chip-bg, var(--graph-muted-text)) 3px);
+	box-shadow: inset 0 0 0 1px color-mix(in srgb, #000 12%, transparent);
+}
+
+/* "All": the first colours stacked. */
+.graph_relationship_stack {
+	flex: none;
+	display: inline-flex;
+	padding-left: 4px;
+}
+
+.graph_relationship_stack span {
+	width: 10px;
+	height: 10px;
+	margin-left: -4px;
+	border: 1.5px solid var(--graph-canvas-bg);
+	border-radius: 50%;
+	background: radial-gradient(circle, color-mix(in srgb, var(--chip-bg) 55%, #000) 0 2px, var(--chip-bg) 2.5px);
+}
+
+/* Loading: the dot turns into a spinner. */
+.graph_relationship_dot.is-loading {
+	background: transparent;
+	border: 2px solid color-mix(in srgb, currentColor 30%, transparent);
+	border-top-color: currentColor;
+	box-shadow: none;
+	animation: graph_relationship_spin 0.8s linear infinite;
+}
+
+@keyframes graph_relationship_spin {
+	to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.graph_relationship_dot.is-loading {
+		animation-duration: 2.4s;
+	}
 }
 
 /* Hover titles (production "Show titles"). */
@@ -1051,11 +1197,224 @@
 	pointer-events: none;
 }
 
+/* Timeline filter strip under the canvas (i2 benchmark #1). */
+.graph_window_icon_button.is-filtering {
+	border-color: var(--graph-accent);
+	background: color-mix(in srgb, var(--graph-accent) 14%, transparent);
+}
+
+.graph_timeline {
+	container-type: inline-size;
+	flex: none;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding: 6px 10px 8px;
+	border-top: 1px solid var(--graph-border);
+	background: var(--graph-toolbar-bg);
+	color: var(--graph-text);
+	font-size: 11px;
+}
+
+.graph_timeline_header {
+	display: flex;
+	flex-wrap: nowrap;
+	align-items: flex-start;
+	gap: 8px;
+}
+
+.graph_timeline_header > strong,
+.graph_timeline_reset,
+.graph_timeline_fold {
+	flex: none;
+	min-height: 22px;
+	white-space: nowrap;
+}
+
+.graph_timeline_controls {
+	flex: 1 1 auto;
+	min-width: 0;
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 6px 8px;
+}
+
+.graph_timeline_controls select {
+	min-width: 0;
+	flex: 0 1 auto;
+}
+
+/* Narrow strips: the title keeps only its icon. */
+@container (max-width: 560px) {
+	.graph_timeline_title_text {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip: rect(0 0 0 0);
+		white-space: nowrap;
+	}
+}
+
+.graph_timeline_header strong {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	font-size: 12px;
+}
+
+.graph_timeline_header strong svg {
+	width: 13px;
+	height: 13px;
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 1.8;
+	stroke-linecap: round;
+}
+
+.graph_timeline_header select {
+	height: 22px;
+	max-width: 200px;
+	padding: 0 4px;
+	border: 1px solid var(--graph-border);
+	border-radius: 4px;
+	background: var(--graph-toolbar-bg);
+	color: inherit;
+	font: inherit;
+}
+
+.graph_timeline_summary {
+	flex: 1 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	color: var(--graph-muted-text);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.graph_timeline_options {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 4px 14px;
+	padding-left: 2px;
+}
+
+.graph_timeline_check {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	white-space: nowrap;
+}
+
+.graph_timeline_media {
+	/* Takes the room left in the header row. */
+	flex: 1 1 150px;
+	display: flex;
+	align-items: center;
+	gap: 3px;
+	min-width: 120px;
+}
+
+.graph_timeline_media_button {
+	display: grid;
+	place-items: center;
+	flex: 1 1 0;
+	min-width: 32px;
+	height: 22px;
+	padding: 0;
+	border: 1px solid var(--graph-border);
+	border-radius: 4px;
+	background: var(--graph-toolbar-bg);
+	color: var(--graph-text);
+	cursor: pointer;
+}
+
+.graph_timeline_media_button.is-play {
+	flex-grow: 1.6;
+	border-color: var(--graph-accent);
+	color: var(--graph-accent);
+}
+
+.graph_timeline_media_button:hover:not(:disabled) {
+	background: color-mix(in srgb, var(--graph-accent) 12%, var(--graph-toolbar-bg));
+}
+
+.graph_timeline_media_button:disabled {
+	opacity: 0.4;
+	cursor: default;
+}
+
+.graph_timeline_media_button svg {
+	width: 13px;
+	height: 13px;
+	fill: currentColor;
+}
+
+.graph_timeline_media_button svg .is-stroke {
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 2.4;
+	stroke-linecap: round;
+}
+
+.graph_timeline_fold {
+	display: grid;
+	place-items: center;
+	width: 18px;
+	height: 18px;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	color: var(--graph-muted-text);
+	cursor: pointer;
+}
+
+.graph_timeline_fold:hover {
+	color: var(--graph-text);
+}
+
+.graph_timeline_fold svg {
+	width: 14px;
+	height: 14px;
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 2;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+
+.graph_timeline_bars {
+	display: block;
+	width: 100%;
+	height: 56px;
+	cursor: crosshair;
+	touch-action: none;
+	user-select: none;
+}
+
+.graph_timeline_bars rect {
+	fill: color-mix(in srgb, var(--graph-text) 28%, transparent);
+}
+
+.graph_timeline_bars rect.is-selected {
+	fill: var(--graph-accent);
+}
+
+.graph_timeline_axis {
+	display: flex;
+	justify-content: space-between;
+	color: var(--graph-muted-text);
+	font-size: 10px;
+}
+
 /* Minimap (not in production): top-right of the canvas while part of the
    graph is outside the view; the visible part as a rectangle. */
 .graph_minimap {
 	position: absolute;
-	top: 0;
+	/* A little room below the toolbar / relationship tabs. */
+	top: 8px;
 	right: 0;
 	z-index: 2;
 	border: 1px solid var(--graph-border);
@@ -1137,6 +1496,27 @@
 	max-width: 100%;
 }
 
+/* An open node card appears at its own corner of the canvas (out of the
+   stack, so the other bubbles stay put); dragged, it is placed by left / top. */
+.graph_overlay_panel[class*="is-at-"] {
+	position: absolute;
+}
+
+.graph_overlay_panel.is-at-top-left {
+	top: 0;
+	left: 0;
+}
+
+.graph_overlay_panel.is-at-top-right {
+	top: 0;
+	right: 0;
+}
+
+.graph_overlay_panel.is-at-bottom-right {
+	right: 0;
+	bottom: 0;
+}
+
 /* Folded to its header. !important wins over the size a resize writes inline. */
 .graph_overlay_panel.is-collapsed {
 	flex-shrink: 0;
@@ -1155,6 +1535,238 @@
 	cursor: move;
 	user-select: none;
 	touch-action: none;
+}
+
+/* Folded to a bubble (Graph Alerts: an alerted node). !important wins over
+   the size a resize writes inline. */
+.graph_overlay_panel.is-bubble {
+	width: auto !important;
+	height: auto !important;
+	min-width: 0;
+	min-height: 0;
+	/* Room for the hover glow, which the canvas edge would crop. */
+	padding: 16px;
+	overflow: visible;
+	border: 0;
+	background: transparent;
+}
+
+/* Stacked bubbles sit closer: the room each keeps for its glow (16px) is
+   shared with the one above, not doubled. (~, not +: an open card between
+   two bubbles is out of the stack.) */
+.graph_overlay_panel.is-bubble ~ .graph_overlay_panel.is-bubble {
+	margin-top: -28px;
+}
+
+/* The bubble's tooltip: a small card left of it in the card's colour (an
+   accent edge and arrow, a soft wash), sliding in after a short wait. */
+.graph_overlay_tip {
+	position: absolute;
+	top: 50%;
+	right: calc(100% - 8px);
+	z-index: 4;
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+	width: max-content;
+	max-width: 220px;
+	padding: 8px 11px 8px 12px;
+	border: 1px solid color-mix(in srgb, var(--card-accent, var(--graph-accent)) 30%, var(--graph-border));
+	border-left: 3px solid var(--card-accent, var(--graph-accent));
+	border-radius: 3px;
+	background:
+		linear-gradient(90deg, color-mix(in srgb, var(--card-accent, var(--graph-accent)) 10%, transparent), transparent 70%),
+		var(--graph-toolbar-bg);
+	box-shadow: 0 8px 22px rgb(0 0 0 / 0.16), 0 1px 3px rgb(0 0 0 / 0.08);
+	color: var(--graph-text);
+	font-size: 11px;
+	line-height: 1.35;
+	white-space: normal;
+	opacity: 0;
+	visibility: hidden;
+	transform: translate(6px, -50%);
+	transition: opacity 0.16s ease, transform 0.16s ease, visibility 0s linear 0.16s;
+	pointer-events: none;
+}
+
+/* The arrow, pointing at the bubble. */
+.graph_overlay_tip::after {
+	content: "";
+	position: absolute;
+	top: 50%;
+	right: -6px;
+	width: 9px;
+	height: 9px;
+	border-top: 1px solid color-mix(in srgb, var(--card-accent, var(--graph-accent)) 30%, var(--graph-border));
+	border-right: 1px solid color-mix(in srgb, var(--card-accent, var(--graph-accent)) 30%, var(--graph-border));
+	background: var(--graph-toolbar-bg);
+	transform: translateY(-50%) rotate(45deg);
+}
+
+.graph_overlay_bubble:hover ~ .graph_overlay_tip,
+.graph_overlay_bubble:focus-visible ~ .graph_overlay_tip {
+	opacity: 1;
+	visibility: visible;
+	transform: translate(0, -50%);
+	transition: opacity 0.18s ease 0.25s, transform 0.18s ease 0.25s, visibility 0s linear 0.25s;
+}
+
+.graph_overlay_tip_title {
+	color: var(--card-accent, var(--graph-accent));
+	font-size: 9.5px;
+	font-weight: 800;
+	letter-spacing: 0.7px;
+	text-transform: uppercase;
+}
+
+.graph_overlay_tip_summary {
+	font-size: 12px;
+	font-weight: 700;
+}
+
+.graph_overlay_tip_extra {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+	margin-top: 2px;
+}
+
+.graph_overlay_tip_extra .graph_card_chip {
+	padding: 1px 7px 1px 5px;
+	font-size: 10px;
+}
+
+.graph_overlay_tip_hint {
+	margin-top: 2px;
+	color: var(--graph-muted-text);
+	font-size: 9.5px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.graph_overlay_tip,
+	.graph_overlay_bubble:hover ~ .graph_overlay_tip,
+	.graph_overlay_bubble:focus-visible ~ .graph_overlay_tip {
+		transform: translate(0, -50%);
+		transition: none;
+	}
+}
+
+/* A folded card with nothing to show steps back (full again on hover). */
+.graph_overlay_bubble .graph_card_node.is-clean {
+	opacity: 0.6;
+	transition: transform 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
+}
+
+.graph_overlay_bubble:hover .graph_card_node.is-clean,
+.graph_overlay_bubble:focus-visible .graph_card_node.is-clean {
+	opacity: 1;
+}
+
+.graph_overlay_bubble {
+	display: block;
+	padding: 0;
+	border: 0;
+	background: none;
+	cursor: pointer;
+}
+
+.graph_overlay_bubble:focus-visible {
+	outline: 2px solid var(--graph-accent);
+	outline-offset: 4px;
+	border-radius: 50%;
+}
+
+.graph_overlay_hidden {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	clip: rect(0 0 0 0);
+	white-space: nowrap;
+}
+
+/* An alerted node, drawn as the canvas draws one (graphElements: the theme's
+   node fill, transparent; MARKER_STYLES.alert: a #dc2626 border and its
+   glow, an underlay at 0.3 reaching 5px past the node; graphGlyphs: the "!"
+   badge, top-right). The count takes the border colour. */
+.graph_card_node {
+	/* Alert: MARKER_STYLES.alert; pinned: MARKER_STYLES.pinned (amber). */
+	--node-color: #dc2626;
+	--node-badge: var(--graph-alert-high);
+	position: relative;
+	display: grid;
+	place-items: center;
+	width: 44px;
+	height: 44px;
+	/* The border a little see-through; the count keeps the full colour. */
+	border: 3px solid color-mix(in srgb, var(--node-color) 60%, transparent);
+	border-radius: 50%;
+	background:
+		linear-gradient(color-mix(in srgb, var(--node-color) 30%, transparent), color-mix(in srgb, var(--node-color) 30%, transparent)),
+		var(--graph-canvas-bg);
+	/* A soft shadow in its colour instead of the canvas's halo ring. */
+	box-shadow: 0 2px 8px color-mix(in srgb, var(--node-color) 35%, transparent);
+	box-sizing: border-box;
+	color: var(--node-color);
+	font-size: 13px;
+	font-weight: 700;
+	font-variant-numeric: tabular-nums;
+	user-select: none;
+}
+
+/* Hover: it lifts a little and its glow widens and deepens. */
+.graph_card_node {
+	transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.graph_overlay_bubble:hover .graph_card_node,
+.graph_overlay_bubble:focus-visible .graph_card_node {
+	transform: scale(1.08);
+	box-shadow: 0 4px 14px color-mix(in srgb, var(--node-color) 45%, transparent);
+}
+
+.graph_overlay_bubble:active .graph_card_node {
+	transform: scale(0.97);
+}
+
+.graph_overlay_bubble:hover .graph_card_node.is-clean,
+.graph_overlay_bubble:focus-visible .graph_card_node.is-clean {
+	box-shadow: 0 3px 10px color-mix(in srgb, var(--graph-node-border) 30%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.graph_card_node {
+		transition: none;
+	}
+}
+
+/* Nothing alerted: a plain node (theme border, no glow, no badge). */
+.graph_card_node.is-clean {
+	--node-color: var(--graph-node-border);
+	background: var(--graph-canvas-bg);
+	box-shadow: none;
+}
+
+.graph_card_node_badge {
+	position: absolute;
+	top: -5px;
+	right: -5px;
+	width: 17px;
+	height: 17px;
+	fill: none;
+	stroke: #fff;
+	stroke-width: 1.8;
+	stroke-linecap: round;
+}
+
+.graph_card_node.is-pinned {
+	--node-color: #f59e0b;
+	--node-badge: var(--graph-pinned);
+}
+
+.graph_card_node_badge circle:first-child {
+	fill: var(--node-badge);
+	stroke-width: 1.5;
 }
 
 .graph_overlay_panel.is-collapsed .graph_overlay_header {
@@ -1449,9 +2061,804 @@
 	stroke-linejoin: round;
 }
 
+/* ── Graph Alerts, unfolded (analyst decision 2026-11-16) ──────────────
+   Rises out of its bubble (a circle opening from the node's centre) and
+   sinks back into it; a soft red wash, the node small beside the title,
+   severity counts, "Name by" and Rescan on one line, alerts as rows marked
+   like their nodes. */
+.graph_overlay_panel.is-node-card {
+	/* The card's colour: its node's (alerts red, pinned amber). */
+	--card-accent: #dc2626;
+	--alerts-red: #dc2626;
+	--alerts-amber: var(--graph-alert-medium);
+	/* The bubble's centre: bottom-right in the stack, top-left once moved
+	   (16px space + half the 44px node). */
+	--arise-x: calc(100% - 38px);
+	--arise-y: calc(100% - 38px);
+}
+
+/* (The folded bubble keeps its own look.) */
+.graph_overlay_panel.is-node-card:not(.is-bubble) {
+	width: 300px;
+	/* As tall as what it holds, up to the canvas limit (85 %), then the
+	   list scrolls; a size set with the grip is kept inline over this. */
+	height: auto;
+	min-width: 240px;
+	min-height: 0;
+	border: 1px solid color-mix(in srgb, var(--card-accent) 22%, var(--graph-border));
+	border-radius: 3px;
+	background:
+		radial-gradient(140% 90px at 0 0, color-mix(in srgb, var(--card-accent) 11%, transparent), transparent 70%),
+		var(--graph-toolbar-bg);
+	box-shadow: 0 12px 32px rgb(0 0 0 / 0.16), 0 2px 6px rgb(0 0 0 / 0.08);
+	font-size: 11.5px;
+}
+
+.graph_overlay_panel.is-node-card.is-arising {
+	animation: graph_card_arise 0.38s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.graph_overlay_panel.is-node-card.is-sinking {
+	animation: graph_card_sink 0.3s cubic-bezier(0.4, 0, 0.8, 0.4) forwards;
+	pointer-events: none;
+}
+
+@keyframes graph_card_arise {
+	from {
+		clip-path: circle(22px at var(--arise-x) var(--arise-y));
+		opacity: 0.6;
+	}
+	to {
+		clip-path: circle(var(--arise-r, 150%) at var(--arise-x) var(--arise-y));
+		opacity: 1;
+	}
+}
+
+@keyframes graph_card_sink {
+	from {
+		clip-path: circle(var(--arise-r, 150%) at var(--arise-x) var(--arise-y));
+		opacity: 1;
+	}
+	to {
+		clip-path: circle(22px at var(--arise-x) var(--arise-y));
+		opacity: 0;
+	}
+}
+
+/* The rows come in one after another (with the opening, and after a rescan). */
+.graph_overlay_panel.is-node-card .graph_card_row,
+.graph_overlay_panel.is-node-card.is-arising .graph_card_tools {
+	/* backwards: hidden during the delay, and the hover slide still works after. */
+	animation: graph_card_row_in 0.34s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+	animation-delay: calc(0.08s + var(--i, 0) * 0.035s);
+}
+
+@keyframes graph_card_row_in {
+	from { opacity: 0; transform: translateY(6px); }
+	to { opacity: 1; transform: none; }
+}
+
+.graph_overlay_panel.is-node-card .graph_overlay_header {
+	align-items: center;
+	gap: 10px;
+	padding: 12px 10px 10px 14px;
+	border-bottom: 0;
+}
+
+.graph_overlay_panel.is-node-card .graph_overlay_heading {
+	flex: 1 1 auto;
+	gap: 2px;
+}
+
+.graph_overlay_panel.is-node-card .graph_overlay_heading strong {
+	font-size: 13.5px;
+	font-weight: 700;
+	letter-spacing: 0.1px;
+}
+
+.graph_overlay_panel.is-node-card .graph_overlay_heading span {
+	font-size: 11px;
+}
+
+.graph_overlay_mark {
+	flex: none;
+	display: grid;
+	place-items: center;
+	padding: 3px;
+}
+
+.graph_overlay_panel.is-node-card .graph_overlay_fold,
+.graph_overlay_panel.is-node-card .graph_overlay_close {
+	width: 26px;
+	height: 26px;
+	border-radius: 50%;
+	transition: background 0.15s, color 0.15s;
+}
+
+.graph_overlay_panel.is-node-card .graph_overlay_fold:hover,
+.graph_overlay_panel.is-node-card .graph_overlay_close:hover {
+	background: color-mix(in srgb, var(--graph-text) 8%, transparent);
+}
+
+/* The node, small, beside the title. */
+.graph_card_node.is-small {
+	width: 30px;
+	height: 30px;
+	border-width: 2px;
+	box-shadow: 0 1px 4px color-mix(in srgb, var(--node-color) 35%, transparent);
+	font-size: 10px;
+}
+
+.graph_card_node.is-small.is-clean {
+	box-shadow: none;
+}
+
+.graph_card_node.is-small .graph_card_node_badge {
+	top: -4px;
+	right: -4px;
+	width: 12px;
+	height: 12px;
+}
+
+/* Counts, "Name by", Rescan. */
+.graph_card_tools {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 0 12px 10px 14px;
+}
+
+.graph_card_counts {
+	display: inline-flex;
+	gap: 4px;
+	flex: none;
+}
+
+.graph_card_chip {
+	--chip: var(--card-accent);
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 2px 8px 2px 6px;
+	border-radius: 999px;
+	background: color-mix(in srgb, var(--chip) 14%, transparent);
+	color: color-mix(in srgb, var(--chip) 80%, var(--graph-text));
+	font-size: 10.5px;
+	font-weight: 600;
+	white-space: nowrap;
+}
+
+.graph_card_chip::before {
+	content: "";
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: var(--chip);
+}
+
+.graph_card_chip.is-high {
+	--chip: var(--alerts-red);
+}
+
+.graph_card_chip.is-medium {
+	--chip: var(--alerts-amber);
+}
+
+.graph_card_field {
+	display: inline-flex;
+	flex: 1 1 auto;
+	align-items: center;
+	gap: 5px;
+	min-width: 0;
+	height: 26px;
+	padding: 0 4px 0 10px;
+	border: 1px solid var(--graph-border);
+	border-radius: 999px;
+	background: color-mix(in srgb, var(--graph-text) 3%, transparent);
+}
+
+.graph_card_field:focus-within {
+	border-color: var(--graph-field-focus-border);
+}
+
+.graph_card_field span {
+	flex: none;
+	color: var(--graph-muted-text);
+	font-size: 10.5px;
+	white-space: nowrap;
+}
+
+.graph_card_field select {
+	flex: 1 1 auto;
+	min-width: 0;
+	height: 22px;
+	padding: 0 2px;
+	border: 0;
+	background: transparent;
+	color: var(--graph-text);
+	font: inherit;
+	font-size: 11px;
+	font-weight: 600;
+	outline: none;
+	cursor: pointer;
+}
+
+.graph_card_button {
+	flex: none;
+	display: inline-grid;
+	place-items: center;
+	width: 26px;
+	height: 26px;
+	padding: 0;
+	border: 1px solid var(--graph-border);
+	border-radius: 50%;
+	background: color-mix(in srgb, var(--graph-text) 3%, transparent);
+	color: var(--graph-text);
+	cursor: pointer;
+	transition: background 0.15s, border-color 0.15s, transform 0.3s;
+}
+
+.graph_card_button:hover:not(:disabled) {
+	border-color: color-mix(in srgb, var(--card-accent) 45%, var(--graph-border));
+	background: color-mix(in srgb, var(--card-accent) 10%, transparent);
+	transform: rotate(-60deg);
+}
+
+.graph_card_button:disabled {
+	opacity: 0.45;
+	cursor: default;
+}
+
+.graph_card_button.is-spinning svg {
+	animation: graph_relationship_spin 0.9s linear infinite reverse;
+}
+
+.graph_card_button svg {
+	width: 13px;
+	height: 13px;
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 2;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+
+/* The alerts: grouped by severity under sticky headings; flat rows split
+   by hairlines, the whole row tinting on hover. */
+.graph_overlay_list.graph_card_list {
+	gap: 0;
+	padding: 0 0 4px;
+	border-top: 1px solid color-mix(in srgb, var(--graph-border) 70%, transparent);
+}
+
+.graph_card_group {
+	--group-color: var(--card-accent);
+	display: flex;
+	flex-direction: column;
+}
+
+.graph_card_group.is-high {
+	--group-color: var(--alerts-red);
+}
+
+.graph_card_group.is-medium {
+	--group-color: var(--alerts-amber);
+}
+
+.graph_card_group_head {
+	position: sticky;
+	top: 0;
+	z-index: 1;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	margin: 0;
+	padding: 6px 12px 3px;
+	background: var(--graph-toolbar-bg);
+	color: var(--group-color);
+	font-size: 8.5px;
+	font-weight: 800;
+	letter-spacing: 0.8px;
+	text-transform: uppercase;
+}
+
+.graph_card_group_head::after {
+	content: "";
+	flex: 1 1 auto;
+	height: 1px;
+	background: color-mix(in srgb, var(--group-color) 25%, transparent);
+}
+
+.graph_card_group_count {
+	order: 2;
+	min-width: 16px;
+	padding: 0 5px;
+	border-radius: 999px;
+	background: color-mix(in srgb, var(--group-color) 14%, transparent);
+	font-size: 8.5px;
+	letter-spacing: 0;
+	text-align: center;
+}
+
+.graph_card_row {
+	--row-color: var(--card-accent);
+	position: relative;
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr) auto;
+	align-items: center;
+	gap: 8px;
+	flex-shrink: 0;
+	padding: 4px 12px;
+	border: 0;
+	border-bottom: 1px solid color-mix(in srgb, var(--graph-border) 45%, transparent);
+	background: transparent;
+	color: var(--graph-text);
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+	transition: background 0.15s;
+}
+
+.graph_card_group .graph_card_row:last-child {
+	border-bottom: 0;
+}
+
+.graph_card_row.is-high {
+	--row-color: var(--alerts-red);
+}
+
+.graph_card_row.is-medium {
+	--row-color: var(--alerts-amber);
+}
+
+/* An accent bar slides in at the left on hover. */
+.graph_card_row::before {
+	content: "";
+	position: absolute;
+	left: 0;
+	top: 4px;
+	bottom: 4px;
+	width: 2px;
+	border-radius: 0 3px 3px 0;
+	background: var(--row-color);
+	transform: scaleY(0);
+	transition: transform 0.18s ease;
+}
+
+.graph_card_row:hover,
+.graph_card_row:focus-visible {
+	background: color-mix(in srgb, var(--row-color) 7%, transparent);
+	outline: none;
+}
+
+.graph_card_row:hover::before,
+.graph_card_row:focus-visible::before {
+	transform: scaleY(1);
+}
+
+/* Its mark: a flat warning sign in the alert colour. */
+.graph_card_row_mark {
+	display: grid;
+	place-items: center;
+	width: 16px;
+	height: 16px;
+}
+
+.graph_card_row_mark svg {
+	width: 16px;
+	height: 16px;
+}
+
+.graph_card_row_sign {
+	fill: var(--row-color);
+}
+
+.graph_card_row_bang {
+	fill: none;
+	stroke: #fff;
+	stroke-width: 2.2;
+	stroke-linecap: round;
+}
+
+.graph_card_row_dot {
+	fill: #fff;
+}
+
+.graph_card_row_body {
+	display: flex;
+	flex-direction: column;
+	gap: 0;
+	min-width: 0;
+}
+
+.graph_card_row_name {
+	overflow: hidden;
+	font-size: 10.5px;
+	font-weight: 700;
+	line-height: 1.3;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+.graph_card_row_line {
+	display: flex;
+	align-items: baseline;
+	gap: 6px;
+	min-width: 0;
+	color: var(--graph-muted-text);
+	font-size: 9.5px;
+	line-height: 1.3;
+}
+
+.graph_card_row_category {
+	flex: none;
+	color: var(--row-color);
+	font-weight: 700;
+}
+
+.graph_card_row_detail {
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+/* The number that raised it. */
+.graph_card_row_metric {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-end;
+	line-height: 1.05;
+}
+
+.graph_card_row_metric b {
+	color: var(--graph-text);
+	font-size: 11.5px;
+	font-weight: 800;
+	font-variant-numeric: tabular-nums;
+}
+
+.graph_card_row_metric small {
+	color: var(--graph-muted-text);
+	font-size: 7.5px;
+	letter-spacing: 0.4px;
+	text-transform: uppercase;
+}
+
+/* Pinned Evidence: the card in its node's amber. */
+.graph_overlay_panel.is-node-card.is-pinned-card {
+	--card-accent: #f59e0b;
+}
+
+.graph_card_chip.is-muted {
+	--chip: var(--graph-muted-text);
+}
+
+/* Merged & Grouped: the card in the group colour; merged rows in theirs. */
+.graph_overlay_panel.is-node-card.is-combined-card {
+	--card-accent: var(--graph-group);
+}
+
+.graph_card_node.is-group {
+	--node-color: var(--graph-group);
+	--node-badge: var(--graph-group);
+}
+
+.graph_card_chip.is-group,
+.graph_card_group.is-group,
+.graph_card_row.is-group {
+	--chip: var(--graph-group);
+	--group-color: var(--graph-group);
+	--row-color: var(--graph-group);
+}
+
+.graph_card_chip.is-merged,
+.graph_card_group.is-merged,
+.graph_card_row.is-merged {
+	--chip: var(--graph-merged);
+	--group-color: var(--graph-merged);
+	--row-color: var(--graph-merged);
+}
+
+/* A text action on a row (Ungroup). */
+.graph_card_row_action.is-text {
+	align-self: center;
+	margin-right: 10px;
+	padding: 2px 8px;
+	border: 1px solid var(--graph-border);
+	border-radius: 999px;
+	font-size: 9.5px;
+	font-weight: 600;
+}
+
+.graph_card_row_action.is-text:hover {
+	border-color: var(--row-color);
+	color: var(--row-color);
+}
+
+/* A pill button on the tools line (Show all). */
+.graph_card_pill {
+	flex: none;
+	height: 24px;
+	margin-left: auto;
+	padding: 0 12px;
+	border: 1px solid color-mix(in srgb, var(--card-accent) 40%, var(--graph-border));
+	border-radius: 999px;
+	background: color-mix(in srgb, var(--card-accent) 10%, transparent);
+	color: var(--graph-text);
+	font: inherit;
+	font-size: 10.5px;
+	font-weight: 600;
+	cursor: pointer;
+	transition: background 0.15s, border-color 0.15s;
+}
+
+.graph_card_pill:hover:not(:disabled) {
+	border-color: var(--card-accent);
+	background: color-mix(in srgb, var(--card-accent) 18%, transparent);
+}
+
+.graph_card_pill:disabled {
+	opacity: 0.45;
+	cursor: default;
+}
+
+/* A row with its own action (× unpin): the main part focuses the item. */
+.graph_card_row.has-action {
+	grid-template-columns: minmax(0, 1fr) auto;
+	gap: 0;
+	padding: 0;
+	cursor: default;
+}
+
+.graph_card_row_main {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr);
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+	padding: 4px 4px 4px 12px;
+	border: 0;
+	background: none;
+	color: inherit;
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+
+.graph_card_row_main:focus-visible {
+	outline: none;
+}
+
+.graph_card_row.has-action:hover,
+.graph_card_row.has-action:focus-within {
+	background: color-mix(in srgb, var(--row-color) 7%, transparent);
+}
+
+.graph_card_row.has-action:hover::before,
+.graph_card_row.has-action:focus-within::before {
+	transform: scaleY(1);
+}
+
+.graph_card_row_action {
+	align-self: stretch;
+	padding: 0 12px 0 8px;
+	border: 0;
+	background: none;
+	color: var(--graph-muted-text);
+	font-size: 14px;
+	line-height: 1;
+	opacity: 0.45;
+	cursor: pointer;
+	transition: opacity 0.15s, color 0.15s;
+}
+
+.graph_card_row.has-action:hover .graph_card_row_action,
+.graph_card_row_action:focus-visible {
+	opacity: 1;
+}
+
+.graph_card_row_action:hover {
+	color: var(--graph-text);
+}
+
+.graph_card_row_stem {
+	fill: none;
+	stroke: var(--row-color);
+	stroke-width: 2.2;
+	stroke-linecap: round;
+}
+
+/* Hidden at the current limit: dimmed, and said so. */
+.graph_card_row.is-hidden .graph_card_row_name {
+	opacity: 0.7;
+}
+
+.graph_card_row_flag {
+	flex: none;
+	color: var(--graph-muted-text);
+	font-style: italic;
+}
+
+.graph_card_elsewhere {
+	margin: 0;
+	padding: 6px 12px 2px;
+	color: var(--graph-muted-text);
+	font-size: 9.5px;
+	font-style: italic;
+}
+
+.graph_card_empty_mark.is-muted {
+	--row-color: var(--card-accent);
+	background: color-mix(in srgb, var(--card-accent) 12%, transparent);
+}
+
+.graph_card_empty_mark.is-muted svg {
+	width: 18px;
+	height: 18px;
+	fill: var(--card-accent);
+	stroke: none;
+}
+
+.graph_card_empty_mark.is-muted .graph_card_row_stem {
+	stroke: var(--card-accent);
+}
+
+/* Resized from the top-left corner (anchored bottom-right): a grip that
+   shows on hover. */
+.graph_overlay_panel.is-node-card:not(.is-bubble) {
+	resize: none;
+}
+
+.graph_overlay_resize {
+	position: absolute;
+	top: 0;
+	left: 0;
+	z-index: 3;
+	width: 18px;
+	height: 18px;
+	border-top-left-radius: 3px;
+	cursor: nwse-resize;
+	touch-action: none;
+}
+
+.graph_overlay_resize::before {
+	content: "";
+	position: absolute;
+	top: 5px;
+	left: 5px;
+	width: 8px;
+	height: 8px;
+	border-top: 2px solid var(--graph-muted-text);
+	border-left: 2px solid var(--graph-muted-text);
+	border-top-left-radius: 2px;
+	opacity: 0;
+	transition: opacity 0.15s;
+}
+
+/* The grip is the corner facing into the canvas. */
+.graph_overlay_resize.is-top-right,
+.graph_overlay_resize.is-bottom-right {
+	right: 0;
+	left: auto;
+}
+
+.graph_overlay_resize.is-bottom-left,
+.graph_overlay_resize.is-bottom-right {
+	top: auto;
+	bottom: 0;
+}
+
+.graph_overlay_resize.is-bottom-left {
+	border-radius: 0 0 0 3px;
+	cursor: nesw-resize;
+}
+
+.graph_overlay_resize.is-bottom-right {
+	border-radius: 0 0 3px;
+}
+
+.graph_overlay_resize.is-bottom-left::before,
+.graph_overlay_resize.is-bottom-right::before {
+	top: auto;
+	bottom: 5px;
+	border-top: 0;
+	border-bottom: 2px solid var(--graph-muted-text);
+	border-radius: 0 0 0 2px;
+}
+
+.graph_overlay_resize.is-bottom-right::before {
+	right: 5px;
+	left: auto;
+	border-left: 0;
+	border-right: 2px solid var(--graph-muted-text);
+	border-radius: 0 0 2px;
+}
+
+.graph_overlay_panel:hover > .graph_overlay_resize::before {
+	opacity: 0.55;
+}
+
+.graph_overlay_resize:hover::before {
+	opacity: 1;
+	border-color: var(--card-accent, var(--graph-accent));
+}
+
+/* Nothing alerted. */
+.graph_card_empty {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 10px;
+	padding: 22px 12px;
+	text-align: center;
+}
+
+.graph_card_empty_mark {
+	display: grid;
+	place-items: center;
+	width: 38px;
+	height: 38px;
+	border-radius: 50%;
+	background: color-mix(in srgb, #16a34a 14%, transparent);
+}
+
+.graph_card_empty_mark svg {
+	width: 20px;
+	height: 20px;
+	fill: none;
+	stroke: #16a34a;
+	stroke-width: 2.4;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+
+.graph_card_footer {
+	padding: 7px 14px 10px;
+	color: var(--graph-muted-text);
+	font-size: 10px;
+	text-align: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.graph_overlay_panel.is-node-card.is-arising,
+	.graph_overlay_panel.is-node-card .graph_card_row,
+	.graph_overlay_panel.is-node-card.is-arising .graph_card_tools,
+	.graph_card_button.is-spinning svg {
+		animation: none;
+	}
+
+	.graph_card_row,
+	.graph_card_row::before,
+	.graph_card_button {
+		transition: none;
+	}
+}
+
 /* Edge semantic legend (production #semantic-legend): bottom-left, takes no
    clicks. Lines use the edge colour; the node-flag sample is production's
    orange. */
+.graph_period_title {
+	position: absolute;
+	top: 10px;
+	left: 10px;
+	z-index: 1;
+	max-width: calc(100% - 200px);
+	color: var(--graph-text);
+	font-family: var(--app-font-family, "Manrope", "Segoe UI", Roboto, Arial, sans-serif);
+	font-size: 20px;
+	font-weight: 400;
+	line-height: 28.8px; /* the height 24px text had */
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	padding: 4px 10px;
+	border: 0;
+	border-left: 4px solid var(--graph-accent);
+	border-radius: 0 6px 6px 0;
+	background: color-mix(in srgb, var(--graph-toolbar-bg) 90%, transparent);
+	pointer-events: none;
+}
+
 .graph_semantic_legend {
 	position: absolute;
 	bottom: 10px;
@@ -1500,4 +2907,1222 @@
 
 .graph_semantic_legend_row.is-flag {
 	color: var(--graph-node-flag);
+}
+
+/* ── Customize popup (GraphCustomizeBox; analyst decision 2026-11-16) ──
+   Toolbar ▸ Customize. Minimal and compact: flat sections divided by
+   hairlines, options left, the preview right (held down, it shows the
+   current look); applied with Apply. */
+.graph_customize_backdrop {
+	/* The popup's colour (also its icon album's, which sits beside it). */
+	--customize-accent: var(--graph-accent);
+	position: absolute;
+	inset: 0;
+	z-index: 6;
+	display: grid;
+	place-items: center;
+	padding: 12px;
+	container-type: inline-size;
+	background: color-mix(in srgb, var(--graph-canvas-bg) 45%, transparent);
+	animation: graph_customize_fade 0.14s ease-out;
+}
+
+.graph_customize {
+	display: flex;
+	flex-direction: column;
+	width: min(540px, 100%);
+	max-height: 100%;
+	overflow: hidden;
+	/* As the on-graph cards (Graph Alerts, Pinned Evidence, Merged &
+	   Grouped): an accent-tinted border, 3px corners, the accent washing in
+	   from the top-left corner, the same shadow. */
+	border: 1px solid color-mix(in srgb, var(--customize-accent) 22%, var(--graph-border));
+	border-radius: 3px;
+	background:
+		radial-gradient(140% 90px at 0 0, color-mix(in srgb, var(--customize-accent) 11%, transparent), transparent 70%),
+		var(--graph-toolbar-bg);
+	color: var(--graph-text);
+	box-shadow: 0 12px 32px rgb(0 0 0 / 0.16), 0 2px 6px rgb(0 0 0 / 0.08);
+	font-size: 11.5px;
+	line-height: 1.35;
+	box-sizing: border-box;
+	animation: graph_customize_rise 0.16s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes graph_customize_fade {
+	from { opacity: 0; }
+}
+
+@keyframes graph_customize_rise {
+	from {
+		opacity: 0;
+		transform: translateY(6px);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.graph_customize_backdrop,
+	.graph_customize,
+	.graph_customize_album {
+		animation: none;
+	}
+}
+
+.graph_customize button {
+	font: inherit;
+}
+
+.graph_customize_header {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	min-height: 40px;
+	padding: 0 12px 0 16px;
+	box-sizing: border-box;
+}
+
+.graph_customize_heading {
+	display: flex;
+	flex: 1;
+	align-items: baseline;
+	gap: 8px;
+	min-width: 0;
+}
+
+.graph_customize_heading strong {
+	font-size: 13px;
+	font-weight: 700;
+	letter-spacing: 0.1px;
+}
+
+.graph_customize_heading span,
+.graph_customize_hint {
+	color: var(--graph-muted-text);
+	font-size: 10.5px;
+}
+
+.graph_customize_tabs {
+	display: inline-flex;
+	gap: 2px;
+}
+
+.graph_customize_tab {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	height: 22px;
+	padding: 0 8px;
+	border: 0;
+	border-radius: 4px;
+	background: transparent;
+	color: var(--graph-muted-text);
+	font-size: 11px;
+	cursor: pointer;
+}
+
+.graph_customize_tab:hover {
+	color: var(--graph-text);
+}
+
+.graph_customize_tab.is-current {
+	background: color-mix(in srgb, var(--graph-muted-text) 14%, transparent);
+	color: var(--graph-text);
+}
+
+.graph_customize_tab_count {
+	color: var(--graph-muted-text);
+	font-size: 10px;
+}
+
+.graph_customize_close {
+	flex: none;
+	width: 24px;
+	height: 24px;
+	padding: 0;
+	border: 0;
+	border-radius: 50%;
+	background: transparent;
+	color: var(--graph-muted-text);
+	font-size: 16px;
+	line-height: 1;
+	cursor: pointer;
+}
+
+.graph_customize_close:hover {
+	background: color-mix(in srgb, var(--graph-text) 8%, transparent);
+	color: var(--graph-text);
+}
+
+.graph_customize_body {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) 200px;
+	gap: 16px;
+	padding: 6px 16px 12px;
+	min-height: 0;
+	overflow: hidden;
+}
+
+.graph_customize_options {
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	overflow-y: auto;
+	scrollbar-width: thin;
+}
+
+/* Sections: flat, a hairline between them. */
+.graph_customize_section {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: 9px 0;
+}
+
+.graph_customize_section + .graph_customize_section {
+	border-top: 1px solid color-mix(in srgb, var(--customize-accent) 14%, var(--graph-border));
+}
+
+.graph_customize_section_head {
+	margin: 0;
+	color: var(--customize-accent);
+	font-size: 9px;
+	font-weight: 800;
+	letter-spacing: 0.8px;
+	text-transform: uppercase;
+}
+
+.graph_customize_field {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+}
+
+.graph_customize_field > .graph_customize_segments,
+.graph_customize_field > .graph_customize_range {
+	flex: 1;
+}
+
+.graph_customize_field_label {
+	flex: none;
+	min-width: 58px;
+	color: var(--graph-muted-text);
+	font-size: 10.5px;
+}
+
+.graph_customize_input {
+	width: 100%;
+	padding: 4px 7px;
+	border: 1px solid var(--graph-border);
+	border-radius: 4px;
+	background: transparent;
+	color: var(--graph-text);
+	font: inherit;
+	resize: vertical;
+	box-sizing: border-box;
+}
+
+textarea.graph_customize_input {
+	min-height: 28px;
+}
+
+.graph_customize_input:focus {
+	border-color: var(--customize-accent);
+	outline: none;
+}
+
+.graph_customize_segment:focus-visible,
+.graph_customize_button:focus-visible,
+.graph_customize_icon:focus-visible,
+.graph_customize_paint:focus-visible,
+.graph_customize_chip:focus-visible,
+.graph_customize_stage:focus-visible {
+	outline: 2px solid color-mix(in srgb, var(--customize-accent) 55%, transparent);
+	outline-offset: 1px;
+}
+
+/* Paint: Fill / Border as two slim toggles, then the colours on one line. */
+.graph_customize_paints {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 4px;
+}
+
+.graph_customize_paint {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	height: 28px;
+	padding: 0 7px;
+	border: 1px solid var(--graph-border);
+	border-radius: 4px;
+	background: transparent;
+	color: var(--graph-muted-text);
+	text-align: left;
+	cursor: pointer;
+}
+
+.graph_customize_paint:hover {
+	color: var(--graph-text);
+}
+
+.graph_customize_paint.is-current {
+	border-color: var(--customize-accent);
+	color: var(--graph-text);
+}
+
+.graph_customize_paint_sample {
+	flex: none;
+	width: 18px;
+	height: 18px;
+}
+
+.graph_customize_paint_text {
+	display: flex;
+	flex: 1;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 6px;
+	min-width: 0;
+}
+
+.graph_customize_paint_text strong {
+	font-size: 11px;
+	font-weight: 500;
+}
+
+.graph_customize_paint_text small {
+	color: var(--graph-muted-text);
+	font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+	font-size: 9.5px;
+}
+
+.graph_customize_colour {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 6px;
+}
+
+.graph_customize_colour .graph_adjust_color {
+	width: 22px;
+	height: 22px;
+	padding: 0;
+	border: 1px solid var(--graph-border);
+	border-radius: 50%;
+	overflow: hidden;
+}
+
+.graph_customize_colour .graph_adjust_color::-webkit-color-swatch-wrapper {
+	padding: 0;
+}
+
+.graph_customize_colour .graph_adjust_color::-webkit-color-swatch {
+	border: 0;
+	border-radius: 50%;
+}
+
+.graph_customize_colour .graph_adjust_color::-moz-color-swatch {
+	border: 0;
+	border-radius: 50%;
+}
+
+.graph_customize_colour .graph_adjust_swatches {
+	display: flex;
+	gap: 4px;
+}
+
+.graph_customize .graph_adjust_swatch {
+	width: 16px;
+	height: 16px;
+	border: 0;
+	border-radius: 50%;
+}
+
+.graph_customize .graph_adjust_swatch:hover {
+	box-shadow: 0 0 0 2px var(--graph-toolbar-bg), 0 0 0 3px var(--graph-muted-text);
+}
+
+.graph_customize .graph_adjust_swatch.is-current {
+	box-shadow: 0 0 0 2px var(--graph-toolbar-bg), 0 0 0 3px var(--graph-text);
+}
+
+/* Theme / Auto, Remove: plain text buttons. */
+.graph_customize_chip {
+	margin-left: auto;
+	padding: 2px 4px;
+	border: 0;
+	border-radius: 3px;
+	background: transparent;
+	color: var(--graph-muted-text);
+	font-size: 10.5px;
+	cursor: pointer;
+}
+
+.graph_customize_chip:hover {
+	color: var(--graph-text);
+}
+
+.graph_customize_chip.is-danger {
+	color: var(--graph-alert-high);
+}
+
+.graph_customize_chip.is-danger:hover {
+	background: color-mix(in srgb, var(--graph-alert-high) 12%, transparent);
+	color: var(--graph-alert-high);
+}
+
+.graph_customize_chip.is-current {
+	color: var(--customize-accent);
+	font-weight: 600;
+}
+
+/* Segments and tiles: one quiet strip, the current one tinted. */
+.graph_customize_segments {
+	display: flex;
+	gap: 2px;
+}
+
+.graph_customize_segment {
+	display: inline-flex;
+	flex: 1;
+	align-items: center;
+	justify-content: center;
+	gap: 5px;
+	min-width: 0;
+	height: 24px;
+	padding: 0 6px;
+	border: 1px solid transparent;
+	border-radius: 4px;
+	background: color-mix(in srgb, var(--graph-muted-text) 7%, transparent);
+	color: var(--graph-muted-text);
+	font-size: 10.5px;
+	cursor: pointer;
+}
+
+.graph_customize_segment:hover {
+	color: var(--graph-text);
+}
+
+.graph_customize_segment.is-current {
+	border-color: color-mix(in srgb, var(--customize-accent) 55%, transparent);
+	background: color-mix(in srgb, var(--customize-accent) 10%, transparent);
+	color: var(--graph-text);
+}
+
+.graph_customize_segment svg {
+	flex: none;
+	width: 13px;
+	height: 13px;
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 1.6;
+}
+
+.graph_customize_icon_row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.graph_customize_icon_row .graph_customize_hint {
+	flex: 1;
+}
+
+.graph_customize_icon {
+	display: grid;
+	flex: none;
+	place-items: center;
+	width: 28px;
+	height: 28px;
+	padding: 4px;
+	border: 1px dashed var(--graph-border);
+	border-radius: 50%;
+	background: transparent;
+	color: var(--graph-muted-text);
+	font-size: 14px;
+	cursor: pointer;
+}
+
+.graph_customize_icon:hover,
+.graph_customize_icon.is-open {
+	border-color: var(--customize-accent);
+	border-style: solid;
+	color: var(--graph-text);
+}
+
+.graph_customize_icon img {
+	width: 100%;
+	height: 100%;
+	object-fit: contain;
+}
+
+.graph_customize_range input {
+	width: 100%;
+	margin: 0;
+	accent-color: var(--customize-accent);
+}
+
+/* The preview: held down (pointer, Space / Enter), it shows the current look. */
+.graph_customize_preview {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	margin: 0;
+	padding-top: 10px;
+}
+
+/* The icon, under the preview. */
+.graph_customize_preview .graph_customize_section {
+	margin-top: 6px;
+	padding-bottom: 0;
+	border-top: 1px solid color-mix(in srgb, var(--customize-accent) 14%, var(--graph-border));
+}
+
+.graph_customize_stage {
+	border-radius: 5px;
+	touch-action: none;
+	user-select: none;
+}
+
+.graph_customize_stage.can-compare {
+	cursor: pointer;
+}
+
+.graph_customize_canvas {
+	display: block;
+	width: 100%;
+	height: auto;
+	aspect-ratio: 260 / 230;
+	border: 1px solid color-mix(in srgb, var(--customize-accent) 22%, var(--graph-border));
+	border-radius: 3px;
+	background:
+		radial-gradient(circle, color-mix(in srgb, var(--graph-muted-text) 18%, transparent) 1px, transparent 1.2px) 0 0 / 14px 14px,
+		var(--graph-canvas-bg);
+	transition: border-color 0.15s;
+}
+
+.graph_customize_preview.is-comparing .graph_customize_canvas {
+	border-color: var(--customize-accent);
+	border-style: dashed;
+}
+
+.graph_customize_caption {
+	color: var(--graph-muted-text);
+	font-size: 10px;
+	text-align: center;
+}
+
+.graph_customize_preview.is-comparing .graph_customize_caption {
+	color: var(--customize-accent);
+}
+
+.graph_customize_ghost {
+	stroke-width: 1.5;
+	opacity: 0.55;
+}
+
+.graph_customize_ghost_edge {
+	stroke-width: 1.4;
+	opacity: 0.5;
+}
+
+.graph_customize_subject * {
+	transition: fill 0.18s, stroke 0.18s, stroke-width 0.18s;
+}
+
+.graph_customize_label {
+	fill: var(--graph-label);
+	font-size: 12px;
+	text-anchor: middle;
+}
+
+.graph_customize_label.is-edge {
+	font-size: 10px;
+	opacity: 0.85;
+}
+
+.graph_customize_footer {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 10px 12px 10px 16px;
+	border-top: 1px solid color-mix(in srgb, var(--customize-accent) 14%, var(--graph-border));
+}
+
+.graph_customize_footer .graph_customize_hint {
+	flex: 1;
+}
+
+.graph_customize_button {
+	height: 24px;
+	padding: 0 10px;
+	border: 0;
+	border-radius: 4px;
+	background: transparent;
+	color: var(--graph-text);
+	font-size: 11px;
+	cursor: pointer;
+}
+
+.graph_customize_button:hover:not(:disabled) {
+	background: color-mix(in srgb, var(--graph-muted-text) 12%, transparent);
+}
+
+.graph_customize_button.is-primary {
+	background: var(--customize-accent);
+	color: #fff;
+	font-weight: 600;
+}
+
+.graph_customize_button.is-primary:hover:not(:disabled) {
+	background: color-mix(in srgb, var(--customize-accent) 85%, #000);
+}
+
+.graph_customize_button:disabled {
+	opacity: 0.4;
+	cursor: default;
+}
+
+/* Narrow windows: the preview goes above the options. */
+@container (max-width: 500px) {
+	.graph_customize_body {
+		grid-template-columns: 1fr;
+		overflow-y: auto;
+	}
+
+	.graph_customize_preview {
+		order: -1;
+	}
+
+	.graph_customize_canvas {
+		max-height: 130px;
+	}
+
+	.graph_customize_options {
+		overflow: visible;
+	}
+}
+
+/* The icon album: a popover rising from the icon button, over the popup. */
+.graph_customize_album {
+	position: absolute;
+	z-index: 2;
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: 8px;
+	border: 1px solid color-mix(in srgb, var(--customize-accent) 22%, var(--graph-border));
+	border-radius: 3px;
+	background:
+		radial-gradient(140% 90px at 0 0, color-mix(in srgb, var(--customize-accent) 11%, transparent), transparent 70%),
+		var(--graph-toolbar-bg);
+	color: var(--graph-text);
+	box-shadow: 0 12px 32px rgb(0 0 0 / 0.16), 0 2px 6px rgb(0 0 0 / 0.08);
+	font-size: 11px;
+	box-sizing: border-box;
+	transform-origin: var(--album-arrow) 0;
+	animation: graph_customize_album_in 0.14s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.graph_customize_album.is-above {
+	transform-origin: var(--album-arrow) 100%;
+}
+
+/* The arrow pointing at the button. */
+.graph_customize_album::before {
+	content: "";
+	position: absolute;
+	top: -5px;
+	left: calc(var(--album-arrow) - 5px);
+	width: 8px;
+	height: 8px;
+	border-top: 1px solid color-mix(in srgb, var(--customize-accent) 22%, var(--graph-border));
+	border-left: 1px solid color-mix(in srgb, var(--customize-accent) 22%, var(--graph-border));
+	background: var(--graph-toolbar-bg);
+	transform: rotate(45deg);
+}
+
+.graph_customize_album.is-above::before {
+	top: auto;
+	bottom: -5px;
+	transform: rotate(225deg);
+}
+
+@keyframes graph_customize_album_in {
+	from {
+		opacity: 0;
+		transform: scale(0.7);
+	}
+}
+
+.graph_customize_album_head {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding-left: 2px;
+}
+
+.graph_customize_album_head strong {
+	font-size: 11.5px;
+	font-weight: 600;
+}
+
+.graph_customize_album_head span {
+	flex: 1;
+	color: var(--graph-muted-text);
+	font-size: 10.5px;
+}
+
+.graph_customize_album .graph_adjust_album {
+	grid-template-columns: repeat(auto-fill, minmax(30px, 1fr));
+	max-height: 200px;
+	margin: 0;
+	border: 0;
+	padding: 0;
+}
+
+.graph_customize_album .graph_adjust_album_icon {
+	height: 30px;
+}
+
+.graph_customize_album .graph_adjust_album_icon.is-current {
+	border-color: var(--customize-accent);
+	background: color-mix(in srgb, var(--customize-accent) 10%, transparent);
+}
+
+/* ── Customize popup: polished controls ────────────────────────────────
+   One look for every control: soft tinted fields, pill strips with a raised
+   current choice, sliders with an accent-filled track, ringed swatches. */
+.graph_customize_heading span {
+	padding: 1px 7px;
+	border-radius: 999px;
+	background: color-mix(in srgb, var(--customize-accent) 12%, transparent);
+	color: color-mix(in srgb, var(--customize-accent) 80%, var(--graph-text));
+	font-size: 10px;
+	font-weight: 600;
+}
+
+/* Tabs: a pill strip. */
+.graph_customize_tabs {
+	padding: 2px;
+	border-radius: 999px;
+	background: color-mix(in srgb, var(--graph-muted-text) 10%, transparent);
+}
+
+.graph_customize_tab {
+	border-radius: 999px;
+	transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+}
+
+.graph_customize_tab.is-current {
+	background: var(--graph-toolbar-bg);
+	box-shadow: 0 1px 3px rgb(0 0 0 / 0.12);
+}
+
+/* Text fields: soft tinted wells, an accent ring when focused. */
+.graph_customize_input {
+	padding: 5px 9px;
+	border: 1px solid transparent;
+	border-radius: 6px;
+	background: color-mix(in srgb, var(--graph-muted-text) 8%, transparent);
+	transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+}
+
+.graph_customize_input::placeholder {
+	color: color-mix(in srgb, var(--graph-muted-text) 75%, transparent);
+}
+
+.graph_customize_input:hover {
+	background: color-mix(in srgb, var(--graph-muted-text) 12%, transparent);
+}
+
+.graph_customize_input:focus {
+	border-color: color-mix(in srgb, var(--customize-accent) 60%, transparent);
+	background: var(--graph-toolbar-bg);
+	box-shadow: 0 0 0 3px color-mix(in srgb, var(--customize-accent) 16%, transparent);
+}
+
+/* Fill / Border: two cards in a pill strip, the current one raised. */
+.graph_customize_paints {
+	gap: 2px;
+	padding: 2px;
+	border-radius: 8px;
+	background: color-mix(in srgb, var(--graph-muted-text) 10%, transparent);
+}
+
+.graph_customize_paint {
+	height: 30px;
+	border: 0;
+	border-radius: 6px;
+	transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+}
+
+.graph_customize_paint.is-current {
+	background: var(--graph-toolbar-bg);
+	box-shadow: 0 1px 3px rgb(0 0 0 / 0.12), 0 0 0 1px color-mix(in srgb, var(--customize-accent) 35%, transparent);
+}
+
+.graph_customize_paint_text small {
+	padding: 0 5px;
+	border-radius: 999px;
+	background: color-mix(in srgb, var(--graph-muted-text) 10%, transparent);
+}
+
+/* Colours: the picker as a ringed disc, swatches lifting on hover. */
+.graph_customize_colour {
+	gap: 8px;
+}
+
+.graph_customize_colour .graph_adjust_color {
+	width: 24px;
+	height: 24px;
+	border: 0;
+	box-shadow: 0 0 0 1px color-mix(in srgb, var(--graph-text) 18%, transparent), 0 1px 3px rgb(0 0 0 / 0.15);
+	transition: transform 0.15s;
+}
+
+.graph_customize_colour .graph_adjust_color:hover {
+	transform: scale(1.08);
+}
+
+.graph_customize_colour .graph_adjust_swatches {
+	gap: 6px;
+	padding-left: 8px;
+	border-left: 1px solid color-mix(in srgb, var(--customize-accent) 14%, var(--graph-border));
+}
+
+.graph_customize .graph_adjust_swatch {
+	width: 18px;
+	height: 18px;
+	box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.12);
+	transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.graph_customize .graph_adjust_swatch:hover {
+	transform: translateY(-1px) scale(1.1);
+	box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.12), 0 2px 5px rgb(0 0 0 / 0.2);
+}
+
+.graph_customize .graph_adjust_swatch.is-current {
+	transform: scale(1.05);
+	box-shadow: 0 0 0 2px var(--graph-toolbar-bg), 0 0 0 3.5px var(--customize-accent);
+}
+
+/* Theme / Auto, Remove: small pills. */
+.graph_customize_chip {
+	height: 22px;
+	padding: 0 9px;
+	border-radius: 999px;
+	transition: background 0.15s, color 0.15s;
+}
+
+.graph_customize_chip:hover {
+	background: color-mix(in srgb, var(--graph-muted-text) 12%, transparent);
+}
+
+.graph_customize_chip.is-current {
+	background: color-mix(in srgb, var(--customize-accent) 14%, transparent);
+}
+
+/* Segments and tiles: a pill strip, the current choice raised. */
+.graph_customize_segments {
+	gap: 2px;
+	padding: 2px;
+	border-radius: 7px;
+	background: color-mix(in srgb, var(--graph-muted-text) 10%, transparent);
+}
+
+.graph_customize_segment {
+	height: 24px;
+	border: 0;
+	border-radius: 5px;
+	background: transparent;
+	transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+}
+
+.graph_customize_segment.is-current {
+	border: 0;
+	background: var(--graph-toolbar-bg);
+	box-shadow: 0 1px 3px rgb(0 0 0 / 0.12), 0 0 0 1px color-mix(in srgb, var(--customize-accent) 35%, transparent);
+	color: var(--graph-text);
+	font-weight: 600;
+}
+
+.graph_customize_segment.is-current svg {
+	color: var(--customize-accent);
+}
+
+.graph_customize_segments.is-tiles {
+	gap: 2px;
+	padding: 2px;
+}
+
+.graph_customize_segments.is-tiles .graph_customize_segment {
+	padding: 6px 4px 5px;
+	border: 0;
+	border-radius: 5px;
+}
+
+.graph_customize_segments.is-tiles .graph_customize_segment.is-current {
+	box-shadow: 0 1px 3px rgb(0 0 0 / 0.12), 0 0 0 1px color-mix(in srgb, var(--customize-accent) 35%, transparent);
+}
+
+/* Sliders: a slim track filled with the accent up to the thumb. */
+.graph_customize_range input[type='range'] {
+	height: 16px;
+	background: transparent;
+	cursor: pointer;
+	appearance: none;
+	-webkit-appearance: none;
+}
+
+.graph_customize_range input[type='range']::-webkit-slider-runnable-track {
+	height: 4px;
+	border-radius: 999px;
+	background: linear-gradient(to right, var(--customize-accent) var(--fill, 50%), color-mix(in srgb, var(--graph-muted-text) 22%, transparent) var(--fill, 50%));
+}
+
+.graph_customize_range input[type='range']::-moz-range-track {
+	height: 4px;
+	border-radius: 999px;
+	background: color-mix(in srgb, var(--graph-muted-text) 22%, transparent);
+}
+
+.graph_customize_range input[type='range']::-moz-range-progress {
+	height: 4px;
+	border-radius: 999px;
+	background: var(--customize-accent);
+}
+
+.graph_customize_range input[type='range']::-webkit-slider-thumb {
+	width: 14px;
+	height: 14px;
+	margin-top: -5px;
+	border: 2px solid var(--customize-accent);
+	border-radius: 50%;
+	background: var(--graph-toolbar-bg);
+	box-shadow: 0 1px 4px rgb(0 0 0 / 0.25);
+	transition: transform 0.12s;
+	-webkit-appearance: none;
+	appearance: none;
+}
+
+.graph_customize_range input[type='range']::-moz-range-thumb {
+	width: 10px;
+	height: 10px;
+	border: 2px solid var(--customize-accent);
+	border-radius: 50%;
+	background: var(--graph-toolbar-bg);
+	box-shadow: 0 1px 4px rgb(0 0 0 / 0.25);
+}
+
+.graph_customize_range input[type='range']:hover::-webkit-slider-thumb,
+.graph_customize_range input[type='range']:focus-visible::-webkit-slider-thumb {
+	transform: scale(1.15);
+}
+
+.graph_customize_range input[type='range']:focus-visible {
+	outline: none;
+}
+
+.graph_customize_range input[type='range']:focus-visible::-webkit-slider-thumb {
+	box-shadow: 0 0 0 4px color-mix(in srgb, var(--customize-accent) 22%, transparent);
+}
+
+/* Field labels: the value after "·" reads as a figure. */
+.graph_customize_field_label {
+	font-variant-numeric: tabular-nums;
+}
+
+/* The icon button: a soft disc, ringed in the accent when it has an icon. */
+.graph_customize_icon {
+	width: 32px;
+	height: 32px;
+	border: 1.5px dashed color-mix(in srgb, var(--graph-muted-text) 50%, transparent);
+	background: color-mix(in srgb, var(--graph-muted-text) 6%, transparent);
+	transition: border-color 0.15s, background 0.15s, transform 0.15s;
+}
+
+.graph_customize_icon:hover {
+	transform: scale(1.06);
+	background: color-mix(in srgb, var(--customize-accent) 10%, transparent);
+}
+
+.graph_customize_icon:has(img) {
+	border: 1.5px solid color-mix(in srgb, var(--customize-accent) 45%, transparent);
+	background: var(--graph-toolbar-bg);
+}
+
+/* The preview: a gentle inner shadow, and a pressed feel while held. */
+.graph_customize_canvas {
+	box-shadow: inset 0 1px 4px rgb(0 0 0 / 0.06);
+	transition: border-color 0.15s, transform 0.15s;
+}
+
+/* Hovered: the preview lifts a little, its border takes the accent. */
+.graph_customize_canvas {
+	transition: border-color 0.18s, box-shadow 0.18s, transform 0.18s;
+}
+
+.graph_customize_stage:hover .graph_customize_canvas {
+	border-color: color-mix(in srgb, var(--customize-accent) 45%, var(--graph-border));
+	box-shadow: inset 0 1px 4px rgb(0 0 0 / 0.06), 0 6px 16px color-mix(in srgb, var(--customize-accent) 16%, transparent);
+	transform: translateY(-1px);
+}
+
+.graph_customize_stage.can-compare:hover + .graph_customize_caption {
+	color: var(--graph-text);
+}
+
+.graph_customize_preview.is-comparing .graph_customize_canvas,
+.graph_customize_preview.is-comparing .graph_customize_stage:hover .graph_customize_canvas {
+	box-shadow: inset 0 1px 4px rgb(0 0 0 / 0.06);
+	transform: scale(0.985);
+}
+
+.graph_customize_caption {
+	font-size: 9.5px;
+	letter-spacing: 0.04em;
+}
+
+/* Footer: Apply as a solid pill with a soft accent glow. */
+.graph_customize_button {
+	height: 26px;
+	padding: 0 12px;
+	border-radius: 999px;
+	transition: background 0.15s, box-shadow 0.15s, transform 0.1s;
+}
+
+.graph_customize_button.is-primary {
+	padding: 0 16px;
+	box-shadow: 0 2px 8px color-mix(in srgb, var(--customize-accent) 35%, transparent);
+}
+
+.graph_customize_button.is-primary:active:not(:disabled) {
+	transform: translateY(1px);
+}
+
+.graph_customize_button.is-primary:disabled {
+	box-shadow: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.graph_customize *,
+	.graph_customize *::before {
+		transition: none !important;
+	}
+
+	/* On its own: a browser without this pseudo-element drops the rule. */
+	.graph_customize_range input[type='range']::-webkit-slider-thumb {
+		transition: none;
+	}
+}
+
+/* The options column scrolls, so it clips: a little room on its sides (taken
+   back from the body's padding) keeps the colour picker's ring, focus rings
+   and hover lifts whole. */
+.graph_customize_options {
+	margin: 0 -6px;
+	padding: 0 6px;
+}
+
+.graph_customize_colour {
+	padding-left: 2px;
+}
+
+/* ── Actor profile (GraphNodeProfile; analyst decision 2026-11-16) ─────
+   A click on a node: compact and subtle, in the right-click box's look,
+   split in two: a square portrait left, the person's details right. */
+.graph_profile {
+	position: absolute;
+	z-index: 3;
+	display: flex;
+	gap: 10px;
+	width: max-content;
+	max-width: min(460px, calc(100% - 16px));
+	padding: 8px;
+	border: 1px solid color-mix(in srgb, var(--graph-border) 80%, transparent);
+	border-radius: 5px;
+	/* A little see-through; the text stays crisp. */
+	background: color-mix(in srgb, var(--graph-toolbar-bg) 82%, transparent);
+	color: var(--graph-text);
+	box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
+	font-size: 10.5px;
+	line-height: 1.35;
+	box-sizing: border-box;
+	backdrop-filter: blur(4px);
+	animation: graph_profile_in 0.12s ease-out;
+}
+
+@keyframes graph_profile_in {
+	from {
+		opacity: 0;
+		transform: translateY(2px);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.graph_profile {
+		animation: none;
+	}
+}
+
+/* Always square and as tall as the card's details (sized by the card; the
+   64px is only until then). */
+.graph_profile_portrait {
+	flex: none;
+	align-self: flex-start;
+	width: 64px;
+	height: 64px;
+	aspect-ratio: 1;
+	overflow: hidden;
+	border-radius: 3px;
+	background: color-mix(in srgb, var(--graph-muted-text) 12%, transparent);
+}
+
+.graph_profile_portrait_art {
+	display: block;
+	width: 100%;
+	height: 100%;
+}
+
+.graph_profile_body {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	gap: 3px;
+	min-width: 150px;
+}
+
+.graph_profile_head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 6px;
+}
+
+.graph_profile_kicker {
+	color: var(--graph-muted-text);
+	font-size: 8.5px;
+	font-weight: 700;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+}
+
+.graph_profile_close {
+	width: 16px;
+	height: 16px;
+	padding: 0;
+	border: 0;
+	border-radius: 50%;
+	background: transparent;
+	color: var(--graph-muted-text);
+	font: inherit;
+	font-size: 12px;
+	line-height: 1;
+	cursor: pointer;
+	opacity: 0.7;
+}
+
+.graph_profile_close:hover {
+	background: color-mix(in srgb, var(--graph-text) 8%, transparent);
+	color: var(--graph-text);
+	opacity: 1;
+}
+
+.graph_profile_fields {
+	display: grid;
+	gap: 1px;
+	margin: 0;
+}
+
+.graph_profile_field {
+	display: grid;
+	grid-template-columns: 64px minmax(0, max-content);
+	gap: 6px;
+}
+
+.graph_profile_field dt {
+	color: var(--graph-muted-text);
+}
+
+.graph_profile_field dd {
+	margin: 0;
+	font-weight: 600;
+	/* Shown whole: long values wrap rather than being cut. */
+	white-space: normal;
+	overflow-wrap: anywhere;
+	user-select: text;
+}
+
+.graph_profile_field dd.is-empty {
+	color: color-mix(in srgb, var(--graph-muted-text) 60%, transparent);
+	font-weight: 400;
+}
+
+/* A real portrait fills its square. */
+img.graph_profile_portrait_art {
+	object-fit: cover;
+}
+
+.graph_profile_none {
+	margin: 0;
+	color: var(--graph-muted-text);
+	font-size: 10px;
+}
+
+/* Settings ▸ This graph ▸ Actor profile: a row per detail, its switch and
+   the property that fills it. */
+.graph_panel_profile_fields {
+	display: grid;
+	gap: 4px;
+}
+
+.graph_panel_profile_field {
+	display: grid;
+	grid-template-columns: minmax(96px, 0.8fr) minmax(0, 1.2fr);
+	align-items: center;
+	gap: 8px;
+}
+
+/* (Beats the stack's grid labels.) */
+.workspace_context_form_stack .graph_panel_profile_name {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+}
+
+.graph_panel_profile_name span {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.graph_panel_profile_field.is-off .graph_panel_profile_name span {
+	opacity: 0.55;
+}
+
+.graph_panel_profile_field select {
+	width: 100%;
+	min-width: 0;
+}
+
+/* No portrait: a quiet placeholder filling the square. */
+.graph_profile_portrait_none {
+	display: grid;
+	place-items: center;
+	width: 100%;
+	height: 100%;
+	color: color-mix(in srgb, var(--graph-muted-text) 55%, transparent);
+}
+
+.graph_profile_portrait_none svg {
+	width: 46%;
+	height: 46%;
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 1.5;
+	stroke-linecap: round;
 }

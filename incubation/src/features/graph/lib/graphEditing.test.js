@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   brightenColor, buildNodeColor, clampEdgeWidth, darkenColor, edgeBoxValues, edgeColorPatch, edgeStylePatch, edgeWidthPatch,
-  nodeBoxValues, nodeColorPatches, nodeIconPatch, nodeShapePatch,
+  nodeBorderPatch, nodeBoxValues, nodeColorPatches, nodeFillClearPatch, nodeIconClearPatch, nodeIconPatch, nodeShapePatch,
 } from './graphEditing.js';
 import { toCyEdge } from './graphElements.js';
 
@@ -41,8 +41,26 @@ describe('adjust box colours (production GA:1807-2075)', () => {
 describe('adjust box node patches', () => {
   it('reads the box values from a node', () => {
     expect(nodeBoxValues({ label: 'A', color: { background: '#123456' }, shape: 'circularImage', iconPath: 'x.svg' }))
-      .toEqual({ label: 'A', note: '', color: '#123456', shape: 'dot', colorBehavior: 'individual', icon: 'x.svg' });
+      .toEqual({ label: 'A', note: '', color: '#123456', shape: 'dot', colorBehavior: 'individual', size: 15, fill: '#123456', border: '', icon: 'x.svg' });
     expect(nodeBoxValues({ color: { background: 'rgba(0,0,0,0)' }, shape: 'star' })).toMatchObject({ color: '#000000', shape: 'dot' });
+  });
+
+  it('fill and border each on their own (Customize popup)', () => {
+    // A border alone keeps the theme fill (a clear background).
+    expect(nodeBorderPatch({}, '#112233')).toMatchObject({ borderColor: '#112233', color: { background: 'rgba(0,0,0,0)', border: '#112233', hover: { border: '#112233' } } });
+    // On a coloured node it keeps the fill.
+    const coloured = { baseColor: '#DC143C', color: buildNodeColor('#DC143C') };
+    expect(nodeBorderPatch(coloured, '#112233').color).toMatchObject({ background: '#DC143C', border: '#112233' });
+    // Auto: back to the border worked out from the fill, or the theme's.
+    expect(nodeBorderPatch(coloured, '')).toEqual({ color: buildNodeColor('#DC143C'), borderColor: null });
+    expect(nodeBorderPatch({ color: { background: 'rgba(0,0,0,0)', border: '#112233' }, borderColor: '#112233' }, '')).toEqual({ color: null, borderColor: null });
+    // A new fill keeps a border set on its own.
+    const patches = nodeColorPatches(['a'], '#32CD32', { behaviorOf: () => 'individual', neighbours: () => [], edges: [], borderOf: () => '#112233' });
+    expect(patches.nodes[0][1].color).toMatchObject({ background: '#32CD32', border: '#112233' });
+    // Theme fill again, the border kept.
+    expect(nodeFillClearPatch({ borderColor: '#112233' })).toMatchObject({ baseColor: null, color: { background: 'rgba(0,0,0,0)', border: '#112233' } });
+    expect(nodeFillClearPatch({})).toEqual({ color: null, baseColor: null });
+    expect(nodeIconClearPatch({ shape: 'circularImage' })).toEqual({ shape: 'dot', image: null, iconPath: null });
   });
 
   it('a circle keeps the node\'s icon (production UpdateNodeShape)', () => {

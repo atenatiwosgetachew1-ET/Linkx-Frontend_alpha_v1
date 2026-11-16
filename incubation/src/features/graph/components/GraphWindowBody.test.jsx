@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
 
@@ -15,6 +15,7 @@ import { clearGraphStores, getGraphStore, hasGraphStore } from '../lib/graphStor
 import { getPinnedEvidence, pinEvidence, resetPinnedEvidenceCache } from '../lib/pinnedEvidence.js';
 import { OVERLAY_PREFS_KEY, resetOverlayPrefsCache } from '../lib/overlayPrefs.js';
 import { CLIPBOARD_KEY, resetClipboardCache } from '../lib/graphClipboard.js';
+import { getProfileSettings, resetProfileSettingsCache, setProfileSettings } from '../lib/nodeProfile.js';
 import { bindGraphStatusSocket, clearGraphStatus, markGraphSessionClosed, markGraphSessionTerminated } from '../lib/graphStatus.js';
 
 // jsdom cannot draw: the canvas is replaced by a probe showing what it gets.
@@ -175,7 +176,7 @@ describe('GraphWindowBody', () => {
     unmount();
     renderGraph({ id: 'graph-2', metadata: { graphLinkSource: '1_7' } });
     expect(screen.getByText('Waiting for the linked session')).toBeInTheDocument();
-    expect(screen.getByRole('group', { name: 'Graph relationships' })).toBeInTheDocument();
+    expect(screen.getByText(/Waiting for relationships from session 1_7/)).toBeInTheDocument();
   });
 });
 
@@ -208,24 +209,33 @@ describe('GraphWindowBody linked to a session', () => {
     });
   };
 
-  it('shows the relationship chips from the status socket and loads one', async () => {
+  it('shows the relationship tabs from the status socket, starts on All and loads one', async () => {
     const socket = statusSocket();
     const apiFetch = vi.fn(async () => ({ results: { graph: graphOf(4) } }));
     openLinked(apiFetch);
     expect(screen.getByText('Waiting for the linked session')).toBeInTheDocument();
     act(() => socket.receive('status', { session_id: '3_17', type: 'relationships', data: [{ type: 'FUND_FLOW', bgcolor: '#2563eb' }] }));
-    expect(screen.getByText('Choose a relationship')).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'FUND_FLOW' }));
+    expect(screen.getByRole('tablist', { name: 'Graph relationships' })).toBeInTheDocument();
+    // All loads by itself once the relationships arrive.
+    expect(screen.getByRole('tab', { name: 'All (*)' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: 'FUND_FLOW' })).toHaveAttribute('aria-selected', 'false');
+    await waitFor(() => expect(screen.getByTestId('canvas')).toHaveAttribute('data-nodes', '4'));
+    expect(apiFetch).toHaveBeenCalledWith('/get_graph', expect.objectContaining({ body: { id: 'relationship', source_id: '3_17', relationship: '*' } }));
+    await userEvent.click(screen.getByRole('tab', { name: 'FUND_FLOW' }));
     await waitFor(() => expect(screen.getByTestId('canvas')).toHaveAttribute('data-nodes', '4'));
     expect(apiFetch).toHaveBeenCalledWith('/get_graph', expect.objectContaining({ body: { id: 'relationship', source_id: '3_17', relationship: 'FUND_FLOW' } }));
-    expect(screen.getByRole('button', { name: 'FUND_FLOW' })).toHaveAttribute('aria-pressed', 'true');
+    // The drawn tab is selected, read as words, in its backend colour.
+    const tab = screen.getByRole('tab', { name: 'FUND_FLOW' });
+    expect(tab).toHaveAttribute('aria-selected', 'true');
+    expect(tab).toHaveTextContent('Fund flow');
+    expect(tab.style.getPropertyValue('--chip-bg')).toBe('#2563eb');
+    expect(screen.getByRole('tab', { name: 'All (*)' })).toHaveAttribute('aria-selected', 'false');
   });
 
   it('keeps the window when a relationship has no data', async () => {
     const socket = statusSocket();
     openLinked(vi.fn(async () => ({ results: { graph: { nodes: [], edges: [] } } })));
     act(() => socket.receive('status', { session_id: '3_17', type: 'relationships', data: ['SMURFING'] }));
-    await userEvent.click(screen.getByRole('button', { name: 'All (*)' }));
     expect(await screen.findByText('No graph data found for this session.')).toBeInTheDocument();
     expect(workspaceRef.windows.map((item) => item.id)).toContain('graph-7');
   });
@@ -234,7 +244,7 @@ describe('GraphWindowBody linked to a session', () => {
     const socket = statusSocket();
     openLinked(vi.fn(async () => ({ results: { graph: graphOf(3) } })));
     act(() => socket.receive('status', { session_id: '3_17', type: 'relationships', data: ['A'] }));
-    await userEvent.click(screen.getByRole('button', { name: 'A' }));
+    await userEvent.click(screen.getByRole('tab', { name: 'A' }));
     await waitFor(() => expect(screen.getByTestId('canvas')).toHaveAttribute('data-nodes', '3'));
     act(() => markGraphSessionTerminated('3_17'));
     await waitFor(() => expect(workspaceRef.windows[0].metadata.graphLinkSource).toBeNull());
@@ -437,17 +447,33 @@ describe('GraphWindowBody graph alerts (G2.4)', () => {
     hub.nodes = hub.nodes.map((node) => ({ ...node, account: `ACC-${node.id}` }));
     await open(hub);
     const panel = await screen.findByRole('region', { name: 'Graph Alerts' });
-    // Starts folded: the summary shows, the cards wait.
+    // Starts folded, as an alerted node with its count and "!" badge; the
+    // summary is its title and status.
     expect(panel).toHaveClass('is-collapsed');
+    expect(panel).toHaveClass('is-bubble');
     expect(panel).toHaveTextContent('1 alert · 1 high');
+    expect(panel.querySelector('.graph_card_node')).toHaveTextContent('×1');
+    expect(panel.querySelector('.graph_card_node_badge')).not.toBeNull();
+    // Its themed tooltip: title, summary, severity chips.
+    const tip = screen.getByRole('tooltip', { hidden: true });
+    expect(screen.getByRole('button', { name: 'Expand Graph Alerts' })).toHaveAttribute('aria-describedby', tip.id);
+    expect(tip).toHaveTextContent('Graph Alerts');
+    expect(tip).toHaveTextContent('1 alert · 1 high');
+    expect(tip).toHaveTextContent('1 high');
     await userEvent.click(screen.getByRole('button', { name: 'Expand Graph Alerts' }));
     expect(panel).toHaveTextContent('Highly connected');
     // Short card text; production's full text is the tooltip.
     expect(panel).toHaveTextContent('Hub linked to 24 nodes.');
     expect(panel).not.toHaveTextContent('structuring');
     expect(screen.getByRole('button', { name: /label : N1/ }).title).toMatch(/^Connected to 24 other nodes/);
-    // Collapse to the header (summary stays), expand again.
+    // Open, it has no fold or close button of its own: × folds it back into
+    // the bubble (summary stays), and it is not dragged.
+    expect(screen.queryByRole('button', { name: 'Close Graph Alerts' })).not.toBeInTheDocument();
+    expect(panel.querySelector('.graph_overlay_fold')).toBeNull();
+    // Grouped by severity, with the number that raised it.
+    expect(within(panel).getByRole('region', { name: 'High severity' })).toHaveTextContent('24links');
     await userEvent.click(screen.getByRole('button', { name: 'Collapse Graph Alerts' }));
+    expect(panel).toHaveClass('is-bubble');
     expect(panel).toHaveClass('is-collapsed');
     expect(panel).toHaveTextContent('1 alert · 1 high');
     expect(screen.queryByRole('combobox', { name: 'Name by' })).not.toBeInTheDocument();
@@ -463,8 +489,10 @@ describe('GraphWindowBody graph alerts (G2.4)', () => {
     expect(await screen.findByText('No “account” on this node; named automatically.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /label : N1/ })).toBeInTheDocument();
     expect(requested).toEqual(['info']);
-    await userEvent.click(screen.getByRole('button', { name: 'Close Graph Alerts' }));
-    expect(screen.queryByRole('region', { name: 'Graph Alerts' })).not.toBeInTheDocument();
+    // Escape folds it (the window is the active one).
+    const { fireEvent } = await import('@testing-library/react');
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(panel).toHaveClass('is-collapsed');
     unsubscribe();
   });
 
@@ -472,10 +500,10 @@ describe('GraphWindowBody graph alerts (G2.4)', () => {
     await open(graphOf(3));
     const panel = await screen.findByRole('region', { name: 'Graph Alerts' });
     expect(panel).toHaveTextContent('No alerts — graph looks clean.');
-    await userEvent.click(screen.getByRole('button', { name: 'Close Graph Alerts' }));
     await alertMenu('Run Alert Scan');
     expect(screen.getByRole('region', { name: 'Graph Alerts' })).toHaveTextContent('Scanning…');
-    expect(await screen.findByText('No alerts — graph looks clean.')).toBeInTheDocument();
+    // (The summary is also in the bubble's tooltip.)
+    expect((await screen.findAllByText('No alerts — graph looks clean.')).length).toBeGreaterThan(0);
   });
 
   it('Disable Alert Rules clears the highlight and is kept in the window settings', async () => {
@@ -524,36 +552,58 @@ describe('GraphWindowBody alerts panel behaviour', () => {
     expect(await screen.findByRole('region', { name: 'Graph Alerts' })).toHaveTextContent('1 alert · 1 high');
   });
 
-  it('drags from where it is and comes back there when reopened', async () => {
+  it('open, it drags by its header and folds back to the stack; it resizes from its top-left corner and keeps that size while open', async () => {
     cacheEvidenceGraph('tr-drag', { data: {}, ...graphOf(20) });
     renderGraph({ metadata: { evidence: { traceId: 'tr-drag', reportId: 1 } } });
     const panel = await screen.findByRole('region', { name: 'Graph Alerts' });
     const stage = panel.parentElement;
     Object.defineProperty(stage, 'clientWidth', { configurable: true, value: 800 });
     Object.defineProperty(stage, 'clientHeight', { configurable: true, value: 600 });
-    Object.defineProperty(panel, 'offsetWidth', { configurable: true, value: 300 });
-    Object.defineProperty(panel, 'offsetHeight', { configurable: true, value: 440 });
-    // jsdom has no layout: report the panel where the CSS puts it (top-right).
-    let at = { left: 480, top: 20 };
-    Object.defineProperty(panel, 'offsetLeft', { configurable: true, get: () => at.left });
-    Object.defineProperty(panel, 'offsetTop', { configurable: true, get: () => at.top });
-    const header = panel.querySelector('header');
+    Object.defineProperty(panel, 'offsetWidth', { configurable: true, get: () => parseFloat(panel.style.width) || 300 });
+    Object.defineProperty(panel, 'offsetHeight', { configurable: true, get: () => parseFloat(panel.style.height) || 380 });
+    Object.defineProperty(panel, 'offsetLeft', { configurable: true, get: () => 480 });
+    Object.defineProperty(panel, 'offsetTop', { configurable: true, get: () => 200 });
+    await userEvent.click(screen.getByRole('button', { name: 'Expand Graph Alerts' }));
     const { fireEvent } = await import('@testing-library/react');
-    // jsdom has no PointerEvent: without it pointer events carry no button / coordinates.
     if (!window.PointerEvent) window.PointerEvent = class extends MouseEvent {};
-    fireEvent.pointerDown(header, { button: 0, clientX: 600, clientY: 30 });
-    fireEvent.pointerMove(document, { clientX: 500, clientY: 80 });
-    expect(panel.style.left).toBe('380px');
-    expect(panel.style.top).toBe('70px');
-    at = { left: 380, top: 70 };
+    // The header drags it; folding sends it back to the stack, and the next
+    // unfold starts there.
+    fireEvent.pointerDown(panel.querySelector('header'), { button: 0, clientX: 600, clientY: 210 });
+    fireEvent.pointerMove(document, { clientX: 500, clientY: 260 });
     fireEvent.pointerUp(document);
-    await userEvent.click(screen.getByRole('button', { name: 'Close Graph Alerts' }));
-    act(() => canvasProps.current.onContextMenu({ x: 20, y: 20, kind: 'canvas', id: null, selection: [] }));
-    await userEvent.click(screen.getByRole('menuitem', { name: 'Alert Rules' }));
-    await userEvent.click(screen.getByRole('menuitem', { name: 'Run Alert Scan' }));
-    const reopened = screen.getByRole('region', { name: 'Graph Alerts' });
-    expect(reopened.style.left).toBe('380px');
-    expect(reopened.style.top).toBe('70px');
+    expect(panel).toHaveClass('is-moved');
+    await userEvent.click(screen.getByRole('button', { name: 'Collapse Graph Alerts' }));
+    expect(panel).not.toHaveClass('is-moved');
+    expect(panel.style.left).toBe('');
+    await userEvent.click(screen.getByRole('button', { name: 'Expand Graph Alerts' }));
+    expect(panel).not.toHaveClass('is-moved');
+    // The top-left grip grows it up and to the left (anchored bottom-right).
+    fireEvent.pointerDown(panel.querySelector('.graph_overlay_resize'), { button: 0, clientX: 480, clientY: 200 });
+    fireEvent.pointerMove(document, { clientX: 420, clientY: 160 });
+    expect(panel.style.width).toBe('360px');
+    expect(panel.style.height).toBe('420px');
+    // Not below its smallest size, nor past the canvas.
+    fireEvent.pointerMove(document, { clientX: 700, clientY: 500 });
+    expect(panel.style.width).toBe('240px');
+    expect(panel.style.height).toBe('200px');
+    fireEvent.pointerMove(document, { clientX: -900, clientY: -900 });
+    expect(panel.style.width).toBe('800px');
+    expect(panel.style.height).toBe('600px');
+    fireEvent.pointerMove(document, { clientX: 420, clientY: 160 });
+    fireEvent.pointerUp(document);
+    expect(getGraphStore('graph-1').getUi('alertsSize')).toEqual({ width: 360, height: 420 });
+    // Kept for the next mount.
+    cleanup();
+    renderGraph({ metadata: { evidence: { traceId: 'tr-drag', reportId: 1 } } });
+    const again = await screen.findByRole('region', { name: 'Graph Alerts' });
+    expect(again.style.width).toBe('360px');
+    expect(again.style.height).toBe('420px');
+    // Folded and opened again: back to its initial size.
+    await userEvent.click(screen.getByRole('button', { name: 'Collapse Graph Alerts' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Expand Graph Alerts' }));
+    expect(again.style.width).toBe('');
+    expect(again.style.height).toBe('');
+    expect(getGraphStore('graph-1').getUi('alertsSize')).toBeNull();
   });
 });
 
@@ -838,29 +888,6 @@ describe('GraphWindowBody semantic legend', () => {
 describe('GraphWindowBody overlay cards stay put', () => {
   if (!window.PointerEvent) window.PointerEvent = class extends MouseEvent {};
 
-  it('a dragged card keeps its place when it is expanded or collapsed', async () => {
-    cacheEvidenceGraph('tr-stay', { data: {}, ...graphOf(20) });
-    renderGraph({ metadata: { evidence: { traceId: 'tr-stay', reportId: 1 } } });
-    const panel = await screen.findByRole('region', { name: 'Graph Alerts' });
-    const dock = panel.parentElement;
-    Object.defineProperty(dock, 'clientWidth', { configurable: true, value: 800 });
-    Object.defineProperty(dock, 'clientHeight', { configurable: true, value: 600 });
-    Object.defineProperty(panel, 'offsetLeft', { configurable: true, get: () => 480 });
-    Object.defineProperty(panel, 'offsetTop', { configurable: true, get: () => 20 });
-    const { fireEvent } = await import('@testing-library/react');
-    fireEvent.pointerDown(panel.querySelector('header'), { button: 0, clientX: 600, clientY: 30 });
-    fireEvent.pointerMove(document, { clientX: 300, clientY: 230 });
-    fireEvent.pointerUp(document);
-    expect(panel).toHaveClass('is-moved');
-    // Re-renders used to rewrite className and drop the moved state.
-    await userEvent.click(screen.getByRole('button', { name: 'Expand Graph Alerts' }));
-    expect(panel).toHaveClass('is-moved');
-    expect(panel).not.toHaveClass('is-collapsed');
-    await userEvent.click(screen.getByRole('button', { name: 'Collapse Graph Alerts' }));
-    expect(panel).toHaveClass('is-moved');
-    expect(panel.style.left).not.toBe('');
-  });
-
   it('cards keep their state when the window body remounts (docked <-> floating)', async () => {
     pinEvidence([{ type: 'node', id: '2' }]);
     cacheEvidenceGraph('tr-remount', { data: {}, ...graphOf(20) });
@@ -869,15 +896,14 @@ describe('GraphWindowBody overlay cards stay put', () => {
     await screen.findByRole('region', { name: 'Pinned Evidence' });
     await screen.findByRole('region', { name: 'Graph Alerts' });
     await userEvent.click(screen.getByRole('button', { name: 'Expand Pinned Evidence' }));
-    await userEvent.click(screen.getByRole('button', { name: 'Close Graph Alerts' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Expand Graph Alerts' }));
     // Same window, new body (as a mode switch does); the store is kept.
     cleanup();
     renderGraph({ metadata });
     const pinned = await screen.findByRole('region', { name: 'Pinned Evidence' });
     expect(pinned).not.toHaveClass('is-collapsed');
     expect(pinned).toHaveTextContent('1 pinned in this graph');
-    await new Promise((resolve) => { setTimeout(resolve, 250); });
-    expect(screen.queryByRole('region', { name: 'Graph Alerts' })).not.toBeInTheDocument(); // closed stays closed
+    expect(await screen.findByRole('region', { name: 'Graph Alerts' })).not.toHaveClass('is-collapsed'); // open stays open
   });
 
   it('the card last clicked comes on top, also after a remount', async () => {
@@ -888,7 +914,7 @@ describe('GraphWindowBody overlay cards stay put', () => {
     const pinned = await screen.findByRole('region', { name: 'Pinned Evidence' });
     const alerts = await screen.findByRole('region', { name: 'Graph Alerts' });
     const { fireEvent } = await import('@testing-library/react');
-    fireEvent.pointerDown(pinned.querySelector('header'), { button: 0, clientX: 10, clientY: 10 });
+    fireEvent.pointerDown(pinned.querySelector('.graph_overlay_bubble'), { button: 0, clientX: 10, clientY: 10 });
     fireEvent.pointerUp(document);
     expect(pinned).toHaveClass('is-front');
     expect(alerts).not.toHaveClass('is-front');
@@ -948,6 +974,25 @@ describe('GraphWindowBody on-graph components menu', () => {
     await userEvent.click(screen.getByRole('menuitem', { name: 'Run Alert Scan' }));
     expect(await screen.findByRole('region', { name: 'Graph Alerts' })).toBeInTheDocument();
     expect(JSON.parse(localStorage.getItem(OVERLAY_PREFS_KEY)).alerts).toBe(true);
+  });
+
+  it('All hides every component, is mixed when some show, and shows them all again', async () => {
+    cacheEvidenceGraph('tr-ov5', { data: {}, ...graphOf(20) });
+    renderGraph({ metadata: { evidence: { traceId: 'tr-ov5', reportId: 1 } } });
+    await screen.findByRole('note', { name: 'Relationship Types' });
+    await openMenu();
+    expect(item('All')).toHaveAttribute('aria-checked', 'true');
+    await userEvent.click(item('All'));
+    expect(item('All')).toHaveAttribute('aria-checked', 'false');
+    expect(screen.queryByRole('note', { name: 'Relationship Types' })).not.toBeInTheDocument();
+    expect(canvasProps.current.showMinimap).toBe(false);
+    expect(Object.values(JSON.parse(localStorage.getItem(OVERLAY_PREFS_KEY))).every((on) => on === false)).toBe(true);
+    await userEvent.click(item('Minimap'));
+    expect(item('All')).toHaveAttribute('aria-checked', 'mixed');
+    await userEvent.click(item('All'));
+    expect(item('All')).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('note', { name: 'Relationship Types' })).toBeInTheDocument();
+    expect(Object.values(JSON.parse(localStorage.getItem(OVERLAY_PREFS_KEY))).every((on) => on === true)).toBe(true);
   });
 
   it('closes on Escape', async () => {
@@ -1058,7 +1103,81 @@ describe('GraphWindowBody graph editing (G3.1)', () => {
   });
 });
 
-describe('GraphWindowBody adjust boxes (G3.2)', () => {
+describe('GraphWindowBody actor profile', () => {
+  it('a click on a node shows its profile: a portrait and empty details; the background, Escape and Ctrl-clicks close it', async () => {
+    cacheEvidenceGraph('tr-profile', { data: {}, ...graphOf(4) });
+    renderGraph({ metadata: { evidence: { traceId: 'tr-profile', reportId: 1 } } });
+    await waitFor(() => expect(screen.getByTestId('canvas')).toHaveAttribute('data-nodes', '4'));
+    const tap = (target) => act(() => canvasProps.current.onElementTap(target));
+    tap({ kind: 'node', id: '2', x: 40, y: 40 });
+    const card = screen.getByRole('region', { name: 'Actor profile' });
+    expect(within(card).getByRole('img', { name: 'No portrait' })).toBeInTheDocument();
+    expect(card).not.toHaveTextContent('N2');
+    ['Full name', 'ID', 'Acc No.', 'Tel', 'Address'].forEach((label) => expect(card).toHaveTextContent(label));
+    expect(card.querySelectorAll('dd.is-empty')).toHaveLength(5);
+    tap(null);
+    expect(screen.queryByRole('region', { name: 'Actor profile' })).not.toBeInTheDocument();
+    tap({ kind: 'node', id: '3', x: 40, y: 40 });
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('region', { name: 'Actor profile' })).not.toBeInTheDocument();
+    tap({ kind: 'node', id: '3', x: 40, y: 40, adding: true });
+    expect(screen.queryByRole('region', { name: 'Actor profile' })).not.toBeInTheDocument();
+    // Moving the view lets it go.
+    tap({ kind: 'node', id: '3', x: 40, y: 40 });
+    act(() => canvasProps.current.onViewportChange());
+    expect(screen.queryByRole('region', { name: 'Actor profile' })).not.toBeInTheDocument();
+  });
+});
+
+describe('GraphWindowBody actor profile, configured', () => {
+  afterEach(() => {
+    localStorage.clear();
+    resetProfileSettingsCache();
+  });
+
+  it('fills the details from the chosen properties, shows a portrait link, hides unticked details; off, a click shows nothing', async () => {
+    cacheEvidenceGraph('tr-profile2', {
+      data: {},
+      nodes: [{ id: 1, label: 'A', name: 'Abebe Kebede', id_number: '1234 5678', photo: 'https://example.org/a.jpg' }, { id: 2, label: 'B' }],
+      edges: [{ from: 1, to: 2 }],
+    });
+    const profile = {
+      enabled: true,
+      portraitKey: 'photo',
+      fields: [{ key: 'fullName', source: 'name', shown: true }, { key: 'idNumber', source: 'id_number', shown: true }, { key: 'address', source: '', shown: false }],
+    };
+    // The domain's settings (bank in these tests).
+    setProfileSettings('bank', profile);
+    renderGraph({ metadata: { evidence: { traceId: 'tr-profile2', reportId: 1 } } });
+    await waitFor(() => expect(screen.getByTestId('canvas')).toHaveAttribute('data-nodes', '2'));
+    act(() => canvasProps.current.onElementTap({ kind: 'node', id: '1', x: 40, y: 40 }));
+    const card = screen.getByRole('region', { name: 'Actor profile' });
+    expect(within(card).getByRole('img', { name: 'Portrait' })).toHaveAttribute('src', 'https://example.org/a.jpg');
+    expect(card).toHaveTextContent('Full nameAbebe Kebede');
+    expect(card).toHaveTextContent('ID1234 5678');
+    expect(card).not.toHaveTextContent('Address');
+    // A node without them: the sample portrait and "—".
+    act(() => canvasProps.current.onElementTap({ kind: 'node', id: '2', x: 40, y: 40 }));
+    expect(within(screen.getByRole('region', { name: 'Actor profile' })).getByRole('img', { name: 'No portrait' })).toBeInTheDocument();
+    cleanup();
+    act(() => setProfileSettings('bank', { ...profile, enabled: false }));
+    renderGraph({ metadata: { evidence: { traceId: 'tr-profile2', reportId: 1 } } });
+    await waitFor(() => expect(screen.getByTestId('canvas')).toHaveAttribute('data-nodes', '2'));
+    act(() => canvasProps.current.onElementTap({ kind: 'node', id: '1', x: 40, y: 40 }));
+    expect(screen.queryByRole('region', { name: 'Actor profile' })).not.toBeInTheDocument();
+    // Another domain keeps its own.
+    expect(getProfileSettings('cdr').enabled).toBe(true);
+    // On for the domain but off for this graph (Settings ▸ This graph): no card.
+    cleanup();
+    act(() => setProfileSettings('bank', profile));
+    renderGraph({ metadata: { evidence: { traceId: 'tr-profile2', reportId: 1 }, graphSettings: { actorProfile: false } } });
+    await waitFor(() => expect(screen.getByTestId('canvas')).toHaveAttribute('data-nodes', '2'));
+    act(() => canvasProps.current.onElementTap({ kind: 'node', id: '1', x: 40, y: 40 }));
+    expect(screen.queryByRole('region', { name: 'Actor profile' })).not.toBeInTheDocument();
+  });
+});
+
+describe('GraphWindowBody Customize popup (replaces the G3.2 adjust boxes)', () => {
   const open = async () => {
     cacheEvidenceGraph('tr-adjust', { data: {}, ...graphOf(4) });
     renderGraph({ metadata: { evidence: { traceId: 'tr-adjust', reportId: 1 } } });
@@ -1066,68 +1185,159 @@ describe('GraphWindowBody adjust boxes (G3.2)', () => {
     return getGraphStore('graph-1');
   };
   const tap = (target) => act(() => canvasProps.current.onElementTap(target));
+  const selectNodes = (store, ids) => act(() => { store.setSelection(ids); });
+  const selectEdges = (keys) => act(() => canvasProps.current.onEdgeSelection(keys));
+  const customize = () => screen.getByRole('button', { name: 'Customize' });
 
-  it('a node click opens its box; label, note, size, colour, shape and icon change the node', async () => {
+  it('the toolbar button needs a selection; clicking a node no longer opens a box', async () => {
     const store = await open();
+    expect(customize()).toBeDisabled();
     tap({ kind: 'node', id: '2', x: 40, y: 40 });
-    const box = screen.getByRole('region', { name: 'Node adjustments' });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: /adjustments/ })).not.toBeInTheDocument();
+    selectNodes(store, ['2']);
+    expect(customize()).toBeEnabled();
+    expect(customize()).toHaveAttribute('title', 'Customize the selected 1 node');
+  });
+
+  it('options on the left, a preview on the right; nothing changes until Apply, then once (one undo step)', async () => {
+    const store = await open();
+    selectNodes(store, ['2', '3']);
+    await userEvent.click(customize());
+    const dialog = screen.getByRole('dialog', { name: 'Customize node' });
+    expect(dialog).toHaveTextContent('2 selected');
+    expect(screen.getByRole('img', { name: 'Node preview' })).toBeInTheDocument();
     const label = screen.getByRole('textbox', { name: 'Node label' });
     expect(label).toHaveValue('N2');
     await userEvent.clear(label);
-    await userEvent.type(label, 'Renamed{Enter}');
-    expect(store.getNode('2').label).toBe('Renamed');
+    await userEvent.type(label, 'Renamed');
     await userEvent.type(screen.getByRole('textbox', { name: 'Note' }), 'seen twice');
-    await userEvent.tab();
-    expect(store.getNode('2').note).toBe('seen twice');
-    await userEvent.click(screen.getByRole('button', { name: 'Size 25' }));
-    expect(store.getNode('2').size).toBe(25);
+    fireEvent.change(screen.getByRole('slider', { name: 'Node size' }), { target: { value: '25' } });
     await userEvent.click(screen.getByRole('button', { name: 'Colour #DC143C' }));
-    expect(store.getNode('2')).toMatchObject({ baseColor: '#DC143C', color: { background: '#DC143C', border: '#b01030' } });
-    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Node shape' }), 'diamond');
-    expect(store.getNode('2').shape).toBe('diamond');
+    await userEvent.click(screen.getByRole('radio', { name: 'Diamond' }));
+    // The icons open in a popover from the icon button; Escape closes it
+    // (not the popup); picking one closes it.
+    await userEvent.click(screen.getByRole('button', { name: 'Choose an icon' }));
+    expect(screen.getByRole('dialog', { name: 'Choose an icon' })).toBeInTheDocument();
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog', { name: 'Choose an icon' })).not.toBeInTheDocument();
+    expect(dialog).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Choose an icon' }));
     await userEvent.click(screen.getByRole('option', { name: 'Bank' }));
-    expect(store.getNode('2')).toMatchObject({ shape: 'circularImage', iconPath: '../graph_icons/Bank.svg' });
-    // Each change is one undo step.
+    expect(screen.queryByRole('dialog', { name: 'Choose an icon' })).not.toBeInTheDocument();
+    // The preview follows; the graph does not yet.
+    expect(screen.getByRole('img', { name: 'Node preview' }).querySelector('path').style.fill).toBe('#DC143C');
+    expect(screen.getByRole('img', { name: 'Node preview' })).toHaveTextContent('Renamed');
+    expect(store.getNode('2').label).toBe('N2');
+    expect(dialog).toHaveTextContent('6 changes to apply');
+    // Held down, the preview shows the current look.
+    const stage = screen.getByLabelText(/Preview: hold to compare/);
+    expect(dialog).toHaveTextContent('Click and hold on the preview to compare');
+    fireEvent.pointerDown(stage);
+    expect(dialog).toHaveTextContent('Old look');
+    expect(screen.getByRole('img', { name: 'Node preview' })).toHaveTextContent('N2');
+    fireEvent.pointerUp(stage);
+    expect(screen.getByRole('img', { name: 'Node preview' })).toHaveTextContent('Renamed');
+    await userEvent.click(screen.getByRole('button', { name: 'Apply' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    ['2', '3'].forEach((id) => expect(store.getNode(id)).toMatchObject({
+      label: 'Renamed', note: 'seen twice', size: 25, baseColor: '#DC143C', shape: 'diamond', iconPath: '../graph_icons/Bank.svg',
+    }));
     await userEvent.click(screen.getByRole('button', { name: 'Undo' }));
-    expect(store.getNode('2')).toMatchObject({ shape: 'diamond', iconPath: null });
-    expect(box).toBeInTheDocument();
+    expect(store.getNode('2')).toMatchObject({ label: 'N2' });
+    expect(store.getNode('2').baseColor).toBeUndefined();
+  });
+
+  it('Cancel, Escape and the backdrop close it without changes; Reset restores the options', async () => {
+    const store = await open();
+    selectNodes(store, ['1']);
+    await userEvent.click(customize());
+    await userEvent.click(screen.getByRole('button', { name: 'Colour #32CD32' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Reset' }));
+    expect(screen.getByRole('button', { name: 'Apply' })).toBeDisabled();
+    await userEvent.click(screen.getByRole('button', { name: 'Colour #32CD32' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(store.getNode('1').baseColor).toBeUndefined();
+    await userEvent.click(customize());
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('paints the border alone (the fill stays the theme\'s), and a later fill keeps it', async () => {
+    const store = await open();
+    selectNodes(store, ['1']);
+    await userEvent.click(customize());
+    await userEvent.click(screen.getByRole('radio', { name: 'Border' }));
+    expect(screen.getByRole('radio', { name: 'Border' })).toHaveAttribute('aria-checked', 'true');
+    await userEvent.click(screen.getByRole('button', { name: 'Colour #7851A9' }));
+    expect(screen.getByRole('radio', { name: 'Border' })).toHaveTextContent('#7851A9');
+    expect(screen.getByRole('radio', { name: 'Fill' })).toHaveTextContent('Theme');
+    expect(screen.getByRole('img', { name: 'Node preview' }).querySelector('.graph_customize_subject circle').style.stroke).toBe('#7851A9');
+    await userEvent.click(screen.getByRole('button', { name: 'Apply' }));
+    expect(store.getNode('1')).toMatchObject({ borderColor: '#7851A9', color: { background: 'rgba(0,0,0,0)', border: '#7851A9' } });
+    expect(store.getNode('1').baseColor).toBeUndefined();
+    // Then the fill alone: the border stays.
+    await userEvent.click(customize());
+    expect(screen.getByRole('radio', { name: 'Border' })).toHaveTextContent('#7851A9');
+    await userEvent.click(screen.getByRole('button', { name: 'Colour #32CD32' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Apply' }));
+    expect(store.getNode('1')).toMatchObject({ baseColor: '#32CD32', color: { background: '#32CD32', border: '#7851A9' } });
+    // Auto border: back to the one worked out from the fill.
+    await userEvent.click(customize());
+    await userEvent.click(screen.getByRole('radio', { name: 'Border' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Auto' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Apply' }));
+    expect(store.getNode('1')).toMatchObject({ borderColor: null, color: { background: '#32CD32', border: '#28a428' } });
+  });
+
+  it('removes an icon', async () => {
+    const store = await open();
+    act(() => { store.updateNodes([['2', { shape: 'circularImage', image: '../graph_icons/Bank.svg', iconPath: '../graph_icons/Bank.svg' }]]); });
+    selectNodes(store, ['2']);
+    await userEvent.click(customize());
+    await userEvent.click(screen.getByRole('button', { name: 'Remove icon' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Apply' }));
+    expect(store.getNode('2')).toMatchObject({ shape: 'dot', image: null, iconPath: null });
   });
 
   it('"link" colour effect colours the neighbours and the links among them', async () => {
     const store = await open();
-    tap({ kind: 'node', id: '1', x: 40, y: 40 });
-    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Colour effect' }), 'link');
+    selectNodes(store, ['1']);
+    await userEvent.click(customize());
+    await userEvent.click(screen.getByRole('radio', { name: 'Link' }));
     await userEvent.click(screen.getByRole('button', { name: 'Colour #32CD32' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Apply' }));
     ['1', '2', '3', '4'].forEach((id) => expect(store.getNode(id).baseColor).toBe('#32CD32'));
     store.graph().forEachEdge((key, attributes) => expect(attributes.__edits.color).toBe('#32CD32'));
   });
 
-  it('an edge click opens the link box; label, style and width change it; the background closes it', async () => {
+  it('customizes the selected links: label, colour, style and width, with a link preview', async () => {
     const store = await open();
     const [key] = store.graph().edges();
-    tap({ kind: 'edge', id: key, x: 60, y: 60 });
-    expect(screen.getByRole('region', { name: 'Link adjustments' })).toBeInTheDocument();
-    await userEvent.type(screen.getByRole('textbox', { name: 'Link label' }), 'wire{Enter}');
-    expect(store.getEdge(key).label).toBe('wire');
-    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Line style' }), 'dotted');
-    expect(store.getEdge(key)).toMatchObject({ edgeStyle: 'dotted', dashes: [2, 6] });
-    const width = screen.getByRole('spinbutton', { name: 'Link width' });
-    await userEvent.clear(width);
-    await userEvent.type(width, '9');
-    expect(store.getEdge(key).width).toBe(6);
-    tap(null);
-    expect(screen.queryByRole('region', { name: 'Link adjustments' })).not.toBeInTheDocument();
+    selectEdges([key]);
+    await userEvent.click(customize());
+    expect(screen.getByRole('dialog', { name: 'Customize link' })).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'Link preview' })).toBeInTheDocument();
+    await userEvent.type(screen.getByRole('textbox', { name: 'Link label' }), 'wire');
+    await userEvent.click(screen.getByRole('radio', { name: 'Dotted' }));
+    fireEvent.change(screen.getByRole('slider', { name: 'Link width' }), { target: { value: '4' } });
+    await userEvent.click(screen.getByRole('button', { name: 'Apply' }));
+    expect(store.getEdge(key)).toMatchObject({ label: 'wire', edgeStyle: 'dotted', dashes: [2, 6], width: 4 });
   });
 
-  it('closes when its node is deleted, and on Escape', async () => {
+  it('with nodes and links selected, Node / Link tabs switch; Apply covers both', async () => {
     const store = await open();
-    tap({ kind: 'node', id: '3', x: 40, y: 40 });
-    await userEvent.keyboard('{Escape}');
-    expect(screen.queryByRole('region', { name: 'Node adjustments' })).not.toBeInTheDocument();
-    tap({ kind: 'node', id: '3', x: 40, y: 40 });
-    act(() => { store.removeNodes(['3']); });
-    expect(screen.queryByRole('region', { name: 'Node adjustments' })).not.toBeInTheDocument();
+    const [key] = store.graph().edges();
+    selectNodes(store, ['4']);
+    selectEdges([key]);
+    await userEvent.click(customize());
+    await userEvent.click(screen.getByRole('button', { name: 'Colour #00BFFF' }));
+    await userEvent.click(screen.getByRole('tab', { name: /Link/ }));
+    expect(screen.getByRole('dialog', { name: 'Customize link' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('radio', { name: 'Dashed' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Apply' }));
+    expect(store.getNode('4').baseColor).toBe('#00BFFF');
+    expect(store.getEdge(key).edgeStyle).toBe('dashed');
   });
 });
 
@@ -1423,5 +1633,172 @@ describe('GraphWindowBody selection tools (G3.6)', () => {
     await userEvent.type(screen.getByRole('textbox', { name: 'Value contains' }), 'addis');
     await userEvent.click(screen.getByRole('button', { name: 'Select' }));
     expect(await screen.findByText('3 node(s) selected.')).toBeInTheDocument();
+  });
+});
+
+describe('GraphWindowBody timeline filter (i2 benchmark #1)', () => {
+  const open = async () => {
+    cacheEvidenceGraph('tr-time', {
+      data: {},
+      nodes: [1, 2, 3, 4].map((id) => ({ id, label: `N${id}`, TRANSACTIONDATE: `2026-03-0${id}` })),
+      edges: [{ from: 1, to: 2 }, { from: 3, to: 4 }],
+    });
+    renderGraph({ metadata: { evidence: { traceId: 'tr-time', reportId: 1 } } });
+    await waitFor(() => expect(screen.getByTestId('canvas')).toHaveAttribute('data-nodes', '4'));
+  };
+  if (!window.PointerEvent) window.PointerEvent = class extends MouseEvent {};
+
+  it('is always there, collapsed, at 0.5x; the toolbar button expands it', async () => {
+    await open();
+    const strip = screen.getByRole('region', { name: 'Timeline' });
+    expect(screen.queryByRole('img', { name: /Histogram/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'Play speed' })).toHaveValue('0.5');
+    expect(screen.queryByRole('button', { name: 'Close timeline' })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Timeline' }));
+    expect(screen.getByRole('img', { name: /Histogram/ })).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'Date field' })).toHaveValue('TRANSACTIONDATE');
+    expect(screen.getByRole('img', { name: /Histogram/ })).toHaveAccessibleName(/by hour/);
+    expect(strip.querySelector('.graph_timeline_summary')).toBeNull();
+  });
+
+  it('dragging across the bars keeps only that period; Reset shows all again', async () => {
+    await open();
+    await userEvent.click(screen.getByRole('button', { name: 'Timeline' }));
+    const bars = screen.getByRole('img', { name: /Histogram/ });
+    bars.getBoundingClientRect = () => ({ left: 0, top: 0, width: 1000, height: 56, right: 1000, bottom: 56 });
+    const { fireEvent } = await import('@testing-library/react');
+    const count = bars.querySelectorAll('rect').length; // hourly bars over three days
+    fireEvent.pointerDown(bars, { button: 0, clientX: 0 });
+    fireEvent.pointerUp(bars, { clientX: Math.floor(1000 / count) * 30 }); // the first ~day
+    await waitFor(() => expect(screen.getByTestId('canvas')).toHaveAttribute('data-nodes', '2'));
+    expect(screen.getByRole('button', { name: 'Timeline' })).toHaveClass('is-filtering');
+    expect(screen.getByRole('status', { name: 'Timeline period' })).toHaveTextContent(/Mar/);
+    await userEvent.click(screen.getByRole('button', { name: 'Reset' }));
+    await waitFor(() => expect(screen.getByTestId('canvas')).toHaveAttribute('data-nodes', '4'));
+    expect(screen.queryByRole('status', { name: 'Timeline period' })).not.toBeInTheDocument();
+  });
+
+  it('the fold button expands and collapses it to its header', async () => {
+    await open();
+    await userEvent.click(screen.getByRole('button', { name: 'Expand timeline' }));
+    expect(screen.getByRole('img', { name: /Histogram/ })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Collapse timeline' }));
+    expect(screen.queryByRole('img', { name: /Histogram/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'Date field' })).toBeInTheDocument();
+  });
+
+  const openDaily = async (traceId) => {
+    cacheEvidenceGraph(traceId, {
+      data: {},
+      nodes: ['01', '03', '05', '08'].map((day, index) => ({ id: index + 1, label: `N${index + 1}`, TRANSACTIONDATE: `2026-03-${day}` })),
+      edges: [{ from: 1, to: 2 }, { from: 3, to: 4 }],
+    });
+    renderGraph({ metadata: { evidence: { traceId, reportId: 1 } } });
+    await waitFor(() => expect(screen.getByTestId('canvas')).toHaveAttribute('data-nodes', '4'));
+    await userEvent.click(screen.getByRole('button', { name: 'Timeline' }));
+  };
+
+  it('plays at the chosen speed and resets to all dates at the end', async () => {
+    await openDaily('tr-play');
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Play speed' }), '4');
+    expect(screen.getByRole('checkbox', { name: 'Auto reset' })).toBeChecked();
+    await userEvent.click(screen.getByRole('button', { name: 'Play' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Timeline' })).toHaveClass('is-filtering'));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Play' })).toBeInTheDocument(), { timeout: 4000 });
+    expect(screen.getByRole('button', { name: 'Timeline' })).not.toHaveClass('is-filtering');
+    expect(screen.getByTestId('canvas')).toHaveAttribute('data-nodes', '4');
+  });
+
+  it('Slice by changes the bars: daily, weekly, monthly…', async () => {
+    await openDaily('tr-slice');
+    const bars = () => screen.getByRole('img', { name: /Histogram/ });
+    expect(bars()).toHaveAccessibleName(/by day/);
+    expect(bars().querySelectorAll('rect')).toHaveLength(8); // 1-8 March
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Slice by' }), 'week');
+    expect(bars()).toHaveAccessibleName(/by week/);
+    expect(bars().querySelectorAll('rect')).toHaveLength(2); // weeks of 23 Feb and 2 Mar
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Slice by' }), 'quarter');
+    expect(bars().querySelectorAll('rect')).toHaveLength(1);
+    expect(bars()).toHaveAccessibleName(/by quarter/);
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Slice by' }), 'auto');
+    expect(bars()).toHaveAccessibleName(/by day/);
+  });
+
+  it('Previous / Next step through the dated periods while paused', async () => {
+    await openDaily('tr-step');
+    const period = () => screen.getByRole('status', { name: 'Timeline period' }).textContent;
+    const day = () => Number(period().match(/\b(\d{1,2})\b/)[1]);
+    await userEvent.click(screen.getByRole('button', { name: 'Next period' }));
+    expect(day()).toBe(1);
+    expect(screen.getByRole('button', { name: 'Previous period' })).toBeDisabled();
+    await userEvent.click(screen.getByRole('button', { name: 'Next period' }));
+    expect(day()).toBe(3); // the empty 2 March is skipped
+    expect(screen.getByTestId('canvas')).toHaveAttribute('data-nodes', '1');
+    await userEvent.click(screen.getByRole('button', { name: 'Next period' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Next period' }));
+    expect(day()).toBe(8);
+    expect(screen.getByRole('button', { name: 'Next period' })).toBeDisabled();
+    await userEvent.click(screen.getByRole('button', { name: 'Previous period' }));
+    expect(day()).toBe(5);
+    expect(screen.getByRole('button', { name: 'Play' })).toBeInTheDocument(); // still paused
+  });
+
+  it('Play skips the bars with nothing dated in them', async () => {
+    await openDaily('tr-skip');
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Play speed' }), '4');
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Auto reset' }));
+    const periods = [];
+    const observer = new MutationObserver(() => {
+      const title = screen.queryByRole('status', { name: 'Timeline period' });
+      if (title && periods[periods.length - 1] !== title.textContent) periods.push(title.textContent);
+    });
+    observer.observe(document.body, { subtree: true, childList: true, characterData: true });
+    await userEvent.click(screen.getByRole('button', { name: 'Play' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Play' })).toBeInTheDocument(), { timeout: 4000 });
+    observer.disconnect();
+    expect(periods).toHaveLength(4); // 1, 3, 5 and 8 March, not the 8 days between
+    expect(periods.map((text) => Number(text.match(/\b(\d{1,2})\b/)[1]))).toEqual([1, 3, 5, 8]);
+  });
+
+  it('without Auto reset, Play stops on the last period', async () => {
+    await openDaily('tr-noreset');
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Play speed' }), '4');
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Auto reset' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Play' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Play' })).toBeInTheDocument(), { timeout: 4000 });
+    expect(screen.getByRole('button', { name: 'Timeline' })).toHaveClass('is-filtering');
+    expect(screen.getByTestId('canvas')).toHaveAttribute('data-nodes', '1');
+  });
+
+  it('Autoplay starts Play at once and again whenever the timeline is expanded', async () => {
+    await openDaily('tr-autoplay');
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Autoplay' }));
+    expect(screen.getByRole('button', { name: 'Pause' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Pause' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Timeline' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Timeline' }));
+    expect(screen.getByRole('checkbox', { name: 'Autoplay' })).toBeChecked();
+    expect(await screen.findByRole('button', { name: 'Pause' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Pause' }));
+  });
+
+  it('Play and the expanded strip carry on across a remount (docked <-> floating)', async () => {
+    await openDaily('tr-play-remount');
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Autoplay' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Timeline' })).toHaveClass('is-filtering'), { timeout: 3000 });
+    cleanup();
+    renderGraph({ metadata: { evidence: { traceId: 'tr-play-remount', reportId: 1 } } });
+    await waitFor(() => expect(screen.getByTestId('canvas')).toHaveAttribute('data-nodes', '1'), { timeout: 3000 });
+    expect(screen.getByRole('button', { name: 'Pause' })).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: /Histogram/ })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Pause' }));
+    expect(screen.getByRole('button', { name: 'Play' })).toBeInTheDocument();
+  });
+
+  it('says so when the graph has no dates', async () => {
+    cacheEvidenceGraph('tr-nodate', { data: {}, ...graphOf(3) });
+    renderGraph({ metadata: { evidence: { traceId: 'tr-nodate', reportId: 1 } } });
+    await waitFor(() => expect(screen.getByTestId('canvas')).toHaveAttribute('data-nodes', '3'));
+    expect(screen.getByText('No dates found on the shown nodes or links.')).toBeInTheDocument();
   });
 });

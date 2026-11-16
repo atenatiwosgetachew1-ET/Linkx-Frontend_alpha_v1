@@ -574,3 +574,19 @@
 	padding-left: 18px;
 	font-size: 12px;
 }
+
+/* Profile mapping fields: the switch, its box then its text, on the left. */
+.config_window_profile_switch {
+	display: inline-flex;
+	align-items: center;
+	justify-content: flex-start;
+	gap: 8px;
+	margin-bottom: 8px;
+	cursor: pointer;
+}
+
+.config_window_profile_switch input {
+	flex: none;
+	width: auto;
+	margin: 0;
+}

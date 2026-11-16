@@ -97,6 +97,14 @@ describe('right panel bound to the active Graph window', () => {
     await waitFor(() => expect(screen.getByTestId('canvas')).toHaveAttribute('data-nodes', '1,2,3'));
   });
 
+  it('Settings: the actor profile card can be turned off for this graph', async () => {
+    const panel = setup('settings');
+    const box = panel.getByRole('checkbox', { name: 'Show actor profile on node click' });
+    expect(box).toBeChecked();
+    await userEvent.click(box);
+    expect(workspaceRef.windows.find((item) => item.id === 'graph-1').metadata.graphSettings.actorProfile).toBe(false);
+  });
+
   it('Settings: the range and ordering apply to that window and are kept in it', async () => {
     const panel = setup('settings');
     await userEvent.selectOptions(panel.getByRole('combobox', { name: 'Order by' }), 'amount');

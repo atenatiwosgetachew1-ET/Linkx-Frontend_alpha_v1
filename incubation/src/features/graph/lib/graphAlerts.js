@@ -141,7 +141,7 @@ export const generateGraphAlerts = (graph, { nodeIds = [], edgeIds = [] } = {}, 
 // Visual / structural keys never used as a node's name in the panel.
 const ALERT_NAME_EXCLUDE_KEYS = new Set([
   'size', 'x', 'y', 'vx', 'vy', 'rel_type', 'session_id', 'index', 'edges',
-  'neighbors', 'colorBehavior', 'baseColor', 'color', 'shape', 'borderWidth',
+  'neighbors', 'colorBehavior', 'baseColor', 'borderColor', 'color', 'shape', 'borderWidth',
   'borderWidthSelected', 'borderWidth1', 'image', 'imagePadding', 'iconPath',
   'title', 'font', 'group', 'level', 'mass', 'hidden', 'fixed', 'physics',
   'shapeProperties', 'widthConstraint', 'heightConstraint', 'margin', 'icon',

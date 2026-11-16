@@ -1,43 +1,29 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
-import {
-  COLOR_BEHAVIORS, COLOR_SWATCHES, EDGE_STYLES, EDGE_WIDTH_RANGE, ICON_ALBUM, NODE_SHAPES, NODE_SIZES, albumIconPath,
-} from '../lib/graphEditing.js';
+import { COLOR_SWATCHES, ICON_ALBUM, albumIconPath } from '../lib/graphEditing.js';
 import { iconForTheme, resolveIconUrl, subscribeIconThemes } from '../lib/graphIcons.js';
 import { EVENT_TYPES, FONT_FACES } from '../lib/graphAnnotations.js';
 
-// Production's node / edge adjust boxes (graphs_basic.html #nodeAdjustBox,
-// #edgeAdjustBox): opened by clicking a node or an edge, beside it, kept
-// inside the canvas. Node: label, icon (album or upload), note, colour
-// (picker and swatches), size, colour effect, shape. Edge: label, colour,
-// line style, width. Text fields apply when committed (Enter or leaving the
-// field, production's "change"); the colour picker applies as it moves.
-//
-// Annotations have production's own boxes (GB:1113-1200): kind 'label'
+// Annotation boxes (production graphs_basic.html GB:1113-1200), opened by
+// clicking an annotation, beside it, kept inside the canvas: kind 'label'
 // (text, font, size, colour), 'note' (comment box / text block: label and
 // text), 'event' (label, date and time, event types) and 'object' (label,
-// link, file, preview, open, clear).
+// link, file, preview, open, clear). Text fields apply when committed (Enter
+// or leaving the field, production's "change"); the colour picker applies as
+// it moves.
 //
-// kind 'node' | 'edge' | 'label' | 'note' | 'event' | 'object'; values from
-// nodeBoxValues / edgeBoxValues / annotationBoxValues; at { x, y } canvas
-// pixels; onChange(field, value); onClose().
+// Production's node / edge adjust boxes (#nodeAdjustBox, #edgeAdjustBox,
+// opened by a click) were replaced by the Customize popup
+// (GraphCustomizeBox.jsx, toolbar ▸ Customize; analyst decision 2026-11-16);
+// it reuses the colour, swatch and icon pieces exported here.
+//
+// values from annotationBoxValues; at { x, y } canvas pixels;
+// onChange(field, value); onClose().
 const OFFSET = 20; // production positionAdjustBox
 const MARGIN = 10;
 
-// Light or dark from the canvas background (as GraphCanvas), for the icons.
-const themeModeOf = (element) => {
-  if (!element) return 'light';
-  const probe = document.createElement('span');
-  probe.style.display = 'none';
-  probe.style.color = 'var(--graph-canvas-bg)';
-  element.appendChild(probe);
-  const rgb = /rgba?\(\s*(\d+)[,\s]+(\d+)[,\s]+(\d+)/.exec(getComputedStyle(probe).color);
-  probe.remove();
-  return rgb && (Number(rgb[1]) * 299 + Number(rgb[2]) * 587 + Number(rgb[3]) * 114) / 1000 < 128 ? 'dark' : 'light';
-};
-
 // A text field that reports on commit (Enter / blur), not per keystroke.
-function CommitField({ value, onCommit, multiline = false, ...props }) {
+export function CommitField({ value, onCommit, multiline = false, ...props }) {
   const [draft, setDraft] = useState(value);
   useEffect(() => setDraft(value), [value]);
   const commit = () => {
@@ -55,7 +41,7 @@ function CommitField({ value, onCommit, multiline = false, ...props }) {
 }
 
 // The colour picker applies while it moves, at most once a frame.
-function LiveColor({ value, onPick, label }) {
+export function LiveColor({ value, onPick, label }) {
   const frame = useRef(0);
   const latest = useRef(value);
   useEffect(() => () => cancelAnimationFrame(frame.current), []);
@@ -78,17 +64,17 @@ function LiveColor({ value, onPick, label }) {
   );
 }
 
-function Swatches({ onPick }) {
+export function Swatches({ onPick, value = '' }) {
   return (
     <div className="graph_adjust_swatches" role="group" aria-label="Colours">
       {COLOR_SWATCHES.map((color) => (
-        <button key={color} type="button" className="graph_adjust_swatch" style={{ backgroundColor: color }} aria-label={`Colour ${color}`} title={color} onClick={() => onPick(color)} />
+        <button key={color} type="button" className={`graph_adjust_swatch${value.toLowerCase() === color.toLowerCase() ? ' is-current' : ''}`} style={{ backgroundColor: color }} aria-label={`Colour ${color}`} title={color} onClick={() => onPick(color)} />
       ))}
     </div>
   );
 }
 
-function IconAlbum({ mode, onPick }) {
+export function IconAlbum({ mode, onPick, value = '' }) {
   const [, redraw] = useState(0);
   useEffect(() => subscribeIconThemes(() => redraw((value) => value + 1)), []);
   const upload = () => {
@@ -109,7 +95,7 @@ function IconAlbum({ mode, onPick }) {
   return (
     <div className="graph_adjust_album" role="listbox" aria-label="Icon album">
       {ICON_ALBUM.map((name) => (
-        <button key={name} type="button" role="option" aria-selected="false" className="graph_adjust_album_icon" title={name} aria-label={name} onClick={() => onPick(albumIconPath(name))}>
+        <button key={name} type="button" role="option" aria-selected={value === albumIconPath(name)} className={`graph_adjust_album_icon${value === albumIconPath(name) ? ' is-current' : ''}`} title={name} aria-label={name} onClick={() => onPick(albumIconPath(name))}>
           <img src={iconForTheme(resolveIconUrl(name), mode)} alt="" />
         </button>
       ))}
@@ -228,8 +214,6 @@ function AnnotationFields({ kind, values, onChange }) {
 
 export default function GraphAdjustBox({ kind, values, at, onChange, onClose }) {
   const ref = useRef(null);
-  const [album, setAlbum] = useState(false);
-  const [mode, setMode] = useState('light');
 
   // Beside the element, inside the canvas (production positionAdjustBox).
   useLayoutEffect(() => {
@@ -240,8 +224,7 @@ export default function GraphAdjustBox({ kind, values, at, onChange, onClose }) 
     const maxTop = stage.clientHeight - box.offsetHeight - MARGIN;
     box.style.left = `${Math.max(MARGIN, Math.min(at.x + OFFSET, maxLeft))}px`;
     box.style.top = `${Math.max(MARGIN, Math.min(at.y + OFFSET, maxTop))}px`;
-  }, [at.x, at.y, album, kind]);
-  useLayoutEffect(() => setMode(themeModeOf(ref.current)), []);
+  }, [at.x, at.y, kind]);
 
   useEffect(() => {
     const onKey = (event) => {
@@ -251,91 +234,16 @@ export default function GraphAdjustBox({ kind, values, at, onChange, onClose }) 
     return () => document.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  const iconUrl = kind === 'node' ? resolveIconUrl(values.icon) : '';
   const title = {
-    node: 'Node', edge: 'Link', label: 'Label', note: values.title || 'Note', event: 'Event Frame', object: 'Object',
+    label: 'Label', note: values.title || 'Note', event: 'Event Frame', object: 'Object',
   }[kind];
-  if (kind !== 'node' && kind !== 'edge') {
-    return (
-      <section ref={ref} className="graph_adjust_box is-annotation" aria-label={`${title} adjustments`} onContextMenu={(event) => event.preventDefault()}>
-        <header className="graph_adjust_header">
-          <strong className="graph_adjust_title">{kind === 'object' ? 'Object Attachment' : kind === 'label' ? 'Label Adjustment' : title}</strong>
-          <button type="button" className="graph_adjust_close" aria-label="Close adjustments" title="Close" onClick={onClose}>×</button>
-        </header>
-        <AnnotationFields kind={kind} values={values} onChange={onChange} />
-      </section>
-    );
-  }
-
   return (
-    <section ref={ref} className="graph_adjust_box" aria-label={`${title} adjustments`} onContextMenu={(event) => event.preventDefault()}>
+    <section ref={ref} className="graph_adjust_box is-annotation" aria-label={`${title} adjustments`} onContextMenu={(event) => event.preventDefault()}>
       <header className="graph_adjust_header">
-        <CommitField className="graph_adjust_label" aria-label={`${title} label`} placeholder="No Label" value={values.label} onCommit={(value) => onChange('label', value)} />
+        <strong className="graph_adjust_title">{kind === 'object' ? 'Object Attachment' : kind === 'label' ? 'Label Adjustment' : title}</strong>
         <button type="button" className="graph_adjust_close" aria-label="Close adjustments" title="Close" onClick={onClose}>×</button>
       </header>
-      {kind === 'node' ? (
-        <>
-          <div className="graph_adjust_row">
-            <button
-              type="button"
-              className={`graph_adjust_icon${album ? ' is-open' : ''}`}
-              aria-label="Choose an icon"
-              aria-expanded={album}
-              title="Choose an icon"
-              onClick={() => setAlbum((open) => !open)}
-            >
-              {iconUrl ? <img src={iconForTheme(iconUrl, mode)} alt="" /> : <span aria-hidden="true">+</span>}
-            </button>
-            <CommitField multiline className="graph_adjust_note" aria-label="Note" placeholder="Write a Note..." value={values.note} onCommit={(value) => onChange('note', value)} />
-          </div>
-          {album ? <IconAlbum mode={mode} onPick={(path) => onChange('icon', path)} /> : null}
-          <div className="graph_adjust_row">
-            <LiveColor label="Node colour" value={values.color} onPick={(color) => onChange('color', color)} />
-            <div className="graph_adjust_column">
-              <Swatches onPick={(color) => onChange('color', color)} />
-              <div className="graph_adjust_sizes" role="group" aria-label="Sizes">
-                {NODE_SIZES.map((size) => (
-                  <button key={size} type="button" className="graph_adjust_size" style={{ width: 6 + size / 3, height: 6 + size / 3 }} aria-label={`Size ${size}`} title={`Size ${size}`} onClick={() => onChange('size', size)} />
-                ))}
-              </div>
-            </div>
-            <div className="graph_adjust_column">
-              <select aria-label="Colour effect" title="Color changing behaviour" value={values.colorBehavior} onChange={(event) => onChange('colorBehavior', event.target.value)}>
-                {COLOR_BEHAVIORS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-              </select>
-              <select aria-label="Node shape" title="Change Node shape" value={values.shape} onChange={(event) => onChange('shape', event.target.value)}>
-                {NODE_SHAPES.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-              </select>
-            </div>
-          </div>
-        </>
-      ) : (
-        <div className="graph_adjust_row">
-          <LiveColor label="Link colour" value={values.color} onPick={(color) => onChange('color', color)} />
-          <div className="graph_adjust_column">
-            <Swatches onPick={(color) => onChange('color', color)} />
-          </div>
-          <div className="graph_adjust_column">
-            <select aria-label="Line style" title="Change Edge style" value={values.style} onChange={(event) => onChange('style', event.target.value)}>
-              {EDGE_STYLES.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-            </select>
-            <label className="graph_adjust_width">
-              <span>Width</span>
-              <input
-                type="number"
-                aria-label="Link width"
-                title="Adjust Edge Weight"
-                min={EDGE_WIDTH_RANGE.min}
-                max={EDGE_WIDTH_RANGE.max}
-                value={values.width}
-                onChange={(event) => {
-                  if (event.target.value !== '') onChange('width', event.target.value);
-                }}
-              />
-            </label>
-          </div>
-        </div>
-      )}
+      <AnnotationFields kind={kind} values={values} onChange={onChange} />
     </section>
   );
 }

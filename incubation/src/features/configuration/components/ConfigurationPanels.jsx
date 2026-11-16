@@ -16,6 +16,7 @@ import {
   readClassifiedEntities,
 } from '../lib/configModel.js';
 import { sanitizeText } from '../../../utils/inputSecurity.js';
+import { CONFIG_PROFILE_KEY, PROFILE_FIELDS, profileToConfiguration, resolveProfileSettings } from '../../graph/lib/nodeProfile.js';
 
 const truthy = (value) => value === true || value === 'true';
 
@@ -527,6 +528,78 @@ export function RulesPanel({
           {categoryOptions.map((option) => <option key={option} value={option} />)}
         </datalist>
       </Section>
+
+      <ProfileMappingSection draft={draft} onChange={onChange} />
     </WriteGate>
+  );
+}
+
+// Profile mapping fields (analyst decision 2026-11-16; not in production):
+// what the actor profile card shows when a node is clicked in a Graph window
+// of this domain. Saved with the configuration as `actor_profile` (backend
+// request B-23); a domain without one starts from this device's copy.
+function ProfileMappingSection({ draft, onChange }) {
+  const domain = getActiveDomainKey(draft);
+  const profile = resolveProfileSettings(draft, domain);
+  const update = (next) => onChange(CONFIG_PROFILE_KEY, profileToConfiguration(next));
+  const setField = (key, patch) => update({ ...profile, fields: profile.fields.map((field) => (field.key === key ? { ...field, ...patch } : field)) });
+  const property = (value) => sanitizeText(value, { maxLength: 120 });
+  return (
+    <Section
+      title="Profile mapping fields"
+      description="What the actor profile card shows when a node is clicked in a Graph window: the node property behind the portrait and each detail."
+    >
+      <label className="config_window_profile_switch">
+        <input type="checkbox" checked={profile.enabled} onChange={(event) => update({ ...profile, enabled: event.target.checked })} />
+        <span>Show the actor profile on node click</span>
+      </label>
+      <div className="config_window_table_wrap">
+        <table className="config_window_table" aria-label="Profile mapping fields">
+          <thead>
+            <tr><th>#</th><th>Profile field</th><th>Node property</th><th>Shown</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td className="config_window_table_index">1</td>
+              <td>Portrait</td>
+              <td>
+                <input
+                  className="settings_input"
+                  aria-label="Portrait property"
+                  value={profile.portraitKey}
+                  placeholder="An image link property, e.g. PHOTO_URL (empty: no portrait)"
+                  disabled={!profile.enabled}
+                  onChange={(event) => update({ ...profile, portraitKey: property(event.target.value) })}
+                />
+              </td>
+              <td />
+            </tr>
+            {profile.fields.map((field, index) => {
+              const label = PROFILE_FIELDS.find((entry) => entry.key === field.key)?.label || field.key;
+              return (
+                <tr key={field.key}>
+                  <td className="config_window_table_index">{index + 2}</td>
+                  <td>{label}</td>
+                  <td>
+                    <input
+                      className="settings_input"
+                      aria-label={`${label} property`}
+                      value={field.source}
+                      placeholder="Node property (empty: —)"
+                      disabled={!profile.enabled}
+                      onChange={(event) => setField(field.key, { source: property(event.target.value) })}
+                    />
+                  </td>
+                  <td>
+                    <input type="checkbox" aria-label={`Show ${label}`} checked={field.shown} disabled={!profile.enabled} onChange={(event) => setField(field.key, { shown: event.target.checked })} />
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <p className="settings_hint">Property names as they appear in the graph's node data (exact spelling). The portrait takes an https or data:image link.</p>
+    </Section>
   );
 }

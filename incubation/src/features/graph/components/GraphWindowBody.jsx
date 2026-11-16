@@ -48,8 +48,14 @@ import GraphSemanticLegend from './GraphSemanticLegend.jsx';
 import GraphOverlayMenu from './GraphOverlayMenu.jsx';
 import GraphZoomBox from './GraphZoomBox.jsx';
 import GraphAdjustBox from './GraphAdjustBox.jsx';
+import GraphCustomizeBox from './GraphCustomizeBox.jsx';
+import GraphNodeProfile from './GraphNodeProfile.jsx';
+import { getProfileSettings, resolveProfileSettings, subscribeProfileSettings } from '../lib/nodeProfile.js';
+import GraphTimeline from './GraphTimeline.jsx';
+import GraphRelationshipTabs from './GraphRelationshipTabs.jsx';
+import { applyTimeFilter } from '../lib/graphTimeline.js';
 import {
-  edgeBoxValues, edgeColorPatch, edgeStylePatch, edgeWidthPatch, nodeBoxValues, nodeColorPatches, nodeIconPatch, nodeShapePatch,
+  edgeBoxValues, edgeColorPatch, edgeStylePatch, edgeWidthPatch, nodeBoxValues, nodeColorPatches, nodeBorderPatch, nodeFillClearPatch, nodeIconClearPatch, nodeIconPatch, nodeShapePatch,
 } from '../lib/graphEditing.js';
 import {
   ANNOTATION_ACTIONS, ANNOTATION_PROMPTS, annotationBoxKind, annotationBoxValues, annotationNode, fromDateTimeLocalValue, hasAttachment,
@@ -77,6 +83,9 @@ const ICONS = {
   plus: ['M12 5v14', 'M5 12h14'],
   undo: ['M9 14 4 9l5-5', 'M4 9h10.5a5.5 5.5 0 0 1 0 11H11'],
   redo: ['m15 14 5-5-5-5', 'M20 9H9.5a5.5 5.5 0 0 0 0 11H13'],
+  timeline: ['M3 20h18', 'M6 20v-5', 'M10 20V9', 'M14 20v-7', 'M18 20V5'],
+  // A palette: customize nodes and links.
+  customize: ['M12 3a9 9 0 1 0 0 18c1 0 1.7-.8 1.7-1.7 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.2 0-.9.8-1.7 1.7-1.7H16a5 5 0 0 0 5-5c0-4-4-7.2-9-7.2Z', 'M7.5 11h.01', 'M10.5 7h.01', 'M15.5 7.5h.01'],
 };
 
 const formatCount = (value) => Number(value || 0).toLocaleString();
@@ -142,7 +151,15 @@ export default function GraphWindowBody({ windowItem }) {
   const { tasks } = useSyncExternalStore(subscribeTasks, getTasksSnapshot);
   const { apiFetch, configuration } = useSession();
   const { notify } = useNotifications();
-  const isCdr = getActiveDomainKey(configuration) === 'cdr';
+  const domainKey = getActiveDomainKey(configuration);
+  const isCdr = domainKey === 'cdr';
+  // Actor profile settings: the domain's (Configuration ▸ Rules ▸ Profile
+  // mapping fields), else the device copy kept by the last save.
+  const deviceProfile = useSyncExternalStore(subscribeProfileSettings, () => getProfileSettings(domainKey));
+  const profileSettings = useMemo(
+    () => (configuration?.actor_profile ? resolveProfileSettings(configuration, domainKey) : deviceProfile),
+    [configuration, deviceProfile, domainKey],
+  );
   const canvasRef = useRef(null);
   const [isLayingOut, setIsLayingOut] = useState(false);
   const [linkTarget, setLinkTarget] = useState('');
@@ -189,7 +206,10 @@ export default function GraphWindowBody({ windowItem }) {
   // Element types hidden with Filter Elements (production keeps the choice
   // on the device; each window starts from it).
   const elementFilters = useMemo(() => metadata.graphElementFilters || readElementFilters(), [metadata.graphElementFilters]);
-  const view = useMemo(
+  // Timeline filter (i2 benchmark #1): open, date key, period, undated.
+  // Window state kept in the store, applied after the other filters.
+  const [timeline, setTimeline] = useWindowUiState(store, 'timeline', { collapsed: true, key: '', from: null, to: null, hideUndated: false, speed: 0.5, slice: 'auto', autoReset: true, autoplay: false, playing: false });
+  const baseView = useMemo(
     () => applyElementFilters(store.graph(), store.applyVisibility(store.searchView({
       ...settings.limit,
       max: settings.limit.min + Math.min(requested, cap),
@@ -201,6 +221,17 @@ export default function GraphWindowBody({ windowItem }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [store, snapshot.version, settings.limit, cap, requested, search, viewKey, elementFilters],
   );
+  // The timeline's applied period, shown as a title top-left of the canvas.
+  const [timelinePeriod, setTimelinePeriod] = useState('');
+  const view = useMemo(
+    () => applyTimeFilter(store.graph(), baseView, timeline),
+    [baseView, store, timeline],
+  );
+  // While the timeline plays, each step focuses the nodes and links of its
+  // period once drawn (two frames: the canvas redraws after the render).
+  const focusPlayed = useCallback((ids, options) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => canvasRef.current?.focusOn?.(ids, options)));
+  }, []);
   useEffect(() => {
     store.setViewStats({ nodes: view.nodeIds.length, edges: view.edgeIds.length, searched: view.searched });
   }, [store, view]);
@@ -301,6 +332,19 @@ export default function GraphWindowBody({ windowItem }) {
       }),
     });
   }, [apiFetch, notify, resetRange, sessionId, store, updateWindowMetadata, windowId, windowItem.title]);
+
+  // A linked session starts on All once its relationships arrive (analyst
+  // decision 2026-11-16; production waited for a pick). Only when nothing
+  // was picked or drawn yet, once per session.
+  const autoAllRef = useRef(null);
+  const hasRelationships = Boolean(session.relationships?.length);
+  useEffect(() => {
+    if (!sessionId || !hasRelationships || session.terminated || metadata.graphRelationship) return;
+    if (autoAllRef.current === sessionId) return;
+    if (store.getStatus().state !== 'idle' || store.getSnapshot().nodes > 0) return;
+    autoAllRef.current = sessionId;
+    fetchRelationship('*');
+  }, [fetchRelationship, hasRelationships, metadata.graphRelationship, session.terminated, sessionId, store]);
 
   // Source terminated: production unlinks the windows and clears the
   // relationships, keeping what is drawn. Source closed: the window resets.
@@ -1164,19 +1208,33 @@ export default function GraphWindowBody({ windowItem }) {
     }
   }, [cap, effective.layout, effective.showLabels, notifyDrawingLimit, plainNodeIds, record, report, showCombined, store, view.nodeIds, viewKey]);
 
-  // Node / edge adjust box (G3.2; production click GB:2374): which element
-  // it belongs to and where it opened. Edits apply to everything of that
-  // kind that is selected (production getSelectedNodes / Edges), except the
-  // icon, which only the clicked node takes (production currentEntityId).
+  // Annotation box (G3.3; production click GB:2374): which annotation it
+  // belongs to and where it opened. Clicking a plain node or a link no longer
+  // opens production's adjust box: they are customized from the toolbar
+  // (Customize popup, analyst decision 2026-11-16).
   const [adjust, setAdjust] = useState(null); // { kind, id, x, y }
   const closeAdjust = useCallback(() => setAdjust(null), []);
+  // Clicked from far out, only an annotation is zoomed in to (its box opens).
+  const tapZoomsTo = useCallback((target) => target?.kind === 'node' && Boolean(annotationBoxKind(store.getNode(target.id))), [store]);
+  // Actor profile (analyst decision 2026-11-16): a plain click on a plain
+  // node shows its card beside it; Ctrl / Cmd / Shift clicks (adding to the
+  // selection), links, the background and moving the view close it.
+  const [profile, setProfile] = useState(null); // { id, x, y }
+  const closeProfile = useCallback(() => setProfile(null), []);
   const handleElementTap = useCallback((target) => {
     if (target?.kind !== 'node') {
-      setAdjust(target);
+      setAdjust(null);
+      setProfile(null);
       return;
     }
     const node = store.getNode(target.id);
     const boxKind = annotationBoxKind(node);
+    if (!boxKind) {
+      setAdjust(null);
+      setProfile(target.adding || !profileSettings.enabled || !settings.actorProfile ? null : { id: target.id, x: target.x, y: target.y });
+      return;
+    }
+    setProfile(null);
     // Production's OLE click gives an object that lost its icon the
     // document icon back (a recorded change).
     const repair = boxKind === 'object' ? oleIconRepair(node, { dark: isDarkTheme() }) : null;
@@ -1184,9 +1242,9 @@ export default function GraphWindowBody({ windowItem }) {
       record();
       store.updateNodes([[target.id, repair]]);
     }
-    setAdjust(boxKind ? { ...target, kind: boxKind } : target);
-  }, [record, store]);
-  const adjustTarget = adjust && (adjust.kind === 'edge' ? store.getEdge(adjust.id) : store.getNode(adjust.id));
+    setAdjust({ ...target, kind: boxKind });
+  }, [profileSettings.enabled, record, settings.actorProfile, store]);
+  const adjustTarget = adjust && store.getNode(adjust.id);
   const lastEdit = useRef({ field: '', at: 0 });
   // One undo step per field while it is being changed (the colour picker
   // sends many values; production queued one history capture).
@@ -1197,8 +1255,7 @@ export default function GraphWindowBody({ windowItem }) {
   }, [record]);
   const applyAdjust = useCallback((field, value) => {
     if (!adjust) return;
-    const selected = canvasRef.current?.selectedIds?.() || { nodes: [], edges: [] };
-    if (adjust.kind !== 'node' && adjust.kind !== 'edge') {
+    {
       // Annotation boxes change the clicked annotation only (production
       // currentEntityId).
       const node = store.getNode(adjust.id);
@@ -1226,23 +1283,30 @@ export default function GraphWindowBody({ windowItem }) {
       store.updateNodes([[adjust.id, patch]]);
       return;
     }
-    if (adjust.kind === 'node') {
-      const ids = selected.nodes.includes(adjust.id) ? selected.nodes : [adjust.id];
+  }, [adjust, recordEdit, store]);
+  // Customize popup (analyst decision 2026-11-16): one changed option on
+  // the given nodes or links (production's adjust-box edits, GA:1854-2474).
+  // The icon goes to every selected node (production's box gave it to the
+  // clicked node only; the popup has no clicked node).
+  const editElements = useCallback((kind, ids, field, value) => {
+    if (kind === 'node') {
       if (field === 'colorBehavior') {
-        // Production stored it without a history step.
         store.updateNodes(ids.map((id) => [id, { colorBehavior: value }]));
         return;
       }
-      recordEdit(`node:${field}`);
       if (field === 'label' || field === 'note') store.updateNodes(ids.map((id) => [id, { [field]: value }]));
       else if (field === 'size') store.updateNodes(ids.map((id) => [id, { size: value }]));
       else if (field === 'shape') store.updateNodes(ids.map((id) => [id, nodeShapePatch(store.getNode(id), value)]));
-      else if (field === 'icon') store.updateNodes([[adjust.id, nodeIconPatch(value)]]);
-      else if (field === 'color') {
+      else if (field === 'icon') store.updateNodes(ids.map((id) => [id, value ? nodeIconPatch(value) : nodeIconClearPatch(store.getNode(id))]));
+      else if (field === 'border') store.updateNodes(ids.map((id) => [id, nodeBorderPatch(store.getNode(id), value)]));
+      else if (field === 'fill' && !value) store.updateNodes(ids.map((id) => [id, nodeFillClearPatch(store.getNode(id))]));
+      else if (field === 'fill' || field === 'color') {
         const graph = store.graph();
         const drawn = new Set(view.edgeIds);
         const patches = nodeColorPatches(ids, value, {
           behaviorOf: (id) => store.getNode(id)?.colorBehavior,
+          // A border set on its own stays.
+          borderOf: (id) => store.getNode(id)?.borderColor,
           neighbours: (id) => {
             const found = new Set();
             graph.forEachEdge(id, (key, attributes, source, target) => {
@@ -1256,8 +1320,7 @@ export default function GraphWindowBody({ windowItem }) {
         store.updateEdges(patches.edges.map(([key, patch]) => [key, { ...patch, __edits: { ...(store.getEdge(key)?.__edits || {}), ...patch.__edits } }]));
       }
     } else {
-      const keys = selected.edges.includes(adjust.id) ? selected.edges : [adjust.id];
-      recordEdit(`edge:${field}`);
+      const keys = ids;
       const patchFor = (key) => {
         const edge = store.getEdge(key);
         if (field === 'label') return { label: value };
@@ -1268,7 +1331,34 @@ export default function GraphWindowBody({ windowItem }) {
       };
       store.updateEdges(keys.map((key) => [key, patchFor(key)]));
     }
-  }, [adjust, recordEdit, store, view.edgeIds]);
+  }, [store, view.edgeIds]);
+  const [customize, setCustomize] = useState(null); // { nodes, edges }
+  const [edgeSelection, setEdgeSelection] = useState([]);
+  const closeCustomize = useCallback(() => setCustomize(null), []);
+  // The selected plain nodes (annotations have their own boxes) and links.
+  const customizable = useMemo(() => ({
+    nodes: snapshot.selection.filter((id) => { const node = store.getNode(id); return node && !annotationBoxKind(node); }),
+    edges: edgeSelection.filter((key) => store.getEdge(key)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [snapshot.selection, snapshot.version, edgeSelection, store]);
+  const openCustomize = useCallback(() => {
+    if (!customizable.nodes.length && !customizable.edges.length) return;
+    setAdjust(null);
+    setCustomize({ ...customizable });
+  }, [customizable]);
+  // Applied as one undo step: the colour effect first (production stored it
+  // before colouring), then the rest, the colour last.
+  const applyCustomize = useCallback((changes) => {
+    if (!customize) return;
+    const nodeFields = Object.entries(changes.node || {});
+    const edgeFields = Object.entries(changes.edge || {});
+    if (!nodeFields.length && !edgeFields.length) return;
+    record();
+    const nodes = customize.nodes.filter((id) => store.getNode(id));
+    const edges = customize.edges.filter((key) => store.getEdge(key));
+    if (nodes.length) nodeFields.forEach(([field, value]) => editElements('node', nodes, field, value));
+    if (edges.length) edgeFields.forEach(([field, value]) => editElements('edge', edges, field, value));
+  }, [customize, editElements, record, store]);
 
   // Selection tools (G3.6, after i2; not in production). They work on the
   // drawn nodes; hiding is a visibility edit of this view, recorded.
@@ -1446,6 +1536,11 @@ export default function GraphWindowBody({ windowItem }) {
     store.expandNode(nodeId, { viewKey, visibleIds: view.nodeIds });
   }, [cap, notifyDrawingLimit, record, store, view.nodeIds, viewKey]);
 
+  // Escape folds every open node card of the active window (analyst decision
+  // 2026-11-16), unless a menu, dialog, adjust box or the zoom tool is open:
+  // Escape is theirs first.
+  const escapeFolds = workspace.activeWindowId === windowId && !menu && !dialog && !adjust && !customize && !profile && !zoomingArea;
+
   /* ── Render ─────────────────────────────────────────────────────────── */
   const status = snapshot.status;
   const hasData = snapshot.nodes > 0;
@@ -1473,8 +1568,8 @@ export default function GraphWindowBody({ windowItem }) {
     if (source.kind === 'session') {
       title = relationships.length ? 'Choose a relationship' : 'Waiting for the linked session';
       text = relationships.length
-        ? 'Pick a relationship below (or All) to load the graph.'
-        : `Linked to session ${sessionId}. Its relationships appear below once the session reports them.`;
+        ? 'Pick a relationship tab above the canvas (or All) to load the graph.'
+        : `Linked to session ${sessionId}. Its relationships appear as tabs above the canvas once the session reports them.`;
     }
     overlay = (
       <div className="graph_window_state" role="status">
@@ -1554,6 +1649,21 @@ export default function GraphWindowBody({ windowItem }) {
             <button type="button" className="graph_window_icon_button" aria-label="Undo" title="Undo" disabled={!snapshot.history?.canUndo} onClick={() => stepHistory('undo')}><Icon d={ICONS.undo} /></button>
             <button type="button" className="graph_window_icon_button" aria-label="Redo" title="Redo" disabled={!snapshot.history?.canRedo} onClick={() => stepHistory('redo')}><Icon d={ICONS.redo} /></button>
           </div>
+          <div className="graph_window_tools" role="group" aria-label="Edit">
+            <button
+              type="button"
+              className={`graph_window_icon_button${customize ? ' is-active' : ''}`}
+              aria-label="Customize"
+              aria-haspopup="dialog"
+              title={customizable.nodes.length || customizable.edges.length
+                ? `Customize the selected ${[customizable.nodes.length && `${customizable.nodes.length} ${customizable.nodes.length === 1 ? 'node' : 'nodes'}`, customizable.edges.length && `${customizable.edges.length} ${customizable.edges.length === 1 ? 'link' : 'links'}`].filter(Boolean).join(' and ')}`
+                : 'Customize: select a node or a link first'}
+              disabled={!hasData || (!customizable.nodes.length && !customizable.edges.length)}
+              onClick={openCustomize}
+            >
+              <Icon d={ICONS.customize} />
+            </button>
+          </div>
           <div className="graph_window_tools" role="group" aria-label="View">
             <button type="button" className="graph_window_icon_button" aria-label="Zoom in" title="Zoom in" disabled={!hasData} onClick={() => canvasRef.current?.zoomBy(1.25)}><Icon d={ICONS.zoomIn} /></button>
             <button type="button" className="graph_window_icon_button" aria-label="Zoom out" title="Zoom out" disabled={!hasData} onClick={() => canvasRef.current?.zoomBy(0.8)}><Icon d={ICONS.zoomOut} /></button>
@@ -1569,9 +1679,29 @@ export default function GraphWindowBody({ windowItem }) {
               <Icon d={ICONS.zoomArea} />
             </button>
             <button type="button" className="graph_window_icon_button" aria-label="Fit graph" title="Fit graph" disabled={!hasData} onClick={() => canvasRef.current?.fit()}><Icon d={ICONS.fit} /></button>
+            <button
+              type="button"
+              className={`graph_window_icon_button${!timeline.collapsed ? ' is-active' : ''}${timeline.from != null || timeline.to != null || timeline.hideUndated ? ' is-filtering' : ''}`}
+              aria-label="Timeline"
+              aria-pressed={!timeline.collapsed}
+              title={timeline.from != null || timeline.to != null || timeline.hideUndated ? 'Timeline (a period is applied)' : 'Timeline: expand or collapse the date filter'}
+              disabled={!hasData}
+              onClick={() => setTimeline((current) => ({ ...current, collapsed: !current.collapsed }))}
+            >
+              <Icon d={ICONS.timeline} />
+            </button>
             <GraphOverlayMenu prefs={overlays} onToggle={toggleOverlay} />
           </div>
         </div>
+        {source.kind === 'session' ? (
+          <GraphRelationshipTabs
+            sessionId={sessionId}
+            relationships={relationships}
+            active={metadata.graphRelationship}
+            busy={busy}
+            onPick={fetchRelationship}
+          />
+        ) : null}
         <div className="graph_window_stage">
           <GraphCanvas
             ref={canvasRef}
@@ -1588,6 +1718,9 @@ export default function GraphWindowBody({ windowItem }) {
             showMinimap={overlays.minimap}
             showGlyphs={overlays.glyphs}
             onElementTap={handleElementTap}
+            tapZoomsTo={tapZoomsTo}
+            onViewportChange={closeProfile}
+            onEdgeSelection={setEdgeSelection}
           />
           {hasData && overlays.legend ? <GraphSemanticLegend isCdr={isCdr} /> : null}
           {zoomingArea && hasData ? <GraphZoomBox onZoom={zoomToArea} onDone={endZoomArea} /> : null}
@@ -1595,51 +1728,30 @@ export default function GraphWindowBody({ windowItem }) {
             <GraphAdjustBox
               key={`${adjust.kind}:${adjust.id}`}
               kind={adjust.kind}
-              values={adjust.kind === 'node' ? nodeBoxValues(adjustTarget) : adjust.kind === 'edge' ? edgeBoxValues(adjustTarget) : annotationBoxValues(adjustTarget)}
+              values={annotationBoxValues(adjustTarget)}
               at={adjust}
               onChange={applyAdjust}
               onClose={closeAdjust}
             />
           ) : null}
+          {profile && settings.actorProfile && profileSettings.enabled && store.getNode(profile.id) && !customize && !menu ? (
+            <GraphNodeProfile key={profile.id} node={store.getNode(profile.id)} at={profile} settings={profileSettings} isCdr={isCdr} onClose={closeProfile} />
+          ) : null}
+          {customize ? (
+            <GraphCustomizeBox
+              nodes={customize.nodes}
+              edges={customize.edges}
+              nodeValues={customize.nodes.length ? nodeBoxValues(store.getNode(customize.nodes[0])) : null}
+              edgeValues={customize.edges.length ? edgeBoxValues(store.getEdge(customize.edges[0])) : null}
+              nodeLook={customize.nodes.length ? canvasRef.current?.lookOf?.('node', customize.nodes[0]) || null : null}
+              edgeLook={customize.edges.length ? canvasRef.current?.lookOf?.('edge', customize.edges[0]) || null : null}
+              onApply={applyCustomize}
+              onClose={closeCustomize}
+            />
+          ) : null}
           <GraphOverlayDock>
-            {overlays.alerts && alertsPanel.open ? (
-              <GraphAlertsPanel
-                alerts={describedAlerts}
-                summary={alertsEnabled ? alertSummary(alerts) : 'Alert rules are off.'}
-                emptyText={alertsEnabled ? undefined : 'Alert rules are turned off. Turn them on from the right-click menu: Alert Rules ▸ Enable Alert Rules.'}
-                scanning={alertsPanel.scanning}
-                nameKey={activeNameKey}
-                nameKeys={alertNameKeys}
-                onNameKey={setAlertNameKey}
-                position={store.getUi('alertsPosition', null)}
-                onMoved={(position) => store.setUi('alertsPosition', position)}
-                collapsed={alertsCollapsed}
-                onToggleCollapsed={() => setAlertsCollapsed((value) => !value)}
-                onFocus={focusAlert}
-                onRescan={runAlertScan}
-                canRescan={alertsEnabled}
-                front={frontCard === 'alerts'}
-                onActivate={() => setFrontCard('alerts')}
-                onClose={() => setAlertsPanel({ open: false, scanning: false })}
-              />
-            ) : null}
-            {overlays.pinned && pinnedPanel.open ? (
-              <GraphPinnedPanel
-                items={pinnedCards}
-                elsewhere={pinned.length - pinnedHere.length}
-                summary={pinnedHere.length ? `${pinnedHere.length} pinned in this graph` : 'None in this graph'}
-                position={store.getUi('pinnedPosition', null)}
-                onMoved={(position) => store.setUi('pinnedPosition', position)}
-                collapsed={pinnedPanel.collapsed}
-                onToggleCollapsed={() => setPinnedPanel((current) => ({ ...current, collapsed: !current.collapsed }))}
-                onFocus={focusPinned}
-                onUnpin={(item) => unpinEvidence([item])}
-                onShowAll={showPinnedEvidence}
-                front={frontCard === 'pinned'}
-                onActivate={() => setFrontCard('pinned')}
-                onClose={() => setPinnedPanel((current) => ({ ...current, open: false }))}
-              />
-            ) : null}
+            {/* The folded stack, top to bottom: Merged & Grouped, Pinned Evidence,
+                Graph Alerts (analyst decision 2026-11-16). */}
             {overlays.combined && combinedPanel.open ? (
               <GraphCombinedPanel
                 items={combinedCards}
@@ -1649,15 +1761,56 @@ export default function GraphWindowBody({ windowItem }) {
                     combinedCards.filter((card) => card.kind === 'merged').length && `${combinedCards.filter((card) => card.kind === 'merged').length} merged`,
                   ].filter(Boolean).join(' · ')
                   : 'None in this graph'}
-                position={store.getUi('combinedPosition', null)}
-                onMoved={(position) => store.setUi('combinedPosition', position)}
+                size={store.getUi('combinedSize', null)}
+                onResized={(size) => store.setUi('combinedSize', size)}
                 collapsed={combinedPanel.collapsed}
                 onToggleCollapsed={() => setCombinedPanel((current) => ({ ...current, collapsed: !current.collapsed }))}
                 onFocus={focusNode}
                 onUngroup={(id) => runEditAction('ungroup', { id, selection: [id] })}
                 front={frontCard === 'combined'}
                 onActivate={() => setFrontCard('combined')}
+                escapeFolds={escapeFolds}
                 onClose={() => setCombinedPanel((current) => ({ ...current, open: false }))}
+              />
+            ) : null}
+            {overlays.pinned && pinnedPanel.open ? (
+              <GraphPinnedPanel
+                items={pinnedCards}
+                elsewhere={pinned.length - pinnedHere.length}
+                summary={pinnedHere.length ? `${pinnedHere.length} pinned in this graph` : 'None in this graph'}
+                size={store.getUi('pinnedSize', null)}
+                onResized={(size) => store.setUi('pinnedSize', size)}
+                collapsed={pinnedPanel.collapsed}
+                onToggleCollapsed={() => setPinnedPanel((current) => ({ ...current, collapsed: !current.collapsed }))}
+                onFocus={focusPinned}
+                onUnpin={(item) => unpinEvidence([item])}
+                onShowAll={showPinnedEvidence}
+                front={frontCard === 'pinned'}
+                onActivate={() => setFrontCard('pinned')}
+                escapeFolds={escapeFolds}
+                onClose={() => setPinnedPanel((current) => ({ ...current, open: false }))}
+              />
+            ) : null}
+            {overlays.alerts && alertsPanel.open ? (
+              <GraphAlertsPanel
+                alerts={describedAlerts}
+                summary={alertsEnabled ? alertSummary(alerts) : 'Alert rules are off.'}
+                emptyText={alertsEnabled ? undefined : 'Alert rules are turned off. Turn them on from the right-click menu: Alert Rules ▸ Enable Alert Rules.'}
+                scanning={alertsPanel.scanning}
+                nameKey={activeNameKey}
+                nameKeys={alertNameKeys}
+                onNameKey={setAlertNameKey}
+                size={store.getUi('alertsSize', null)}
+                onResized={(size) => store.setUi('alertsSize', size)}
+                collapsed={alertsCollapsed}
+                onToggleCollapsed={() => setAlertsCollapsed((value) => !value)}
+                onFocus={focusAlert}
+                onRescan={runAlertScan}
+                canRescan={alertsEnabled}
+                front={frontCard === 'alerts'}
+                onActivate={() => setFrontCard('alerts')}
+                escapeFolds={escapeFolds}
+                onClose={() => setAlertsPanel({ open: false, scanning: false })}
               />
             ) : null}
           </GraphOverlayDock>
@@ -1672,33 +1825,21 @@ export default function GraphWindowBody({ windowItem }) {
               }}
             />
           ) : null}
+          {timelinePeriod && hasData ? (
+            <div className="graph_period_title" role="status" aria-label="Timeline period">{timelinePeriod}</div>
+          ) : null}
           {overlay}
         </div>
-        {source.kind === 'session' ? (
-          <div className="graph_window_relationships" role="group" aria-label="Graph relationships">
-            {relationships.length ? (
-              ['*', ...relationships].map((item) => {
-                const type = item === '*' ? '*' : item.type;
-                const active = metadata.graphRelationship === type;
-                return (
-                  <button
-                    key={type}
-                    type="button"
-                    className={`graph_relationship_chip${active ? ' is-active' : ''}${item === '*' ? ' is-all' : ''}`}
-                    aria-pressed={active}
-                    disabled={busy && active}
-                    style={item === '*' ? undefined : { '--chip-bg': item.bgcolor, '--chip-text': item.textcolor }}
-                    title={type === '*' ? 'All relationships' : type}
-                    onClick={() => fetchRelationship(type)}
-                  >
-                    {type === '*' ? 'All (*)' : type}
-                  </button>
-                );
-              })
-            ) : (
-              <span className="graph_window_hint">Waiting for relationships from session {sessionId}…</span>
-            )}
-          </div>
+        {hasData ? (
+          <GraphTimeline
+            graph={store.graph()}
+            view={baseView}
+            version={snapshot.version}
+            filter={timeline}
+            onChange={(next) => setTimeline((current) => ({ ...current, ...next }))}
+            onPlayStep={focusPlayed}
+            onPeriod={setTimelinePeriod}
+          />
         ) : null}
       </div>
     </div>
