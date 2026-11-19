@@ -42,15 +42,19 @@ export default function GraphOverlayMenu({ prefs, onToggle }) {
     });
   };
 
+  // Lit while any component is on the graph (as it is by default), not only
+  // while the menu is open.
+  const anyShown = shownCount > 0;
   return (
     <div ref={rootRef} className="graph_overlay_menu">
       <button
         type="button"
-        className={`graph_window_icon_button${open ? ' is-active' : ''}`}
+        className={`graph_window_icon_button${open || anyShown ? ' is-active' : ''} linkx_tooltip_anchor`}
         aria-label="On-graph components"
         aria-haspopup="menu"
         aria-expanded={open}
-        title="On-graph components"
+        data-tooltip-placement="bottom"
+        data-tooltip={open ? '' : 'On-graph components'}
         onClick={() => setOpen((value) => !value)}
       >
         <LayersIcon />

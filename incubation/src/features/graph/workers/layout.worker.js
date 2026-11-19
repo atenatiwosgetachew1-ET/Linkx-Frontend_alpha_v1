@@ -3,6 +3,12 @@
 //
 // Layout:  { requestId, layout, nodeIds, edgePairs, options }
 //       -> { requestId, positions: { id: {x, y} }, ms } | { requestId, error }
+// Measure: { type: 'measure', requestId, measure, nodeIds, edgePairs }
+//       -> { requestId, scores: { id: number } } | { requestId, error }
+//          (network measures, lib/networkMeasures.js)
+// Chart:   { type: 'chart-metric', requestId, metric, input }
+//       -> { requestId, scores: result } | { requestId, error }
+//          (Chart window metrics, features/chart/lib/chartMetrics.js)
 // Physics (production vis-network barnesHut, lib/physics.js):
 //   { type: 'physics-start', simId, nodeIds, edgePairs, positions, fixed, stabilize }
 //       -> with `stabilize`, production's 350 stabilisation iterations run
@@ -13,6 +19,8 @@
 //   { type: 'physics-node', simId, id, position, fixed } moves / pins a node
 //          (a dragged node is pinned, as vis does) and wakes the simulation.
 //   { type: 'physics-stop', simId } ends it.
+import { computeMeasure } from '../lib/networkMeasures.js';
+import { computeChartMetric } from '../../chart/lib/chartMetrics.js';
 import { createSimulation, PRODUCTION_PHYSICS } from '../lib/physics.js';
 import { LAYOUTS, neighbourIndex } from '../lib/layouts.js';
 
@@ -70,6 +78,23 @@ self.onmessage = (event) => {
     const entry = sims.get(data.simId);
     if (entry?.timer) clearTimeout(entry.timer);
     sims.delete(data.simId);
+    return;
+  }
+  // Network measures (G3.5 i2 #3).
+  if (data.type === 'chart-metric') {
+    try {
+      self.postMessage({ requestId: data.requestId, scores: computeChartMetric(data.metric, data.input) });
+    } catch (error) {
+      self.postMessage({ requestId: data.requestId, error: String(error?.message || error) });
+    }
+    return;
+  }
+  if (data.type === 'measure') {
+    try {
+      self.postMessage({ requestId: data.requestId, scores: computeMeasure(data.measure, data.nodeIds || [], data.edgePairs || []) });
+    } catch (error) {
+      self.postMessage({ requestId: data.requestId, error: String(error?.message || error) });
+    }
     return;
   }
   const { requestId, layout, nodeIds, edgePairs, options } = data;

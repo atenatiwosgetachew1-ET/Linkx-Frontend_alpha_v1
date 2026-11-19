@@ -1,4 +1,5 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 import { DraftInput, Field, ListTextarea, OptionField, Section } from '../../../shared/components/form/FormFields.jsx';
 import {
@@ -17,6 +18,8 @@ import {
 } from '../lib/configModel.js';
 import { sanitizeText } from '../../../utils/inputSecurity.js';
 import { CONFIG_PROFILE_KEY, PROFILE_FIELDS, profileToConfiguration, resolveProfileSettings } from '../../graph/lib/nodeProfile.js';
+import { CONFIG_FORMATTING_KEY, describeRule, resolveDomainFormatting } from '../../graph/lib/conditionalFormatting.js';
+import GraphFormattingBox, { RuleSample } from '../../graph/components/GraphFormattingBox.jsx';
 
 const truthy = (value) => value === true || value === 'true';
 
@@ -53,7 +56,7 @@ export function SystemPanel({ draft, onChange, onSwitchDomain, isSwitchingDomain
     <>
       <Section
         title="Domain pillar (session)"
-        description="Active investigative pillar for this session. Switching re-projects database catalogs, ports, storage paths and schema mappings on the backend."
+        description="Active investigative pillar for this session. Switching re-projects database catalogs, ports, storage paths and schema mappings on the Service."
       >
         <Field label="Active domain pillar" hint={isSwitchingDomain ? 'Switching pillar and projecting configuration…' : 'Takes effect immediately for this session and every Source window.'}>
           <select
@@ -89,7 +92,7 @@ export function SystemPanel({ draft, onChange, onSwitchDomain, isSwitchingDomain
       <fieldset className="config_window_write_gate" disabled={!canWrite} title={canWrite ? undefined : 'You need config:write to change these settings.'}>
       <Section
         title="Session timeout policy"
-        description={`Loaded from and saved to the backend session policy. Source: ${idlePolicyMeta?.source || 'session'}.`}
+        description={`Loaded from and saved to the Service session policy. Source: ${idlePolicyMeta?.source || 'session'}.`}
       >
         <div className="config_window_grid is-compact">
           <Field label="Warn after (min)">
@@ -530,7 +533,54 @@ export function RulesPanel({
       </Section>
 
       <ProfileMappingSection draft={draft} onChange={onChange} />
+      <FormattingRulesSection draft={draft} onChange={onChange} />
     </WriteGate>
+  );
+}
+
+// Formatting rules (G3.5 i2 #4; analyst decision 2026-11-16; not in
+// production): the domain's conditional formatting, applied in every Graph
+// window of the domain below the graph's own rules (a graph can turn them
+// off). Saved with the configuration as `formatting_rules` (backend request
+// B-24); a domain without them starts from this device's copy. Edited in the
+// Graph windows' rule editor, without a graph (property names typed).
+const portalTo = (host, node) => (host ? createPortal(node, host) : node);
+
+function FormattingRulesSection({ draft, onChange }) {
+  const [editing, setEditing] = useState(false);
+  const anchorRef = useRef(null);
+  const domain = getActiveDomainKey(draft);
+  const rules = resolveDomainFormatting(draft, domain);
+  // The editor covers the window's body only (its header stays visible).
+  const host = editing ? anchorRef.current?.closest('.configuration_window_body') : null;
+  return (
+    <Section
+      title="Formatting rules"
+      description="Conditional formatting every Graph window of this domain applies, below its own rules: when a node or link matches, how it is drawn."
+      actions={<button type="button" className="settings_button" onClick={() => setEditing(true)}>Edit rules…</button>}
+    >
+      {rules.length ? (
+        <ol className="config_window_rule_list" aria-label="Formatting rules">
+          {rules.map((rule) => (
+            <li key={rule.id} className={rule.on ? '' : 'is-off'}>
+              <RuleSample rule={rule} />
+              <span>{rule.name || describeRule(rule)}</span>
+              {rule.on ? null : <small>off</small>}
+            </li>
+          ))}
+        </ol>
+      ) : <p className="settings_hint">No formatting rules for this domain yet.</p>}
+      <span ref={anchorRef} hidden />
+      {editing ? portalTo(host, (
+        <GraphFormattingBox
+          configMode
+          title={`Formatting rules · ${formatDomainPillarLabel(domain)}`}
+          rules={rules}
+          onApply={(next) => onChange(CONFIG_FORMATTING_KEY, next)}
+          onClose={() => setEditing(false)}
+        />
+      )) : null}
+    </Section>
   );
 }
 

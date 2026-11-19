@@ -316,7 +316,8 @@ export default function ReportDetail({ record, isCdr, graph, onClose, onCopyPayl
           data-tooltip={download.hint}
           onClick={download.onDownload}
         >
-          <Icon d={ICONS.download} /> Download report
+          <Icon d={download.busy ? ICONS.spinner : ICONS.download} className={download.busy ? 'reports_icon is-spinning' : undefined} />
+          {download.busy ? 'Preparing…' : 'Download report'}
         </button>
       </footer>
       )}

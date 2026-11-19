@@ -278,3 +278,103 @@ Tracked as a separate handoff: `docs/backend-handoff-analysis-results.md` (H-1�
 3. Save without `actor_profile`: an existing one is kept, not wiped.
 
 **Frontend once done:** drop the browser copy (`linkx_actor_profile_v1`). The configuration's value is already used whenever the configuration has one.
+
+### B-24. Keep the domain's formatting rules (`formatting_rules`) in the configuration
+**New frontend feature (2026-11-16, not in production):** conditional formatting in the Graph windows. These are rules of the form "when a node or link matches these conditions, draw it like this", re-applied as the view changes and view only (the graph data is never changed).
+- **Per graph:** each Graph window keeps its own rules in its window settings. These need nothing from the backend.
+- **Per domain:** the domain's shared rules are edited in **Configuration ▸ Rules ▸ Formatting rules**. Every Graph window of the domain applies them below its own rules, unless that window turns them off.
+
+**Today:** the frontend sends the domain's rules with `POST /configuration {id: 'save', configuration}` as a new top-level key, `formatting_rules`. As with `actor_profile` (B-23), the server is not expected to keep unknown keys. The frontend therefore also keeps a copy in the browser (`localStorage` `linkx_domain_formatting_v1`, per domain). That copy does not reach other browsers, devices or analysts.
+
+**Request:**
+- Store `formatting_rules` with the domain's configuration on `save`, and return it on `load` (and in the save response once B-10 is done).
+- Keep it per domain, like `column_mapping` and `actor_profile`.
+- A save without the key keeps the existing value.
+- `load_default` may drop it.
+- Shape: an ordered array, at most 50 rules. Order matters: when two rules set the same style, the earlier one wins.
+  ```json
+  "formatting_rules": [
+    {
+      "id": "rule_m3x1_1",
+      "name": "PEP customers",
+      "on": true,
+      "target": "node",
+      "match": "all",
+      "conditions": [
+        { "key": "CATEGORY", "op": "eq", "value": "PEP", "value2": "" },
+        { "key": "@degree", "op": "gte", "value": "5", "value2": "" }
+      ],
+      "style": { "fill": "#e74c3c", "size": 30, "shape": "diamond" }
+    },
+    {
+      "id": "rule_m3x1_2",
+      "name": "Large transfers",
+      "on": true,
+      "target": "edge",
+      "match": "any",
+      "conditions": [{ "key": "AMOUNT", "op": "gt", "value": "100000", "value2": "" }],
+      "style": { "color": "#c0392b", "width": 4, "lineStyle": "dashed" }
+    }
+  ]
+  ```
+  - **Rule fields:**
+    - `target`: `node` or `edge`.
+    - `match`: `all` or `any`.
+    - at most 12 `conditions` per rule.
+    - `id`: a free string (max 80) that the frontend generates.
+  - **Condition fields:**
+    - `key`: a node or link property name, or a built-in fact: `@type`, `@degree`, `@alerted`, `@pinned`.
+    - `op`: one of `eq`, `neq`, `contains`, `starts`, `in`, `gt`, `gte`, `lt`, `lte`, `between`, `before`, `after`, `dateBetween`, `exists`, `empty`.
+    - `value` and `value2`: plain strings, max 200 each.
+  - **Style fields** (all optional):
+    - nodes: `fill`, `border`, `labelColor` (`#rrggbb`), `size` (5–60), `shape` (`dot` / `box` / `diamond`), `icon` (an icon path or an image data URL), `hide` (`true`);
+    - links: `color` (`#rrggbb`), `width` (0.5–12), `lineStyle` (`solid` / `dashed` / `dotted` / `dashdot`), `hide`.
+  - The frontend normalizes and bounds every field on load, so the server may store the array as given. A size limit on the whole key is welcome: an `icon` may be an uploaded image.
+- **Permissions:** `config:write` to save, as for the rest of the configuration (B-1).
+
+**Verify:**
+1. Save a configuration with `formatting_rules`, then `load` it: the same array comes back, in the same order.
+2. Switch domain and back: each domain keeps its own rules.
+3. Save without the key: the existing rules are kept.
+
+**Frontend once done:** drop the browser copy (`linkx_domain_formatting_v1`). The configuration's value is already used whenever the configuration has one.
+
+### B-25. Encrypted LinkX graph files (`.lxg`): export and import through the server
+**New frontend feature (2026-11-17, not in production):** the Graph window's toolbar has **Import graph** and **Export ▸ Export JSON** (G4.1). Export writes production's plain JSON shape (`{ graphData: { type: 'Graph', nodes, edges }, networkOptions }`), so files move between production and this frontend. Import reads only `.json` (analyst decision 2026-11-17: HTML graph files are no longer read). It is size-bounded and cleaned in the browser.
+
+Evidence graphs are sensitive. A plain JSON file left in Downloads, on a share or on a USB stick can be read by anyone, and edited without trace. The analyst asked for a protected LinkX format of our own, done the way encrypted configurations (`.lxac`, `/configuration/export/encrypted`) already are: encrypted and checked by the server, so keys never sit in the browser.
+
+**Request:**
+- **Export:** `POST /graph/export/encrypted` with JSON `{ graph: { nodes, edges }, settings, meta: { title, source_window, exported_at } }` returns an encrypted file (`application/octet-stream`, name `LinkxGraph_<ts>.lxg`). The file must be:
+  - encrypted at rest (e.g. AES-256-GCM with a server-held key);
+  - authenticated, so a file changed outside LinkX is rejected;
+  - stamped with who exported it, when, and from which domain / session, for the audit trail.
+- **Verify:** `POST /graph/lxg/verify` (multipart `file`) returns `{ valid: true, meta }` or `{ valid: false, error }`, as `/configuration/lxac/verify` does. This lets the frontend show what a file holds before replacing a graph.
+- **Import:** `POST /graph/import/encrypted` (multipart `file`) returns `{ graph: { nodes, edges }, settings, meta }`, or a clear error (`not_lxg_file`, `tampered`, `forbidden`, `expired` if expiry is supported).
+- **Limits:** the frontend caps imports at 50 MB, 100 000 nodes and 300 000 links; the server may enforce the same or lower.
+- **Permissions:** suggest `graph:create` to export and import. Optionally, restrict opening to the same domain or organisation. Log both actions in the activity log.
+
+**Verify:**
+1. Export a graph, import it back: the same nodes, links and positions return.
+2. Change one byte of the file: import and verify reject it as tampered.
+3. Open the file in a text editor: no node data is readable.
+4. A user without the permission gets `forbidden`, and the attempt is logged.
+
+**Frontend once done:**
+- Export menu: add **Export encrypted (.lxg)**.
+- Import: accept `.lxg` (verified first, with its meta shown in the confirmation).
+- Plain JSON stays for exchanging files with production, unless the analysts decide to hide it behind a permission.
+
+### B-26. Actor profile portraits readable by the report (same origin or CORS)
+**New frontend feature (2026-11-17, not in production):** the graph report's Profiles cards (Export ▸ Generate report…) show each entity's actor profile with its portrait. The portrait is the node property chosen in Configuration ▸ Profile mapping fields (an image link, or an embedded `data:image/...`). To put a picture into the PDF, the browser must read its pixels. It can only do that for an image from the same origin, or one served with CORS headers. Otherwise the card shows the placeholder silhouette. The on-screen actor profile card is not affected, since it only displays the image.
+
+**Request (either is enough):**
+- **Preferred:** serve portraits through the API on the same origin, e.g. `GET /media/portrait/<id>`. It should use the user's session, check that they may see that entity, and log the access. Graph nodes then carry that path in the mapped property.
+- **Or:** have the image host send `Access-Control-Allow-Origin` for the LinkX frontend origin (not `*` for personal data), along with the image's `Content-Type`.
+- **Limits:** JPEG or PNG; about 1 MB at most (the report scales them to 320 × 400 px).
+
+**Verify:**
+1. Map a portrait property, open a graph whose top entities have portraits, and generate the report: the photos appear in the Profiles cards.
+2. A portrait the user may not see returns 403, and its card shows the placeholder.
+
+**Frontend once done:** nothing further. `loadPortrait` already loads with `crossOrigin="anonymous"` and no referrer, and falls back to the placeholder after 5 s or on any error.

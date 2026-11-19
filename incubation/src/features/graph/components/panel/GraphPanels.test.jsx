@@ -105,6 +105,18 @@ describe('right panel bound to the active Graph window', () => {
     expect(workspaceRef.windows.find((item) => item.id === 'graph-1').metadata.graphSettings.actorProfile).toBe(false);
   });
 
+  it('Settings: Aggregate links, with its mode and the total of a numeric link property', async () => {
+    const panel = setup('settings');
+    act(() => { getGraphStore('graph-1').replace({ nodes: NODES, edges: [{ from: 1, to: 2, amount: 5, kind: 'x' }, { from: 1, to: 2, amount: '7' }] }); });
+    expect(panel.queryByRole('combobox', { name: 'Total of' })).not.toBeInTheDocument();
+    await userEvent.click(panel.getByRole('checkbox', { name: 'Aggregate links' }));
+    const total = panel.getByRole('combobox', { name: 'Total of' });
+    expect(within(total).getAllByRole('option').map((option) => option.textContent)).toEqual(['No total (count only)', 'amount']);
+    await userEvent.selectOptions(total, 'amount');
+    await userEvent.selectOptions(panel.getByRole('combobox', { name: 'Aggregate' }), 'direction');
+    expect(workspaceRef.windows.find((item) => item.id === 'graph-1').metadata.graphSettings.linkAggregation).toEqual({ on: true, mode: 'direction', totalKey: 'amount' });
+  });
+
   it('Settings: the range and ordering apply to that window and are kept in it', async () => {
     const panel = setup('settings');
     await userEvent.selectOptions(panel.getByRole('combobox', { name: 'Order by' }), 'amount');
@@ -148,5 +160,20 @@ describe('right panel bound to the active Graph window', () => {
     const saved = workspaceRef.windows.find((item) => item.id === 'graph-1').metadata.graphSettings;
     expect(saved.layout).toMatchObject({ type: 'hierarchical', direction: 'UD', sortMethod: 'directed', layerMode: 'by_key', layerKey: 'amount' });
     expect(saved).toMatchObject({ edgeWeight: 'amount', showTitles: true, performance: false });
+  });
+
+  it('Settings: Peacock and Grouped layouts (i2 #6); Grouped groups by node type or a property', async () => {
+    const panel = setup('settings');
+    const saved = () => workspaceRef.windows.find((item) => item.id === 'graph-1').metadata.graphSettings;
+    await userEvent.selectOptions(panel.getByRole('combobox', { name: 'Layout' }), 'peacock');
+    expect(saved().layout.type).toBe('peacock');
+    expect(panel.queryByRole('combobox', { name: 'Group by' })).not.toBeInTheDocument();
+    await userEvent.selectOptions(panel.getByRole('combobox', { name: 'Layout' }), 'grouped');
+    const groupBy = panel.getByRole('combobox', { name: 'Group by' });
+    expect(groupBy).toHaveValue('node_identity');
+    expect(panel.queryByRole('combobox', { name: 'Group property' })).not.toBeInTheDocument();
+    await userEvent.selectOptions(groupBy, 'by_key');
+    await userEvent.selectOptions(panel.getByRole('combobox', { name: 'Group property' }), 'amount');
+    expect(saved().layout).toMatchObject({ type: 'grouped', layerMode: 'by_key', layerKey: 'amount' });
   });
 });

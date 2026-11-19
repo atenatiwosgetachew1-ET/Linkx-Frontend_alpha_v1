@@ -49,7 +49,13 @@ export const createGraphStore = () => {
   let status = { state: 'idle', message: '', source: '' };
   // What the window currently shows (for the right panel's counts).
   let viewStats = { nodes: 0, edges: 0, searched: false };
-  let snapshot = { version: 0, nodes: 0, edges: 0, danglingEdges: 0, selection: [], status, viewStats, history: { canUndo: false, canRedo: false } };
+  // dataVersion: bumped only when the graph's data changes, not for a
+  // highlight (markers, the expand flash) nor for showing / hiding nodes
+  // (reveal, expand, collapse, hide): what the Chart window measures (analyst
+  // report 2026-11-18: a chart click revealing its entity recomputed every
+  // chart).
+  let dataVersion = 0;
+  let snapshot = { version: 0, dataVersion: 0, nodes: 0, edges: 0, danglingEdges: 0, selection: [], status, viewStats, history: { canUndo: false, canRedo: false } };
   // Laid-out positions (kept across remounts; a docked tab switch must not
   // re-run the layout) and the selected node ids (read by the right panel).
   let positions = new Map();
@@ -95,15 +101,20 @@ export const createGraphStore = () => {
     flashTimer = setTimeout(() => {
       flashTimer = null;
       markers.traversal = { nodes: new Set(), edges: new Set() };
-      emit();
+      emit({ dataChanged: false });
     }, HIGHLIGHT_FLASH_MS);
   };
   const listeners = new Set();
 
-  const emit = () => {
+  // dataChanged: false for what changes only how the graph is shown (the
+  // highlights, which nodes are visible), not its data.
+  const emit = ({ dataChanged = true } = {}) => {
     version += 1;
-    propertyKeysCache = null;
-    snapshot = { version, nodes: graph.order, edges: graph.size, danglingEdges, selection, status, viewStats, history: historyState() };
+    if (dataChanged) {
+      dataVersion += 1;
+      propertyKeysCache = null;
+    }
+    snapshot = { version, dataVersion, nodes: graph.order, edges: graph.size, danglingEdges, selection, status, viewStats, history: historyState() };
     listeners.forEach((listener) => listener());
   };
 
@@ -344,7 +355,7 @@ export const createGraphStore = () => {
       });
     }
     flashTraversal(traversedNodes, traversedEdges, viewKey, { persist });
-    emit();
+    emit({ dataChanged: false });
     return { added: visible.size - before, skipped };
   };
 
@@ -377,7 +388,7 @@ export const createGraphStore = () => {
       else edit.removed.add(id);
     });
     flashTraversal(new Set(anchors), new Set(), viewKey);
-    emit();
+    emit({ dataChanged: false });
     return toHide.size;
   };
 
@@ -394,7 +405,7 @@ export const createGraphStore = () => {
     graph.forEachEdge(id, hidden, (key) => edges.add(key));
     graph.forEachEdge(hidden, id, (key) => edges.add(key));
     flashTraversal(new Set([hidden]), edges, viewKey);
-    emit();
+    emit({ dataChanged: false });
     return hidden;
   };
 
@@ -409,7 +420,7 @@ export const createGraphStore = () => {
       if (visible.size >= cap) skipped += 1;
       else makeVisible(edit, id, visible);
     });
-    if (visible.size !== before) emit();
+    if (visible.size !== before) emit({ dataChanged: false });
     return { added: visible.size - before, skipped };
   };
 
@@ -424,7 +435,7 @@ export const createGraphStore = () => {
       added: target.filter((id) => !base.has(id)),
       removed: new Set([...base].filter((id) => !wanted.has(id))),
     };
-    emit();
+    emit({ dataChanged: false });
     return target.length;
   };
 
@@ -801,7 +812,7 @@ export const createGraphStore = () => {
       if (index >= 0) edit.added.splice(index, 1);
       else edit.removed.add(id);
     });
-    emit();
+    emit({ dataChanged: false });
     return targets.length;
   };
   // Nodes hidden in this view (by Hide or Collapse Neighbourhood).
@@ -811,7 +822,7 @@ export const createGraphStore = () => {
     const count = hiddenCount(viewKey);
     if (!count) return 0;
     visibility.removed = new Set();
-    emit();
+    emit({ dataChanged: false });
     return count;
   };
 
@@ -854,7 +865,8 @@ export const createGraphStore = () => {
     if (!historyAllowed()) return false;
     pushLimited(history.undo, takeSnapshot(context));
     history.redo = [];
-    emit();
+    // Only the undo state changed (the action itself changes the data).
+    emit({ dataChanged: false });
     return true;
   };
   // -> { context, selection } of the restored state, or null if none
@@ -905,7 +917,7 @@ export const createGraphStore = () => {
   const setMarkers = (kind, next) => {
     if (!MARKER_KINDS.includes(kind)) return;
     markers[kind] = { nodes: new Set(next?.nodes || []), edges: new Set(next?.edges || []) };
-    emit();
+    emit({ dataChanged: false });
   };
 
   // Keys offered for search / limit / label-by (GA:1706 getAllNodeKeys).
@@ -986,7 +998,7 @@ export const createGraphStore = () => {
       clearing.forEach((kind) => {
         markers[kind] = { nodes: new Set(), edges: new Set() };
       });
-      emit();
+      emit({ dataChanged: false });
     },
     setMarkers,
     propertyKeys,

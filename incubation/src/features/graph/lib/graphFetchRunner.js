@@ -20,7 +20,7 @@ export const runGraphFetch = async ({ store, apiFetch, payload, source, label = 
     const result = await fetchGraphProgressive(apiFetch, payload, {
       signal: controller.signal,
       onQueued: () => {
-        if (current() && !received) store.setStatus({ state: 'queued', message: `The ${label} request is queued on the backend…`, source, request: payload });
+        if (current() && !received) store.setStatus({ state: 'queued', message: `The ${label} request is queued on the Service…`, source, request: payload });
       },
       onChunk: (chunk) => {
         if (!current()) return;

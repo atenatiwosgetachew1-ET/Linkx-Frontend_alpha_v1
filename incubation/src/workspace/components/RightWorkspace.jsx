@@ -31,10 +31,10 @@ function RightWorkspace({ displayName, workspace, logoSrc, isRightCollapsed = fa
   const [activeTab, setActiveTab] = useState('overview');
   const activeTabConfig = contextTabs.find((tab) => tab.id === activeTab) || contextTabs[0];
 
-  // 1. The entire panel is disabled if NO Source, Graph, or Chart window is open
+  // 1. The entire panel is disabled if NO Source, Graph, Chart or Table window is open
   const hasAnalysisWindow = Boolean(
     workspace?.windows?.some((w) =>
-      [WORKSPACE_WINDOW_TYPES.SOURCE, WORKSPACE_WINDOW_TYPES.GRAPH, WORKSPACE_WINDOW_TYPES.CHART].includes(w.type)
+      [WORKSPACE_WINDOW_TYPES.SOURCE, WORKSPACE_WINDOW_TYPES.GRAPH, WORKSPACE_WINDOW_TYPES.CHART, WORKSPACE_WINDOW_TYPES.TABLE].includes(w.type)
     )
   );
   const isPanelDisabled = !hasAnalysisWindow;
@@ -42,9 +42,10 @@ function RightWorkspace({ displayName, workspace, logoSrc, isRightCollapsed = fa
   // 2. Identify the currently active (top focused) window
   const activeWindow = workspace?.activeWindow || workspace?.windows?.find((w) => w.id === workspace?.activeWindowId) || workspace?.windows?.at(-1) || null;
 
-  // 3. Determine if the active window is Graph or Chart
+  // 3. Determine if the active window is Graph, Chart or Table
   const isGraphOrChartActive = Boolean(
-    activeWindow && (activeWindow.type === WORKSPACE_WINDOW_TYPES.GRAPH || activeWindow.type === WORKSPACE_WINDOW_TYPES.CHART)
+    // The Chart and Table windows are twins (analyst decision 2026-11-18).
+    activeWindow && [WORKSPACE_WINDOW_TYPES.GRAPH, WORKSPACE_WINDOW_TYPES.CHART, WORKSPACE_WINDOW_TYPES.TABLE].includes(activeWindow.type)
   );
 
   // 4. Per-tab disabled rules:

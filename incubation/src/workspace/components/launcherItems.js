@@ -1,5 +1,6 @@
 import { SOURCE_PERMISSIONS } from '../../auth/permissions.js';
 import { WORKSPACE_CONTEXT_TABS, WORKSPACE_WINDOW_TYPES } from '../state/workspaceTypes.js';
+import { CHART_ICON, TABLE_ICON } from '../../shared/icons/windowIcons.js';
 
 export const launcherItems = [
   {
@@ -23,7 +24,16 @@ export const launcherItems = [
     label: 'Chart',
     windowType: WORKSPACE_WINDOW_TYPES.CHART,
     contextTab: WORKSPACE_CONTEXT_TABS.OVERVIEW,
-    path: 'M5 20V10m7 10V4m7 16v-7M3 20h18',
+    path: CHART_ICON,
+  },
+  {
+    // A Graph window's data as rows (G3.5 i2 #5); opened unlinked, it offers
+    // the open Graph windows to link to.
+    id: 'table',
+    label: 'Table',
+    windowType: WORKSPACE_WINDOW_TYPES.TABLE,
+    contextTab: WORKSPACE_CONTEXT_TABS.OVERVIEW,
+    path: TABLE_ICON,
   },
   {
     id: 'reports',

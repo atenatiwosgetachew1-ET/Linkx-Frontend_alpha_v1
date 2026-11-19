@@ -1,12 +1,17 @@
 import React from 'react';
 
 import { semanticLegend } from '../lib/graphModel.js';
+import { describeRule } from '../lib/conditionalFormatting.js';
+import { RuleSample } from './GraphFormattingBox.jsx';
 
 // Production's edge semantic legend (graphs_basic.html #semantic-legend):
 // bottom-left of the canvas, "Relationship Types", one line sample per edge
 // semantic, worded for CDR or NBE. It takes no clicks (pointer-events none,
 // as production), so it never blocks the graph under it.
-export default function GraphSemanticLegend({ isCdr }) {
+//
+// rules: the conditional formatting rules that are on (i2 #4), listed under
+// "Formatting" with their look, so a screenshot explains itself.
+export default function GraphSemanticLegend({ isCdr, rules = [] }) {
   return (
     <div className="graph_semantic_legend" role="note" aria-label="Relationship Types">
       <strong>Relationship Types</strong>
@@ -19,6 +24,17 @@ export default function GraphSemanticLegend({ isCdr }) {
           <span>{entry.text}</span>
         </div>
       ))}
+      {rules.length ? (
+        <>
+          <strong className="graph_semantic_legend_sub">Formatting</strong>
+          {rules.map((rule) => (
+            <div key={rule.id} className="graph_semantic_legend_row is-rule">
+              <RuleSample rule={rule} />
+              <span>{rule.name || describeRule(rule)}</span>
+            </div>
+          ))}
+        </>
+      ) : null}
     </div>
   );
 }

@@ -157,7 +157,7 @@ function SourceSessionNotifications() {
       if (!subscribed.has(sessionId)) return;
       const base = String(payload.message || payload.text || '').trim();
       notifyRef.current({
-        title: code || 'Backend Notice',
+        title: code || 'Service Notice',
         message: base || (code ? `[${code}]` : 'Notification received.'),
         source: payload.source || `Session ${sessionId}`,
         level: ['info', 'success', 'warning', 'error'].includes(payload.level) ? payload.level : 'info',

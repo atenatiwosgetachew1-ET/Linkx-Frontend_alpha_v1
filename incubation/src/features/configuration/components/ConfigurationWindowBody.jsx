@@ -7,6 +7,7 @@ import { useWorkspaceActions } from '../../../workspace/hooks/useWorkspace.js';
 import WindowLoadScreen from '../../../shared/components/WindowLoadScreen.jsx';
 import { ConnectionsPanel, RulesPanel, SystemPanel, ToolsPanel } from './ConfigurationPanels.jsx';
 import { CONFIG_PROFILE_KEY, profileFromConfiguration, setProfileSettings } from '../../graph/lib/nodeProfile.js';
+import { CONFIG_FORMATTING_KEY, setDomainFormatting } from '../../graph/lib/conditionalFormatting.js';
 import DetectionSensitivityPanel from './DetectionSensitivityPanel.jsx';
 import ActivityLogPanel from './ActivityLogPanel.jsx';
 import LxacDialog from './LxacDialog.jsx';
@@ -37,7 +38,7 @@ const TABS = [
   { id: 'system', label: 'System', description: 'Domain pillar, session timeout policy and service toggles.' },
   { id: 'connections', label: 'Connections', description: 'Broker, storage and search endpoints used by Source windows.' },
   { id: 'tools', label: 'Tools', description: 'Graph tool (Neo4j) connection defaults.' },
-  { id: 'rules', label: 'Rules', description: 'Analysis rules, column mapping, classified entities and profile mapping fields.' },
+  { id: 'rules', label: 'Rules', description: 'Analysis rules, column mapping, classified entities, profile mapping and formatting rules.' },
   { id: 'sensitivity', label: 'Detection sensitivity', description: 'Rule thresholds and score lineage.', permission: 'config:read' },
   { id: 'activity', label: 'Activity log', description: 'Session cleanup and cleanup audit trail.', permission: 'users:manage' },
 ];
@@ -263,6 +264,10 @@ export default function ConfigurationWindowBody({ windowItem }) {
       // `actor_profile` (B-23), so the Graph windows keep the saved mapping.
       if (draftRef.current?.[CONFIG_PROFILE_KEY]) {
         setProfileSettings(getActiveDomainKey(sessionConfig), profileFromConfiguration(draftRef.current[CONFIG_PROFILE_KEY]));
+      }
+      // Formatting rules: the same until the backend keeps them (B-24).
+      if (Array.isArray(draftRef.current?.[CONFIG_FORMATTING_KEY])) {
+        setDomainFormatting(getActiveDomainKey(sessionConfig), draftRef.current[CONFIG_FORMATTING_KEY]);
       }
       if (result.returned) {
         notify({ title: 'Configuration saved', message: 'Configuration saved successfully.', level: 'success', source: 'Configuration' });

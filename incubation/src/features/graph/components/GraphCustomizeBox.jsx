@@ -3,7 +3,7 @@ import React, { useCallback, useEffect, useId, useLayoutEffect, useRef, useState
 import {
   COLOR_BEHAVIORS, EDGE_STYLES, EDGE_WIDTH_RANGE, NODE_SHAPES, NODE_SIZES, buildNodeColor,
 } from '../lib/graphEditing.js';
-import { iconForTheme, resolveIconUrl } from '../lib/graphIcons.js';
+import { iconForTheme, resolveIconUrl, themeModeOf } from '../lib/graphIcons.js';
 import { IconAlbum, LiveColor, Swatches } from './GraphAdjustBox.jsx';
 
 // Customize popup (analyst decision 2026-11-16; replaces production's node /
@@ -30,17 +30,6 @@ import { IconAlbum, LiveColor, Swatches } from './GraphAdjustBox.jsx';
 // theme's own); onApply({ node, edge }) with the changed fields of each;
 // onClose().
 
-// Light or dark from the canvas background (as GraphCanvas), for the icons.
-const themeModeOf = (element) => {
-  if (!element) return 'light';
-  const probe = document.createElement('span');
-  probe.style.display = 'none';
-  probe.style.color = 'var(--graph-canvas-bg)';
-  element.appendChild(probe);
-  const rgb = /rgba?\(\s*(\d+)[,\s]+(\d+)[,\s]+(\d+)/.exec(getComputedStyle(probe).color);
-  probe.remove();
-  return rgb && (Number(rgb[1]) * 299 + Number(rgb[2]) * 587 + Number(rgb[3]) * 114) / 1000 < 128 ? 'dark' : 'light';
-};
 
 const KINDS = { node: { one: 'node', many: 'nodes', title: 'Node' }, edge: { one: 'link', many: 'links', title: 'Link' } };
 // Applied in this order: the colour effect before the fill, the border last.
@@ -385,6 +374,16 @@ const albumPlace = (button, stage) => {
     left, width, arrow: centre - left, ...(fitsBelow || at.top - box.top < ALBUM_HEIGHT ? { top: below } : { bottom: above }),
   };
 };
+
+// The album popover for another popup (conditional formatting): placed from
+// its icon button within `stage` (the popup's backdrop).
+export function IconAlbumPopover({ anchor, stage, ...props }) {
+  const [place, setPlace] = useState(null);
+  useLayoutEffect(() => {
+    if (anchor && stage) setPlace(albumPlace(anchor, stage));
+  }, [anchor, stage]);
+  return place ? <AlbumPopover place={place} {...props} /> : null;
+}
 
 function AlbumPopover({ place, mode, value, onPick, onClose }) {
   const ref = useRef(null);

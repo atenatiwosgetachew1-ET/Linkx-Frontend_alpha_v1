@@ -168,6 +168,28 @@ describe('GraphOverlayPanel', () => {
     fireEvent.pointerUp(document);
   });
 
+  it('folded with nothing to show it is dead: the bubble rechecks (turning) instead of opening', async () => {
+    let rechecks = 0;
+    const bubble = ({ refresh, spinning }) => <span data-testid="node">{refresh ? `refresh${spinning ? ' spinning' : ''}` : '×2'}</span>;
+    const { rerender } = render(<Card bubble={bubble} empty onRefresh={() => { rechecks += 1; }} />);
+    const panel = screen.getByRole('region', { name: 'Card' });
+    expect(panel).toHaveClass('is-dead');
+    expect(screen.getByTestId('node')).toHaveTextContent('refresh');
+    expect(screen.getByRole('tooltip')).toHaveTextContent('click to recheck');
+    await userEvent.click(screen.getByRole('button', { name: 'Recheck Card' }));
+    expect(rechecks).toBe(1);
+    expect(panel).toHaveClass('is-bubble');
+    expect(screen.queryByText('Body')).not.toBeInTheDocument();
+    expect(screen.getByTestId('node')).toHaveTextContent('refresh spinning');
+    expect(screen.getByRole('tooltip')).toHaveTextContent('Rechecking…');
+    // Something found: alive again, and the bubble opens the card.
+    rerender(<Card bubble={bubble} empty={false} onRefresh={() => {}} />);
+    expect(panel).not.toHaveClass('is-dead');
+    expect(screen.getByTestId('node')).toHaveTextContent('×2');
+    await userEvent.click(screen.getByRole('button', { name: 'Expand Card' }));
+    expect(screen.getByText('Body')).toBeInTheDocument();
+  });
+
   it('Escape folds an open bubble card when allowed, but not from a typed-in field', async () => {
     const { rerender } = render(<Card bubble={<span>node</span>} escapeFolds />);
     const panel = screen.getByRole('region', { name: 'Card' });

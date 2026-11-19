@@ -10,8 +10,8 @@ export const OVERLAY_COMPONENTS = Object.freeze([
   { key: 'legend', label: 'Relationship legend', hint: 'Line types, bottom-left' },
   { key: 'glyphs', label: 'Node badges', hint: 'Alert, pinned, flag, note, group and merged badges on nodes' },
   { key: 'alerts', label: 'Graph Alerts', hint: 'Alert card, bottom-right' },
-  { key: 'pinned', label: 'Pinned Evidence', hint: 'Pinned items card, bottom-right' },
-  { key: 'combined', label: 'Merged & Grouped', hint: 'Merged and grouped nodes card, bottom-right' },
+  { key: 'pinned', label: 'Pinned Evidence', hint: 'Pinned items card, top-right' },
+  { key: 'combined', label: 'Merged & Grouped', hint: 'Merged and grouped nodes card, top-left' },
 ]);
 
 export const DEFAULT_OVERLAY_PREFS = Object.freeze({ minimap: true, legend: true, glyphs: true, alerts: true, pinned: true, combined: true });

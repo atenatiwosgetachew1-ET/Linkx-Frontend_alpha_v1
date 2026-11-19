@@ -50,7 +50,11 @@ describe('context menu items (production GB:2096)', () => {
 
   it('groups into submenus so the menu stays short (production order kept inside)', () => {
     const canvas = contextMenuItems({ kind: 'canvas', hasClipboard: true });
-    expect(topLevel(canvas)).toEqual(['Paste', 'Add', 'Select', 'Analyze', 'Views', 'Edge Bundling', 'Alert Rules', 'Pinned Evidence']);
+    expect(topLevel(canvas)).toEqual(['Paste', 'Add', 'Select', 'Analyze', 'Open as', 'Views', 'Edge Bundling', 'Alert Rules', 'Pinned Evidence']);
+    // The companion windows, twins, out of Analyze (not analysis).
+    const openAs = canvas.items.find((entry) => entry.label === 'Open as');
+    expect(openAs.items.map((entry) => entry.label)).toEqual(['Table', 'Chart']);
+    expect(canvas.items.find((entry) => entry.label === 'Analyze').items.map((entry) => entry.label)).not.toContain('Show in Table');
     expect(canvas.items[1].items.map((entry) => entry.label)).toEqual(['Add Node', 'Label', 'Comment Box', 'Text Block', 'Event Frame', 'Theme Line', 'OLE Object']);
     // G3.1 / G3.3: everything under Add works; Theme Line needs two selected nodes.
     expect(canvas.items[1]).toMatchObject({ group: 'add', enabled: true });

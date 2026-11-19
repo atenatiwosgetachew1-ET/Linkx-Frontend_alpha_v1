@@ -13,6 +13,21 @@ import { WORKSPACE_WINDOW_TYPES } from '../../../workspace/state/workspaceTypes.
 import { clearEvidenceGraphs } from '../lib/evidenceGraphs.js';
 import ReportsWindowBody from './ReportsWindowBody.jsx';
 
+// The PDF is drawn for real; the logo, portraits and snapshot need a
+// browser (no image loading or canvas in jsdom).
+vi.mock('../../graph/report/graphReportPdf.js', async (importOriginal) => {
+  const original = await importOriginal();
+  return {
+    ...original,
+    rasterizeSvg: vi.fn(async () => null),
+    loadPortrait: vi.fn(async () => null),
+    renderGraphReportPdf: vi.fn((...args) => original.renderGraphReportPdf(...args)),
+  };
+});
+vi.mock('../../graph/lib/offscreenSnapshot.js', async (importOriginal) => ({ ...(await importOriginal()), renderOffscreenSnapshot: vi.fn(async () => null) }));
+const { renderGraphReportPdf } = await import('../../graph/report/graphReportPdf.js');
+const { renderOffscreenSnapshot } = await import('../../graph/lib/offscreenSnapshot.js');
+
 afterEach(() => {
   cleanup();
   clearEvidenceGraphs();
@@ -30,7 +45,7 @@ const REPORTS = {
     { id: 22, report_type: 'Vigilance', source_system: 'xvigilance', status: 'completed', created_at: inRunWindow, payload: { fraud_score: 30, score_band: 'medium', run_id: 'run-8' } },
   ],
   evidence: [
-    { id: 31, report_type: 'Evidence', source_system: 'svc-aml', status: 'success', created_at: now, external_reference_id: 'EV-1', payload: { trace_id: 'trace-1', fraud_score: 70, score_band: 'high', flagged_rules: ['FUND_FLOW'], score_evidence: { config_version: 'v3', base_score_applied: 40, node_count_bonus: 10, financial_bonus: 20 } } },
+    { id: 31, report_type: 'Evidence', source_system: 'svc-aml', status: 'success', created_at: now, external_reference_id: 'EV-1', payload: { trace_id: 'trace-1', resolved_domain: 'microfinance', fraud_score: 70, score_band: 'high', flagged_rules: ['FUND_FLOW'], score_evidence: { config_version: 'v3', base_score_applied: 40, node_count_bonus: 10, financial_bonus: 20 } } },
   ],
 };
 
@@ -183,8 +198,63 @@ describe('ReportsWindowBody', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Open graph' }));
     const graphs = workspaceRef.windows.filter((item) => item.type === WORKSPACE_WINDOW_TYPES.GRAPH);
     expect(graphs).toHaveLength(1);
-    expect(graphs[0].metadata.evidence).toEqual({ traceId: 'trace-1', reportId: 31, externalReferenceId: 'EV-1' });
+    expect(graphs[0].metadata.evidence).toEqual({ traceId: 'trace-1', reportId: 31, externalReferenceId: 'EV-1', domain: 'microfinance', domainDistribution: [], score: { value: '70', band: 'high' }, systemRules: ['FUND_FLOW'] });
     expect(apiFetch.mock.calls.filter(([url]) => url === '/get_graph')).toHaveLength(1); // probe result reused
+  });
+
+  it('Download report: the NBE graph report of the evidence, without opening a Graph window', async () => {
+    renderReports();
+    await screen.findByText('core-banking');
+    await userEvent.click(screen.getByRole('tab', { name: 'Service evidence' }));
+    await userEvent.click(await screen.findByText('svc-aml'));
+    const download = await screen.findByRole('button', { name: 'Download report' });
+    await waitFor(() => expect(download).toBeEnabled());
+    await userEvent.click(download);
+    const form = await screen.findByRole('dialog', { name: 'Generate evidence report' });
+    expect(within(form).getByLabelText('Analysis Reference ID')).toHaveValue('EV-1');
+    expect(within(form).getByLabelText('System Flagged Rule')).toHaveValue('FUND_FLOW');
+    expect(within(form).getByLabelText('Graph Alert')).toHaveValue('Not applied (generated from Reports)');
+    expect(within(form).getByLabelText('Purpose')).toHaveValue('Link analysis of 2 entities and 1 relationships.');
+    expect(within(form).getByLabelText('Key findings').value).not.toBe('');
+    expect(within(form).getByLabelText('Report title')).toHaveValue('Evidence Report · EV-1');
+    // The Graph options: what the picture draws.
+    expect(within(form).getByLabelText('Order by')).toHaveValue('__degree');
+    expect(within(form).getByLabelText('Direction')).toHaveValue('desc');
+    expect(within(form).getByLabelText('Amount')).toHaveValue(250);
+    // Orientation with the Graph window's layout options.
+    expect(within(form).getByLabelText('Orientation')).toHaveValue('concentric');
+    expect(within(form).queryByLabelText('Group property')).not.toBeInTheDocument();
+    await userEvent.selectOptions(within(form).getByLabelText('Orientation'), 'grouped');
+    expect(within(form).getByLabelText('Group by')).toHaveValue('node_identity');
+    expect(within(form).getByLabelText('Group property')).toBeDisabled();
+    await userEvent.selectOptions(within(form).getByLabelText('Group by'), 'by_key');
+    expect(within(form).getByLabelText('Group property')).toBeEnabled();
+    await userEvent.selectOptions(within(form).getByLabelText('Group property'), 'id');
+    await userEvent.selectOptions(within(form).getByLabelText('Orientation'), 'layered');
+    expect(within(form).getByLabelText('Layers by')).toHaveValue('by_key');
+    await userEvent.selectOptions(within(form).getByLabelText('Flow'), 'LR');
+    await userEvent.selectOptions(within(form).getByLabelText('Identify entities by'), 'id');
+    await userEvent.clear(within(form).getByLabelText('Amount'));
+    await userEvent.type(within(form).getByLabelText('Amount'), '40');
+    const blobs = [];
+    Object.assign(URL, { createObjectURL: vi.fn((blob) => { blobs.push(blob); return 'blob:x'; }), revokeObjectURL: vi.fn() });
+    const clicked = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    await userEvent.click(within(form).getByRole('button', { name: 'Generate PDF' }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Generate evidence report' })).not.toBeInTheDocument(), { timeout: 5000 });
+    expect(renderOffscreenSnapshot).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ order: '__degree', direction: 'desc', layout: 'layered', flow: 'LR', layerMode: 'by_key', layerKey: 'id', amount: '40' }));
+    // The picture names entities by the chosen column.
+    expect(renderOffscreenSnapshot.mock.calls.at(-1)[1].nameOf('1')).toBe('1');
+    const report = renderGraphReportPdf.mock.calls.at(-1)[0];
+    expect(report.cover.fields).toContainEqual(['Analysis Reference ID', 'EV-1']);
+    expect(report.cover.domain).toBe('Microfinance'); // the evidence's own domain
+    expect(report.cover.title).toBe('Evidence Report · EV-1');
+    expect(report.kind).toBe('evidence');
+    expect(clicked.mock.contexts.at(-1).download).toMatch(/^LinkxEvidence_Report_EV-1_\d+\.pdf$/);
+    expect(report.score).toEqual({ value: '70', band: 'high' });
+    expect(blobs[0].type).toBe('application/pdf');
+    expect(clicked).toHaveBeenCalled();
+    expect(workspaceRef.windows.filter((item) => item.type === WORKSPACE_WINDOW_TYPES.GRAPH)).toHaveLength(0);
+    clicked.mockRestore();
   });
 
   it('has no graph outside Service evidence', async () => {

@@ -17,6 +17,8 @@ import {
 } from '../lib/rulesLibrary.js';
 import RulesLibraryPanel from './RulesLibraryPanel.jsx';
 import GraphRenderingPanel from './GraphRenderingPanel.jsx';
+import ReportTemplatesPanel from './ReportTemplatesPanel.jsx';
+import { IMAGE_TEMPLATES } from '../../chart/lib/chartSnapTemplates.js';
 
 // Sections of the Libraries window (docs/libraries-plan.md §3). Only Rules is
 // live; the others arrive with the Graph / Chart windows and are shown so the
@@ -25,9 +27,9 @@ const SECTIONS = [
   { id: 'rules', label: 'Rules', scope: 'System', description: 'Rule sets available to this session.' },
   { id: 'graph_rendering', label: 'Graph rendering', scope: 'Device', description: 'GPU rendering for large graphs.' },
   { id: 'graph_defaults', label: 'Graph defaults', scope: 'Personal', description: 'Default layout, limits and labels.', pending: 'Arrives with the Graph window.' },
-  { id: 'charts', label: 'Charts', scope: 'Personal', description: 'Chart colours and metric scope.', pending: 'Arrives with the Chart window.' },
+  { id: 'charts', label: 'Charts', scope: 'System', description: 'Image templates for chart snaps.' },
   { id: 'icons', label: 'Icon sets', scope: 'System', description: 'Node icon albums.', pending: 'Arrives with graph editing.' },
-  { id: 'templates', label: 'Report templates', scope: 'System', description: 'Evidence report layouts.', pending: 'Arrives with the evidence report.' },
+  { id: 'templates', label: 'Report templates', scope: 'System', description: 'Report layouts and their previews.' },
 ];
 
 export default function LibrariesWindowBody({ windowItem }) {
@@ -158,6 +160,10 @@ export default function LibrariesWindowBody({ windowItem }) {
     );
   } else if (activeSection.id === 'graph_rendering') {
     content = <GraphRenderingPanel configuration={configuration} />;
+  } else if (activeSection.id === 'templates') {
+    content = <ReportTemplatesPanel />;
+  } else if (activeSection.id === 'charts') {
+    content = <ReportTemplatesPanel templates={IMAGE_TEMPLATES} title="Image templates" description="The frames chart snaps are drawn in. Built-in templates cannot be changed or removed." />;
   } else {
     content = (
       <RulesLibraryPanel

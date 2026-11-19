@@ -4,7 +4,7 @@ import ThemePicker from '../../../shared/theme/ThemePicker.jsx';
 import { useBackgroundAnimations } from '../../../utils/backgroundAnimations.js';
 import { useGlassEffects } from '../../../utils/glassEffects.js';
 import { useActiveGraph } from '../../../features/graph/lib/useActiveGraph.js';
-import { ChartPanelPending, GraphSettingsPanel } from '../../../features/graph/components/panel/GraphPanels.jsx';
+import { CompanionPanelNote, GraphSettingsPanel } from '../../../features/graph/components/panel/GraphPanels.jsx';
 
 // Right panel → Settings: "This graph" (or chart) first, then Appearance &
 // Theme (graph-chart-plan §3.11).
@@ -72,10 +72,10 @@ export default function WorkspaceSettingsTab({ workspace }) {
   return (
     <div className="workspace_context_settings_wrapper">
       {graph.windowItem ? <GraphSettingsPanel graph={graph} /> : null}
-      {graph.isChart ? (
-        <section className="workspace_context_section" aria-label="This chart">
-          <h2>This chart</h2>
-          <ChartPanelPending />
+      {graph.companion ? (
+        <section className="workspace_context_section" aria-label={graph.companion === 'table' ? 'This table' : 'This chart'}>
+          <h2>{graph.companion === 'table' ? 'This table' : 'This chart'}</h2>
+          <CompanionPanelNote kind={graph.companion} graphTitle={graph.companionGraph?.title || ''} />
         </section>
       ) : null}
 

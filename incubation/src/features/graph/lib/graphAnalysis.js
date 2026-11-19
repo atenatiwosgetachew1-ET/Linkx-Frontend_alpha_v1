@@ -12,6 +12,7 @@
 
 import { getNodeValue } from './graphModel.js';
 import { toFiniteNumber } from './graphSearch.js';
+import { DEFAULT_BANK_TYPOLOGIES, DEFAULT_CDR_TYPOLOGIES } from '../../configuration/lib/configModel.js';
 
 /* ── Shared helpers ─────────────────────────────────────────────────── */
 
@@ -481,6 +482,17 @@ export const degreeEncoding = (graph, visibleIds) => {
   });
 };
 
+// Network measures (G3.5 i2 #3): scores { id: value } -> the same size and
+// colour scale as Visualize by Degree (largest score biggest and warmest).
+export const scoreEncoding = (scores) => {
+  const entries = Object.entries(scores);
+  const max = entries.reduce((top, [, value]) => (value > top ? value : top), 0);
+  return entries.map(([id, value]) => {
+    const ratio = max > 0 ? value / max : 0;
+    return [id, { size: 14 + ratio * 26, color: nodeColor(hslToHex(Math.round(220 - ratio * 180), 70, 58)) }];
+  });
+};
+
 export const propertyEncoding = (graph, visibleIds, propertyKey) => {
   const key = String(propertyKey || '').trim();
   const ids = [...visibleIds].map(String).filter((id) => graph.hasNode(id));
@@ -541,6 +553,15 @@ const ANNOTATION_FILTER_KEY = {
 };
 export const nodeFilterKey = (node) => ANNOTATION_FILTER_KEY[String(node?.annotationType || '').toLowerCase()] || 'nodes';
 
+// A node's type (Select by Type, conditional formatting's "Node type"): its
+// annotation kind, else its node_identity (Entity / Source / Target Node),
+// else "Nodes".
+export const nodeTypeOf = (node) => {
+  const key = nodeFilterKey(node);
+  if (key !== 'nodes') return ELEMENT_TYPES.find((type) => type.id === key)?.label;
+  return node?.node_identity ? String(node.node_identity) : 'Nodes';
+};
+
 // The view with hidden element types left out (production
 // getFilteredVisibleGraphIds). Returns `view` itself when nothing is hidden.
 export const applyElementFilters = (graph, view, filters) => {
@@ -554,4 +575,24 @@ export const applyElementFilters = (graph, view, filters) => {
     return kept.has(graph.source(edgeId)) && kept.has(graph.target(edgeId));
   });
   return { ...view, nodeIds, edgeIds, filtered: true };
+};
+
+// The backend link analysis rules (the report's "System rule"; analyst
+// decision 2026-11-17) as the graph carries them: a relationship the
+// analysis made is labelled with its rule (FUND_FLOW, SMURFING, ...) and
+// carries the analysis metadata (edge_semantic / financial_flow /
+// directed_display), as production's resolveEdgeSemantic reads it.
+// -> [{ rule, links }], most links first.
+const KNOWN_RULES = new Set([...Object.keys(DEFAULT_BANK_TYPOLOGIES), ...Object.keys(DEFAULT_CDR_TYPOLOGIES)]);
+const RULE_NAME = /^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+$/;
+export const systemRulesOf = (graph) => {
+  const counts = new Map();
+  graph.forEachEdge((key, attributes) => {
+    const label = String(attributes?.rel_type ?? attributes?.label ?? attributes?.type ?? '').trim();
+    if (!label || label.length > 80) return;
+    const analysed = attributes?.edge_semantic !== undefined || attributes?.financial_flow !== undefined || attributes?.directed_display !== undefined;
+    if (!KNOWN_RULES.has(label) && !(analysed && RULE_NAME.test(label))) return;
+    counts.set(label, (counts.get(label) || 0) + 1);
+  });
+  return [...counts.entries()].map(([rule, links]) => ({ rule, links })).sort((a, b) => b.links - a.links || a.rule.localeCompare(b.rule));
 };

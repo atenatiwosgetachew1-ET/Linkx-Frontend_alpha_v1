@@ -368,7 +368,7 @@ export default function SourceWindowBody({ windowItem }) {
     : !canContinueWorkflow);
   const footerMessage = isStreamStep
     ? modeState.streamStatus === STREAM_STATUSES.STARTING
-      ? 'The ingestion job is queued on the backend. The live log appears once it starts.'
+      ? 'The ingestion job is queued on the Service. The live log appears once it starts.'
       : modeState.streamStatus === STREAM_STATUSES.RUNNING
         ? 'Streaming in progress. Show the results or terminate the ingestion.'
         : isStreamTerminating
@@ -552,7 +552,7 @@ export default function SourceWindowBody({ windowItem }) {
     } catch (error) {
       if (error?.name === 'AbortError' || request.signal.aborted) {
         // The backend may already have accepted the start: close it.
-        appendStreamLog(windowItem.id, 'Start request cancelled. Closing the stream session on the backend.', 'warn');
+        appendStreamLog(windowItem.id, 'Start request cancelled. Closing the stream session on the Service.', 'warn');
         patchModeState({ streamStatus: STREAM_STATUSES.IDLE, preparing: '' }, key);
         finishTask(taskId, TASK_STATUSES.TERMINATED, { message: 'Start request cancelled.' });
         endAbandonedStream(apiFetch, windowItem.id, { reason: 'start_cancelled' });
@@ -583,7 +583,7 @@ export default function SourceWindowBody({ windowItem }) {
       return;
     }
 
-    appendStreamLog(windowItem.id, started.queued ? 'Ingestion job queued on the backend.' : 'Stream accepted by the backend.');
+    appendStreamLog(windowItem.id, started.queued ? 'Ingestion job queued on the Service.' : 'Stream accepted by the Service.');
     // Stays "starting" until the first backend log line arrives (see the
     // effect below); the live indicator then follows the actual ingestion.
     if (started.logFile) followStreamLog(key, started.logFile, STREAM_STATUSES.STARTING);
@@ -639,7 +639,7 @@ export default function SourceWindowBody({ windowItem }) {
     finishTask(streamTaskRef.current, TASK_STATUSES.TERMINATED, { message: result.ok ? '' : result.message });
     if (result.ok) {
       appendStreamLog(windowItem.id, 'Streaming terminated by user.');
-      notify({ title: 'Stream terminated', message: 'The stream was stopped on the backend.', level: 'info', source: windowItem.title });
+      notify({ title: 'Stream terminated', message: 'The stream was stopped on the Service.', level: 'info', source: windowItem.title });
     } else {
       appendStreamLog(windowItem.id, result.message, 'warn');
       notify({ title: 'Stream state', message: result.message, level: 'warning', source: windowItem.title });
@@ -1265,7 +1265,7 @@ export default function SourceWindowBody({ windowItem }) {
       appendStreamLog(windowItem.id, `Domain changed to ${label}: ending the running stream.`, 'warn');
       finishTask(streamTaskRef.current, TASK_STATUSES.TERMINATED, { message: `Domain changed to ${label}.` });
       endAbandonedStream(apiFetch, windowItem.id, { reason: 'domain_changed' }).then((ended) => {
-        appendStreamLog(windowItem.id, ended?.ok ? 'Stream ended on the backend.' : (ended?.message || 'The stream end could not be confirmed.'), ended?.ok ? 'info' : 'warn');
+        appendStreamLog(windowItem.id, ended?.ok ? 'Stream ended on the Service.' : (ended?.message || 'The stream end could not be confirmed.'), ended?.ok ? 'info' : 'warn');
       });
     }
 

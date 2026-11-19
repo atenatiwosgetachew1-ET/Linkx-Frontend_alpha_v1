@@ -488,7 +488,7 @@ export default function ServiceAccountsPanel({ apiFetch, canManageUsers, onNotic
       if (payload.config && isConfigSchemaError(err)) {
         try {
           const { config: _config, ...fallback } = payload;
-          await finish(await apiFetch('/auth/admin/service-accounts', { method: 'POST', body: fallback }), "Account created, but the backend does not accept 'config' yet, so storage targets were not saved.");
+          await finish(await apiFetch('/auth/admin/service-accounts', { method: 'POST', body: fallback }), "Account created, but the Service does not accept 'config' yet, so storage targets were not saved.");
           return;
         } catch { /* show the original error */ }
       }
@@ -520,7 +520,7 @@ export default function ServiceAccountsPanel({ apiFetch, canManageUsers, onNotic
         try {
           const { config: _config, ...fallback } = patch;
           await patchAccount(apiFetch, account.id, fallback);
-          onNotice?.({ title: 'Service account updated', message: `${account.client_id} was updated, but the backend does not accept 'config' yet.`, source: 'Admin', level: 'warning' });
+          onNotice?.({ title: 'Service account updated', message: `${account.client_id} was updated, but the Service does not accept 'config' yet.`, source: 'Admin', level: 'warning' });
           setExpandedId('');
           await loadAccounts();
           return;

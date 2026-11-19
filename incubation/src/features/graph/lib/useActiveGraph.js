@@ -41,7 +41,12 @@ export function useActiveGraph(workspace) {
 
   return {
     windowItem,
-    isChart: active?.type === WORKSPACE_WINDOW_TYPES.CHART,
+    // A Chart or Table window (twins; analyst decision 2026-11-18): its
+    // kind, and the Graph window it follows.
+    companion: active?.type === WORKSPACE_WINDOW_TYPES.CHART ? 'chart' : active?.type === WORKSPACE_WINDOW_TYPES.TABLE ? 'table' : null,
+    companionGraph: active?.type === WORKSPACE_WINDOW_TYPES.CHART ? (workspace?.windows?.find((item) => item.id === active.metadata?.chartGraph) || null)
+      : active?.type === WORKSPACE_WINDOW_TYPES.TABLE ? (workspace?.windows?.find((item) => item.id === active.metadata?.tableGraph) || null)
+        : null,
     store,
     snapshot,
     settings,

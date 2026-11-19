@@ -24,8 +24,17 @@ export function GraphPanelHeader({ windowItem }) {
 }
 
 // Shown in the tabs while a Chart window is active (Chart is a later phase).
-export function ChartPanelPending() {
-  return <p className="workspace_context_hint">Chart controls arrive with the Chart window.</p>;
+// A Chart or Table window is active (twins; analyst decision 2026-11-18):
+// its options are in its own toolbar; the Graph window it follows has the
+// graph's. kind: 'chart' | 'table'; graphTitle: the linked Graph window's.
+export function CompanionPanelNote({ kind, graphTitle = '' }) {
+  const name = kind === 'table' ? 'Table' : 'Chart';
+  return (
+    <p className="workspace_context_hint">
+      {graphTitle ? `This ${name} window follows ${graphTitle}.` : `This ${name} window is not linked to a Graph window yet.`}
+      {' '}Its options are in its own toolbar; select {graphTitle ? 'that Graph window' : 'a Graph window'} for the graph&apos;s settings.
+    </p>
+  );
 }
 
 /* ── Info ───────────────────────────────────────────────────────────── */
@@ -240,6 +249,9 @@ const LAYOUT_LABELS = {
   radial: 'Radial',
   grid: 'Grid',
   spiral: 'Spiral',
+  // G3.5 i2 #6 (not in production).
+  peacock: 'Peacock (hubs and their leaves)',
+  grouped: 'Grouped (clusters by type or property)',
 };
 
 function RangeInputs({ limit, onCommit, disabled }) {
@@ -273,6 +285,20 @@ function RangeInputs({ limit, onCommit, disabled }) {
 export function GraphSettingsPanel({ graph }) {
   const { windowItem, store, snapshot, settings, updateSettings } = graph;
   const keys = useMemo(() => (snapshot.nodes ? store.propertyKeys() : []), [store, snapshot.version, snapshot.nodes]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Link properties holding numbers (link aggregation's total).
+  const edgeKeys = useMemo(() => {
+    const found = new Set();
+    store.graph().forEachEdge((key, attributes) => {
+      Object.entries(attributes).forEach(([name, value]) => {
+        if (name.startsWith('__') || ['from', 'to', 'id', 'width', 'color', 'dashes', 'smooth', 'arrows'].includes(name)) return;
+        const numeric = typeof value === 'number'
+          ? Number.isFinite(value)
+          : typeof value === 'string' && value.trim() !== '' && Number.isFinite(Number(value.replace(/[,\s]/g, '')));
+        if (numeric) found.add(name);
+      });
+    });
+    return [...found].sort();
+  }, [store, snapshot.version]); // eslint-disable-line react-hooks/exhaustive-deps
   const hasData = snapshot.nodes > 0;
   const patch = (next) => updateSettings({ ...settings, ...next });
   const count = settings.limit.max - settings.limit.min;
@@ -350,6 +376,10 @@ export function GraphSettingsPanel({ graph }) {
           <input type="checkbox" checked={settings.actorProfile} onChange={(event) => patch({ actorProfile: event.target.checked })} />
           <span>Show actor profile on node click</span>
         </label>
+        <label className="workspace_context_switch" title="The domain's formatting rules (Configuration ▸ Rules ▸ Formatting rules), below this graph's own">
+          <input type="checkbox" checked={settings.useDomainRules} onChange={(event) => patch({ useDomainRules: event.target.checked })} />
+          <span>Use domain formatting rules</span>
+        </label>
 
         <h3 className="graph_panel_subheading">Edges</h3>
         <label>
@@ -360,6 +390,34 @@ export function GraphSettingsPanel({ graph }) {
             {keys.map((key) => <option key={key} value={key}>By {key}</option>)}
           </select>
         </label>
+
+        {/* Link aggregation (G3.5 i2 #2; not in production): view only. */}
+        <label className="workspace_context_switch" title="Links between the same two nodes drawn as one, with how many and a total; double-click one to expand it">
+          <input type="checkbox" checked={settings.linkAggregation.on} onChange={(event) => patch({ linkAggregation: { ...settings.linkAggregation, on: event.target.checked } })} />
+          <span>Aggregate links</span>
+        </label>
+        {settings.linkAggregation.on ? (
+          <>
+            <label>
+              <span>Aggregate</span>
+              <select value={settings.linkAggregation.mode} onChange={(event) => patch({ linkAggregation: { ...settings.linkAggregation, mode: event.target.value } })}>
+                <option value="combined">Both directions together</option>
+                <option value="direction">Each direction apart</option>
+              </select>
+            </label>
+            <label>
+              <span>Total of</span>
+              <select value={settings.linkAggregation.totalKey} disabled={!hasData && !settings.linkAggregation.totalKey} onChange={(event) => patch({ linkAggregation: { ...settings.linkAggregation, totalKey: event.target.value } })}>
+                <option value="">No total (count only)</option>
+                {settings.linkAggregation.totalKey && !edgeKeys.includes(settings.linkAggregation.totalKey)
+                  ? <option value={settings.linkAggregation.totalKey}>{settings.linkAggregation.totalKey} (not in this graph)</option>
+                  : null}
+                {edgeKeys.map((key) => <option key={key} value={key}>{key}</option>)}
+              </select>
+            </label>
+            <small className="workspace_context_hint">Double-click an aggregated link (or right-click ▸ Expand Links) to show its links; again to merge them back.{settings.edgeBundling ? ' Edge bundling is not applied while links are aggregated.' : ''}</small>
+          </>
+        ) : null}
 
         <h3 className="graph_panel_subheading">Layout</h3>
         <label>
@@ -399,6 +457,26 @@ export function GraphSettingsPanel({ graph }) {
               <option value="hubsize">Hub size</option>
             </select>
           </label>
+        ) : null}
+        {settings.layout.type === 'grouped' ? (
+          <>
+            <label>
+              <span>Group by</span>
+              <select value={settings.layout.layerMode === 'by_key' ? 'by_key' : 'node_identity'} onChange={(event) => patch({ layout: { ...settings.layout, layerMode: event.target.value } })}>
+                <option value="node_identity">Node type</option>
+                <option value="by_key">A property</option>
+              </select>
+            </label>
+            {settings.layout.layerMode === 'by_key' ? (
+              <label>
+                <span>Group property</span>
+                <select value={settings.layout.layerKey} disabled={!hasData} onChange={(event) => patch({ layout: { ...settings.layout, layerKey: event.target.value } })}>
+                  <option value="">Choose a property</option>
+                  {keys.map((key) => <option key={key} value={key}>{key}</option>)}
+                </select>
+              </label>
+            ) : null}
+          </>
         ) : null}
         {settings.layout.type === 'layered' ? (
           <>

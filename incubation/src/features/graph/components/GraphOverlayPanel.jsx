@@ -31,12 +31,19 @@ import React, { useEffect, useId, useLayoutEffect, useRef, useState } from 'reac
 // very corner of the canvas ('top-left', 'top-right' or 'bottom-right'; it
 // can still be dragged from there). It rises out of its bubble wherever that
 // is, and its resize grip is the corner facing into the canvas.
+// empty / onRefresh / refreshing (analyst decision 2026-11-17): folded with
+// nothing to show, the card is "dead": all grey (its tooltip too), dimmed
+// even on hover, and its bubble rechecks (onRefresh) instead of opening; the
+// bubble is then a function of { refresh, spinning } drawing the refresh sign
+// (turning while `refreshing` or for a moment after the click).
 const canAnimate = () => typeof window !== 'undefined'
   && typeof window.matchMedia === 'function'
   && !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 // Longest fold animation (CSS); the fold completes then even if no
 // animationend arrives.
 const SINK_MS = 320;
+// Shortest turn of the refresh sign, so a quick recheck is still seen.
+const SPIN_MS = 700;
 // Smallest size the top-left grip resizes to.
 const MIN_WIDTH = 240;
 const MIN_HEIGHT = 200;
@@ -54,7 +61,7 @@ export function GraphOverlayDock({ children }) {
 }
 
 export default function GraphOverlayPanel({
-  label, icon, title, summary, collapsed = false, onToggleCollapsed, onClose, position = null, onMoved, front = false, onActivate, className = '', bubble = null, mark = null, size = null, onResized, escapeFolds = false, tip = null, corner = 'bottom-right', children,
+  label, icon, title, summary, collapsed = false, onToggleCollapsed, onClose, position = null, onMoved, front = false, onActivate, className = '', bubble = null, mark = null, size = null, onResized, escapeFolds = false, tip = null, corner = 'bottom-right', empty = false, onRefresh, refreshing = false, children,
 }) {
   const resizing = useRef(null);
   const onResizedRef = useRef(onResized);
@@ -86,6 +93,19 @@ export default function GraphOverlayPanel({
     }
     onToggleCollapsed?.();
   };
+  // Dead (folded, nothing to show): the bubble rechecks.
+  const dead = Boolean(collapsed && bubble && empty);
+  const [spinUntil, setSpinUntil] = useState(false);
+  const spinTimer = useRef(0);
+  useEffect(() => () => clearTimeout(spinTimer.current), []);
+  const recheck = () => {
+    setSpinUntil(true);
+    clearTimeout(spinTimer.current);
+    spinTimer.current = setTimeout(() => setSpinUntil(false), SPIN_MS);
+    onRefresh?.();
+  };
+  const spinning = spinUntil || refreshing;
+  const bubbleNode = typeof bubble === 'function' ? bubble({ refresh: dead, spinning: dead && spinning }) : bubble;
   // 'arise' while unfolding out of the bubble, 'sink' while folding into it.
   const [motion, setMotion] = useState(null);
   const sinkTimer = useRef(0);
@@ -256,7 +276,7 @@ export default function GraphOverlayPanel({
     return (
       <section
         ref={ref}
-        className={`${classes} is-bubble`}
+        className={`${classes} is-bubble${dead ? ' is-dead' : ''}`}
         aria-label={label}
         onPointerDownCapture={front ? undefined : onActivate}
         onFocus={front ? undefined : onActivate}
@@ -265,19 +285,20 @@ export default function GraphOverlayPanel({
         <button
           type="button"
           className="graph_overlay_bubble"
-          aria-label={`Expand ${title}`}
+          aria-label={dead ? `Recheck ${title}` : `Expand ${title}`}
           aria-expanded="false"
+          aria-busy={dead && spinning ? 'true' : undefined}
           aria-describedby={tipId}
-          onClick={openFromBubble}
+          onClick={dead ? recheck : openFromBubble}
         >
-          {bubble}
+          {bubbleNode}
         </button>
         <span className="graph_overlay_hidden" role="status">{summary}</span>
         <span className="graph_overlay_tip" id={tipId} role="tooltip">
           <span className="graph_overlay_tip_title">{title}</span>
           <span className="graph_overlay_tip_summary">{summary}</span>
           {tip ? <span className="graph_overlay_tip_extra">{tip}</span> : null}
-          <span className="graph_overlay_tip_hint">Click to open</span>
+          <span className="graph_overlay_tip_hint">{dead ? (spinning ? 'Rechecking…' : 'Nothing here · click to recheck') : 'Click to open'}</span>
         </span>
       </section>
     );

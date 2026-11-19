@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  systemRulesOf,
   applyElementFilters,
   degreeEncoding,
   detectCommunities,
@@ -154,5 +155,23 @@ describe('parity with production on recorded graphs', () => {
         expect(findShortestPath(graph, a, b, { directed: true }).totalCost).toBe(cost(directed));
       });
     });
+  });
+});
+
+describe('systemRulesOf (report System rule)', () => {
+  it('reads the backend rules from the relationships the analysis drew', () => {
+    const store = createGraphStore();
+    store.replace({
+      nodes: [{ id: 'a' }, { id: 'b' }, { id: 'c' }],
+      edges: [
+        { from: 'a', to: 'b', label: 'FUND_FLOW', financial_flow: false, directed_display: true },
+        { from: 'b', to: 'c', label: 'FUND_FLOW' },
+        { from: 'a', to: 'c', label: 'SMURFING' },
+        { from: 'a', to: 'a', label: 'NEW_BANK_RULE', edge_semantic: 'NODE_FLAG' },
+        { from: 'b', to: 'a', label: 'TRANSFER' },
+        { from: 'c', to: 'a', label: 'PAID_OUT' },
+      ],
+    });
+    expect(systemRulesOf(store.graph())).toEqual([{ rule: 'FUND_FLOW', links: 2 }, { rule: 'NEW_BANK_RULE', links: 1 }, { rule: 'SMURFING', links: 1 }]);
   });
 });

@@ -16,6 +16,7 @@ import { clearEvidenceGraphs } from '../../features/reports/lib/evidenceGraphs.j
 import { clearConfigurationDrafts } from '../../features/configuration/lib/configDraft.js';
 import { clearKnownBuiltinRules } from '../../features/libraries/lib/rulesLibrary.js';
 import { clearGraphStores, disposeGraphStore } from '../../features/graph/lib/graphStore.js';
+import { forgetGraphState } from '../../features/graph/lib/graphLinkBus.js';
 import { forgetLayoutOwner } from '../../features/graph/lib/layoutClient.js';
 import { bindGraphStatusSocket, clearGraphStatus, markGraphSessionClosed, retainGraphStatus, setGraphStatusNotifier } from '../../features/graph/lib/graphStatus.js';
 import { streamingSessionIds } from '../../features/graph/lib/graphLinkFlow.js';
@@ -293,6 +294,7 @@ export default function WorkspaceFrame({ user, token, mainSessionId, sessionErro
       if (targetWindow?.type === WORKSPACE_WINDOW_TYPES.GRAPH) {
         disposeGraphStore(windowId);
         forgetLayoutOwner(windowId);
+        forgetGraphState(windowId); // its Table windows say it closed
       }
       closeWindow(windowId);
       return;

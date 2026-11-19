@@ -110,4 +110,15 @@ describe('LibrariesWindowBody: rules library (moved from Configuration)', () => 
     render(<Harness apiFetch={vi.fn()} permissions={[]} />);
     expect(screen.getByText('You need config:read to view the rules library.')).toBeInTheDocument();
   });
+
+  it('lists the built-in report template with its preview (Report templates)', async () => {
+    render(<Harness apiFetch={vi.fn()} />);
+    await userEvent.click(screen.getByRole('button', { name: /Report templates/ }));
+    const list = screen.getByRole('list', { name: 'Report templates' });
+    const item = within(list).getAllByRole('listitem')[0];
+    expect(within(item).getByText('NBE LinkX Graph Report')).toBeInTheDocument();
+    expect(within(item).getByText('Default')).toBeInTheDocument();
+    expect(within(item).getByText('Built-in')).toBeInTheDocument();
+    expect(within(item).getByRole('img', { name: 'NBE LinkX Graph Report preview' })).toHaveAttribute('src', expect.stringMatching(/nbe_graph_report_thumbnail\.png/));
+  });
 });

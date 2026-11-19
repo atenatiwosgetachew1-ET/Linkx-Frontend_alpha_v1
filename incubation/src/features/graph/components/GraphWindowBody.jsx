@@ -1,15 +1,21 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import React, { useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 
 import { useSession } from '../../../shared/session/useSession.js';
 import { useNotifications } from '../../../shared/notifications/useNotifications.js';
 import { useWorkspace } from '../../../workspace/hooks/useWorkspace.js';
-import { getActiveDomainKey } from '../../configuration/lib/configModel.js';
+import { formatDomainPillarLabel, getActiveDomainKey } from '../../configuration/lib/configModel.js';
 import { buildEvidencePayload, buildRelationshipPayload } from '../../../services/graphApi.js';
 import { getCachedEvidenceGraph, cacheEvidenceGraph } from '../../reports/lib/evidenceGraphs.js';
 import { markGpuNotCapable } from '../../../shared/device/gpuCapability.js';
 import { getTasksSnapshot, subscribeTasks } from '../../tasks/lib/taskRegistry.js';
 import { disposeGraphStore, getGraphStore } from '../lib/graphStore.js';
-import { forgetLayoutOwner } from '../lib/layoutClient.js';
+import { handleGraphActions, publishGraphState } from '../lib/graphLinkBus.js';
+import { CHART_ICON, TABLE_ICON, TIMELINE_ICON } from '../../../shared/icons/windowIcons.js';
+import {
+  GRAPH_FILE_ACCEPT, GRAPH_FILE_MAX_BYTES, buildGraphExport, downloadBlob, downloadDataUrl, exportFileName, parseGraphFile, printImage, readFileText, snapshotFileName,
+} from '../lib/graphFile.js';
+import GraphFileMenu from './GraphFileMenu.jsx';
+import { forgetLayoutOwner, requestMeasure } from '../lib/layoutClient.js';
 import { runGraphFetch } from '../lib/graphFetchRunner.js';
 import { getGraphSession, subscribeGraphSession } from '../lib/graphStatus.js';
 import { linkGraphToSession, linkableSources, resolveSourceWindow, unlinkGraph } from '../lib/graphLinkFlow.js';
@@ -20,7 +26,7 @@ import { RENDERERS, markGpuSuggested, resolveRenderer, setGpuPreference, shouldS
 import { WORKSPACE_WINDOW_TYPES } from '../../../workspace/state/workspaceTypes.js';
 import { allPairsLinked, contextMenuItems } from '../lib/graphContextMenu.js';
 import {
-  ALL_PATHS_LIMITS, ELEMENT_TYPES, PATH_MODES, applyElementFilters, degreeEncoding, detectCommunities,
+  ALL_PATHS_LIMITS, ELEMENT_TYPES, PATH_MODES, applyElementFilters, degreeEncoding, detectCommunities, scoreEncoding,
   findAllSimplePaths, findCutPoints, findShortestPath, inferNodeKeys, nodeColor, paletteColor, pathModeOf,
   propertyEncoding, separateCommunities,
 } from '../lib/graphAnalysis.js';
@@ -29,7 +35,7 @@ import {
 } from '../lib/analysisPrefs.js';
 import {
   ALERT_AUTO_SCAN_LIMITS, ALERT_RULE_FIELDS, ALERT_SCAN_DELAY_MS, alertFocusNode, alertNameMissing, alertNodeName, alertPropertyKeys, alertSummary,
-  describeGraphAlert, generateGraphAlerts, normalizeAlertRules,
+  describeAlertRules, describeGraphAlert, generateGraphAlerts, normalizeAlertRules,
 } from '../lib/graphAlerts.js';
 import { requestContextTab } from '../../../workspace/state/contextTabRequests.js';
 import {
@@ -49,8 +55,21 @@ import GraphOverlayMenu from './GraphOverlayMenu.jsx';
 import GraphZoomBox from './GraphZoomBox.jsx';
 import GraphAdjustBox from './GraphAdjustBox.jsx';
 import GraphCustomizeBox from './GraphCustomizeBox.jsx';
-import GraphNodeProfile from './GraphNodeProfile.jsx';
-import { getProfileSettings, resolveProfileSettings, subscribeProfileSettings } from '../lib/nodeProfile.js';
+import GraphProfileCards from './GraphProfileCards.jsx';
+import GraphFormattingBox from './GraphFormattingBox.jsx';
+import { formattingContext } from '../lib/graphElements.js';
+import { describeRule, getDomainFormatting, resolveDomainFormatting, subscribeDomainFormatting } from '../lib/conditionalFormatting.js';
+import { aggregateLinks, formatLinkTotal } from '../lib/linkAggregation.js';
+import { MEASURES, topScores } from '../lib/networkMeasures.js';
+import { getProfileSettings, profileOf, resolveProfileSettings, subscribeProfileSettings } from '../lib/nodeProfile.js';
+import { AuthContext } from '../../../auth/authContext.js';
+import { describeReportDomain, draftFindings, entityName, reportDateTime, reportFacts, reportTimeline, DEFAULT_MARKING } from '../report/graphReportModel.js';
+import { downloadGraphReport, systemRuleText } from '../report/graphReportExport.js';
+import GraphSnapDialog from './GraphSnapDialog.jsx';
+import { MAX_CARDS, readProfileCards, withCapturedCards, withProfileCards } from '../lib/graphSnap.js';
+import { framePicture, pagesToPdf, snapFileName } from '../../chart/lib/chartSnaps.js';
+import nbeLogoSvg from '../report/nbe_logo.svg?raw';
+import GraphReportDialog from './GraphReportDialog.jsx';
 import GraphTimeline from './GraphTimeline.jsx';
 import GraphRelationshipTabs from './GraphRelationshipTabs.jsx';
 import { applyTimeFilter } from '../lib/graphTimeline.js';
@@ -63,7 +82,7 @@ import {
 } from '../lib/graphAnnotations.js';
 import { getOverlayPrefs, setOverlayPref, subscribeOverlayPrefs } from '../lib/overlayPrefs.js';
 import { getClipboard, setClipboard, subscribeClipboard } from '../lib/graphClipboard.js';
-import { nodeFilterKey } from '../lib/graphAnalysis.js';
+import { nodeTypeOf } from '../lib/graphAnalysis.js';
 import { getNodeValue } from '../lib/graphModel.js';
 import GraphDialog from './GraphDialog.jsx';
 import GraphCanvas from './GraphCanvas.jsx';
@@ -83,12 +102,22 @@ const ICONS = {
   plus: ['M12 5v14', 'M5 12h14'],
   undo: ['M9 14 4 9l5-5', 'M4 9h10.5a5.5 5.5 0 0 1 0 11H11'],
   redo: ['m15 14 5-5-5-5', 'M20 9H9.5a5.5 5.5 0 0 0 0 11H13'],
-  timeline: ['M3 20h18', 'M6 20v-5', 'M10 20V9', 'M14 20v-7', 'M18 20V5'],
+  timeline: TIMELINE_ICON,
+  // Rules: conditional formatting.
+  formatting: ['M4 6h12', 'M4 12h8', 'M4 18h6', 'm14 16.5 2.5 2.5L21 14.5'],
+  table: TABLE_ICON,
+  chart: CHART_ICON,
+  importFile: ['M12 15V3', 'm7 8 5-5 5 5', 'M5 15v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4'],
+  exportFile: ['M12 3v12', 'm7 10 5 5 5-5', 'M5 15v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4'],
   // A palette: customize nodes and links.
   customize: ['M12 3a9 9 0 1 0 0 18c1 0 1.7-.8 1.7-1.7 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.2 0-.9.8-1.7 1.7-1.7H16a5 5 0 0 0 5-5c0-4-4-7.2-9-7.2Z', 'M7.5 11h.01', 'M10.5 7h.01', 'M15.5 7.5h.01'],
 };
 
 const formatCount = (value) => Number(value || 0).toLocaleString();
+// "LinkxGraph_<window title>_<yyyymmdd-hhmm>.pdf" (Print graph ▸ Download PDF).
+const graphPdfFileName = (windowTitle, now = new Date()) => snapFileName(windowTitle, '', now).replace(/^ChartSnap_/, 'LinkxGraph_').replace(/\.png$/, '.pdf');
+// The NBE logo for the snap's frame header (the report's, as a data URL).
+const NBE_LOGO_URL = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(nbeLogoSvg)}`;
 
 // Production getDefaultGraphNodeColor (GA:3068): an added node's colour,
 // by theme (drawn as the theme's default node).
@@ -100,14 +129,6 @@ const defaultNodeColor = () => (document.documentElement.getAttribute('data-them
 const EDIT_ACTIONS = new Set(['group', 'ungroup', 'merge_nodes', 'add_node', 'delete', 'link', 'unlink', 'unlinks', 'copy', 'paste', 'bring_to_front', 'add_theme_line', ...ANNOTATION_ACTIONS]);
 // Selection tools (G3.6, after i2 Analyst's Notebook), run by runSelectAction.
 const SELECT_ACTIONS = new Set(['select_all', 'invert_selection', 'select_by_type', 'select_by_property', 'select_link_ends', 'show_hidden', 'select_linked', 'select_same_type', 'hide_selected']);
-// A node's type for Select by Type: its annotation kind, else its
-// node_identity (Entity / Source / Target Node), else "Nodes".
-const ELEMENT_LABELS = Object.fromEntries(ELEMENT_TYPES.map((type) => [type.id, type.label]));
-const nodeTypeOf = (node) => {
-  const key = nodeFilterKey(node);
-  if (key !== 'nodes') return ELEMENT_LABELS[key];
-  return node?.node_identity ? String(node.node_identity) : 'Nodes';
-};
 const isDarkTheme = () => document.documentElement.getAttribute('data-theme') === 'dark';
 
 // State kept in the window's graph store, so it survives the body remounting
@@ -150,7 +171,7 @@ export default function GraphWindowBody({ windowItem }) {
   const { closeWindow, updateWindowMetadata } = workspace;
   const { tasks } = useSyncExternalStore(subscribeTasks, getTasksSnapshot);
   const { apiFetch, configuration } = useSession();
-  const { notify } = useNotifications();
+  const { notify, requestConfirmation } = useNotifications();
   const domainKey = getActiveDomainKey(configuration);
   const isCdr = domainKey === 'cdr';
   // Actor profile settings: the domain's (Configuration ▸ Rules ▸ Profile
@@ -386,9 +407,13 @@ export default function GraphWindowBody({ windowItem }) {
     else loadEvidence();
   };
 
-  // An unlinked empty window can start a new graph: a blank canvas for the
-  // analyst (graph-chart-plan G3; the authoring tools land there).
-  const createBlankGraph = () => updateWindowMetadata(windowId, { metadata: { graphBlank: true } });
+  // An unlinked empty window is a new graph as soon as something is added to
+  // it (right-click ▸ Add, or Paste; analyst decision 2026-11-17, replacing
+  // the "Create new graph" button): it is then kept as a blank graph.
+  const startedHere = source.kind === 'none' && snapshot.nodes > 0 && !metadata.graphBlank;
+  useEffect(() => {
+    if (startedHere) updateWindowMetadata(windowId, { metadata: { graphBlank: true } });
+  }, [startedHere, updateWindowMetadata, windowId]);
 
   /* ── Pinned evidence (G2.4b; production GA:5017-5195) ────────────────── */
   // One device-wide list; this window outlines the pinned items it holds.
@@ -408,28 +433,33 @@ export default function GraphWindowBody({ windowItem }) {
     else store.clearMarkers('pinned');
   }, [pinned, snapshot.version, store]);
 
-  // The Pinned Evidence card: opens (folded) once a graph holding pinned
-  // items has loaded, and whenever something is pinned here.
+  // The Pinned Evidence card: opens (folded) once the graph has loaded, even
+  // with nothing pinned, and comes to the front whenever something is pinned here.
   const [pinnedPanel, setPinnedPanel] = useWindowUiState(store, 'pinnedPanel', { open: false, collapsed: true });
   // Which overlay card is drawn on top: the one last clicked / focused, or
   // the one an action just opened ('alerts' | 'pinned' | 'combined').
   const [frontCard, setFrontCard] = useWindowUiState(store, 'overlayFront', 'alerts');
+  // A dead (empty) folded card's recheck: reads the graph again (analyst
+  // decision 2026-11-17).
+  const [recheckTick, setRecheckTick] = useState(0);
+  const recheckCards = useCallback(() => setRecheckTick((tick) => tick + 1), []);
   const pinnedHere = useMemo(() => {
     const graph = store.graph();
     return pinned.filter((item) => (item.type === 'node' ? graph.hasNode(item.id) : Boolean(edgeKeyForPinned(graph, item.id))));
     // The graph changes with the store version.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pinned, store, snapshot.version]);
+  }, [pinned, store, snapshot.version, recheckTick]);
   useEffect(() => {
     const status = snapshot.status;
     if (status.state !== 'ready' || !snapshot.nodes || PINNED_AUTO_OPENED.has(status)) return;
     PINNED_AUTO_OPENED.add(status);
-    if (pinnedHere.length) setPinnedPanel((current) => ({ ...current, open: true }));
-  }, [pinnedHere.length, setPinnedPanel, snapshot.nodes, snapshot.status]);
+    // Shown empty too (folded and grey, analyst decision 2026-11-17).
+    setPinnedPanel((current) => ({ ...current, open: true }));
+  }, [setPinnedPanel, snapshot.nodes, snapshot.status]);
 
   // The Merged & Grouped card (analyst decision 2026-11-15): the graph's
-  // group and merged nodes. Opens (folded) once a graph holding some has
-  // loaded, and whenever nodes are grouped or merged here.
+  // group and merged nodes. Opens (folded) once the graph has loaded, even
+  // with none, and comes to the front whenever nodes are grouped or merged here.
   const [combinedPanel, setCombinedPanel] = useWindowUiState(store, 'combinedPanel', { open: false, collapsed: true });
   const combinedCards = useMemo(() => {
     const graph = store.graph();
@@ -442,7 +472,11 @@ export default function GraphWindowBody({ windowItem }) {
       if (node.isGroup) {
         const members = Array.isArray(node.members) ? node.members : [];
         const names = members.map((member) => (member.label != null && String(member.label).trim() ? String(member.label) : String(member.id)));
-        cards.push({ key: `group:${id}`, id, kind: 'group', name, count: `${members.length} members`, detail: names.join(', '), hidden: !visible.has(id) });
+        cards.push({
+          key: `group:${id}`, id, kind: 'group', name, count: `${members.length} members`, detail: names.join(', '), hidden: !visible.has(id),
+          // Its inside, listed under it in the open card.
+          members: members.map((member, index) => ({ id: String(member.id ?? index), name: names[index], type: nodeTypeOf(member) })),
+        });
       } else {
         const count = Number(node.merge_count) || node.merged_from.length + 1;
         cards.push({ key: `merged:${id}`, id, kind: 'merged', name, count: `${count} nodes merged`, detail: `Merged from ${node.merged_from.join(', ')}`, hidden: !visible.has(id) });
@@ -451,13 +485,14 @@ export default function GraphWindowBody({ windowItem }) {
     return cards;
     // The graph changes with the store version.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [store, snapshot.version, view.nodeIds]);
+  }, [store, snapshot.version, view.nodeIds, recheckTick]);
   useEffect(() => {
     const status = snapshot.status;
     if (status.state !== 'ready' || !snapshot.nodes || COMBINED_AUTO_OPENED.has(status)) return;
     COMBINED_AUTO_OPENED.add(status);
-    if (combinedCards.length) setCombinedPanel((current) => ({ ...current, open: true }));
-  }, [combinedCards.length, setCombinedPanel, snapshot.nodes, snapshot.status]);
+    // Shown empty too (folded and grey, analyst decision 2026-11-17).
+    setCombinedPanel((current) => ({ ...current, open: true }));
+  }, [setCombinedPanel, snapshot.nodes, snapshot.status]);
   // Grouping or merging here shows the card in front.
   const showCombined = useCallback(() => {
     setCombinedPanel((current) => ({ ...current, open: true }));
@@ -481,6 +516,37 @@ export default function GraphWindowBody({ windowItem }) {
   const endZoomArea = useCallback(() => setZoomingArea(false), []);
   const zoomToArea = useCallback((box) => canvasRef.current?.zoomToRect(box), []);
   const closeMenu = useCallback(() => setMenu(null), []);
+  // Link aggregation (G3.5 i2 #2): the pairs drawn as one, and those opened
+  // back into their links (kept with the window).
+  const [expandedLinks, setExpandedLinks] = useWindowUiState(store, 'linkExpanded', []);
+  const linkGroups = useMemo(() => (settings.linkAggregation.on
+    ? aggregateLinks(view.edgeIds.map((key) => [key, store.getEdge(key)]), { ...settings.linkAggregation, expanded: expandedLinks })
+    : null), [expandedLinks, settings.linkAggregation, snapshot.version, store, view.edgeIds]); // eslint-disable-line react-hooks/exhaustive-deps
+  const aggregateOf = useCallback((key) => {
+    const group = linkGroups?.memberOf.get(String(key));
+    if (!group) return null;
+    const entry = linkGroups.groups.get(group);
+    return {
+      ...entry,
+      group,
+      mode: settings.linkAggregation.mode,
+      totalKey: settings.linkAggregation.totalKey,
+      totalText: entry.total === null ? '' : formatLinkTotal(entry.total),
+      expanded: expandedLinks.includes(group),
+    };
+  }, [expandedLinks, linkGroups, settings.linkAggregation.mode, settings.linkAggregation.totalKey]);
+  const toggleLinks = useCallback((key, open) => {
+    const aggregate = aggregateOf(key);
+    if (!aggregate) return;
+    setExpandedLinks((current) => {
+      const has = current.includes(aggregate.group);
+      const next = open ?? !has;
+      if (next === has) return current;
+      return next ? [...current, aggregate.group] : current.filter((group) => group !== aggregate.group);
+    });
+  }, [aggregateOf, setExpandedLinks]);
+  const handleEdgeDoubleClick = useCallback((key) => toggleLinks(key), [toggleLinks]);
+
   const handleContextMenu = useCallback((request) => {
     if (!request) {
       setMenu(null);
@@ -516,10 +582,11 @@ export default function GraphWindowBody({ windowItem }) {
       pinnedCount: pinned.length,
       canPin: targetKeys.some((key) => !pinnedKeys.has(key)),
       canUnpin: targetKeys.some((key) => pinnedKeys.has(key)),
+      aggregate: request.kind === 'edge' ? aggregateOf(request.id) : null,
     });
     if (!content.header && !content.items.length) return;
     setMenu({ ...request, content });
-  }, [clipboard.nodes.length, isCdr, pinned, settings.alertRules, settings.edgeBundling, store, view.nodeIds, viewKey]);
+  }, [aggregateOf, clipboard.nodes.length, isCdr, pinned, settings.alertRules, settings.edgeBundling, store, view.nodeIds, viewKey]);
 
   const notifyDrawingLimit = useCallback((skipped) => notify({
     title: 'Drawing limit reached',
@@ -652,6 +719,87 @@ export default function GraphWindowBody({ windowItem }) {
     requestAnimationFrame(() => canvasRef.current?.fit(communities.flat()));
     report(`${communities.length} communit${communities.length === 1 ? 'y' : 'ies'} detected; the largest has ${communities[0].length} node(s).`);
   }, [record, report, store, view.edgeIds, view.nodeIds]);
+
+  // Network measures (G3.5 i2 #3; not in production): computed in the
+  // layout worker over the drawn nodes and links, then shown like Visualize
+  // by Degree (one undo step; Reset Node Styles restores), the top nodes
+  // reported.
+  const measuring = useRef(false);
+  const runMeasure = useCallback(async (measure) => {
+    if (measuring.current) return;
+    const graph = store.graph();
+    const nodeIds = view.nodeIds.filter((id) => graph.hasNode(id));
+    const edgePairs = view.edgeIds
+      .filter((key) => graph.hasEdge(key) && String(store.getEdge(key)?.edge_kind || '').toLowerCase() !== 'theme_line')
+      .map((key) => [graph.source(key), graph.target(key)]);
+    const { label } = MEASURES[measure];
+    measuring.current = true;
+    try {
+      const scores = await requestMeasure(measure, nodeIds, edgePairs);
+      if (!nodeIds.every((id) => store.getNode(id))) return; // the graph changed meanwhile
+      record();
+      store.patchNodes(scoreEncoding(scores));
+      const top = topScores(scores, 3).filter(([, value]) => value > 0);
+      const nameOf = (id) => String(store.getNode(id)?.label ?? id);
+      report(top.length
+        ? `${label}: highest ${top.map(([id, value]) => `${nameOf(id)} (${value.toFixed(3)})`).join(', ')}.`
+        : `${label}: every drawn node scores 0.`);
+    } catch (error) {
+      report(`${label} could not be computed: ${error.message}`, 'warning');
+    } finally {
+      measuring.current = false;
+    }
+  }, [record, report, store, view.edgeIds, view.nodeIds]);
+
+  // Conditional formatting: this graph's rules, then the domain's
+  // (Configuration ▸ Rules ▸ Formatting rules, else the device copy kept by
+  // its last save; B-24) unless this graph turns them off.
+  const deviceDomainRules = useSyncExternalStore(subscribeDomainFormatting, () => getDomainFormatting(domainKey));
+  const domainRules = useMemo(
+    () => (Array.isArray(configuration?.formatting_rules) ? resolveDomainFormatting(configuration, domainKey) : deviceDomainRules),
+    [configuration, deviceDomainRules, domainKey],
+  );
+  const activeRules = useMemo(
+    () => [...settings.formatting.rules, ...(settings.useDomainRules ? domainRules : [])],
+    [domainRules, settings.formatting.rules, settings.useDomainRules],
+  );
+  const canvasSettings = useMemo(() => ({ ...effective, formatting: { rules: activeRules } }), [activeRules, effective]);
+  const rulesOn = activeRules.filter((rule) => rule.on).length;
+
+  // Conditional formatting (G3.5 i2 #4): the editor works on the drawn
+  // nodes and links (counts, Select them, suggestions); Apply saves the
+  // rules in the window settings, one undo step.
+  const [formattingOpen, setFormattingOpen] = useState(false);
+  const closeFormatting = useCallback(() => setFormattingOpen(false), []);
+  const formattingData = useMemo(() => {
+    if (!formattingOpen) return null;
+    const node = view.nodeIds.map((id) => [id, store.getNode(id)]).filter(([, item]) => item);
+    const edge = view.edgeIds.map((key) => [key, store.getEdge(key)]).filter(([, item]) => item);
+    const edgeKeys = new Set();
+    edge.forEach(([, item]) => Object.keys(item).forEach((name) => {
+      if (!name.startsWith('__') && !['from', 'to', 'smooth', 'arrows', 'dashes'].includes(name)) edgeKeys.add(name);
+    }));
+    return {
+      items: { node, edge },
+      ctx: formattingContext(store, view, store.getMarkers(viewKey)),
+      keys: { node: [...store.propertyKeys()].sort(), edge: [...edgeKeys].sort() },
+    };
+  }, [formattingOpen, snapshot.version, store, view, viewKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  // The most used values of a property among the drawn nodes / links.
+  const formattingValues = useCallback((target, key) => {
+    const counts = new Map();
+    (formattingData?.items[target] || []).forEach(([, item]) => {
+      const value = target === 'node' ? getNodeValue(item, key) : item[key];
+      if (value === null || value === undefined || typeof value === 'object' || String(value).trim() === '') return;
+      counts.set(String(value), (counts.get(String(value)) || 0) + 1);
+    });
+    return [...counts].sort((a, b) => b[1] - a[1]).slice(0, 30).map(([value]) => value);
+  }, [formattingData]);
+  const applyFormatting = useCallback((rules, useDomainRules) => {
+    record();
+    updateWindowMetadata(windowId, { metadata: { graphSettings: { ...settingsRef.current, formatting: { rules }, useDomainRules } } });
+  }, [record, updateWindowMetadata, windowId]);
+  const selectFormatted = useCallback((target, ids) => canvasRef.current?.select(ids), []);
 
   const runVisualProperty = useCallback(() => {
     const graph = store.graph();
@@ -1216,25 +1364,70 @@ export default function GraphWindowBody({ windowItem }) {
   const closeAdjust = useCallback(() => setAdjust(null), []);
   // Clicked from far out, only an annotation is zoomed in to (its box opens).
   const tapZoomsTo = useCallback((target) => target?.kind === 'node' && Boolean(annotationBoxKind(store.getNode(target.id))), [store]);
-  // Actor profile (analyst decision 2026-11-16): a plain click on a plain
-  // node shows its card beside it; Ctrl / Cmd / Shift clicks (adding to the
-  // selection), links, the background and moving the view close it.
-  const [profile, setProfile] = useState(null); // { id, x, y }
-  const closeProfile = useCallback(() => setProfile(null), []);
+  // Actor profile (analyst decisions 2026-11-16, 2026-11-18): a plain click
+  // on a plain node shows its card beside it (alone); a Ctrl / Cmd / Shift
+  // click (adding to the selection) adds its card, up to MAX_CARDS (then the
+  // oldest makes way), or takes it away when shown; links and the background close them all. The cards
+  // follow their nodes as the view moves (they used to close).
+  const [profiles, setProfiles] = useState([]); // [{ id, x, y }], in the order opened
+  const closeProfile = useCallback((id) => setProfiles((now) => now.filter((card) => card.id !== id)), []);
+  const closeProfiles = useCallback(() => setProfiles((now) => (now.length ? [] : now)), []);
+  // The cards last shown, and when they closed (the snap offers them: the
+  // click on Export can be what closed them).
+  const lastProfileRef = useRef({ profiles: [], closedAt: 0 });
+  useEffect(() => {
+    if (profiles.length) lastProfileRef.current = { profiles, closedAt: Number.POSITIVE_INFINITY };
+    else if (lastProfileRef.current.profiles.length && lastProfileRef.current.closedAt === Number.POSITIVE_INFINITY) lastProfileRef.current = { ...lastProfileRef.current, closedAt: Date.now() };
+  }, [profiles]);
+  // The view moved: each card to where its node is now (once a frame).
+  const followFrame = useRef(0);
+  const followProfiles = useCallback(() => {
+    if (followFrame.current) return;
+    followFrame.current = requestAnimationFrame(() => {
+      followFrame.current = 0;
+      setProfiles((now) => {
+        if (!now.length) return now;
+        let changed = false;
+        const next = now.map((card) => {
+          const place = canvasRef.current?.renderedPositionOf?.(card.id);
+          if (!place) return card;
+          if (place.x === card.x && place.y === card.y) return card;
+          changed = true;
+          return { ...card, x: place.x, y: place.y };
+        });
+        return changed ? next : now;
+      });
+    });
+  }, []);
+  useEffect(() => () => cancelAnimationFrame(followFrame.current), []);
   const handleElementTap = useCallback((target) => {
     if (target?.kind !== 'node') {
       setAdjust(null);
-      setProfile(null);
+      closeProfiles();
       return;
     }
     const node = store.getNode(target.id);
     const boxKind = annotationBoxKind(node);
     if (!boxKind) {
       setAdjust(null);
-      setProfile(target.adding || !profileSettings.enabled || !settings.actorProfile ? null : { id: target.id, x: target.x, y: target.y });
+      if (!profileSettings.enabled || !settings.actorProfile) {
+        closeProfiles();
+        return;
+      }
+      const card = { id: target.id, x: target.x, y: target.y };
+      if (!target.adding) {
+        setProfiles([card]);
+        return;
+      }
+      setProfiles((now) => {
+        if (now.some((entry) => entry.id === card.id)) return now.filter((entry) => entry.id !== card.id);
+        // Full: the oldest card makes way (first in, first out; analyst
+        // decision 2026-11-18).
+        return [...now, card].slice(-MAX_CARDS);
+      });
       return;
     }
-    setProfile(null);
+    closeProfiles();
     // Production's OLE click gives an object that lost its icon the
     // document icon back (a recorded change).
     const repair = boxKind === 'object' ? oleIconRepair(node, { dark: isDarkTheme() }) : null;
@@ -1243,7 +1436,7 @@ export default function GraphWindowBody({ windowItem }) {
       store.updateNodes([[target.id, repair]]);
     }
     setAdjust({ ...target, kind: boxKind });
-  }, [profileSettings.enabled, record, settings.actorProfile, store]);
+  }, [closeProfiles, profileSettings.enabled, record, settings.actorProfile, store]);
   const adjustTarget = adjust && store.getNode(adjust.id);
   const lastEdit = useRef({ field: '', at: 0 });
   // One undo step per field while it is being changed (the colour picker
@@ -1294,6 +1487,9 @@ export default function GraphWindowBody({ windowItem }) {
         store.updateNodes(ids.map((id) => [id, { colorBehavior: value }]));
         return;
       }
+      // Styles set by hand win over conditional formatting rules: marked
+      // per style ('' / theme clears the mark).
+      let marked = ids;
       if (field === 'label' || field === 'note') store.updateNodes(ids.map((id) => [id, { [field]: value }]));
       else if (field === 'size') store.updateNodes(ids.map((id) => [id, { size: value }]));
       else if (field === 'shape') store.updateNodes(ids.map((id) => [id, nodeShapePatch(store.getNode(id), value)]));
@@ -1316,8 +1512,13 @@ export default function GraphWindowBody({ windowItem }) {
           },
           edges: view.edgeIds.map((key) => [key, graph.source(key), graph.target(key)]),
         });
+        marked = patches.nodes.map(([id]) => id);
         store.updateNodes(patches.nodes);
         store.updateEdges(patches.edges.map(([key, patch]) => [key, { ...patch, __edits: { ...(store.getEdge(key)?.__edits || {}), ...patch.__edits } }]));
+      }
+      const mark = { fill: 'fill', color: 'fill', border: 'border', size: 'size', shape: 'shape', icon: 'icon' }[field];
+      if (mark) {
+        store.updateNodes(marked.map((id) => [id, { __customized: { ...(store.getNode(id)?.__customized || {}), [mark]: Boolean(value) } }]));
       }
     } else {
       const keys = ids;
@@ -1338,9 +1539,308 @@ export default function GraphWindowBody({ windowItem }) {
   // The selected plain nodes (annotations have their own boxes) and links.
   const customizable = useMemo(() => ({
     nodes: snapshot.selection.filter((id) => { const node = store.getNode(id); return node && !annotationBoxKind(node); }),
-    edges: edgeSelection.filter((key) => store.getEdge(key)),
+    // A link drawn for an aggregated pair stands for all of its links.
+    edges: [...new Set(edgeSelection.filter((key) => store.getEdge(key)).flatMap((key) => {
+      const aggregate = aggregateOf(key);
+      return aggregate && !aggregate.expanded && aggregate.key === key ? aggregate.members : [key];
+    }))],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [snapshot.selection, snapshot.version, edgeSelection, store]);
+  }), [aggregateOf, snapshot.selection, snapshot.version, edgeSelection, store]);
+  /* ── Files (G4.1; production sidebar Upload Graph, Take a snap, Print
+     Graph, Export JSON; toolbar placement, analyst decision 2026-11-15) ── */
+  const fileInputRef = useRef(null);
+  // Take a snap… / Print graph… (analyst decision 2026-11-18): a popup, the
+  // view on an A4 page in the image template (the NBE frame), with a node's
+  // actor profile card drawn in if wanted. The view is captured once, when
+  // the popup opens (it covers the canvas, so the view stays as it was).
+  const SNAP_SCALE = 3;
+  const [snapPopup, setSnapPopup] = useState(null); // { purpose, candidates, initialCard, at: { id: { x, y } } }
+  const snapBaseRef = useRef(null);
+  const openSnap = (purpose) => {
+    const what = purpose === 'print' ? 'Print graph' : 'Take a snap';
+    const url = canvasRef.current?.snapshot?.({ scale: SNAP_SCALE });
+    if (!url) {
+      notify({ title: what, message: view.nodeIds.length ? 'The graph is not ready to capture yet.' : 'Graph is empty. Nothing to capture.', level: 'warning', source: windowItem.title });
+      return;
+    }
+    snapBaseRef.current = url;
+    // The card that was open (a click on Export may just have closed it),
+    // then the selected nodes, each where it is drawn now.
+    const last = lastProfileRef.current;
+    const open = profiles.length ? profiles : (Date.now() - last.closedAt < 4000 ? last.profiles : []);
+    const openIds = new Set(open.map((card) => card.id));
+    // Cards for the selected nodes only; those whose card was open ticked.
+    const ids = [...new Set(snapshot.selection)].filter((id) => store.getNode(id) && !annotationBoxKind(store.getNode(id))).slice(0, 50);
+    const at = {};
+    ids.forEach((id) => {
+      const card = open.find((entry) => entry.id === id);
+      const place = canvasRef.current?.renderedPositionOf?.(id) || (card ? { x: card.x, y: card.y } : null);
+      if (place) at[id] = place;
+    });
+    const candidates = ids.filter((id) => at[id]).map((id) => ({ id, name: entityName(store.graph(), id), open: openIds.has(id) }));
+    snapPrevProfilesRef.current = profiles;
+    setSnapPopup({ purpose, candidates, initialCards: open.map((card) => card.id).filter((id) => at[id]).slice(0, MAX_CARDS), at });
+  };
+  // The cards on the canvas while the popup is open are the ticked ones (laid
+  // out as the canvas lays them out, behind the popup); the analyst's own
+  // come back when it closes.
+  const snapPrevProfilesRef = useRef([]);
+  const closeSnap = () => {
+    setProfiles(snapPrevProfilesRef.current || []);
+    setSnapPopup(null);
+  };
+  // The cards as laid out on the canvas, once they all are (a few frames).
+  const readLiveCards = async (ids) => {
+    const nextFrame = () => new Promise((resolve) => { requestAnimationFrame(() => resolve()); });
+    let captured = null;
+    for (let frame = 0; frame < 30; frame += 1) {
+      await nextFrame();
+      const container = canvasRef.current?.container?.();
+      if (!container) return null;
+      let root = container.parentElement;
+      while (root && !root.querySelector('.graph_profile_cards')) root = root.parentElement;
+      if (!root) continue;
+      captured = readProfileCards(root, container.getBoundingClientRect());
+      if (ids.every((id) => captured.cards.some((card) => card.id === String(id)))) return captured;
+    }
+    return captured?.cards.length ? captured : null;
+  };
+  const cardsEnabled = Boolean(profileSettings.enabled && settings.actorProfile);
+  const composeSnap = async ({ orientation, cardIds = [] }) => {
+    let picture = snapBaseRef.current;
+    if (!picture) return null;
+    const ids = (cardsEnabled ? cardIds : []).filter((id) => store.getNode(id) && snapPopup?.at?.[id]).slice(0, MAX_CARDS);
+    // The ticked cards opened on the canvas, then drawn as it shows them.
+    setProfiles(ids.map((id) => ({ id, ...snapPopup.at[id] })));
+    if (ids.length) {
+      const captured = await readLiveCards(ids);
+      picture = captured
+        ? await withCapturedCards(picture, { scale: SNAP_SCALE, captured })
+        // Not laid out (no layout to read): drawn in the card's proportions.
+        : await withProfileCards(picture, { scale: SNAP_SCALE, cards: ids.map((id) => ({ at: snapPopup.at[id], profile: profileOf(store.getNode(id), profileSettings, { isCdr }) })) });
+    }
+    return framePicture(picture, {
+      title: 'LINK ANALYSIS \u00b7 GRAPH SNAP',
+      logoUrl: NBE_LOGO_URL,
+      source: `Source: ${windowItem.title} \u00b7 ${formatCount(view.nodeIds.length)} nodes \u00b7 ${formatCount(view.edgeIds.length)} links drawn`,
+      details: new Date().toLocaleString('en-GB'),
+      orientation,
+    });
+  };
+  const submitSnap = async (choice) => {
+    const page = await composeSnap(choice);
+    if (!page) {
+      notify({ title: snapPopup?.purpose === 'print' ? 'Print graph' : 'Take a snap', message: 'The picture could not be drawn on a page.', level: 'warning', source: windowItem.title });
+      return;
+    }
+    if (snapPopup?.purpose === 'print' && choice.action === 'download') {
+      // Print ▸ Download PDF: the page as a PDF.
+      const doc = await pagesToPdf([page], { orientation: choice.orientation, title: `${windowItem.title} \u00b7 graph` });
+      downloadBlob(graphPdfFileName(windowItem.title), doc.output('blob'));
+    } else if (snapPopup?.purpose === 'print') printImage([page], { pages: true, orientation: choice.orientation });
+    else downloadDataUrl(snapshotFileName(), page);
+    closeSnap();
+  };
+  const runFileAction = (id) => {
+    if (id === 'snapshot' || id === 'print') {
+      openSnap(id === 'print' ? 'print' : 'snap');
+    } else if (id === 'report') {
+      openReport();
+    } else if (id === 'json') {
+      if (!view.nodeIds.length) {
+        notify({ title: 'Export JSON', message: 'Graph is empty. Nothing to export.', level: 'warning', source: windowItem.title });
+        return;
+      }
+      try {
+        const data = buildGraphExport(store, view, settingsRef.current);
+        downloadBlob(exportFileName('json'), new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
+      } catch (error) {
+        notify({ title: 'Export JSON', message: `Could not export the graph: ${error?.message || error}`, level: 'error', source: windowItem.title });
+      }
+    }
+  };
+  /* ── Graph report (G4.2; analyst decisions 2026-11-17) ──────────────── */
+  const auth = useContext(AuthContext);
+  const [reportForm, setReportForm] = useState(null);
+  // The report's inputs from this window, as plain data.
+  const reportInput = (nameKey = '') => {
+    const graph = store.graph();
+    const named = (id) => entityName(graph, id, nameKey);
+    const markers = store.getMarkers(viewKey);
+    const weightKey = settings.linkAggregation?.totalKey || settings.edgeWeight || '';
+    return {
+      // A Graph Report: the analyst may have changed this window's graph.
+      kind: 'graph',
+      graph,
+      view,
+      totals: { nodes: snapshot.nodes, edges: snapshot.edges },
+      markers,
+      weightKey,
+      nameKey,
+      // Named by the chosen column, as everything else in the report.
+      alerts: describedAlerts.map(({ alert, name, category, severity, short }) => {
+        const focus = alertFocusNode(graph, alert);
+        return { name: focus != null && graph.hasNode(String(focus)) ? named(String(focus)) : name, category, severity, short };
+      }),
+      pinned: pinnedCards.map(({ item, name, kind, detail }) => ({ name: kind === 'node' ? named(item.id) : name, kind, detail })),
+      rules: activeRules.filter((rule) => rule.on).map((rule) => ({ name: rule.name, target: rule.target, description: describeRule(rule) })),
+      groups: combinedCards.map(({ id, kind, count, detail }) => ({ name: named(id), kind, count, detail })),
+      // The actor profile, as its card shows it: every shown field ("—"
+      // when unknown) and the portrait; none for a node with neither.
+      profileOf: (id) => {
+        if (!profileSettings.enabled) return null;
+        const node = store.getNode(id);
+        if (!node) return null;
+        const profile = profileOf(node, profileSettings, { isCdr });
+        if (!profile.portrait && !profile.fields.some((entry) => entry.value)) return null;
+        return { fields: profile.fields.map((entry) => [entry.label, entry.value]), portrait: profile.portrait };
+      },
+      source: { kind: source.kind, evidence: source.evidence, sessionId, relationship: metadata.graphRelationship, fileName: metadata.graphImported },
+      score: source.evidence?.score || null,
+      scope: {
+        searched: view.searched,
+        period: timelinePeriod,
+        filtersOff: ELEMENT_TYPES.filter((type) => !elementFilters[type.id]).map((type) => type.label),
+      },
+    };
+  };
+  // The findings draft, naming entities by a column.
+  const reportDraft = (nameKey) => {
+    const input = reportInput(nameKey);
+    const facts = reportFacts(input.graph, view, { weightKey: input.weightKey, markers: input.markers });
+    return draftFindings({ graph: input.graph, facts, alerts: input.alerts, timeline: reportTimeline(input.graph, view), nameKey }).join('\n');
+  };
+  const openReport = () => {
+    // The alert card's "Name by" column, if one is chosen, to start with.
+    const nameKey = activeNameKey || '';
+    const user = auth?.user;
+    // Two layers of flags (analyst decision 2026-11-17): the System rule is
+    // the backend link analysis rule that flagged the evidence at ingestion;
+    // the Graph alert is this window's alert configuration.
+    // The rules come from the evidence report and from the graph itself
+    // (the relationships the analysis drew are labelled with their rule).
+    setReportForm({
+      title: `Graph Report · ${windowItem.title}`,
+      caseId: '',
+      nameKey,
+      reference: String(source.evidence?.externalReferenceId || source.evidence?.reportId || ''),
+      dateTime: reportDateTime(),
+      analyst: String(user?.display_name || user?.username || ''),
+      systemRule: systemRuleText(source.evidence?.systemRules, store.graph()),
+      graphAlert: describeAlertRules(alertRules, alertsEnabled, alerts.length),
+      purpose: `Link analysis of ${view.nodeIds.length.toLocaleString('en-GB')} entities and ${view.edgeIds.length.toLocaleString('en-GB')} relationships.`,
+      findings: reportDraft(nameKey),
+      assessment: '',
+      actions: '',
+      marking: DEFAULT_MARKING,
+      includeLists: false,
+    });
+  };
+  // The cover's domain: an evidence graph's own domain (its report payload),
+  // else the active domain a session ran under; an imported file's domain is
+  // unknown, so it is left out.
+  // An evidence spanning several domains (e.g. "all") adds its
+  // domain_distribution: "All (Banking 12 · Microfinance 3)".
+  const evidenceDomain = source.kind === 'evidence'
+    ? describeReportDomain(source.evidence?.domain, source.evidence?.domainDistribution, formatDomainPillarLabel)
+    : '';
+  const reportDomain = evidenceDomain || (metadata.graphImported ? '' : formatDomainPillarLabel(domainKey));
+  const generateReport = async (values) => {
+    try {
+      // The picture names entities as the report does (Identify entities
+      // by); nodes drawn without a label keep none.
+      const graph = store.graph();
+      const nameOf = values.nameKey ? (id) => (graph.hasNode(id) ? entityName(graph, id, values.nameKey) : '') : null;
+      const snapshotUrl = canvasRef.current?.snapshot?.({ full: true, maxSide: 2400, format: 'jpg', nameOf }) || null; // print resolution (~350 dpi at full width)
+      await downloadGraphReport({ input: reportInput(values.nameKey), values, domain: reportDomain, snapshot: snapshotUrl });
+      setReportForm(null);
+    } catch (error) {
+      notify({ title: 'Graph report', message: `Could not generate the graph report: ${error?.message || error}`, level: 'error', source: windowItem.title });
+    }
+  };
+
+  // Production Upload Graph: replaces what the window shows (after
+  // "Any unsaved progress will be lost"); the window is no longer linked.
+  const importGraphFile = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    const fail = (message) => notify({ title: 'Could not open the graph file', message, level: 'error', source: windowItem.title });
+    if (file.size > GRAPH_FILE_MAX_BYTES) {
+      fail(`${file.name} is larger than ${Math.round(GRAPH_FILE_MAX_BYTES / (1024 * 1024))} MB.`);
+      return;
+    }
+    if (store.getSnapshot().nodes > 0) {
+      const confirmed = await requestConfirmation({ title: 'Confirm Replace', message: 'Any unsaved progress will be lost. Continue?', confirmText: 'Continue', cancelText: 'Cancel' });
+      if (!confirmed) return;
+    }
+    let parsed;
+    try {
+      parsed = parseGraphFile(file.name, await readFileText(file));
+    } catch (error) {
+      fail(error?.message || 'It may be corrupted or invalid.');
+      return;
+    }
+    if (source.kind === 'session') await handleUnlink();
+    store.abortFetch();
+    updateWindowMetadata(windowId, {
+      metadata: { evidence: null, graphLinkSource: null, graphLinkAction: null, graphRelationship: null, graphSearch: null, graphBlank: true, graphImported: file.name.slice(0, 200) },
+    });
+    store.replace({ nodes: parsed.nodes, edges: parsed.edges });
+    // A file with every position (ours) is drawn as it was.
+    if (parsed.positions) {
+      store.setPositions(parsed.positions);
+      store.setLayoutSignature(layoutSignatureOf(settingsRef.current.layout));
+    }
+    store.setStatus({ state: 'ready', source: 'import' });
+    notify({ title: 'Graph imported', message: `${file.name}: ${store.getSnapshot().nodes} nodes, ${store.getSnapshot().edges} links.`, level: 'success', source: windowItem.title });
+  };
+
+  /* ── Table / Chart window link (G3.5 i2 #5, G5; analyst decisions
+     2026-11-17, 2026-11-18) ── */
+  // What this window draws and what is selected, for its Table and Chart
+  // windows (lib/graphLinkBus.js); their row / bar clicks select / focus here.
+  useEffect(() => {
+    // The weight key the window measures links by (link aggregation's
+    // total, else the edge weight property), for the Chart window's Edge
+    // Weight.
+    const weightKey = settings.linkAggregation?.totalKey || (settings.edgeWeight && settings.edgeWeight !== 'default' ? settings.edgeWeight : '');
+    publishGraphState(windowId, {
+      nodeIds: view.nodeIds, edgeIds: view.edgeIds, selection: { nodes: snapshot.selection, edges: edgeSelection }, title: windowItem.title, weightKey,
+      // The timeline's date field and slicing, for the Chart window's
+      // Temporal Metrics.
+      timeKey: timeline.key || '', timeSlice: timeline.slice || 'auto',
+    });
+  }, [edgeSelection, snapshot.selection, view, windowId, windowItem.title, settings.linkAggregation?.totalKey, settings.edgeWeight, timeline.key, timeline.slice]);
+  const tableActionRef = useRef(null);
+  tableActionRef.current = (action) => {
+    const graph = store.graph();
+    const nodes = (action.nodes || []).filter((id) => graph.hasNode(id));
+    const edges = (action.edges || []).filter((key) => graph.hasEdge(key));
+    // A link needs both ends drawn; items the limit hides are shown first.
+    const ends = [...new Set([...nodes, ...edges.flatMap((key) => [graph.source(key), graph.target(key)])])];
+    revealThen(ends, () => {
+      canvasRef.current?.select([...nodes, ...edges]);
+      if (action.type === 'focus' && ends.length) canvasRef.current?.focusOn?.(ends, { maxZoom: 1.5 });
+    });
+  };
+  useEffect(() => handleGraphActions(windowId, (action) => tableActionRef.current(action)), [windowId]);
+  // Toolbar ▸ Open as table, right-click ▸ Open as ▸ Table: this graph's
+  // Table window (focused when one is open), else a new one.
+  const openTable = useCallback(() => {
+    const existing = workspace.windows.find((item) => item.type === WORKSPACE_WINDOW_TYPES.TABLE && item.metadata?.tableGraph === windowId);
+    if (existing) workspace.focusWindow(existing.id);
+    else openWindow(WORKSPACE_WINDOW_TYPES.TABLE, { title: 'Table', metadata: { tableGraph: windowId } });
+  }, [openWindow, windowId, workspace]);
+  // Toolbar ▸ Open as chart, right-click ▸ Open as ▸ Chart (analyst decision
+  // 2026-11-18): this graph's Chart window (focused when one is open), else a
+  // new one linked to it.
+  const openChart = useCallback(() => {
+    const existing = workspace.windows.find((item) => item.type === WORKSPACE_WINDOW_TYPES.CHART && item.metadata?.chartGraph === windowId);
+    if (existing) workspace.focusWindow(existing.id);
+    else openWindow(WORKSPACE_WINDOW_TYPES.CHART, { title: 'Chart', metadata: { chartGraph: windowId } });
+  }, [openWindow, windowId, workspace]);
+
   const openCustomize = useCallback(() => {
     if (!customizable.nodes.length && !customizable.edges.length) return;
     setAdjust(null);
@@ -1451,6 +1951,10 @@ export default function GraphWindowBody({ windowItem }) {
       runSelectAction(action, menu);
       return;
     }
+    if (action === 'expand_links' || action === 'collapse_links') {
+      toggleLinks(menu?.id, action === 'expand_links');
+      return;
+    }
     if (action === 'expand_neighborhood') {
       record();
       const { skipped } = store.expandNeighbourhood(selection, { viewKey, visibleIds, depth: 1, cap });
@@ -1477,6 +1981,14 @@ export default function GraphWindowBody({ windowItem }) {
     } else if (action === 'visual_degree') {
       record();
       store.patchNodes(degreeEncoding(store.graph(), visibleIds));
+    } else if (action === 'conditional_formatting') {
+      setFormattingOpen(true);
+    } else if (action === 'show_in_table') {
+      openTable();
+    } else if (action === 'show_in_chart') {
+      openChart();
+    } else if (action.startsWith('measure_')) {
+      runMeasure(action.slice('measure_'.length));
     } else if (action === 'visual_property') {
       runVisualProperty();
     } else if (action === 'filter_elements') {
@@ -1515,7 +2027,7 @@ export default function GraphWindowBody({ windowItem }) {
     }
   }, [
     cap, configureAlertRules, configureEdgeBundling, confirmClearPinned, toggleEdgeBundling, runSelectAction, loadView, menu, removeViews, runEditAction, saveView, notifyDrawingLimit, record, report, runAlertScan, runAllPaths, runCommunities,
-    runCutPoints, runElementFilter, runShortestPath, runVisualProperty, setFrontCard, setPinnedPanel, showPinnedEvidence, store, toggleAlertRules,
+    runCutPoints, runElementFilter, runShortestPath, runVisualProperty, setFrontCard, setPinnedPanel, showPinnedEvidence, store, toggleAlertRules, toggleLinks, runMeasure, setFormattingOpen, openTable, openChart,
     view.nodeIds, viewKey,
   ]);
 
@@ -1539,11 +2051,19 @@ export default function GraphWindowBody({ windowItem }) {
   // Escape folds every open node card of the active window (analyst decision
   // 2026-11-16), unless a menu, dialog, adjust box or the zoom tool is open:
   // Escape is theirs first.
-  const escapeFolds = workspace.activeWindowId === windowId && !menu && !dialog && !adjust && !customize && !profile && !zoomingArea;
+  const escapeFolds = workspace.activeWindowId === windowId && !menu && !dialog && !adjust && !customize && !formattingOpen && !profiles.length && !zoomingArea;
 
   /* ── Render ─────────────────────────────────────────────────────────── */
   const status = snapshot.status;
   const hasData = snapshot.nodes > 0;
+  // The folded cards show on any drawable graph, a new blank one too
+  // (analyst decision 2026-11-17), empty ones grey.
+  const cardsLive = (hasData || (source.kind === 'none' && Boolean(metadata.graphBlank)))
+    && !(status.state === 'loading' || status.state === 'queued' || status.state === 'error');
+  // Graph Alerts follows the same rule, except that right after a load it
+  // waits for that load's first scan, so it does not flash grey before
+  // its count arrives.
+  const alertsAwaitScan = hasData && status.state === 'ready' && !ALERTS_AUTO_OPENED.has(status);
   const shown = view.nodeIds.length;
   const warnAt = renderer === RENDERERS.WEBGL ? GRAPH_LIMITS.WEBGL_WARNING : GRAPH_LIMITS.WARNING;
   const busy = status.state === 'loading' || status.state === 'queued';
@@ -1565,21 +2085,20 @@ export default function GraphWindowBody({ windowItem }) {
   } else if (!hasData && !(source.kind === 'none' && metadata.graphBlank)) {
     let title = 'No graph to render';
     let text = 'Open a graph from a report or a task, or link this window to a streaming Source session.';
+    // Or start one here: adding anything makes this a new graph.
+    let start = 'To create an instant graph, start by adding components from the canvas context menu.';
     if (source.kind === 'session') {
       title = relationships.length ? 'Choose a relationship' : 'Waiting for the linked session';
       text = relationships.length
         ? 'Pick a relationship tab above the canvas (or All) to load the graph.'
         : `Linked to session ${sessionId}. Its relationships appear as tabs above the canvas once the session reports them.`;
+      start = '';
     }
     overlay = (
       <div className="graph_window_state" role="status">
         <h4>{title}</h4>
         <p>{text}</p>
-        {source.kind === 'none' ? (
-          <button type="button" className="graph_window_button is-primary" onClick={createBlankGraph}>
-            <Icon d={ICONS.plus} /> Create new graph
-          </button>
-        ) : null}
+        {start ? <p className="graph_window_state_start"><strong>Tip:</strong> {start}</p> : null}
       </div>
     );
   }
@@ -1599,20 +2118,21 @@ export default function GraphWindowBody({ windowItem }) {
             {isLayingOut ? <span className="graph_window_hint"> · arranging…</span> : null}
           </p>
           {capped ? (
-            <span className="graph_window_flag is-warning" title={`This renderer shows at most ${formatCount(cap)} nodes at once.`}>
+            <span className="graph_window_flag is-warning linkx_tooltip_anchor" data-tooltip-placement="bottom" data-tooltip={`This renderer shows at most ${formatCount(cap)} nodes at once.`}>
               Limited to {formatCount(cap)}
             </span>
           ) : shown > warnAt ? (
             <span className="graph_window_flag is-warning">Large view: may be slow</span>
           ) : null}
           <span
-            className={`graph_window_flag${renderer === RENDERERS.WEBGL ? ' is-gpu' : ''}`}
-            title={renderer === RENDERERS.WEBGL ? 'Drawn with the GPU (Libraries → Graph rendering).' : 'Standard rendering. GPU rendering can be turned on in Libraries → Graph rendering.'}
+            className={`graph_window_flag${renderer === RENDERERS.WEBGL ? ' is-gpu' : ''} linkx_tooltip_anchor`}
+            data-tooltip-placement="bottom"
+              data-tooltip={renderer === RENDERERS.WEBGL ? 'Drawn with the GPU (Libraries → Graph rendering).' : 'Standard rendering. GPU rendering can be turned on in Libraries → Graph rendering.'}
           >
             {renderer === RENDERERS.WEBGL ? 'GPU' : 'Standard'}
           </span>
           {source.kind === 'session' ? (
-            <button type="button" className="graph_window_button is-compact" onClick={handleUnlink} title={`Unlink from session ${sessionId}`}>
+            <button type="button" className="graph_window_button is-compact linkx_tooltip_anchor" onClick={handleUnlink} data-tooltip-placement="bottom" data-tooltip={`Unlink from session ${sessionId}`}>
               <Icon d={ICONS.link} /> Unlink
             </button>
           ) : source.kind === 'none' ? (
@@ -1637,58 +2157,130 @@ export default function GraphWindowBody({ windowItem }) {
               </datalist>
               <button
                 type="submit"
-                className="graph_window_button is-compact"
+                className="graph_window_button is-compact linkx_tooltip_anchor"
                 disabled={!linkTarget.trim() || linking}
-                title="Link this graph to a streaming Source window (its window ID or session ID)."
+                data-tooltip-placement="bottom"
+              data-tooltip="Link this graph to a streaming Source window (its window ID or session ID)."
               >
                 Link
               </button>
             </form>
           ) : null}
           <div className="graph_window_tools" role="group" aria-label="History">
-            <button type="button" className="graph_window_icon_button" aria-label="Undo" title="Undo" disabled={!snapshot.history?.canUndo} onClick={() => stepHistory('undo')}><Icon d={ICONS.undo} /></button>
-            <button type="button" className="graph_window_icon_button" aria-label="Redo" title="Redo" disabled={!snapshot.history?.canRedo} onClick={() => stepHistory('redo')}><Icon d={ICONS.redo} /></button>
+            <button type="button" className="graph_window_icon_button linkx_tooltip_anchor" aria-label="Undo" data-tooltip-placement="bottom" data-tooltip="Undo" disabled={!snapshot.history?.canUndo} onClick={() => stepHistory('undo')}><Icon d={ICONS.undo} /></button>
+            <button type="button" className="graph_window_icon_button linkx_tooltip_anchor" aria-label="Redo" data-tooltip-placement="bottom" data-tooltip="Redo" disabled={!snapshot.history?.canRedo} onClick={() => stepHistory('redo')}><Icon d={ICONS.redo} /></button>
           </div>
           <div className="graph_window_tools" role="group" aria-label="Edit">
             <button
               type="button"
-              className={`graph_window_icon_button${customize ? ' is-active' : ''}`}
+              className={`graph_window_icon_button${formattingOpen ? ' is-active' : ''}${rulesOn ? ' is-filtering' : ''} linkx_tooltip_anchor`}
+              aria-label="Conditional formatting"
+              aria-haspopup="dialog"
+              data-tooltip-placement="bottom"
+              data-tooltip={rulesOn
+                ? `Conditional formatting (${rulesOn} on)`
+                : 'Conditional formatting: style nodes and links by rules'}
+              disabled={!hasData}
+              onClick={() => setFormattingOpen(true)}
+            >
+              <Icon d={ICONS.formatting} />
+            </button>
+            <button
+              type="button"
+              className={`graph_window_icon_button is-customize${customize ? ' is-active' : ''} linkx_tooltip_anchor`}
               aria-label="Customize"
               aria-haspopup="dialog"
-              title={customizable.nodes.length || customizable.edges.length
+              data-tooltip-placement="bottom"
+              data-tooltip={customizable.nodes.length || customizable.edges.length
                 ? `Customize the selected ${[customizable.nodes.length && `${customizable.nodes.length} ${customizable.nodes.length === 1 ? 'node' : 'nodes'}`, customizable.edges.length && `${customizable.edges.length} ${customizable.edges.length === 1 ? 'link' : 'links'}`].filter(Boolean).join(' and ')}`
                 : 'Customize: select a node or a link first'}
               disabled={!hasData || (!customizable.nodes.length && !customizable.edges.length)}
               onClick={openCustomize}
             >
-              <Icon d={ICONS.customize} />
+              {/* In colour, so it reads as the place to restyle (analyst decision 2026-11-17). */}
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d={ICONS.customize[0]} />
+                <circle className="graph_customize_dot is-red" cx="7.5" cy="11" r="1.5" />
+                <circle className="graph_customize_dot is-amber" cx="10.5" cy="7" r="1.5" />
+                <circle className="graph_customize_dot is-blue" cx="15.5" cy="7.5" r="1.5" />
+              </svg>
             </button>
           </div>
-          <div className="graph_window_tools" role="group" aria-label="View">
-            <button type="button" className="graph_window_icon_button" aria-label="Zoom in" title="Zoom in" disabled={!hasData} onClick={() => canvasRef.current?.zoomBy(1.25)}><Icon d={ICONS.zoomIn} /></button>
-            <button type="button" className="graph_window_icon_button" aria-label="Zoom out" title="Zoom out" disabled={!hasData} onClick={() => canvasRef.current?.zoomBy(0.8)}><Icon d={ICONS.zoomOut} /></button>
+          <div className="graph_window_tools" role="group" aria-label="File">
             <button
               type="button"
-              className={`graph_window_icon_button${zoomingArea ? ' is-active' : ''}`}
+              className="graph_window_icon_button linkx_tooltip_anchor"
+              aria-label="Import graph"
+              data-tooltip-placement="bottom"
+              data-tooltip="Import graph: a JSON graph file (replaces what is shown)"
+              disabled={busy || linking}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <Icon d={ICONS.importFile} />
+            </button>
+            <input ref={fileInputRef} type="file" accept={GRAPH_FILE_ACCEPT} hidden aria-label="Graph file" onChange={importGraphFile} />
+            <GraphFileMenu
+              label="Export"
+              icon={<Icon d={ICONS.exportFile} />}
+              disabled={!hasData}
+              onPick={runFileAction}
+              items={[
+                { id: 'snapshot', label: 'Take a snap…', hint: 'The current view on an A4 page (PNG), in the NBE frame' },
+                { id: 'print', label: 'Print graph…', hint: 'The current view on an A4 page, in the NBE frame' },
+                { id: 'json', label: 'Export JSON', hint: 'Download what is drawn as a graph file (production format)' },
+                { id: 'report', label: 'Generate report…', hint: 'A PDF report of this graph (LinkX Graph Report template)' },
+              ]}
+            />
+          </div>
+          <div className="graph_window_tools" role="group" aria-label="View">
+            <button type="button" className="graph_window_icon_button linkx_tooltip_anchor" aria-label="Zoom in" data-tooltip-placement="bottom" data-tooltip="Zoom in" disabled={!hasData} onClick={() => canvasRef.current?.zoomBy(1.25)}><Icon d={ICONS.zoomIn} /></button>
+            <button type="button" className="graph_window_icon_button linkx_tooltip_anchor" aria-label="Zoom out" data-tooltip-placement="bottom" data-tooltip="Zoom out" disabled={!hasData} onClick={() => canvasRef.current?.zoomBy(0.8)}><Icon d={ICONS.zoomOut} /></button>
+            <button
+              type="button"
+              className={`graph_window_icon_button${zoomingArea ? ' is-active' : ''} linkx_tooltip_anchor`}
               aria-label="Zoom to area"
               aria-pressed={zoomingArea}
-              title="Zoom to area: drag a box over the graph"
+              data-tooltip-placement="bottom"
+              data-tooltip="Zoom to area: drag a box over the graph"
               disabled={!hasData}
               onClick={() => setZoomingArea((value) => !value)}
             >
               <Icon d={ICONS.zoomArea} />
             </button>
-            <button type="button" className="graph_window_icon_button" aria-label="Fit graph" title="Fit graph" disabled={!hasData} onClick={() => canvasRef.current?.fit()}><Icon d={ICONS.fit} /></button>
+            <button type="button" className="graph_window_icon_button linkx_tooltip_anchor" aria-label="Fit graph" data-tooltip-placement="bottom" data-tooltip="Fit graph" disabled={!hasData} onClick={() => canvasRef.current?.fit()}><Icon d={ICONS.fit} /></button>
             <button
               type="button"
-              className={`graph_window_icon_button${!timeline.collapsed ? ' is-active' : ''}${timeline.from != null || timeline.to != null || timeline.hideUndated ? ' is-filtering' : ''}`}
+              className={`graph_window_icon_button${!timeline.collapsed ? ' is-active' : ''}${timeline.from != null || timeline.to != null || timeline.hideUndated ? ' is-filtering' : ''} linkx_tooltip_anchor`}
               aria-label="Timeline"
               aria-pressed={!timeline.collapsed}
-              title={timeline.from != null || timeline.to != null || timeline.hideUndated ? 'Timeline (a period is applied)' : 'Timeline: expand or collapse the date filter'}
+              data-tooltip-placement="bottom"
+              data-tooltip={timeline.from != null || timeline.to != null || timeline.hideUndated ? 'Timeline (a period is applied)' : 'Timeline: expand or collapse the date filter'}
               disabled={!hasData}
               onClick={() => setTimeline((current) => ({ ...current, collapsed: !current.collapsed }))}
             >
               <Icon d={ICONS.timeline} />
+            </button>
+            <button
+              type="button"
+              className="graph_window_icon_button linkx_tooltip_anchor"
+              aria-label="Open as table"
+              data-tooltip-placement="bottom"
+              data-tooltip="Open as table: this graph's nodes and links as rows, in their own window"
+              disabled={!hasData}
+              onClick={openTable}
+            >
+              <Icon d={ICONS.table} />
+            </button>
+            <button
+              type="button"
+              className="graph_window_icon_button linkx_tooltip_anchor"
+              aria-label="Open as chart"
+              data-tooltip-placement="bottom"
+              data-tooltip="Open as chart: this graph's network metrics as charts, in their own window"
+              disabled={!hasData}
+              onClick={openChart}
+            >
+              <Icon d={ICONS.chart} />
             </button>
             <GraphOverlayMenu prefs={overlays} onToggle={toggleOverlay} />
           </div>
@@ -1708,7 +2300,7 @@ export default function GraphWindowBody({ windowItem }) {
             windowId={windowId}
             store={store}
             view={view}
-            settings={effective}
+            settings={canvasSettings}
             renderer={renderer}
             isCdr={isCdr}
             onRendererFailed={handleRendererFailed}
@@ -1719,10 +2311,12 @@ export default function GraphWindowBody({ windowItem }) {
             showGlyphs={overlays.glyphs}
             onElementTap={handleElementTap}
             tapZoomsTo={tapZoomsTo}
-            onViewportChange={closeProfile}
+            onViewportChange={followProfiles}
+            onEdgeDoubleClick={handleEdgeDoubleClick}
+            expandedLinks={expandedLinks}
             onEdgeSelection={setEdgeSelection}
           />
-          {hasData && overlays.legend ? <GraphSemanticLegend isCdr={isCdr} /> : null}
+          {hasData && overlays.legend ? <GraphSemanticLegend isCdr={isCdr} rules={activeRules.filter((rule) => rule.on)} /> : null}
           {zoomingArea && hasData ? <GraphZoomBox onZoom={zoomToArea} onDone={endZoomArea} /> : null}
           {adjust && adjustTarget ? (
             <GraphAdjustBox
@@ -1734,8 +2328,21 @@ export default function GraphWindowBody({ windowItem }) {
               onClose={closeAdjust}
             />
           ) : null}
-          {profile && settings.actorProfile && profileSettings.enabled && store.getNode(profile.id) && !customize && !menu ? (
-            <GraphNodeProfile key={profile.id} node={store.getNode(profile.id)} at={profile} settings={profileSettings} isCdr={isCdr} onClose={closeProfile} />
+          {profiles.length && settings.actorProfile && profileSettings.enabled && !customize && !formattingOpen && !menu ? (
+            <GraphProfileCards cards={profiles.filter((card) => store.getNode(card.id))} nodeOf={(id) => store.getNode(id)} settings={profileSettings} isCdr={isCdr} onClose={closeProfile} />
+          ) : null}
+          {formattingOpen && formattingData ? (
+            <GraphFormattingBox
+              rules={settings.formatting.rules}
+              domain={{ label: formatDomainPillarLabel(domainKey), rules: domainRules, use: settings.useDomainRules }}
+              keys={formattingData.keys}
+              items={formattingData.items}
+              ctx={formattingData.ctx}
+              valuesOf={formattingValues}
+              onApply={applyFormatting}
+              onSelect={selectFormatted}
+              onClose={closeFormatting}
+            />
           ) : null}
           {customize ? (
             <GraphCustomizeBox
@@ -1752,7 +2359,7 @@ export default function GraphWindowBody({ windowItem }) {
           <GraphOverlayDock>
             {/* The folded stack, top to bottom: Merged & Grouped, Pinned Evidence,
                 Graph Alerts (analyst decision 2026-11-16). */}
-            {overlays.combined && combinedPanel.open ? (
+            {overlays.combined && (combinedPanel.open || cardsLive) ? (
               <GraphCombinedPanel
                 items={combinedCards}
                 summary={combinedCards.length
@@ -1767,13 +2374,14 @@ export default function GraphWindowBody({ windowItem }) {
                 onToggleCollapsed={() => setCombinedPanel((current) => ({ ...current, collapsed: !current.collapsed }))}
                 onFocus={focusNode}
                 onUngroup={(id) => runEditAction('ungroup', { id, selection: [id] })}
+                onRefresh={recheckCards}
                 front={frontCard === 'combined'}
                 onActivate={() => setFrontCard('combined')}
                 escapeFolds={escapeFolds}
                 onClose={() => setCombinedPanel((current) => ({ ...current, open: false }))}
               />
             ) : null}
-            {overlays.pinned && pinnedPanel.open ? (
+            {overlays.pinned && (pinnedPanel.open || cardsLive) ? (
               <GraphPinnedPanel
                 items={pinnedCards}
                 elsewhere={pinned.length - pinnedHere.length}
@@ -1785,13 +2393,14 @@ export default function GraphWindowBody({ windowItem }) {
                 onFocus={focusPinned}
                 onUnpin={(item) => unpinEvidence([item])}
                 onShowAll={showPinnedEvidence}
+                onRefresh={recheckCards}
                 front={frontCard === 'pinned'}
                 onActivate={() => setFrontCard('pinned')}
                 escapeFolds={escapeFolds}
                 onClose={() => setPinnedPanel((current) => ({ ...current, open: false }))}
               />
             ) : null}
-            {overlays.alerts && alertsPanel.open ? (
+            {overlays.alerts && (alertsPanel.open || cardsLive) && !alertsAwaitScan ? (
               <GraphAlertsPanel
                 alerts={describedAlerts}
                 summary={alertsEnabled ? alertSummary(alerts) : 'Alert rules are off.'}
@@ -1815,6 +2424,28 @@ export default function GraphWindowBody({ windowItem }) {
             ) : null}
           </GraphOverlayDock>
           {menu ? <GraphContextMenu menu={menu} onAction={runMenuAction} onClose={closeMenu} /> : null}
+          {snapPopup ? (
+            <GraphSnapDialog
+              purpose={snapPopup.purpose}
+              candidates={snapPopup.candidates}
+              initialCards={snapPopup.initialCards}
+              maxCards={MAX_CARDS}
+              cardsEnabled={cardsEnabled}
+              compose={composeSnap}
+              onSubmit={submitSnap}
+              onCancel={closeSnap}
+            />
+          ) : null}
+          {reportForm ? (
+            <GraphReportDialog
+              initial={reportForm}
+              nameKeys={store.propertyKeys()}
+              draftFor={reportDraft}
+              kind="graph"
+              onGenerate={generateReport}
+              onCancel={() => setReportForm(null)}
+            />
+          ) : null}
           {dialog ? (
             <GraphDialog
               dialog={dialog}

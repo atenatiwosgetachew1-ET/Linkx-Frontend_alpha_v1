@@ -1,0 +1,424 @@
+/* Table window (G3.5 i2 #5; analyst decision 2026-11-17): a Graph window's
+   nodes or links as rows. In the graph's theme tokens, so the two read as a
+   pair. */
+.table_window_body {
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	/* The Graph window's margin (its body's padding). */
+	padding: 10px 14px;
+	background: var(--graph-bg);
+}
+
+/* One line (analyst decision 2026-11-18): the filter gives way. */
+.table_toolbar {
+	flex-wrap: nowrap;
+}
+
+.table_filter_field {
+	flex: 0 1 160px;
+	width: auto;
+	min-width: 96px;
+}
+
+.table_window {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	min-height: 0;
+	background: var(--graph-canvas-bg);
+	color: var(--graph-text);
+	font-size: 12px;
+}
+
+
+
+
+
+
+
+.table_button {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	height: 26px;
+	padding: 0 10px;
+	border: 1px solid var(--graph-border);
+	border-radius: 6px;
+	background: transparent;
+	color: var(--graph-text);
+	font: inherit;
+	font-size: 11.5px;
+	white-space: nowrap;
+	cursor: pointer;
+}
+
+.table_button:hover:not(:disabled) {
+	border-color: var(--graph-accent);
+}
+
+.table_button.is-quiet {
+	border-color: transparent;
+	color: var(--graph-muted-text);
+}
+
+.table_button.is-quiet:hover {
+	color: var(--graph-text);
+}
+
+.table_badge {
+	padding: 0 6px;
+	border-radius: 999px;
+	background: color-mix(in srgb, var(--graph-muted-text) 14%, transparent);
+	color: var(--graph-muted-text);
+	font-size: 10px;
+	font-variant-numeric: tabular-nums;
+}
+
+/* Nodes | Links */
+.table_tabs,
+.table_segments {
+	display: inline-flex;
+	gap: 2px;
+	padding: 2px;
+	border: 1px solid var(--graph-border);
+	border-radius: 7px;
+}
+
+.table_tab,
+.table_segment {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	height: 24px;
+	padding: 0 10px;
+	border: 0;
+	border-radius: 5px;
+	background: transparent;
+	color: var(--graph-muted-text);
+	font: inherit;
+	font-size: 11.5px;
+	white-space: nowrap;
+	cursor: pointer;
+}
+
+.table_tab svg {
+	width: 13px;
+	height: 13px;
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 1.8;
+}
+
+.table_tab:hover,
+.table_segment:hover {
+	color: var(--graph-text);
+}
+
+.table_tab.is-current,
+.table_segment.is-current {
+	background: color-mix(in srgb, var(--graph-accent) 14%, transparent);
+	color: var(--graph-text);
+}
+
+.table_tab.is-current .table_badge {
+	background: color-mix(in srgb, var(--graph-accent) 22%, transparent);
+	color: var(--graph-text);
+}
+
+
+/* Columns menu */
+.table_columns {
+	position: relative;
+}
+
+.table_columns_menu {
+	position: absolute;
+	top: calc(100% + 4px);
+	right: 0;
+	z-index: 20;
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	width: 240px;
+	max-height: 360px;
+	padding: 8px;
+	border: 1px solid var(--graph-border);
+	border-radius: 8px;
+	background: var(--graph-toolbar-bg);
+	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+
+.table_columns_menu ol {
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+	margin: 0;
+	padding: 0;
+	overflow-y: auto;
+	list-style: none;
+	scrollbar-width: thin;
+}
+
+.table_columns_menu li {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) 22px 22px;
+	align-items: center;
+	gap: 2px;
+	padding: 2px 4px;
+	border-radius: 4px;
+}
+
+.table_columns_menu li:hover {
+	background: color-mix(in srgb, var(--graph-accent) 8%, transparent);
+}
+
+.table_columns_menu label {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+	cursor: pointer;
+}
+
+.table_columns_menu label span {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.table_columns_menu input {
+	accent-color: var(--graph-accent);
+}
+
+.table_columns_menu li button {
+	height: 20px;
+	padding: 0;
+	border: 0;
+	border-radius: 4px;
+	background: none;
+	color: var(--graph-muted-text);
+	cursor: pointer;
+}
+
+.table_columns_menu li button:hover:not(:disabled) {
+	color: var(--graph-accent);
+}
+
+.table_columns_menu li button:disabled {
+	opacity: 0.3;
+	cursor: default;
+}
+
+/* The grid */
+.table_scroll {
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow: auto;
+	scrollbar-width: thin;
+}
+
+.table_row {
+	display: grid;
+	grid-template-columns: var(--table-columns);
+	height: 26px;
+	border-bottom: 1px solid color-mix(in srgb, var(--graph-border) 50%, transparent);
+	cursor: default;
+}
+
+/* Alternate rows a touch of navy (analyst decision 2026-11-18); by the
+   row's place in the list, so it holds while scrolling (only the rows in
+   sight are drawn). Dark themes take a lighter navy to show at all. */
+.table_window {
+	--table-stripe: color-mix(in srgb, #1e3a5f 5%, transparent);
+	/* The header: a firmer navy over the toolbar's colour, opaque (it stays
+	   on top while scrolling) (analyst decision 2026-11-18). */
+	--table-head: color-mix(in srgb, #1e3a5f 14%, var(--graph-toolbar-bg));
+}
+
+:is([data-theme*='dark'], [data-theme='deep-space'], [data-theme='cyberpunk']) .table_window {
+	--table-stripe: color-mix(in srgb, #8fb3e0 6%, transparent);
+	--table-head: color-mix(in srgb, #8fb3e0 14%, var(--graph-toolbar-bg));
+}
+
+.table_row.is-alt {
+	background: var(--table-stripe);
+}
+
+.table_row:not(.is-head):hover {
+	background: color-mix(in srgb, var(--graph-accent) 6%, transparent);
+}
+
+.table_row:focus-visible {
+	outline: 2px solid color-mix(in srgb, var(--graph-accent) 60%, transparent);
+	outline-offset: -2px;
+}
+
+.table_row.is-selected {
+	background: color-mix(in srgb, var(--graph-accent) 16%, transparent);
+	box-shadow: inset 3px 0 0 var(--graph-accent);
+}
+
+.table_row.is-head {
+	position: sticky;
+	top: 0;
+	z-index: 2;
+	height: 28px;
+	border-bottom-color: var(--graph-border);
+	background: var(--table-head);
+}
+
+.table_cell {
+	display: flex;
+	align-items: center;
+	min-width: 0;
+	padding: 0 10px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.table_cell.is-number {
+	justify-content: flex-end;
+	font-variant-numeric: tabular-nums;
+}
+
+.table_cell.is-head {
+	padding: 0;
+}
+
+.table_cell.is-head button {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	width: 100%;
+	height: 100%;
+	padding: 0 10px;
+	border: 0;
+	background: none;
+	color: var(--graph-muted-text);
+	font: inherit;
+	font-size: 11px;
+	font-weight: 600;
+	text-align: left;
+	cursor: pointer;
+}
+
+.table_cell.is-head button span:first-child {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.table_cell.is-head button:hover,
+.table_cell.is-head[aria-sort="ascending"] button,
+.table_cell.is-head[aria-sort="descending"] button {
+	color: var(--graph-text);
+}
+
+.table_sort {
+	color: var(--graph-accent);
+	font-size: 8px;
+}
+
+.table_blank {
+	color: var(--graph-muted-text);
+	opacity: 0.5;
+}
+
+/* Unlinked: right-click ▸ New Graph window (graph context menu look). */
+.table_context_menu {
+	z-index: 30;
+}
+
+/* As the Graph window's tip: a quiet aside under a hairline, at the bottom. */
+.table_state_tip {
+	position: absolute;
+	left: 50%;
+	bottom: 14px;
+	width: max-content;
+	max-width: min(420px, calc(100% - 48px));
+	margin: 0;
+	padding-top: 8px;
+	overflow: hidden;
+	border-top: 1px solid color-mix(in srgb, var(--graph-border) 60%, transparent);
+	color: var(--graph-muted-text);
+	font-size: 11px;
+	text-align: center;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	opacity: 0.75;
+	transform: translateX(-50%);
+	pointer-events: none;
+}
+
+.table_state_tip strong {
+	font-weight: 600;
+}
+
+/* Empty / not linked */
+.table_state {
+	display: grid;
+	flex: 1 1 auto;
+	place-content: center;
+	justify-items: center;
+	gap: 8px;
+	padding: 24px;
+	color: var(--graph-muted-text);
+	text-align: center;
+}
+
+.table_state h4 {
+	margin: 0;
+	color: var(--graph-text);
+	font-size: 14px;
+}
+
+.table_state p {
+	margin: 0;
+	max-width: 420px;
+	font-size: 12px;
+}
+
+.table_pick {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: center;
+	gap: 6px;
+	margin: 4px 0 0;
+	padding: 0;
+	list-style: none;
+}
+
+.table_footer {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	min-height: 28px;
+	padding: 0 12px;
+	border-top: 1px solid var(--graph-border);
+	background: var(--graph-toolbar-bg);
+	color: var(--graph-muted-text);
+	font-size: 11px;
+	font-variant-numeric: tabular-nums;
+}
+
+.table_footer_hint {
+	margin-left: auto;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	opacity: 0.8;
+}
+
+/* Print table: the columns will continue on more pages. */
+.table_print_sets {
+	margin: 0;
+	padding: 6px 8px;
+	border-left: 3px solid var(--graph-accent);
+	border-radius: 0 3px 3px 0;
+	background: color-mix(in srgb, var(--graph-accent) 8%, transparent);
+	color: var(--graph-text);
+	line-height: 1.4;
+}

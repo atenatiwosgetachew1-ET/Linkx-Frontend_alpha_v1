@@ -8,7 +8,9 @@ import { profileOf } from '../lib/nodeProfile.js';
 // the right, filled from the node's properties as mapped in Configuration ▸
 // Rules ▸ Profile mapping fields (lib/nodeProfile.js; a placeholder and "—"
 // without them). Values are shown whole (they wrap; the card widens first):
-// they are critical. The background, Escape, × or moving the view closes it.
+// they are critical. Up to four at once (Ctrl / Cmd / Shift + click adds
+// one, the oldest making way for a fifth; analyst decision 2026-11-18), following their nodes as the view
+// moves; the background or Escape closes them, × closes one.
 //
 // node: the clicked node's data; at { x, y }: its place on the canvas;
 // settings: the graph's profile settings; isCdr: CDR value formatting.
@@ -25,8 +27,13 @@ const NoPortrait = () => (
   </div>
 );
 
-export default function GraphNodeProfile({ node, at, settings, isCdr = false, onClose }) {
+// place: { left, top } given by the cards' layout (several cards on the
+// canvas; GraphProfileCards), else the card places itself; onMeasure({
+// width, height }): its size, for that layout.
+export default function GraphNodeProfile({ node, at, settings, isCdr = false, onClose, place = null, onMeasure = null, nodeId = undefined }) {
   const ref = useRef(null);
+  const onMeasureRef = useRef(onMeasure);
+  onMeasureRef.current = onMeasure;
   const [portraitFailed, setPortraitFailed] = useState(false);
   const profile = profileOf(node, settings, { isCdr });
 
@@ -43,12 +50,20 @@ export default function GraphNodeProfile({ node, at, settings, isCdr = false, on
       portrait.style.width = `${body.offsetHeight}px`;
       portrait.style.height = `${body.offsetHeight}px`;
     }
+    onMeasureRef.current?.({ width: element.offsetWidth, height: element.offsetHeight });
+    if (place) {
+      element.style.left = `${place.left}px`;
+      element.style.top = `${place.top}px`;
+      return;
+    }
     const right = at.x + OFFSET;
     const left = right + element.offsetWidth <= stage.clientWidth - MARGIN ? right : at.x - OFFSET - element.offsetWidth;
     const top = at.y - element.offsetHeight / 2;
     element.style.left = `${Math.max(MARGIN, Math.min(left, stage.clientWidth - element.offsetWidth - MARGIN))}px`;
     element.style.top = `${Math.max(MARGIN, Math.min(top, stage.clientHeight - element.offsetHeight - MARGIN))}px`;
-  }, [at.x, at.y]);
+    // By the place's values (a new object each render).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [at.x, at.y, place?.left, place?.top]);
 
   useEffect(() => {
     const onKey = (event) => {
@@ -59,7 +74,7 @@ export default function GraphNodeProfile({ node, at, settings, isCdr = false, on
   }, [onClose]);
 
   return (
-    <section ref={ref} className="graph_profile" aria-label="Actor profile" onContextMenu={(event) => event.preventDefault()}>
+    <section ref={ref} className="graph_profile" aria-label="Actor profile" data-node-id={nodeId} onContextMenu={(event) => event.preventDefault()}>
       <div className="graph_profile_portrait">
         {profile.portrait && !portraitFailed
           ? <img className="graph_profile_portrait_art" src={profile.portrait} alt="Portrait" referrerPolicy="no-referrer" onError={() => setPortraitFailed(true)} />

@@ -15,14 +15,14 @@ export const normalizeGraphId = (rawId) => {
 
 // Display-only keys hidden from a node's "Infos" (GA:6099 showNodeInfos).
 export const INFO_HIDDEN_KEYS = new Set([
-  'size', 'x', 'y', 'vx', 'vy', 'rel_type', 'session_id', 'index', 'edges', 'neighbors', 'colorBehavior', 'baseColor', 'borderColor',
+  'size', 'x', 'y', 'vx', 'vy', 'rel_type', 'session_id', 'index', 'edges', 'neighbors', 'colorBehavior', 'baseColor', 'borderColor', '__customized',
   'color', 'shape', 'borderWidth', 'borderWidthSelected', 'borderWidth1', 'image', 'imagePadding', 'iconPath', 'title',
 ]);
 
 // Keys never offered for search / limit / label-by (GA:1706 getAllNodeKeys).
 export const PROPERTY_KEY_HIDDEN = new Set([
   'size', 'x', 'y', 'vx', 'vy', 'index', 'edges', 'neighbors', 'color', 'shape', 'borderWidth', 'borderWidthSelected',
-  'borderWidth1', 'image', 'imagePadding', 'iconPath', 'title', 'batch_id', 'input_file', 'label', 'nodes_label', 'colorBehavior', 'borderColor',
+  'borderWidth1', 'image', 'imagePadding', 'iconPath', 'title', 'batch_id', 'input_file', 'label', 'nodes_label', 'colorBehavior', 'borderColor', '__customized',
 ]);
 
 // GA:8301 getNodeValue: property lookup ignoring case.

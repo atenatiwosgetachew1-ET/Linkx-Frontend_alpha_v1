@@ -6,52 +6,17 @@ import { GRAPH_LIMITS, layoutSignatureOf } from '../lib/graphSettings.js';
 import { requestLayout, startPhysics } from '../lib/layoutClient.js';
 import { neighbourIndex, placeNear } from '../lib/layouts.js';
 import { getNodeValue } from '../lib/graphModel.js';
+import { nodeTypeOf } from '../lib/graphAnalysis.js';
 import { RENDERERS } from '../lib/rendererPreference.js';
 import { subscribeIconThemes } from '../lib/graphIcons.js';
+import { readGraphTheme } from '../lib/graphTheme.js';
 import GraphMinimap from './GraphMinimap.jsx';
 
-// The only file that knows the rendering library (graph-chart-plan §3.2).
+// The only on-screen user of the rendering library (graph-chart-plan §3.2;
+// lib/offscreenSnapshot.js draws report snapshots without a window).
 // Cytoscape draws on canvas by default; WebGL is opt-in. Lessons from G0
 // (§5.3): WebGL contexts are released explicitly on destroy, and a lost
 // context hands the window back to canvas.
-
-// Theme tokens -> concrete colours (Cytoscape cannot read CSS variables or
-// color-mix()). A probe element resolves each token through the cascade.
-const THEME_TOKENS = {
-  nodeFill: '--graph-node-fill',
-  nodeBorder: '--graph-node-border',
-  label: '--graph-label',
-  edge: '--graph-edge',
-  selected: '--graph-selected',
-  // Node badge colours (G3.6).
-  glyphAlert: '--graph-alert-high',
-  glyphPinned: '--graph-pinned',
-  glyphFlag: '--graph-node-flag',
-  glyphNote: '--graph-muted-text',
-  glyphGroup: '--graph-group',
-  glyphMerged: '--graph-merged',
-};
-
-const readGraphTheme = (container) => {
-  const probe = document.createElement('span');
-  probe.style.display = 'none';
-  container.appendChild(probe);
-  const theme = {};
-  Object.entries(THEME_TOKENS).forEach(([name, cssVar]) => {
-    probe.style.color = `var(${cssVar})`;
-    theme[name] = getComputedStyle(probe).color || '#555555';
-  });
-  // Light or dark from the canvas background itself, so custom themes work:
-  // dark canvases get production's white icons.
-  probe.style.color = 'var(--graph-canvas-bg)';
-  const rgb = /rgba?\(\s*(\d+)[,\s]+(\d+)[,\s]+(\d+)/.exec(getComputedStyle(probe).color);
-  theme.mode = rgb && (Number(rgb[1]) * 299 + Number(rgb[2]) * 587 + Number(rgb[3]) * 114) / 1000 < 128 ? 'dark' : 'light';
-  probe.remove();
-  // A transparent fill keeps production's hollow nodes.
-  const alpha = /rgba?\([^)]*,\s*([\d.]+)\)/.exec(theme.nodeFill)?.[1];
-  theme.nodeFillOpacity = alpha === undefined ? 1 : Number(alpha);
-  return theme;
-};
 
 // Replaces an element's data. Cytoscape's data() only merges, so keys the
 // new data no longer has (a cleared highlight, a title switched off) are
@@ -82,7 +47,26 @@ const releaseGraph = (cy) => {
   });
 };
 
-const GraphCanvas = forwardRef(function GraphCanvas({ windowId, store, view, settings, renderer, isCdr, onRendererFailed, onLayoutState, onContextMenu, onNodeDoubleClick, onElementTap, tapZoomsTo, onEdgeSelection, onViewportChange, showMinimap = true, showGlyphs = true }, ref) {
+// The canvas as an image, on its own background colour.
+const capture = (cy, { full, scale, maxSide, format }) => {
+  let element = cy.container();
+  let background = '';
+  while (element && (!background || background === 'transparent' || background === 'rgba(0, 0, 0, 0)')) {
+    background = getComputedStyle(element).backgroundColor;
+    element = element.parentElement;
+  }
+  try {
+    const options = { output: 'base64uri', bg: background || '#ffffff', full, scale, maxWidth: maxSide, maxHeight: maxSide };
+    return format === 'jpg' ? cy.jpg({ ...options, quality: 0.9 }) : cy.png(options);
+  } catch {
+    return null;
+  }
+};
+
+// A stable empty list (a default prop must not change every render).
+const EMPTY_LIST = [];
+
+const GraphCanvas = forwardRef(function GraphCanvas({ windowId, store, view, settings, renderer, isCdr, onRendererFailed, onLayoutState, onContextMenu, onNodeDoubleClick, onElementTap, tapZoomsTo, onEdgeSelection, onViewportChange, onEdgeDoubleClick, expandedLinks = EMPTY_LIST, showMinimap = true, showGlyphs = true }, ref) {
   const containerRef = useRef(null);
   const cyRef = useRef(null);
   // The same instance as state, for the minimap (follows renderer switches).
@@ -112,8 +96,8 @@ const GraphCanvas = forwardRef(function GraphCanvas({ windowId, store, view, set
   // Bumped when a theme change or a recoloured icon needs the elements redrawn.
   const [themeVersion, setThemeVersion] = useState(0);
   useEffect(() => subscribeIconThemes(() => setThemeVersion((value) => value + 1)), []);
-  const callbacksRef = useRef({ onRendererFailed, onLayoutState, onContextMenu, onNodeDoubleClick, onElementTap, tapZoomsTo, onEdgeSelection, onViewportChange });
-  callbacksRef.current = { onRendererFailed, onLayoutState, onContextMenu, onNodeDoubleClick, onElementTap, tapZoomsTo, onEdgeSelection, onViewportChange };
+  const callbacksRef = useRef({ onRendererFailed, onLayoutState, onContextMenu, onNodeDoubleClick, onElementTap, tapZoomsTo, onEdgeSelection, onViewportChange, onEdgeDoubleClick });
+  callbacksRef.current = { onRendererFailed, onLayoutState, onContextMenu, onNodeDoubleClick, onElementTap, tapZoomsTo, onEdgeSelection, onViewportChange, onEdgeDoubleClick };
 
   const visibleCount = view.nodeIds.length;
   const fast = renderer === RENDERERS.CANVAS && visibleCount > GRAPH_LIMITS.CANVAS_FAST_ABOVE;
@@ -171,6 +155,49 @@ const GraphCanvas = forwardRef(function GraphCanvas({ windowId, store, view, set
       return kind === 'edge'
         ? { color: data.color || null, arrow: data.arrow !== 'none' }
         : { fill: data.fill || null, border: data.border || null };
+    },
+    // A PNG of the current view (production captureGraphSnapshot: the
+    // canvas as drawn), on the canvas colour, at twice the screen size for
+    // a sharp print. null while nothing is drawn. maxSide bounds the
+    // longer side in pixels; format 'jpg' (quality 0.9) for a small file
+    // (the report: a PNG of a large graph made a PDF of tens of MB).
+    // nameOf(id): a label to draw each labelled node with in the picture
+    // only (the graph report names entities by its chosen column); the
+    // canvas's own labels are put back at once.
+    snapshot: ({ full = false, scale = 2, maxSide = 8000, format = 'png', nameOf = null } = {}) => {
+      const cy = cyRef.current;
+      if (!cy || cy.nodes().empty()) return null;
+      const restore = [];
+      if (nameOf) {
+        cy.batch(() => {
+          cy.nodes().forEach((node) => {
+            const label = node.data('label');
+            if (!label) return;
+            const name = nameOf(node.id());
+            if (!name || name === label) return;
+            restore.push([node, label]);
+            node.data('label', name);
+          });
+        });
+      }
+      try {
+        return capture(cy, { full, scale, maxSide, format });
+      } finally {
+        if (restore.length) cy.batch(() => restore.forEach(([node, label]) => node.data('label', label)));
+      }
+    },
+
+    // The canvas's element (what a snapshot is taken of; the snap reads the
+    // profile cards over it relative to its box).
+    container: () => cyRef.current?.container() || null,
+    // Where a node is drawn on the canvas, in screen pixels from its top-left
+    // (the snap draws a node's profile card beside it); null when not drawn.
+    renderedPositionOf: (id) => {
+      const cy = cyRef.current;
+      const node = cy?.getElementById(String(id));
+      if (!node || node.empty() || !node.visible()) return null;
+      const { x, y } = node.renderedPosition();
+      return { x, y };
     },
     // Replaces the selection (production network.selectNodes).
     select: (ids) => {
@@ -399,6 +426,8 @@ const GraphCanvas = forwardRef(function GraphCanvas({ windowId, store, view, set
     cy.on('tap viewport', () => callbacksRef.current.onContextMenu?.(null));
     // Production doubleClick (GB:2536): expand one hidden neighbour.
     cy.on('dbltap', 'node', (event) => callbacksRef.current.onNodeDoubleClick?.(event.target.id()));
+    // Link aggregation: a double-click expands / collapses a pair.
+    cy.on('dbltap', 'edge', (event) => callbacksRef.current.onEdgeDoubleClick?.(event.target.id()));
     // Production click (GB:2374): an annotation opens its box (by the
     // node); the background closes it. Plain nodes and links are customized
     // from the toolbar instead (analyst decision 2026-11-16).
@@ -529,6 +558,8 @@ const GraphCanvas = forwardRef(function GraphCanvas({ windowId, store, view, set
       showTitles: settings.showTitles,
       edgeBundling: settings.edgeBundling,
       edgeBundleMin: settings.edgeBundleMin,
+      aggregation: settings.linkAggregation?.on ? { ...settings.linkAggregation, expanded: expandedLinks } : null,
+      formatting: settings.formatting,
       glyphColors: showGlyphs && themeRef.current ? {
         alert: themeRef.current.glyphAlert,
         pinned: themeRef.current.glyphPinned,
@@ -656,6 +687,13 @@ const GraphCanvas = forwardRef(function GraphCanvas({ windowId, store, view, set
         const node = store.getNode(id) || {};
         info[id] = { identity: node.node_identity, layerValue: layerKey ? getNodeValue(node, layerKey) : undefined };
       });
+    } else if (type === 'grouped') {
+      // Grouped (i2 #6): by a property's value, else by node type.
+      const byKey = layerMode === 'by_key' && layerKey;
+      view.nodeIds.forEach((id) => {
+        const node = store.getNode(id) || {};
+        info[id] = { group: byKey ? getNodeValue(node, layerKey) : nodeTypeOf(node) };
+      });
     }
     requestLayout(windowId, type, view.nodeIds, edgePairs, { direction, sortMethod, layerMode, info })
       .then((positions) => {
@@ -680,7 +718,7 @@ const GraphCanvas = forwardRef(function GraphCanvas({ windowId, store, view, set
       cancelled = true;
       stopPhysics();
     };
-  }, [store, view, settings.showLabels, settings.labels, settings.edgeWeight, settings.showTitles, settings.edgeBundling, settings.edgeBundleMin, settings.physics, settings.layout, showGlyphs, isCdr, windowId, renderer, fast, hideEdgesWhileMoving, themeVersion, setPhysicsSettled]);
+  }, [store, view, settings.showLabels, settings.labels, settings.edgeWeight, settings.showTitles, settings.edgeBundling, settings.edgeBundleMin, settings.linkAggregation, expandedLinks, settings.formatting, settings.physics, settings.layout, showGlyphs, isCdr, windowId, renderer, fast, hideEdgesWhileMoving, themeVersion, setPhysicsSettled]);
 
   return (
     <>

@@ -141,7 +141,7 @@ export const generateGraphAlerts = (graph, { nodeIds = [], edgeIds = [] } = {}, 
 // Visual / structural keys never used as a node's name in the panel.
 const ALERT_NAME_EXCLUDE_KEYS = new Set([
   'size', 'x', 'y', 'vx', 'vy', 'rel_type', 'session_id', 'index', 'edges',
-  'neighbors', 'colorBehavior', 'baseColor', 'borderColor', 'color', 'shape', 'borderWidth',
+  'neighbors', 'colorBehavior', 'baseColor', 'borderColor', '__customized', 'color', 'shape', 'borderWidth',
   'borderWidthSelected', 'borderWidth1', 'image', 'imagePadding', 'iconPath',
   'title', 'font', 'group', 'level', 'mass', 'hidden', 'fixed', 'physics',
   'shapeProperties', 'widthConstraint', 'heightConstraint', 'margin', 'icon',
@@ -246,4 +246,20 @@ export const alertSummary = (alerts = []) => {
   if (high) parts.push(`${high} high`);
   if (medium) parts.push(`${medium} medium`);
   return parts.join(' · ');
+};
+
+// The window's graph alert configuration in words, for the report cover
+// ("Graph alert"; analyst decision 2026-11-17).
+export const describeAlertRules = (rules, enabled = true, raised = null) => {
+  if (!enabled) return 'Graph alerts off';
+  const config = normalizeAlertRules(rules);
+  const parts = [];
+  if (config.enableHighDegree) parts.push(`High-degree: ${config.highDegreeMin}+ links (high from ${config.highSeverityDegree})`);
+  if (config.enableHeavyEdge) {
+    const top = Math.round((100 - config.heavyEdgePercentile) * 100) / 100;
+    parts.push(`Heavy-edge: top ${top}% of link weights${config.heavyEdgeMinValue > 0 ? `, at least ${config.heavyEdgeMinValue.toLocaleString('en-GB')}` : ''}`);
+  }
+  if (!parts.length) return 'No graph alert rule enabled';
+  const count = raised == null ? '' : ` · ${raised} ${raised === 1 ? 'alert' : 'alerts'} raised`;
+  return `${parts.join('; ')}${count}`;
 };

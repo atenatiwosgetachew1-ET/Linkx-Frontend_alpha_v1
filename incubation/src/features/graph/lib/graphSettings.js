@@ -9,6 +9,9 @@
 // Here they are a typed object. fromProductionSettings / toProductionSettings
 // convert both ways so production exports and saved views keep loading.
 
+import { DEFAULT_LINK_AGGREGATION, normalizeLinkAggregation } from './linkAggregation.js';
+import { DEFAULT_FORMATTING, normalizeFormatting } from './conditionalFormatting.js';
+
 // Production limits (A:37-38) plus the G0 benchmark limits (plan §5.3).
 export const GRAPH_LIMITS = Object.freeze({
   DEFAULT_VISIBLE: 25, // production default range {0, 25}
@@ -24,7 +27,10 @@ export const GRAPH_LIMITS = Object.freeze({
   ELK_MAX: 1000, // above: production's fast layered layout
 });
 
-export const LAYOUT_TYPES = Object.freeze(['concentric', 'hierarchical', 'layered', 'circle', 'star', 'radial', 'grid', 'spiral']);
+// peacock / grouped: G3.5 i2 #6 (not in production; analyst decision 2026-11-17).
+// Grouped reuses layerMode / layerKey: 'by_key' groups by that property, any
+// other mode by node type.
+export const LAYOUT_TYPES = Object.freeze(['concentric', 'hierarchical', 'layered', 'circle', 'star', 'radial', 'grid', 'spiral', 'peacock', 'grouped']);
 export const LABEL_GROUPS = Object.freeze(['Entity Node', 'Source Node', 'Target Node']);
 export const LAYER_MODES = Object.freeze(['hop_distance', 'node_identity', 'by_key']);
 
@@ -50,6 +56,14 @@ export const DEFAULT_GRAPH_SETTINGS = Object.freeze({
   // Actor profile card on node click, for this graph (analyst decision
   // 2026-11-16; what it shows is the domain's, Configuration ▸ Rules).
   actorProfile: true,
+  // Link aggregation (G3.5 i2 #2, not in production): lib/linkAggregation.js.
+  linkAggregation: DEFAULT_LINK_AGGREGATION,
+  // Conditional formatting rules (G3.5 i2 #4, not in production):
+  // lib/conditionalFormatting.js.
+  formatting: DEFAULT_FORMATTING,
+  // The domain's formatting rules (Configuration ▸ Rules) apply below this
+  // graph's own, unless turned off here.
+  useDomainRules: true,
 });
 
 const clampInt = (value, min, max) => Math.max(min, Math.min(max, Math.floor(Number(value) || 0)));
@@ -100,6 +114,9 @@ export const normalizeGraphSettings = (input = {}) => {
     edgeBundling: input.edgeBundling === undefined ? d.edgeBundling : bool(input.edgeBundling),
     edgeBundleMin: Math.max(2, parseInt(input.edgeBundleMin, 10) || d.edgeBundleMin),
     actorProfile: input.actorProfile === undefined ? d.actorProfile : bool(input.actorProfile),
+    linkAggregation: normalizeLinkAggregation(input.linkAggregation),
+    formatting: normalizeFormatting(input.formatting),
+    useDomainRules: input.useDomainRules === undefined ? d.useDomainRules : bool(input.useDomainRules),
   };
 };
 

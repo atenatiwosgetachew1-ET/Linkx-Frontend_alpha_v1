@@ -10274,18 +10274,7 @@ body{
 
 /* Feature Lanes CSS Styles (Graph, Chart, Config) */
 .graph_window_body,
-.chart_window_body {
-	display: flex;
-	flex-direction: column;
-	width: 100%;
-	height: 100%;
-	padding: 16px;
-	gap: 16px;
-	overflow: auto;
-}
-
-.graph_window_toolbar,
-.chart_window_toolbar {
+.graph_window_toolbar {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
@@ -10305,7 +10294,6 @@ body{
 }
 
 .graph_window_search input,
-.chart_select,
 .graph_select {
 	padding: 6px 12px;
 	border-radius: 6px;
@@ -10315,8 +10303,7 @@ body{
 	font-size: 13px;
 }
 
-.graph_window_controls,
-.chart_controls_group {
+.graph_window_controls {
 	display: flex;
 	align-items: center;
 	gap: 10px;
@@ -10345,28 +10332,8 @@ body{
 }
 
 .graph_window_canvas_wrapper,
-.chart_canvas_wrapper {
-	position: relative;
-	flex-grow: 1;
-	min-height: 280px;
-	border-radius: 10px;
-	border: 1px solid var(--window-glass-border);
-	background: var(--workspace-scene-bg);
-	overflow: hidden;
-}
 
 .graph_canvas_placeholder,
-.chart_placeholder_hud {
-	position: absolute;
-	inset: 0;
-	display: flex;
-	flex-direction: column;
-	align-items: center;
-	justify-content: center;
-	padding: 20px;
-	text-align: center;
-	color: var(--on-scene-text);
-}
 
 .graph_canvas_grid_bg {
 	position: absolute;
@@ -10391,22 +10358,8 @@ body{
 }
 
 .graph_canvas_center_message,
-.chart_placeholder_hud {
-	position: relative;
-	z-index: 2;
-	display: flex;
-	flex-direction: column;
-	align-items: center;
-	max-width: 360px;
-}
 
 .graph_icon_lg,
-.chart_placeholder_icon svg {
-	width: 48px;
-	height: 48px;
-	color: var(--accent);
-	margin-bottom: 12px;
-}
 
 
 
@@ -11244,25 +11197,29 @@ html.is-element-picking *:not(.element_picker_panel *):not(.element_picker_badge
 }
 
 .workspace_home_findings_btn.is-task,
-.workspace_home_findings_btn.is-chart {
+.workspace_home_findings_btn.is-chart,
+.workspace_home_findings_btn.is-table {
 	background: var(--central-findings-chart-btn-bg, #FFFFFF);
 	border: 1px solid var(--central-findings-chart-btn-border, rgba(174, 135, 79, 0.45));
 	color: var(--central-findings-chart-btn-text, #7f5523);
 }
 
 .workspace_home_findings_btn.is-task svg,
-.workspace_home_findings_btn.is-chart svg {
+.workspace_home_findings_btn.is-chart svg,
+.workspace_home_findings_btn.is-table svg {
 	color: var(--central-findings-chart-btn-icon-color, #ae874f);
 	stroke: var(--central-findings-chart-btn-icon-color, #ae874f);
 }
 
 .workspace_home_findings_btn.is-task:hover,
-.workspace_home_findings_btn.is-chart:hover {
+.workspace_home_findings_btn.is-chart:hover,
+.workspace_home_findings_btn.is-table:hover {
 	background: var(--central-findings-chart-btn-hover-bg, rgba(174, 135, 79, 0.08));
 	color: var(--central-findings-chart-btn-hover-text, #131e2a);
 }
 
-.workspace_home_findings_btn.is-chart:hover svg {
+.workspace_home_findings_btn.is-chart:hover svg,
+.workspace_home_findings_btn.is-table:hover svg {
 	color: var(--central-findings-chart-btn-hover-icon-color, #131e2a);
 	stroke: var(--central-findings-chart-btn-hover-icon-color, #131e2a);
 }

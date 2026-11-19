@@ -1,0 +1,930 @@
+/* Chart window (G5; production's Chart window, graph-chart-plan §2.4): a
+   Graph window's network metrics as cards. In the graph's theme tokens, so
+   it reads as a pair with the Graph and Table windows. */
+.chart_window_body {
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	/* The Graph window's margin (its body's padding). */
+	padding: 10px 14px;
+	background: var(--graph-bg);
+}
+
+.chart_toolbar {
+	flex-wrap: nowrap;
+}
+
+.chart_window {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	min-height: 0;
+	container-type: inline-size;
+	background: var(--graph-canvas-bg);
+	color: var(--graph-text);
+	font-size: 12px;
+}
+
+
+
+
+
+
+.chart_button {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	height: 26px;
+	padding: 0 10px;
+	border: 1px solid var(--graph-border);
+	border-radius: 6px;
+	background: transparent;
+	color: var(--graph-text);
+	font: inherit;
+	font-size: 11.5px;
+	white-space: nowrap;
+	cursor: pointer;
+}
+
+.chart_button:hover:not(:disabled) {
+	border-color: var(--graph-accent);
+}
+
+.chart_button:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+.chart_button.is-quiet {
+	border-color: transparent;
+	color: var(--graph-muted-text);
+}
+
+.chart_button.is-quiet:hover:not(:disabled) {
+	color: var(--graph-text);
+}
+
+.chart_button.is-primary {
+	border-color: var(--graph-primary-border);
+	background: var(--graph-primary-bg);
+	color: var(--graph-primary-text);
+	font-weight: 600;
+}
+
+.chart_segments {
+	display: inline-flex;
+	gap: 2px;
+	padding: 2px;
+	border: 1px solid var(--graph-border);
+	border-radius: 7px;
+}
+
+.chart_segment {
+	height: 24px;
+	padding: 0 10px;
+	border: 0;
+	border-radius: 5px;
+	background: transparent;
+	color: var(--graph-muted-text);
+	font: inherit;
+	font-size: 11.5px;
+	cursor: pointer;
+}
+
+.chart_segment:hover {
+	color: var(--graph-text);
+}
+
+.chart_segment.is-current {
+	background: color-mix(in srgb, var(--graph-accent) 14%, transparent);
+	color: var(--graph-text);
+}
+
+/* + New chart: production's three groups */
+.chart_new {
+	/* Not the menu's anchor: the menu is placed against the Chart window. */
+	position: static;
+}
+
+.chart_menu {
+	/* Placed by the window (ChartWindowBody): against the Chart window, so
+	   it stays inside it. */
+	position: absolute;
+	z-index: 40;
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+	gap: 4px 12px;
+	width: max-content;
+	min-width: min(190px, 100%);
+	padding: 10px;
+	overflow: auto;
+	border: 1px solid var(--graph-border);
+	border-radius: 6px;
+	background: var(--graph-toolbar-bg);
+	box-shadow: 0 10px 28px rgb(0 0 0 / 0.16);
+	box-sizing: border-box;
+	scrollbar-width: thin;
+}
+
+/* Three columns when the window is wide enough, else as many as fit. */
+@container (min-width: 600px) {
+	.chart_menu {
+		grid-template-columns: repeat(3, minmax(170px, 1fr));
+	}
+}
+
+.chart_menu_group {
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+}
+
+.chart_menu_heading {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	margin: 0 0 2px;
+	padding: 4px 8px;
+	border: 0;
+	border-radius: 5px;
+	background: transparent;
+	font-family: inherit;
+	text-align: left;
+	cursor: pointer;
+	color: var(--graph-accent);
+	font-size: 10px;
+	font-weight: 700;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+}
+
+.chart_menu_heading:hover {
+	background: color-mix(in srgb, var(--graph-accent) 10%, transparent);
+}
+
+.chart_menu_heading:focus-visible {
+	outline: 2px solid color-mix(in srgb, var(--graph-accent) 60%, transparent);
+	outline-offset: -2px;
+}
+
+/* A category's checkbox: empty, some (a dash), all (a tick). */
+.chart_menu_box {
+	position: relative;
+	flex: 0 0 auto;
+	width: 12px;
+	height: 12px;
+	border: 1.5px solid currentColor;
+	border-radius: 3px;
+}
+
+.chart_menu_box.is-true,
+.chart_menu_box.is-mixed {
+	background: var(--graph-accent);
+	border-color: var(--graph-accent);
+}
+
+.chart_menu_box.is-true::after {
+	content: '';
+	position: absolute;
+	left: 3px;
+	top: 0;
+	width: 3px;
+	height: 6px;
+	border: solid var(--graph-canvas-bg);
+	border-width: 0 1.5px 1.5px 0;
+	transform: rotate(45deg);
+}
+
+.chart_menu_box.is-mixed::after {
+	content: '';
+	position: absolute;
+	left: 2px;
+	right: 2px;
+	top: 4px;
+	height: 1.5px;
+	background: var(--graph-canvas-bg);
+}
+
+.chart_menu_count {
+	margin-left: auto;
+	color: var(--graph-muted-text);
+	font-weight: 600;
+	letter-spacing: 0;
+}
+
+.chart_menu_item {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	padding: 5px 8px;
+	border: 0;
+	border-radius: 5px;
+	background: transparent;
+	color: var(--graph-text);
+	font: inherit;
+	font-size: 12px;
+	text-align: left;
+	cursor: pointer;
+}
+
+.chart_menu_item:hover:not([aria-disabled='true']) {
+	background: color-mix(in srgb, var(--graph-accent) 12%, transparent);
+}
+
+.chart_menu_item[aria-disabled='true'] {
+	color: var(--graph-muted-text);
+	cursor: default;
+}
+
+/* The Histogram's property, beside the colour controls. */
+.chart_card_param {
+	max-width: 130px;
+}
+
+.chart_menu_note {
+	color: var(--graph-muted-text);
+	font-size: 10px;
+}
+
+/* Global control (production's top bar) */
+
+
+
+/* Production's toggle: a flat track with a square thumb */
+.chart_switch {
+	position: relative;
+	display: inline-flex;
+	width: 30px;
+	height: 10px;
+	cursor: pointer;
+}
+
+.chart_switch input {
+	position: absolute;
+	inset: 0;
+	opacity: 0;
+	cursor: pointer;
+}
+
+.chart_switch span {
+	position: absolute;
+	inset: 0;
+	border-radius: 2px;
+	background: color-mix(in srgb, var(--graph-muted-text) 45%, transparent);
+	transition: background 0.24s;
+	pointer-events: none;
+}
+
+.chart_switch span::before {
+	position: absolute;
+	bottom: -3px;
+	left: 0;
+	width: 15px;
+	height: 15px;
+	border: 1px solid var(--graph-border);
+	border-radius: 3px;
+	background: var(--graph-canvas-bg);
+	content: '';
+	transition: transform 0.24s;
+}
+
+.chart_switch input:checked + span {
+	background: var(--graph-accent);
+}
+
+.chart_switch input:checked + span::before {
+	transform: translateX(16px);
+}
+
+.chart_switch input:focus-visible + span {
+	outline: 2px solid var(--graph-accent);
+	outline-offset: 3px;
+}
+
+/* Cards (analyst decision 2026-11-18: tight, with a defined structure):
+   a header (level badge, eyebrow, title; colour and window controls), a
+   strip of key figures, the chart at a fixed height, a one-line footnote.
+   Two columns, one in a narrow window. */
+.chart_grid {
+	display: grid;
+	flex: 1 1 auto;
+	/* Cards keep a compact size (analyst decisions 2026-11-18): at least 340 px
+	   wide (one column when narrower) and a fixed height; the board scrolls
+	   instead of squeezing them. */
+	grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
+	grid-auto-rows: max-content;
+	align-content: start;
+	gap: 8px;
+	min-height: 0;
+	padding: 8px 0 2px;
+	overflow: auto;
+	overscroll-behavior: contain;
+	scrollbar-width: thin;
+}
+
+.chart_card {
+	--card-tone: var(--graph-accent);
+	display: flex;
+	flex: none;
+	flex-direction: column;
+	min-width: 0;
+	overflow: hidden;
+	/* The Graph window's floating cards (Graph Alerts, Pinned Evidence;
+	   analyst decision 2026-11-18): their frame, radius, background, type. */
+	border: 1px solid var(--graph-border);
+	border-radius: 6px;
+	/* The card's tone washing in from the top-left corner, as the Generate
+	   report popup (and the on-graph cards): 11%, 140% × 90px, fading by
+	   70% (analyst decision 2026-11-18: lighter than the header's 16%). */
+	background:
+		radial-gradient(140% 90px at 0 0, color-mix(in srgb, var(--card-tone) 11%, transparent), transparent 70%),
+		var(--graph-toolbar-bg);
+	color: var(--graph-text);
+	box-shadow: none;
+	font-size: 11px;
+	line-height: 1.35;
+}
+
+.chart_card:hover,
+.chart_card:focus-within {
+	border-color: color-mix(in srgb, var(--card-tone) 45%, var(--graph-border));
+}
+
+.chart_card.is-full {
+	position: absolute;
+	inset: 0;
+	z-index: 30;
+	border-radius: 6px;
+}
+
+/* Header */
+.chart_card_header {
+	display: flex;
+	align-items: flex-start;
+	gap: 6px;
+	padding: 5px 8px;
+	border-bottom: 1px solid var(--graph-border);
+}
+
+.chart_card_heading {
+	display: flex;
+	flex: 1 1 auto;
+	flex-direction: column-reverse;
+	gap: 1px;
+	min-width: 0;
+}
+
+.chart_card_eyebrow {
+	overflow: hidden;
+	color: var(--graph-muted-text);
+	font-size: 10px;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* "Advanced": a specialist measure (menu and card). */
+.chart_advanced_tag {
+	display: inline-block;
+	margin-left: 6px;
+	padding: 0 5px;
+	border: 1px solid color-mix(in srgb, var(--graph-accent) 45%, transparent);
+	border-radius: 999px;
+	background: color-mix(in srgb, var(--graph-accent) 10%, transparent);
+	color: var(--graph-accent);
+	font-size: 9px;
+	font-weight: 700;
+	letter-spacing: 0.04em;
+	line-height: 14px;
+	text-transform: uppercase;
+	vertical-align: 1px;
+	white-space: nowrap;
+}
+
+.chart_card_heading h3 {
+	margin: 0;
+	overflow: hidden;
+	color: var(--graph-text);
+	font-size: 12px;
+	font-weight: 700;
+	line-height: 1.3;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.chart_card_controls {
+	display: flex;
+	flex: none;
+	align-items: center;
+	gap: 6px;
+}
+
+.chart_card_colour {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding-right: 6px;
+	border-right: 1px solid var(--graph-border);
+}
+
+.chart_card_colour .chart_select {
+	height: 20px;
+	max-width: 100px;
+	padding: 0 4px;
+	border-radius: 5px;
+	background: var(--graph-toolbar-bg);
+	font-size: 10.5px;
+}
+
+.chart_card_actions {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+}
+
+.chart_icon_button {
+	display: inline-grid;
+	place-items: center;
+	width: 18px;
+	height: 18px;
+	padding: 0;
+	border: 0;
+	background: none;
+	color: var(--graph-muted-text);
+	cursor: pointer;
+}
+
+.chart_icon_button svg {
+	width: 13px;
+	height: 13px;
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 2;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+
+.chart_icon_button:hover {
+	color: var(--graph-text);
+}
+
+.chart_icon_button.is-close:hover {
+	color: #dc2626;
+}
+
+/* Key figures */
+.chart_card_stats {
+	display: flex;
+	gap: 4px;
+	margin: 0;
+	padding: 5px 8px;
+	border-bottom: 1px solid var(--graph-border);
+}
+
+.chart_card_stat {
+	display: flex;
+	flex: 1 1 0;
+	flex-direction: column;
+	gap: 1px;
+	min-width: 0;
+	padding: 3px 6px;
+	/* As the floating cards' items: a coloured left edge, rounded right. */
+	border-left: 3px solid color-mix(in srgb, var(--card-tone) 70%, transparent);
+	border-radius: 0 6px 6px 0;
+	background: color-mix(in srgb, var(--graph-text) 4%, transparent);
+}
+
+.chart_card_stat + .chart_card_stat {
+	border-left-color: color-mix(in srgb, var(--card-tone) 35%, transparent);
+}
+
+.chart_card_stat dt {
+	overflow: hidden;
+	color: var(--graph-muted-text);
+	font-size: 10px;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.chart_card_stat dd {
+	display: flex;
+	align-items: baseline;
+	gap: 5px;
+	min-width: 0;
+	margin: 0;
+	color: var(--graph-text);
+	font-size: 11.5px;
+	font-weight: 700;
+	font-variant-numeric: tabular-nums;
+}
+
+.chart_card_stat.is-emphasis dd {
+	color: var(--card-tone);
+}
+
+.chart_card_stat_detail {
+	min-width: 0;
+	overflow: hidden;
+	color: var(--graph-muted-text);
+	font-size: 10px;
+	font-weight: 400;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* Chart */
+.chart_card_body {
+	position: relative;
+	display: flex;
+	flex: 1 1 auto;
+	padding: 2px 4px 0;
+	background: var(--graph-canvas-bg);
+}
+
+.chart_card_box {
+	flex: none;
+	width: 100%;
+	height: 200px;
+}
+
+/* Wheel without Ctrl: a subtle, fading hint. */
+.chart_card_zoom_hint {
+	position: absolute;
+	top: 10px;
+	left: 50%;
+	z-index: 2;
+	padding: 4px 10px;
+	border-radius: 999px;
+	background: color-mix(in srgb, var(--graph-text) 78%, transparent);
+	color: var(--graph-canvas-bg);
+	font-size: 11px;
+	white-space: nowrap;
+	pointer-events: none;
+	transform: translateX(-50%);
+	animation: chart_hint_fade 1.4s ease forwards;
+}
+
+@keyframes chart_hint_fade {
+	0% { opacity: 0; }
+	12% { opacity: 1; }
+	75% { opacity: 1; }
+	100% { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.chart_card_zoom_hint { animation: none; }
+}
+
+.chart_card.is-full .chart_card_body {
+	min-height: 0;
+}
+
+.chart_card.is-full .chart_card_box {
+	flex: 1 1 auto;
+	height: auto;
+	min-height: 0;
+}
+
+.chart_card_status {
+	display: grid;
+	place-items: center;
+	width: 100%;
+	min-height: 200px;
+	margin: 0;
+	color: var(--graph-muted-text);
+	font-size: 12px;
+	text-align: center;
+}
+
+.chart_card_status.is-error {
+	color: var(--graph-warning-text);
+}
+
+.chart_card_footer {
+	padding: 3px 8px;
+	overflow: hidden;
+	border-top: 1px solid var(--graph-border);
+	color: var(--graph-muted-text);
+	font-size: 10px;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* Empty / not linked */
+.chart_state {
+	display: grid;
+	flex: 1 1 auto;
+	place-content: center;
+	justify-items: center;
+	gap: 8px;
+	padding: 24px;
+	color: var(--graph-muted-text);
+	text-align: center;
+}
+
+.chart_state h4 {
+	margin: 0;
+	color: var(--graph-text);
+	font-size: 14px;
+}
+
+.chart_state p {
+	max-width: 420px;
+	margin: 0;
+	font-size: 12px;
+}
+
+/* As the Table window's tip: a quiet aside under a hairline, at the bottom. */
+.chart_state_tip {
+	position: absolute;
+	left: 50%;
+	bottom: 14px;
+	width: max-content;
+	max-width: min(420px, calc(100% - 48px));
+	margin: 0;
+	padding-top: 8px;
+	overflow: hidden;
+	border-top: 1px solid color-mix(in srgb, var(--graph-border) 60%, transparent);
+	color: var(--graph-muted-text);
+	font-size: 11px;
+	text-align: center;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	opacity: 0.75;
+	transform: translateX(-50%);
+	pointer-events: none;
+}
+
+.chart_state_tip.is-above-footer {
+	bottom: 42px;
+}
+
+.chart_state_tip strong {
+	font-weight: 600;
+}
+
+.chart_context_menu {
+	z-index: 30;
+}
+
+.chart_pick {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: center;
+	gap: 6px;
+	margin: 4px 0 0;
+	padding: 0;
+	list-style: none;
+}
+
+.chart_footer {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	min-height: 28px;
+	padding: 0 12px;
+	border-top: 1px solid var(--graph-border);
+	color: var(--graph-muted-text);
+	font-size: 11px;
+}
+
+.chart_footer_hint {
+	margin-left: auto;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* Global figures (Global / Cohesion Metrics): a tight grid of key values */
+.chart_figures {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+	align-content: start;
+	gap: 4px;
+	width: 100%;
+	margin: 6px 2px 8px;
+}
+
+.chart_figure {
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+	padding: 4px 6px;
+	border-left: 3px solid color-mix(in srgb, var(--card-tone) 55%, transparent);
+	border-radius: 0 6px 6px 0;
+	background: color-mix(in srgb, var(--graph-text) 4%, transparent);
+}
+
+
+.chart_figure dt {
+	color: var(--graph-muted-text);
+	font-size: 10px;
+}
+
+.chart_figure dd {
+	margin: 0;
+	color: var(--graph-text);
+	font-size: 13px;
+	font-weight: 700;
+	font-variant-numeric: tabular-nums;
+}
+
+.chart_select {
+	height: 26px;
+	max-width: 160px;
+	padding: 0 8px;
+	border: 1px solid var(--graph-border);
+	border-radius: 6px;
+	background: var(--graph-canvas-bg);
+	color: var(--graph-text);
+	font: inherit;
+	font-size: 11.5px;
+}
+
+.chart_select:focus {
+	border-color: var(--graph-accent);
+	outline: none;
+}
+
+.chart_select:disabled {
+	opacity: 0.5;
+}
+
+/* Colours panel: the global control */
+.chart_colours {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	min-width: 220px;
+	padding: 2px 4px 4px;
+}
+
+.chart_colours strong {
+	padding: 2px 4px 0;
+}
+
+.chart_colours_row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 10px;
+	padding: 0 4px;
+	color: var(--graph-text);
+	font-size: 12px;
+}
+
+.chart_colours small {
+	padding: 0 4px;
+	color: var(--graph-muted-text);
+	font-size: 10.5px;
+}
+
+.chart_new_button {
+	height: 28px;
+	font-weight: 600;
+}
+
+.chart_switch input:disabled,
+.chart_switch input:disabled + span {
+	cursor: default;
+	opacity: 0.5;
+}
+
+/* Export ▸ Take snaps (analyst decision 2026-11-18): the Generate report
+   popup's card (graph.css), with its chart list and preview. */
+.chart_snap .graph_customize_body {
+	grid-template-columns: minmax(0, 1fr) 220px;
+}
+
+.chart_snap_all {
+	padding-bottom: 4px;
+	border-bottom: 1px solid color-mix(in srgb, var(--customize-accent) 14%, var(--graph-border));
+	font-weight: 600;
+}
+
+.chart_snap_count,
+.chart_snap_level {
+	margin-left: auto;
+	color: var(--graph-muted-text);
+	font-size: 10px;
+	font-weight: 400;
+	white-space: nowrap;
+}
+
+.chart_snap_list {
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+	max-height: 220px;
+	margin: 4px 0 0;
+	padding: 0;
+	overflow-y: auto;
+	list-style: none;
+	scrollbar-width: thin;
+}
+
+.chart_snap_list .graph_report_check span,
+.chart_snap_modes .graph_report_check span {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.chart_snap_list .graph_report_check:has(input:disabled) {
+	opacity: 0.55;
+	cursor: default;
+}
+
+.chart_snap_modes {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+/* The preview takes the height the options give the popup and never adds
+   to it (analyst decision 2026-11-18): sized from its row, not its picture. */
+.chart_snap .chart_snap_preview {
+	contain: size;
+	gap: 6px;
+	min-height: 0;
+	overflow: hidden;
+}
+
+/* The picture fitted whole in what is left above the caption. */
+.chart_snap_stage {
+	display: flex;
+	flex: 1 1 auto;
+	align-items: flex-start;
+	justify-content: center;
+	min-height: 0;
+}
+
+.chart_snap_stage > .chart_snap_image {
+	max-width: 100%;
+	max-height: 100%;
+	width: auto;
+	height: auto;
+	object-fit: contain;
+}
+
+/* Individual: the pictures in two columns, scrolling when many. */
+.chart_snap_stage.is-tiles {
+	display: block;
+	overflow-y: auto;
+	scrollbar-width: thin;
+}
+
+.chart_snap_preview .graph_customize_caption {
+	flex: none;
+}
+
+.chart_snap_image {
+	display: block;
+	width: 100%;
+	height: auto;
+	border: 1px solid color-mix(in srgb, var(--customize-accent) 22%, var(--graph-border));
+	border-radius: 3px;
+	background: var(--graph-canvas-bg);
+}
+
+.chart_snap_tiles {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 4px;
+}
+
+.chart_snap_tile,
+.chart_snap_more,
+.chart_snap_empty {
+	display: grid;
+	place-items: center;
+	min-height: 48px;
+	margin: 0;
+	padding: 4px;
+	border: 1px dashed color-mix(in srgb, var(--customize-accent) 22%, var(--graph-border));
+	border-radius: 3px;
+	color: var(--graph-muted-text);
+	font-size: 10px;
+	text-align: center;
+}
+
+/* What the card says about the selection on the graph (first, marked). */
+.chart_card_stat.is-selected,
+.chart_card_stat.is-selected + .chart_card_stat {
+	border-left-color: var(--graph-selected, var(--graph-accent));
+}
+
+.chart_card_stat.is-selected {
+	background: color-mix(in srgb, var(--graph-selected, var(--graph-accent)) 10%, transparent);
+}
+
+.chart_card_stat.is-selected + .chart_card_stat {
+	border-left-color: color-mix(in srgb, var(--card-tone) 70%, transparent);
+}
+
+/* A list's heading row (no box of its own): the Graph snap's node cards. */
+.chart_snap_all.is-heading {
+	cursor: default;
+}

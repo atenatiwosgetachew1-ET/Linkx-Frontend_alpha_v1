@@ -27,6 +27,76 @@
 	font-size: 12px;
 }
 
+/* The Table and Chart windows use this toolbar too (analyst decision
+   2026-11-18), on one line: what needs room opens in a panel
+   (GraphToolbarPopover), and the counts give way first. */
+.graph_toolbar_popover_button {
+	height: 28px;
+	max-width: 190px;
+}
+
+.graph_toolbar_popover_button svg {
+	flex: none;
+}
+
+.graph_toolbar_popover_text {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.graph_toolbar_popover_caret {
+	flex: none;
+	color: var(--graph-muted-text);
+	font-size: 10px;
+}
+
+.graph_window_button.is-active {
+	border-color: var(--graph-accent);
+	color: var(--graph-accent);
+}
+
+.graph_toolbar_popover {
+	max-width: min(320px, 80vw);
+	max-height: 60vh;
+	overflow: auto;
+}
+
+.graph_toolbar_popover.is-left {
+	right: auto;
+	left: 0;
+}
+
+.graph_overlay_menu_item.is-separated {
+	margin-top: 2px;
+	border-top: 1px solid var(--graph-border);
+	border-radius: 0 0 4px 4px;
+}
+
+.graph_overlay_menu_item.is-described {
+	align-items: flex-start;
+}
+
+.graph_overlay_menu_item.is-described small {
+	display: block;
+	margin-top: 1px;
+	color: var(--graph-muted-text);
+	font-size: 10.5px;
+	line-height: 1.35;
+}
+
+.graph_overlay_menu_icon {
+	flex: none;
+	width: 13px;
+	height: 13px;
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 1.8;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+
 .graph_window_counts {
 	margin: 0;
 	flex: 1 1 auto;
@@ -163,6 +233,16 @@
 	cursor: default;
 }
 
+/* Customize (analyst decision 2026-11-17): the palette's paint in colour,
+   so it reads as the place to restyle the selection. */
+.graph_window_icon_button.is-customize .graph_customize_dot {
+	stroke: none;
+}
+
+.graph_customize_dot.is-red { fill: #ef4444; }
+.graph_customize_dot.is-amber { fill: #f59e0b; }
+.graph_customize_dot.is-blue { fill: #3b82f6; }
+
 .graph_window_icon_button svg {
 	width: 16px;
 	height: 16px;
@@ -209,8 +289,37 @@
 	font-size: 14px;
 }
 
+/* The message under the title (the tip has its own, smaller size). */
+.graph_window_state > p:not(.graph_window_state_start) {
+	font-size: 12px;
+	line-height: 1.45;
+}
+
 .graph_window_state button {
 	pointer-events: auto;
+}
+
+.graph_window_state_start strong {
+	font-weight: 600;
+}
+
+/* The way to start a new graph on an empty window: a quiet aside under a
+   hairline, at the bottom of the canvas. */
+.graph_window_state_start {
+	position: absolute;
+	left: 50%;
+	bottom: 14px;
+	width: max-content;
+	max-width: calc(100% - 48px);
+	overflow: hidden;
+	transform: translateX(-50%);
+	padding-top: 8px;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	border-top: 1px solid color-mix(in srgb, var(--graph-border) 60%, transparent);
+	color: var(--graph-muted-text);
+	font-size: 11px;
+	opacity: 0.75;
 }
 
 .graph_window_state.is-error h4 {
@@ -1233,6 +1342,8 @@
 
 .graph_timeline_controls {
 	flex: 1 1 auto;
+	/* As tall as the title, so a lone line (no dates) sits level with it. */
+	min-height: 22px;
 	min-width: 0;
 	display: flex;
 	flex-wrap: wrap;
@@ -1648,6 +1759,54 @@
 	.graph_overlay_bubble:focus-visible ~ .graph_overlay_tip {
 		transform: translate(0, -50%);
 		transition: none;
+	}
+}
+
+/* Dead (folded, nothing to show; analyst decision 2026-11-17): all grey,
+   its tooltip too, faint, and only half back on hover; the bubble rechecks. */
+.graph_overlay_panel.is-dead {
+	filter: grayscale(1);
+}
+
+/* One neutral colour for every dead card (node, badge, refresh sign and
+   tooltip), so none looks stronger than another for its own colour. */
+.graph_overlay_panel.is-node-card.is-bubble.is-dead {
+	--card-accent: var(--graph-muted-text);
+}
+
+.graph_overlay_panel.is-dead .graph_card_node.graph_card_node {
+	--node-color: var(--graph-muted-text);
+	--node-badge: var(--graph-muted-text);
+	background: var(--graph-canvas-bg);
+	box-shadow: none;
+}
+
+.graph_overlay_panel.is-dead .graph_overlay_bubble .graph_card_node.is-clean {
+	opacity: 0.35;
+}
+
+.graph_overlay_panel.is-dead .graph_overlay_bubble:hover .graph_card_node.is-clean,
+.graph_overlay_panel.is-dead .graph_overlay_bubble:focus-visible .graph_card_node.is-clean {
+	opacity: 0.6;
+}
+
+.graph_card_node_refresh {
+	width: 46%;
+	height: 46%;
+	fill: none;
+	stroke: var(--node-color);
+	stroke-width: 2.2;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+
+.graph_card_node_refresh.is-spinning {
+	animation: graph_window_spin 0.8s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.graph_card_node_refresh.is-spinning {
+		animation-duration: 2.4s;
 	}
 }
 
@@ -2573,6 +2732,90 @@
 .graph_card_row_action.is-text:hover {
 	border-color: var(--row-color);
 	color: var(--row-color);
+}
+
+/* A group row's actions: the members chevron, then Ungroup. */
+.graph_card_row_actions {
+	display: inline-flex;
+	align-items: center;
+	gap: 2px;
+}
+
+.graph_card_row_toggle {
+	display: grid;
+	place-items: center;
+	width: 20px;
+	height: 20px;
+	padding: 0;
+	border: 0;
+	border-radius: 4px;
+	background: none;
+	color: var(--graph-muted-text);
+	cursor: pointer;
+}
+
+.graph_card_row_toggle:hover,
+.graph_card_row_toggle:focus-visible {
+	background: color-mix(in srgb, var(--row-color) 10%, transparent);
+	color: var(--row-color);
+	outline: none;
+}
+
+.graph_card_row_toggle svg {
+	width: 12px;
+	height: 12px;
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 2.2;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+	transition: transform 0.15s ease;
+}
+
+.graph_card_row_toggle.is-open svg {
+	transform: rotate(90deg);
+}
+
+/* A group's inside: its members, indented under its row on a guide line. */
+.graph_card_members {
+	display: flex;
+	flex-direction: column;
+	flex-shrink: 0;
+	margin: 0 0 0 19px;
+	padding: 2px 0 4px;
+	border-left: 1px solid color-mix(in srgb, var(--graph-group) 35%, transparent);
+	border-bottom: 1px solid color-mix(in srgb, var(--graph-border) 45%, transparent);
+	list-style: none;
+}
+
+.graph_card_member {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr) auto;
+	align-items: center;
+	gap: 6px;
+	min-height: 20px;
+	padding: 0 12px 0 10px;
+	font-size: 10.5px;
+}
+
+.graph_card_member_dot {
+	width: 6px;
+	height: 6px;
+	border: 1.5px solid var(--graph-group);
+	border-radius: 50%;
+}
+
+.graph_card_member_name {
+	overflow: hidden;
+	color: var(--graph-text);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.graph_card_member_type {
+	color: var(--graph-muted-text);
+	font-size: 9px;
+	white-space: nowrap;
 }
 
 /* A pill button on the tools line (Show all). */
@@ -3504,6 +3747,136 @@ textarea.graph_customize_input {
 	}
 }
 
+/* Export ▸ Generate report (G4.2): the Customize popup's card, wider, the
+   template's preview on the right (analyst decision 2026-11-17). */
+.graph_customize.is-report {
+	width: min(760px, 100%);
+}
+
+.graph_customize.is-report .graph_customize_body {
+	grid-template-columns: minmax(0, 1fr) 190px;
+}
+
+.graph_report_section {
+	min-width: 0;
+	margin: 0;
+	border: 0;
+	border-radius: 0;
+}
+
+.graph_report_section legend {
+	float: left;
+	width: 100%;
+	padding: 0;
+	margin-bottom: 2px;
+}
+
+.graph_report_row {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+}
+
+.graph_customize.is-report .graph_customize_field_label {
+	min-width: 150px;
+}
+
+.graph_customize.is-report .graph_customize_input[readonly] {
+	color: var(--graph-muted-text);
+	cursor: default;
+}
+
+.graph_customize.is-report select.graph_customize_input {
+	cursor: pointer;
+}
+
+.graph_report_hint {
+	padding-left: 158px;
+	line-height: 1.3;
+}
+
+.graph_report_area {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.graph_report_area + .graph_report_hint,
+.graph_report_row > .graph_report_area ~ .graph_report_hint {
+	padding-left: 0;
+}
+
+.graph_report_area textarea.graph_customize_input {
+	min-height: 54px;
+}
+
+.graph_report_check {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	color: var(--graph-text);
+	font-size: 11px;
+	cursor: pointer;
+}
+
+.graph_report_check input {
+	accent-color: var(--customize-accent);
+}
+
+.graph_report_preview {
+	min-height: 0;
+	overflow-y: auto;
+	scrollbar-width: thin;
+}
+
+.graph_report_thumbnail {
+	display: block;
+	width: 100%;
+	height: auto;
+	aspect-ratio: 1016 / 1444;
+	object-fit: cover;
+	border: 1px solid color-mix(in srgb, var(--customize-accent) 22%, var(--graph-border));
+	border-radius: 3px;
+	box-shadow: 0 4px 12px rgb(0 0 0 / 0.12);
+}
+
+.graph_report_contents {
+	margin: 6px 0 0;
+	padding: 8px 0 0 14px;
+	border-top: 1px solid color-mix(in srgb, var(--customize-accent) 14%, var(--graph-border));
+	color: var(--graph-muted-text);
+	font-size: 10.5px;
+	line-height: 1.6;
+}
+
+@container (max-width: 640px) {
+	.graph_customize.is-report .graph_customize_body {
+		grid-template-columns: 1fr;
+		overflow-y: auto;
+	}
+
+	.graph_customize.is-report .graph_report_preview {
+		display: none;
+	}
+
+	.graph_customize.is-report .graph_customize_options {
+		overflow: visible;
+	}
+
+	.graph_customize.is-report .graph_customize_field {
+		flex-wrap: wrap;
+	}
+
+	.graph_customize.is-report .graph_customize_field_label {
+		min-width: 100%;
+	}
+
+	.graph_report_hint {
+		padding-left: 0;
+	}
+}
+
 /* The icon album: a popover rising from the icon button, over the popup. */
 .graph_customize_album {
 	position: absolute;
@@ -4125,4 +4498,425 @@ img.graph_profile_portrait_art {
 	stroke: currentColor;
 	stroke-width: 1.5;
 	stroke-linecap: round;
+}
+
+/* ── Conditional formatting editor (GraphFormattingBox; i2 #4) ─────────
+   The Customize popup's look: rules left, the chosen rule right. */
+.graph_customize.graph_format {
+	width: min(780px, 100%);
+	height: min(560px, 100%);
+}
+
+.graph_format_body {
+	display: grid;
+	flex: 1;
+	grid-template-columns: 240px minmax(0, 1fr);
+	min-height: 0;
+	border-top: 1px solid color-mix(in srgb, var(--customize-accent) 14%, var(--graph-border));
+}
+
+.graph_format_list {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	min-height: 0;
+	padding: 10px 10px 10px 16px;
+	overflow-y: auto;
+	border-right: 1px solid color-mix(in srgb, var(--customize-accent) 14%, var(--graph-border));
+	scrollbar-width: thin;
+}
+
+.graph_format_list_actions,
+.graph_format_row {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 6px;
+}
+
+/* Rule editor toggles (Nodes / Links, All / Any condition): share the row,
+   wrap as whole groups, and never break a label. */
+.graph_format_row .graph_customize_segments {
+	flex: 1 1 auto;
+}
+
+.graph_format_row .graph_customize_segment {
+	flex: 1 0 auto;
+	padding: 0 10px;
+	white-space: nowrap;
+}
+
+.graph_format_list .graph_customize_chip,
+.graph_format_row .graph_customize_chip {
+	margin-left: 0;
+}
+
+.graph_format_add {
+	color: var(--customize-accent);
+	font-weight: 600;
+}
+
+.graph_format_template_open {
+	align-self: flex-start;
+}
+
+.graph_format_template {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: 8px;
+	border-radius: 6px;
+	background: color-mix(in srgb, var(--graph-muted-text) 8%, transparent);
+}
+
+.graph_format_rules {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	margin: 4px 0 0;
+	padding: 0;
+	list-style: none;
+}
+
+.graph_format_rule {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	padding: 2px 4px;
+	border-radius: 5px;
+	transition: background 0.15s;
+}
+
+.graph_format_rule:hover {
+	background: color-mix(in srgb, var(--graph-muted-text) 8%, transparent);
+}
+
+.graph_format_rule.is-current {
+	background: color-mix(in srgb, var(--customize-accent) 12%, transparent);
+	box-shadow: inset 2px 0 0 var(--customize-accent);
+}
+
+.graph_format_rule.is-off .graph_format_rule_main {
+	opacity: 0.5;
+}
+
+.graph_format_rule input[type='checkbox'] {
+	flex: none;
+	margin: 0;
+	accent-color: var(--customize-accent);
+}
+
+.graph_format_rule_main {
+	display: flex;
+	flex: 1;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+	padding: 4px 2px;
+	border: 0;
+	background: transparent;
+	color: var(--graph-text);
+	font-size: 11px;
+	text-align: left;
+	cursor: pointer;
+}
+
+.graph_format_sample {
+	flex: none;
+	width: 16px;
+	height: 16px;
+	stroke-linecap: round;
+}
+
+.graph_format_sample_off {
+	stroke: var(--graph-muted-text);
+	stroke-width: 2;
+}
+
+.graph_format_rule_name {
+	flex: 1;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.graph_format_rule_count {
+	flex: none;
+	min-width: 18px;
+	padding: 0 5px;
+	border-radius: 999px;
+	background: color-mix(in srgb, var(--graph-muted-text) 14%, transparent);
+	color: var(--graph-muted-text);
+	font-size: 10px;
+	text-align: center;
+	font-variant-numeric: tabular-nums;
+}
+
+.graph_format_rule_tools {
+	display: none;
+	gap: 1px;
+}
+
+.graph_format_rule:hover .graph_format_rule_tools,
+.graph_format_rule.is-current .graph_format_rule_tools,
+.graph_format_rule:focus-within .graph_format_rule_tools {
+	display: inline-flex;
+}
+
+.graph_format_rule_tools button {
+	width: 18px;
+	height: 18px;
+	padding: 0;
+	border: 0;
+	border-radius: 3px;
+	background: transparent;
+	color: var(--graph-muted-text);
+	font-size: 11px;
+	line-height: 1;
+	cursor: pointer;
+}
+
+.graph_format_rule_tools button:hover:not(:disabled) {
+	background: color-mix(in srgb, var(--graph-text) 8%, transparent);
+	color: var(--graph-text);
+}
+
+.graph_format_rule_tools button.is-danger:hover {
+	color: var(--graph-alert-high);
+}
+
+.graph_format_rule_tools button:disabled {
+	opacity: 0.3;
+	cursor: default;
+}
+
+/* Placeholders fill the rest of their column and sit in its middle, both
+   ways. */
+.graph_format_empty {
+	display: flex;
+	flex: 1 1 auto;
+	align-items: center;
+	justify-content: center;
+	min-height: 48px;
+	margin: 0;
+	padding: 8px 0;
+	text-align: center;
+}
+
+/* No rules: the empty list takes no room from the placeholder. */
+.graph_format_rules:empty {
+	display: none;
+}
+
+.graph_format_main {
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	padding: 0 16px;
+	overflow-y: auto;
+	scrollbar-width: thin;
+}
+
+.graph_format_editor {
+	display: flex;
+	flex-direction: column;
+}
+
+/* A condition: property, operator, value(s), remove. */
+.graph_format_condition {
+	display: grid;
+	grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.9fr) minmax(0, 1.3fr) 20px;
+	align-items: center;
+	gap: 4px;
+}
+
+.graph_format_condition select,
+.graph_format_condition input,
+.graph_format_template select {
+	width: 100%;
+	min-width: 0;
+	height: 26px;
+	padding: 0 6px;
+	border: 1px solid transparent;
+	border-radius: 6px;
+	background: color-mix(in srgb, var(--graph-muted-text) 8%, transparent);
+	color: var(--graph-text);
+	font: inherit;
+	font-size: 11px;
+	box-sizing: border-box;
+}
+
+.graph_format_condition select:focus,
+.graph_format_condition input:focus,
+.graph_format_template select:focus {
+	border-color: color-mix(in srgb, var(--customize-accent) 60%, transparent);
+	outline: none;
+}
+
+.graph_format_values {
+	display: flex;
+	gap: 4px;
+	min-width: 0;
+}
+
+.graph_format_remove {
+	width: 20px;
+	height: 20px;
+	padding: 0;
+	border: 0;
+	border-radius: 50%;
+	background: transparent;
+	color: var(--graph-muted-text);
+	font-size: 13px;
+	cursor: pointer;
+}
+
+.graph_format_remove:hover {
+	background: color-mix(in srgb, var(--graph-alert-high) 12%, transparent);
+	color: var(--graph-alert-high);
+}
+
+.graph_format_count {
+	margin-left: auto;
+	color: var(--graph-muted-text);
+	font-size: 10.5px;
+}
+
+.graph_format_check {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 11px;
+	cursor: pointer;
+}
+
+.graph_format_check input {
+	margin: 0;
+	accent-color: var(--customize-accent);
+}
+
+.graph_format_colour {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 6px;
+}
+
+.graph_format_colour .graph_adjust_color {
+	width: 22px;
+	height: 22px;
+	padding: 0;
+	border: 0;
+	border-radius: 50%;
+	overflow: hidden;
+	box-shadow: 0 0 0 1px color-mix(in srgb, var(--graph-text) 18%, transparent);
+}
+
+.graph_format_colour .graph_adjust_color::-webkit-color-swatch-wrapper {
+	padding: 0;
+}
+
+.graph_format_colour .graph_adjust_color::-webkit-color-swatch {
+	border: 0;
+	border-radius: 50%;
+}
+
+.graph_format_colour .graph_adjust_swatches {
+	display: flex;
+	gap: 5px;
+}
+
+.graph_format_colour .graph_customize_field_label {
+	min-width: 58px;
+}
+
+@container (max-width: 640px) {
+	.graph_format_body {
+		grid-template-columns: 1fr;
+		overflow-y: auto;
+	}
+
+	.graph_format_list {
+		max-height: 200px;
+		border-right: 0;
+		border-bottom: 1px solid var(--graph-border);
+	}
+
+	.graph_format_main {
+		overflow: visible;
+	}
+}
+
+/* Legend: the conditional formatting rules that are on. */
+.graph_semantic_legend_sub {
+	margin-top: 4px;
+}
+
+.graph_semantic_legend_row.is-rule {
+	max-width: 220px;
+}
+
+.graph_semantic_legend_row.is-rule .graph_format_sample {
+	width: 14px;
+	height: 14px;
+}
+
+.graph_semantic_legend_row.is-rule span {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* The rule editor opened outside a Graph window (Configuration ▸ Rules):
+   over the whole screen. */
+/* Configuration window: over its body (header, tabs, footer), not the
+   window's title bar. */
+.graph_customize_backdrop.is-screen {
+	z-index: 30;
+}
+
+/* Domain rules, read-only, under a graph's own. */
+.graph_format_domain {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	margin-top: 8px;
+	padding-top: 8px;
+	border-top: 1px solid color-mix(in srgb, var(--customize-accent) 14%, var(--graph-border));
+}
+
+.graph_format_rules.is-domain.is-off {
+	opacity: 0.45;
+}
+
+.graph_format_rules.is-domain .graph_format_rule_main {
+	cursor: default;
+}
+
+/* Several actor profile cards (analyst decision 2026-11-18): laid out by
+   GraphProfileCards over the canvas; the stage lets clicks through to the
+   graph, the cards take them. A moved card's dashed line to its node. */
+.graph_profile_cards {
+	position: absolute;
+	inset: 0;
+	z-index: 3;
+	pointer-events: none;
+}
+
+.graph_profile_cards .graph_profile {
+	pointer-events: auto;
+}
+
+.graph_profile_links {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	overflow: visible;
+}
+
+.graph_profile_links line {
+	stroke: color-mix(in srgb, var(--graph-text) 55%, transparent);
+	stroke-width: 1;
+	stroke-dasharray: 3 3;
 }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  getDomainDistribution,
   ARCHIVE_AFTER_MS,
   DEFAULT_FILTERS,
   buildReportsQuery,
@@ -143,5 +144,15 @@ describe('list PDF rows', () => {
 
   it('ranks leading entities by appearances with their highest-scoring ref id', () => {
     expect(buildLeadingEntitySummary(records)).toEqual([[1, 'E1', 2, 'R2'], [2, 'E2', 1, 'R3']]);
+  });
+});
+
+describe('getDomainDistribution', () => {
+  it('reads an object, an array of items or a list of names, largest first', () => {
+    expect(getDomainDistribution({ domain_distribution: { microfinance: 3, bank: 12, telecom: 0 } })).toEqual([{ domain: 'bank', count: 12 }, { domain: 'microfinance', count: 3 }]);
+    expect(getDomainDistribution({ domain_distribution: [{ name: 'bank', share: 0.6 }, { domain: 'cdr', percentage: '0.4' }] })).toEqual([{ domain: 'bank', count: 0.6 }, { domain: 'cdr', count: 0.4 }]);
+    expect(getDomainDistribution({ domain_distribution: ['bank', 'cdr', ''] })).toEqual([{ domain: 'bank', count: null }, { domain: 'cdr', count: null }]);
+    expect(getDomainDistribution({})).toEqual([]);
+    expect(getDomainDistribution({ domain_distribution: 'bank' })).toEqual([]);
   });
 });

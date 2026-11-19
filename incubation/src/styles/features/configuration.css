@@ -51,6 +51,15 @@
 	gap: 8px;
 }
 
+/* Section header buttons keep to one line. */
+.config_window_section_actions {
+	flex-shrink: 0;
+}
+
+.config_window_section_actions .settings_button {
+	white-space: nowrap;
+}
+
 .config_window_inline_actions.is-end {
 	justify-content: flex-end;
 }
@@ -510,6 +519,89 @@
 	background: color-mix(in srgb, var(--settings-accent) 18%, transparent);
 }
 
+.libraries_templates {
+	display: grid;
+	gap: 12px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.libraries_template {
+	display: grid;
+	grid-template-columns: 112px minmax(0, 1fr);
+	gap: 14px;
+	align-items: start;
+	padding: 12px;
+	border: 1px solid var(--settings-card-border);
+	border-radius: 8px;
+}
+
+.libraries_template_thumbnail {
+	display: block;
+	width: 112px;
+	height: auto;
+	aspect-ratio: 1016 / 1444;
+	object-fit: cover;
+	border: 1px solid var(--settings-card-border);
+	border-radius: 3px;
+	box-shadow: 0 4px 12px rgb(0 0 0 / 0.12);
+}
+
+.libraries_template_body {
+	display: grid;
+	gap: 6px;
+	min-width: 0;
+}
+
+.libraries_template_title {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 6px;
+}
+
+.libraries_template_body p {
+	margin: 0;
+	color: var(--settings-text-secondary);
+}
+
+.libraries_template_facts {
+	display: grid;
+	grid-template-columns: max-content minmax(0, 1fr);
+	gap: 2px 10px;
+	margin: 0;
+	font-size: 12px;
+}
+
+.libraries_template_facts dt {
+	color: var(--settings-text-muted);
+}
+
+.libraries_template_facts dd {
+	margin: 0;
+}
+
+.libraries_template_sections summary {
+	color: var(--settings-accent-text);
+	font-size: 12px;
+	cursor: pointer;
+}
+
+.libraries_template_sections ol {
+	margin: 6px 0 0;
+	padding-left: 18px;
+	color: var(--settings-text-secondary);
+	font-size: 12px;
+	line-height: 1.6;
+}
+
+@media (max-width: 560px) {
+	.libraries_template {
+		grid-template-columns: 1fr;
+	}
+}
+
 .libraries_pending {
 	display: grid;
 	justify-items: start;
@@ -589,4 +681,33 @@
 	flex: none;
 	width: auto;
 	margin: 0;
+}
+
+/* Formatting rules: the domain's rules, summarized. */
+.config_window_rule_list {
+	display: grid;
+	gap: 4px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.config_window_rule_list li {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.config_window_rule_list li.is-off {
+	opacity: 0.55;
+}
+
+.config_window_rule_list .graph_format_sample {
+	flex: none;
+	width: 16px;
+	height: 16px;
+}
+
+.config_window_rule_list small {
+	color: var(--muted-text);
 }

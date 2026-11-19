@@ -10,6 +10,7 @@ import { WORKSPACE_WINDOW_TYPES } from '../../../workspace/state/workspaceTypes.
 import { formatStreamLog } from '../../source/lib/sourceModel.js';
 import LogLines from '../../../shared/logs/LogLines.jsx';
 import { getStreamLogLines, subscribeStreamLog } from '../../source/lib/streamLogs.js';
+import { CHART_ICON, TABLE_ICON } from '../../../shared/icons/windowIcons.js';
 import {
   TASK_ORIGINS,
   canTerminateTask,
@@ -47,8 +48,9 @@ function Icon({ d, className = 'tasks_window_icon' }) {
 const ICONS = {
   tasks: ['M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2', 'M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v0a2 2 0 0 1-2 2h-2a2 2 0 0 1-2-2Z', 'm9 14 2 2 4-4'],
   graph: 'M7 8.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Zm10 12a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5ZM7 20.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Zm2.2-4.2 5.6-7.6M9.5 7.3l5 8.2',
-  // Bar chart: three bars on a baseline.
-  chart: ['M4 20h16', 'M6.5 19.5V13a1 1 0 0 1 1-1h1a1 1 0 0 1 1 1v6.5', 'M10.5 19.5V6a1 1 0 0 1 1-1h1a1 1 0 0 1 1 1v13.5', 'M14.5 19.5V10a1 1 0 0 1 1-1h1a1 1 0 0 1 1 1v9.5'],
+  // The Chart window's icon (shared/icons/windowIcons.js).
+  chart: CHART_ICON,
+  table: TABLE_ICON,
   // Window with an arrow pointing out of it: jump to the Source window.
   source: ['M11 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5', 'M4 8.5h7', 'M14 4h6v6', 'M20 4l-8 8'],
   stop: 'M7 7h10v10H7z',
@@ -580,7 +582,7 @@ function TaskDetail({ task, now, windows, workspace }) {
     ? windows.find((windowItem) => windowItem.id === task.windowId)
     : null;
   const canTerminate = isActive && canTerminateTask(task.id);
-  const resultsHint = task.hasResults ? '' : 'Available once the analysis has started on the backend.';
+  const resultsHint = task.hasResults ? '' : 'Available once the analysis has started on the Service.';
   // Streams: only backend lines carry a verdict; quick tasks: their own log.
   const verdict = useMemo(
     () => taskFlagVerdict(task, lines, { backendOnly: task.origin === TASK_ORIGINS.SOURCE }),
@@ -611,13 +613,22 @@ function TaskDetail({ task, now, windows, workspace }) {
       });
       return;
     }
+    // The analysis chart and table (twins; analyst decision 2026-11-18)
+    // follow the task's Graph window when one is open (G5); otherwise they
+    // offer the open Graph windows.
+    const companion = type === WORKSPACE_WINDOW_TYPES.CHART || type === WORKSPACE_WINDOW_TYPES.TABLE;
+    const taskGraph = companion
+      ? windows.find((windowItem) => windowItem.type === WORKSPACE_WINDOW_TYPES.GRAPH && windowItem.metadata?.taskId === task.id)
+      : null;
+    const linkKey = type === WORKSPACE_WINDOW_TYPES.TABLE ? 'tableGraph' : 'chartGraph';
     workspace.openWindow(type, {
-      title: type === WORKSPACE_WINDOW_TYPES.GRAPH ? 'Graph' : 'Chart',
+      title: type === WORKSPACE_WINDOW_TYPES.GRAPH ? 'Graph' : type === WORKSPACE_WINDOW_TYPES.TABLE ? 'Table' : 'Chart',
       customTitle: `${task.title} #${task.number}`,
       metadata: {
         taskId: task.id,
         graphLinkSource: task.sourceSessionId,
         graphLinkAction: task.action,
+        ...(taskGraph ? { [linkKey]: taskGraph.id } : {}),
       },
     });
   };
@@ -690,6 +701,15 @@ function TaskDetail({ task, now, windows, workspace }) {
             onClick={() => openResultWindow(WORKSPACE_WINDOW_TYPES.CHART)}
           >
             <Icon d={ICONS.chart} /> Show chart
+          </button>
+          <button
+            type="button"
+            className="tasks_action linkx_tooltip_anchor"
+            disabled={!task.hasResults}
+            data-tooltip={resultsHint || 'Open the analysis table'}
+            onClick={() => openResultWindow(WORKSPACE_WINDOW_TYPES.TABLE)}
+          >
+            <Icon d={ICONS.table} /> Show table
           </button>
           {isActive && (
             <button

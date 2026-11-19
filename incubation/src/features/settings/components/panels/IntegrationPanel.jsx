@@ -20,7 +20,7 @@ export function IntegrationPanel() {
       </div>
       <div className="settings_subsection">
         <h4>Reference</h4>
-        <p className="settings_hint">Backend service account API details are documented for sibling-service developers.</p>
+        <p className="settings_hint">Service account API details are documented for sibling-service developers.</p>
         <a className="settings_link" href="docs/integration_contract.md" target="_blank" rel="noreferrer">Open integration_contract.md</a>
       </div>
     </section>

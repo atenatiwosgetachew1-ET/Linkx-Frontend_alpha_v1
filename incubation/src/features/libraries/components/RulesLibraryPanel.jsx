@@ -86,7 +86,7 @@ export default function RulesLibraryPanel({ configuration, canRead, canWrite, bu
                       type="button"
                       className="settings_button is-danger"
                       disabled={!canWrite || Boolean(busy)}
-                      title={rule.builtin ? 'Built-in rules are kept by the backend; removal will be refused.' : `Remove ${rule.name}`}
+                      title={rule.builtin ? 'Built-in rules are kept by the Service; removal will be refused.' : `Remove ${rule.name}`}
                       onClick={() => handleRemove(rule.name)}
                     >
                       {armed === rule.name ? 'Confirm remove' : 'Remove'}

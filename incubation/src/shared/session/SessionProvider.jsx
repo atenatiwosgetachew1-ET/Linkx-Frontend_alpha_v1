@@ -110,7 +110,7 @@ export function SessionProvider({ apiUrl, token, onLogout, onLocked, onIdleSetti
     const handleDisconnect = () => setIsSocketConnected(false);
     const handleConnectError = (error) => {
       setIsSocketConnected(false);
-      log.warn('Backend socket connection failed', { message: error?.message });
+      log.warn('Service socket connection failed', { message: error?.message });
     };
     nextSocket.on('connect', handleConnect);
     nextSocket.on('disconnect', handleDisconnect);
@@ -219,7 +219,7 @@ export function SessionProvider({ apiUrl, token, onLogout, onLocked, onIdleSetti
     try {
       await apiFetch('/auth/logout', { method: 'POST', body: { id: 'logout', reason }, ...QUIET_AUTH_REQUEST });
     } catch (error) {
-      if (!isMissingEndpoint(error)) log.warn('Backend logout notification failed', { status: error?.status });
+      if (!isMissingEndpoint(error)) log.warn('Service logout notification failed', { status: error?.status });
     }
   }, [apiFetch]);
 
@@ -252,7 +252,7 @@ export function SessionProvider({ apiUrl, token, onLogout, onLocked, onIdleSetti
     try {
       applyIdlePolicy(await fetchSessionPolicy(apiFetch, mainSessionId));
     } catch (error) {
-      setIdlePolicyMeta((current) => ({ ...current, isLoading: false, error: error?.message || 'Could not refresh the backend session policy.' }));
+      setIdlePolicyMeta((current) => ({ ...current, isLoading: false, error: error?.message || 'Could not refresh the Service session policy.' }));
     }
   }, [apiFetch, applyIdlePolicy, mainSessionId, token]);
 
@@ -279,7 +279,7 @@ export function SessionProvider({ apiUrl, token, onLogout, onLocked, onIdleSetti
         if (data?.results?.policy) applyIdlePolicy(data);
         else setIdlePolicyMeta((current) => ({ ...current, isSaving: false }));
       } catch (error) {
-        const message = error?.message || 'Could not save the backend session policy.';
+        const message = error?.message || 'Could not save the Service session policy.';
         setIdlePolicyMeta((current) => ({ ...current, isSaving: false, error: message }));
         handlersRef.current.notify({ title: 'Session policy save failed', message, source: 'Auth', level: 'warning' });
         refreshIdlePolicy();

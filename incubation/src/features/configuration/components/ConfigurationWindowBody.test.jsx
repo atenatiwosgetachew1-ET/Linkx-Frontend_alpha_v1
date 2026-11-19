@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import React, { useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
 
@@ -13,12 +13,14 @@ import { WORKSPACE_WINDOW_TYPES } from '../../../workspace/state/workspaceTypes.
 import { clearConfigurationDrafts } from '../lib/configDraft.js';
 import ConfigurationWindowBody from './ConfigurationWindowBody.jsx';
 import { getProfileSettings, resetProfileSettingsCache } from '../../graph/lib/nodeProfile.js';
+import { getDomainFormatting, resetDomainFormattingCache } from '../../graph/lib/conditionalFormatting.js';
 
 afterEach(() => {
   cleanup();
   clearConfigurationDrafts();
   localStorage.clear();
   resetProfileSettingsCache();
+  resetDomainFormattingCache();
 });
 
 const BANK = { domain: 'bank', active_domain: 'bank', registered_domains: ['bank', 'cdr'], active_tool_url: 'bolt://bank', active_tool_username: 'neo' };
@@ -119,5 +121,26 @@ describe('ConfigurationWindowBody profile mapping fields (Rules)', () => {
     });
     // Until the backend keeps it (B-23), the Graph windows read the device copy.
     await waitFor(() => expect(getProfileSettings('bank').fields[0]).toEqual({ key: 'fullName', source: 'FULL_NAME', shown: true }));
+  });
+});
+
+describe('ConfigurationWindowBody formatting rules (Rules)', () => {
+  it('edits the domain\'s rules in the rule editor (typed property names); saved as formatting_rules and kept on the device', async () => {
+    const apiFetch = vi.fn(async (path, options) => ({ status: 'success', configuration: options?.body?.configuration || BANK }));
+    render(<Harness apiFetch={apiFetch} item={{ ...windowItem, metadata: { configurationUi: { activeTab: 'rules' } } }} />);
+    expect(screen.getByText('No formatting rules for this domain yet.')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Edit rules…' }));
+    const dialog = screen.getByRole('dialog', { name: /Formatting rules · Banking/ });
+    await userEvent.click(within(dialog).getByRole('button', { name: '+ Node rule' }));
+    await userEvent.type(within(dialog).getByRole('combobox', { name: 'Property' }), 'CATEGORY');
+    await userEvent.type(within(dialog).getByLabelText('Value'), 'PEP');
+    expect(dialog).not.toHaveTextContent('Matches');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Apply' }));
+    expect(screen.getByRole('list', { name: 'Formatting rules' })).toHaveTextContent('Nodes where CATEGORY equals PEP');
+    await userEvent.click(screen.getByRole('button', { name: /^save/i }));
+    await waitFor(() => expect(apiFetch.mock.calls.some(([, options]) => options?.body?.id === 'save')).toBe(true));
+    const body = apiFetch.mock.calls.find(([, options]) => options?.body?.id === 'save')[1].body;
+    expect(body.configuration.formatting_rules).toEqual([expect.objectContaining({ target: 'node', conditions: [{ key: 'CATEGORY', op: 'eq', value: 'PEP', value2: '' }], style: { fill: '#e74c3c' } })]);
+    await waitFor(() => expect(getDomainFormatting('bank')).toHaveLength(1));
   });
 });

@@ -60,7 +60,7 @@ export const settingsTabDescriptions = {
   vigilance: 'xVigilance engine health, audit runs and findings.',
   users: 'Manage analyst accounts, roles, and permissions.',
   service_accounts: 'Control service clients and generated secrets.',
-  integration: 'Keep frontend and backend contract notes in view.',
+  integration: 'Keep the interface and Service contract notes in view.',
 };
 
 export const normalizeAdminUserList = (data) => {

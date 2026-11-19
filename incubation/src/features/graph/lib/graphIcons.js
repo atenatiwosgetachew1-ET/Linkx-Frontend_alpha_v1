@@ -64,3 +64,15 @@ export const subscribeIconThemes = (listener) => {
   listeners.add(listener);
   return () => listeners.delete(listener);
 };
+
+// Light or dark from the canvas background (as GraphCanvas), for the icons.
+export const themeModeOf = (element) => {
+  if (!element) return 'light';
+  const probe = document.createElement('span');
+  probe.style.display = 'none';
+  probe.style.color = 'var(--graph-canvas-bg)';
+  element.appendChild(probe);
+  const rgb = /rgba?\(\s*(\d+)[,\s]+(\d+)[,\s]+(\d+)/.exec(getComputedStyle(probe).color);
+  probe.remove();
+  return rgb && (Number(rgb[1]) * 299 + Number(rgb[2]) * 587 + Number(rgb[3]) * 114) / 1000 < 128 ? 'dark' : 'light';
+};

@@ -51,12 +51,15 @@ export default function GraphAlertsPanel({
     <GraphOverlayPanel
       {...frame}
       corner="bottom-right"
+      refreshing={scanning}
+      onRefresh={canRescan ? onRescan : undefined}
       className="is-node-card is-alerts"
       label="Graph Alerts"
       title="Graph Alerts"
       mark={<GraphCardNode tone="alert" count={alerts.length} busy={scanning} small />}
       summary={scanning ? 'Scanning…' : summary}
-      bubble={<GraphCardNode tone="alert" count={alerts.length} busy={scanning} />}
+      bubble={({ refresh, spinning }) => <GraphCardNode tone="alert" count={alerts.length} busy={scanning} refresh={refresh} spinning={spinning} />}
+      empty={!alerts.length}
       tip={!scanning && alerts.length ? (
         <>
           {high ? <span className="graph_card_chip is-high">{high} high</span> : null}

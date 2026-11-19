@@ -2,11 +2,13 @@ import React, { useLayoutEffect, useRef, useState } from 'react';
 
 import WorkspaceWindowBody from './WorkspaceWindowBody.jsx';
 import { WORKSPACE_WINDOW_TYPES } from '../state/workspaceTypes.js';
+import { CHART_ICON, TABLE_ICON } from '../../shared/icons/windowIcons.js';
 
 const tabIconPaths = {
   [WORKSPACE_WINDOW_TYPES.SOURCE]: 'M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v13a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 18.5v-13Zm4 2h8M8 12h8M8 16h5',
   [WORKSPACE_WINDOW_TYPES.GRAPH]: 'M7 8.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Zm10 12a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5ZM7 20.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Zm2.2-4.2 5.6-7.6M9.5 7.3l5 8.2',
-  [WORKSPACE_WINDOW_TYPES.CHART]: 'M5 20V10m7 10V4m7 16v-7M3 20h18',
+  [WORKSPACE_WINDOW_TYPES.CHART]: CHART_ICON,
+  [WORKSPACE_WINDOW_TYPES.TABLE]: TABLE_ICON,
   [WORKSPACE_WINDOW_TYPES.REPORTS]: 'M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5.586a1 1 0 0 1 .707.293l5.414 5.414a1 1 0 0 1 .293.707V19a2 2 0 0 1-2 2z',
   [WORKSPACE_WINDOW_TYPES.TASKS]: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4',
   [WORKSPACE_WINDOW_TYPES.LIBRARIES]: 'M8 14v3m4-3v3m4-3v3M3 21h18M3 10h18M3 7l9-4 9 4M4 10h16v11H4V10z',
@@ -45,7 +47,16 @@ export default function WindowDock({ workspace }) {
     });
   }, [activeWindowId, workspace.windows.length]);
 
+  // Chart windows shown at least once: kept mounted (hidden) while open.
+  const [keptCharts, setKeptCharts] = useState(() => new Set());
+  const activeIsChart = activeWindow?.type === WORKSPACE_WINDOW_TYPES.CHART;
+  useLayoutEffect(() => {
+    if (!activeIsChart || keptCharts.has(activeWindowId)) return;
+    setKeptCharts((current) => new Set(current).add(activeWindowId));
+  }, [activeIsChart, activeWindowId, keptCharts]);
+
   if (!activeWindow) return null;
+  const bodies = workspace.windows.filter((windowItem) => windowItem.id === activeWindow.id || (windowItem.type === WORKSPACE_WINDOW_TYPES.CHART && keptCharts.has(windowItem.id)));
 
   const handleTabDragStart = (windowId) => {
     setDraggedWindowId(windowId);
@@ -182,7 +193,15 @@ export default function WindowDock({ workspace }) {
         {/* Keyed per window: without it React reuses one body instance for
             every docked tab and window state (refs, local state, async
             flows) leaks between windows. */}
-        <WorkspaceWindowBody key={activeWindow.id} windowItem={activeWindow} />
+        {/* Chart windows stay mounted, hidden, once shown (analyst report
+            2026-11-18: rebuilding every chart on a tab switch was slow);
+            the others mount with their tab as before. A hidden one is
+            dormant: it follows nothing until shown again. */}
+        {bodies.map((windowItem) => (
+          <div key={windowItem.id} className="workspace_window_dock_body" style={{ display: windowItem.id === activeWindow.id ? 'contents' : 'none' }}>
+            <WorkspaceWindowBody windowItem={windowItem} hidden={windowItem.id !== activeWindow.id} />
+          </div>
+        ))}
       </article>
     </section>
   );

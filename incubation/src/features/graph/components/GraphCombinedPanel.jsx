@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 
 import GraphCardNode from './GraphCardNode.jsx';
 import GraphOverlayPanel from './GraphOverlayPanel.jsx';
@@ -15,7 +15,11 @@ import GraphOverlayPanel from './GraphOverlayPanel.jsx';
 // sign in the canvas badge colour; × in the header folds it back; resized
 // from its bottom-right corner; it opens at the canvas's top-left corner.
 //
-// items: [{ key, id, kind: 'group' | 'merged', name, count, detail, hidden }]
+// A group row lists its members beneath it (analyst decision 2026-11-17),
+// shown until its chevron folds them.
+//
+// items: [{ key, id, kind: 'group' | 'merged', name, count, detail, hidden,
+//   members (groups): [{ id, name, type }] }]
 const GroupSign = () => (
   <svg viewBox="0 0 24 24" focusable="false">
     <circle className="graph_card_row_sign" cx="8" cy="9" r="4.2" />
@@ -31,11 +35,24 @@ const MergedSign = () => (
 );
 
 const GROUPS = [{ kind: 'group', title: 'Groups' }, { kind: 'merged', title: 'Merged' }];
+const Chevron = () => (
+  <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+    <path d="m9 6 6 6-6 6" />
+  </svg>
+);
 
 export default function GraphCombinedPanel({ items, summary, onFocus, onUngroup, ...frame }) {
   const grouped = items.filter((entry) => entry.kind === 'group').length;
   const merged = items.length - grouped;
   const hidden = items.filter((entry) => entry.hidden).length;
+  // Groups whose member list is folded.
+  const [folded, setFolded] = useState(() => new Set());
+  const toggleMembers = (key) => setFolded((current) => {
+    const next = new Set(current);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    return next;
+  });
   return (
     <GraphOverlayPanel
       {...frame}
@@ -45,7 +62,8 @@ export default function GraphCombinedPanel({ items, summary, onFocus, onUngroup,
       title="Merged & Grouped"
       mark={<GraphCardNode tone="group" count={items.length} small />}
       summary={summary}
-      bubble={<GraphCardNode tone="group" count={items.length} />}
+      bubble={({ refresh, spinning }) => <GraphCardNode tone="group" count={items.length} refresh={refresh} spinning={spinning} />}
+      empty={!items.length}
       tip={items.length ? (
         <>
           {grouped ? <span className="graph_card_chip is-group">{grouped} grouped</span> : null}
@@ -73,8 +91,13 @@ export default function GraphCombinedPanel({ items, summary, onFocus, onUngroup,
                 <span>{groupTitle}</span>
                 <span className="graph_card_group_count">{group.length}</span>
               </h5>
-              {group.map((entry, index) => (
-                <div key={entry.key} className={`graph_card_row has-action is-${entry.kind}${entry.hidden ? ' is-hidden' : ''}`} style={{ '--i': Math.min(index, 12) }}>
+              {group.map((entry, index) => {
+                const members = entry.kind === 'group' && Array.isArray(entry.members) ? entry.members : [];
+                const membersOpen = members.length > 0 && !folded.has(entry.key);
+                const membersId = `members-${entry.key}`;
+                return (
+                <React.Fragment key={entry.key}>
+                <div className={`graph_card_row has-action is-${entry.kind}${entry.hidden ? ' is-hidden' : ''}`} style={{ '--i': Math.min(index, 12) }}>
                   <button
                     type="button"
                     className="graph_card_row_main"
@@ -92,12 +115,40 @@ export default function GraphCombinedPanel({ items, summary, onFocus, onUngroup,
                     </span>
                   </button>
                   {entry.kind === 'group' ? (
-                    <button type="button" className="graph_card_row_action is-text" aria-label={`Ungroup ${entry.name}`} title="Ungroup" onClick={() => onUngroup(entry.id)}>
-                      Ungroup
-                    </button>
+                    <span className="graph_card_row_actions">
+                      {members.length ? (
+                        <button
+                          type="button"
+                          className={`graph_card_row_toggle${membersOpen ? ' is-open' : ''}`}
+                          aria-expanded={membersOpen}
+                          aria-controls={membersOpen ? membersId : undefined}
+                          aria-label={`${membersOpen ? 'Hide' : 'Show'} the members of ${entry.name}`}
+                          title={membersOpen ? 'Hide members' : 'Show members'}
+                          onClick={() => toggleMembers(entry.key)}
+                        >
+                          <Chevron />
+                        </button>
+                      ) : null}
+                      <button type="button" className="graph_card_row_action is-text" aria-label={`Ungroup ${entry.name}`} title="Ungroup" onClick={() => onUngroup(entry.id)}>
+                        Ungroup
+                      </button>
+                    </span>
                   ) : null}
                 </div>
-              ))}
+                {membersOpen ? (
+                  <ul id={membersId} className="graph_card_members" aria-label={`Members of ${entry.name}`}>
+                    {members.map((member) => (
+                      <li key={member.id} className="graph_card_member" title={member.name === member.id ? member.id : `${member.name}\nID: ${member.id}`}>
+                        <span className="graph_card_member_dot" aria-hidden="true" />
+                        <span className="graph_card_member_name">{member.name}</span>
+                        {member.type ? <span className="graph_card_member_type">{member.type}</span> : null}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+                </React.Fragment>
+                );
+              })}
             </section>
           );
         }) : (

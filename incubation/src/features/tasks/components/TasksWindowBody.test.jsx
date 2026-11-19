@@ -82,7 +82,7 @@ describe('TasksWindowBody', () => {
     expect(screen.queryByRole('group', { name: 'History' })).not.toBeInTheDocument();
   });
 
-  it('opens one Graph / Chart window per task once results exist', async () => {
+  it('opens one Graph / Chart / Table window per task once results exist', async () => {
     const id = createTask({ title: 'Link Analysis', sourceSessionId: 's7', action: 'Link Analysis' });
     renderTasks();
     const graphButton = screen.getByRole('button', { name: /Show graph/ });
@@ -96,7 +96,15 @@ describe('TasksWindowBody', () => {
     expect(graphs[0].metadata).toMatchObject({ taskId: id, graphLinkSource: 's7', graphLinkAction: 'Link Analysis' });
 
     await userEvent.click(screen.getByRole('button', { name: /Show chart/ }));
-    expect(workspaceRef.windows.filter((windowItem) => windowItem.type === 'chart')).toHaveLength(1);
+    const charts = workspaceRef.windows.filter((windowItem) => windowItem.type === 'chart');
+    expect(charts).toHaveLength(1);
+    expect(charts[0].metadata.chartGraph).toBe(graphs[0].id);
+    // Its twin: Show table, following the task's graph too.
+    await userEvent.click(screen.getByRole('button', { name: /Show table/ }));
+    const tables = workspaceRef.windows.filter((windowItem) => windowItem.type === 'table');
+    expect(tables).toHaveLength(1);
+    expect(tables[0].metadata.tableGraph).toBe(graphs[0].id);
+    expect(tables[0].title).toBe('Table 1');
   });
 
   it('keeps Show graph disabled without graph:create (production gate)', () => {
@@ -105,6 +113,7 @@ describe('TasksWindowBody', () => {
     renderTasks({ permissions: ['analysis:run'] });
     expect(screen.getByRole('button', { name: /Show graph/ })).toBeDisabled();
     expect(screen.getByRole('button', { name: /Show chart/ })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /Show table/ })).toBeEnabled();
   });
 
   it('terminates a running task through its handler', async () => {

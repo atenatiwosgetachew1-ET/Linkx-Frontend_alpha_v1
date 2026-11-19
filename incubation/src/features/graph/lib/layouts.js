@@ -304,6 +304,211 @@ export const hubsizeLayout = (nodeIds, neighbours, { direction = 'UD' } = {}) =>
   return placeLayers(orderLayers(layers.filter(Boolean), neighbours, visible), nodeIds.length, direction);
 };
 
+/* ── Peacock and grouped (G3.5 i2 #6; after IBM i2 Analyst's Notebook; not
+   in production; analyst decision 2026-11-17) ───────────────────────── */
+
+const LEAF_GAP = 34; // between leaves on a fan ring
+const FAN_FIRST = 70; // first fan ring's radius
+const FAN_STEP = 42; // between fan rings
+const NODE_ROOM = 34; // a node's own room
+const CLUSTER_GAP = 60; // between footprints
+
+// Leaves on rings around a hub: as many per ring as fit, outer rings for
+// the rest. -> { offsets: [{x, y}], radius } (radius 0 without leaves).
+const fanRings = (count) => {
+  const offsets = [];
+  let radius = 0;
+  let placed = 0;
+  for (let ringIndex = 0; placed < count; ringIndex += 1) {
+    radius = FAN_FIRST + (ringIndex * FAN_STEP);
+    const capacity = Math.max(6, Math.floor((Math.PI * 2 * radius) / LEAF_GAP));
+    const here = Math.min(capacity, count - placed);
+    const step = (Math.PI * 2) / here;
+    const offset = ringIndex % 2 ? step / 2 : 0;
+    for (let i = 0; i < here; i += 1) {
+      const angle = (-Math.PI / 2) + offset + (i * step);
+      offsets.push({ x: radius * Math.cos(angle), y: radius * Math.sin(angle) });
+    }
+    placed += here;
+  }
+  return { offsets, radius };
+};
+
+// Circles of the given radii, without overlap: the first in the middle, the
+// rest on rings around it, each ring as far out as its largest needs.
+// -> [{x, y}] in the same order.
+const packAround = (radii) => {
+  if (!radii.length) return [];
+  const centres = [{ x: 0, y: 0 }];
+  let inner = radii[0]; // reach of what is placed so far
+  let index = 1;
+  while (index < radii.length) {
+    // One ring: as many as fit round it, in order.
+    const start = index;
+    let largest = radii[index];
+    let ringRadius = inner + CLUSTER_GAP + largest;
+    let used = 0;
+    const angles = [];
+    while (index < radii.length) {
+      const r = radii[index];
+      if (r > largest) {
+        largest = r;
+        ringRadius = inner + CLUSTER_GAP + largest;
+      }
+      const span = 2 * Math.asin(Math.min(1, (r + CLUSTER_GAP / 2) / ringRadius));
+      if (index > start && used + span > Math.PI * 2) break;
+      angles.push(span);
+      used += span;
+      index += 1;
+    }
+    // Spread the spare angle evenly.
+    const spare = Math.max(0, (Math.PI * 2) - used) / angles.length;
+    let angle = -Math.PI / 2;
+    angles.forEach((span) => {
+      const middle = angle + (span + spare) / 2;
+      centres.push({ x: ringRadius * Math.cos(middle), y: ringRadius * Math.sin(middle) });
+      angle += span + spare;
+    });
+    inner = ringRadius + largest;
+  }
+  return centres;
+};
+
+// Nodes without links: a grid under the rest.
+const gridBelow = (ids, positions) => {
+  if (!ids.length) return;
+  // (No spread into Math.max: large graphs pass the argument limit.)
+  const bottom = Object.values(positions).reduce((lowest, point) => Math.max(lowest, point.y), 0);
+  const columns = Math.max(1, Math.ceil(Math.sqrt(ids.length * 2)));
+  const gap = 60;
+  const originX = -((Math.min(columns, ids.length) - 1) * gap) / 2;
+  ids.forEach((id, index) => {
+    positions[id] = { x: originX + ((index % columns) * gap), y: bottom + 120 + (Math.floor(index / columns) * gap) };
+  });
+};
+
+// Peacock: nodes with a single link (leaves) fan out round the node they
+// hang from, on rings; those hubs and the other linked nodes are spread so
+// no fans overlap, the biggest in the middle and its neighbours next; nodes
+// without links go in a grid under them.
+export const peacockLayout = (nodeIds, neighbours) => {
+  if (!nodeIds.length) return {};
+  const visible = new Set(nodeIds);
+  const linked = (id) => [...(neighbours.get(id) || [])].filter((other) => visible.has(other) && other !== id);
+  const degree = new Map(nodeIds.map((id) => [id, linked(id).length]));
+  const isolated = [];
+  const fans = new Map(); // hub -> leaves
+  const core = [];
+  nodeIds.forEach((id) => {
+    const d = degree.get(id);
+    if (d === 0) {
+      isolated.push(id);
+      return;
+    }
+    if (d === 1) {
+      const [hub] = linked(id);
+      // Two nodes linked only to each other: the first (natural order) is the hub.
+      if (degree.get(hub) > 1 || naturalCompare(hub, id) < 0) {
+        if (!fans.has(hub)) fans.set(hub, []);
+        fans.get(hub).push(id);
+        return;
+      }
+    }
+    core.push(id);
+  });
+  const fanOf = new Map(core.map((id) => [id, fanRings((fans.get(id) || []).length)]));
+  const room = (id) => Math.max(NODE_ROOM, fanOf.get(id).radius + LEAF_GAP / 2);
+  // Order: from the biggest, breadth-first over the core, larger first.
+  const size = (id) => ((fans.get(id) || []).length * 2) + degree.get(id);
+  const bySize = [...core].sort((a, b) => (size(b) - size(a)) || naturalCompare(a, b));
+  const coreSet = new Set(core);
+  const order = [];
+  const seen = new Set();
+  bySize.forEach((startId) => {
+    if (seen.has(startId)) return;
+    seen.add(startId);
+    const queue = [startId];
+    while (queue.length) {
+      const current = queue.shift();
+      order.push(current);
+      linked(current)
+        .filter((other) => coreSet.has(other) && !seen.has(other))
+        .sort((a, b) => (size(b) - size(a)) || naturalCompare(a, b))
+        .forEach((other) => {
+          seen.add(other);
+          queue.push(other);
+        });
+    }
+  });
+  const centres = packAround(order.map(room));
+  const positions = {};
+  order.forEach((id, index) => {
+    const centre = centres[index];
+    positions[id] = centre;
+    const leaves = (fans.get(id) || []).sort(naturalCompare);
+    const { offsets } = fanOf.get(id);
+    leaves.forEach((leaf, leafIndex) => {
+      positions[leaf] = { x: centre.x + offsets[leafIndex].x, y: centre.y + offsets[leafIndex].y };
+    });
+  });
+  gridBelow(isolated.sort(naturalCompare), positions);
+  return positions;
+};
+
+// Grouped: one cluster per group (options.info[id].group: the node type or
+// a property's value; 'Unspecified' when missing), each laid out round its
+// most connected nodes (concentric inside the group); clusters packed in
+// rows, the largest first.
+export const groupedLayout = (nodeIds, neighbours, { info = {} } = {}) => {
+  if (!nodeIds.length) return {};
+  const groups = new Map();
+  nodeIds.forEach((id) => {
+    const raw = info[id]?.group;
+    const name = raw == null || String(raw).trim() === '' ? 'Unspecified' : String(raw);
+    if (!groups.has(name)) groups.set(name, []);
+    groups.get(name).push(id);
+  });
+  const clusters = [...groups.entries()]
+    .sort((a, b) => (b[1].length - a[1].length) || naturalCompare(a[0], b[0]))
+    .map(([name, ids]) => {
+      const local = concentricLayout(ids, neighbours);
+      let reach = 0;
+      Object.values(local).forEach(({ x, y }) => { reach = Math.max(reach, Math.hypot(x, y)); });
+      return { name, ids, local, radius: reach + NODE_ROOM };
+    });
+  // Rows about as wide as the whole is tall.
+  const area = clusters.reduce((sum, cluster) => sum + (2 * cluster.radius + CLUSTER_GAP) ** 2, 0);
+  const rowWidth = Math.max(2 * clusters[0].radius, Math.sqrt(area) * 1.3);
+  const rows = [];
+  let row = { items: [], width: 0, height: 0 };
+  clusters.forEach((cluster) => {
+    const width = 2 * cluster.radius;
+    if (row.items.length && row.width + CLUSTER_GAP + width > rowWidth) {
+      rows.push(row);
+      row = { items: [], width: 0, height: 0 };
+    }
+    row.width += (row.items.length ? CLUSTER_GAP : 0) + width;
+    row.height = Math.max(row.height, width);
+    row.items.push(cluster);
+  });
+  rows.push(row);
+  const total = rows.reduce((sum, entry) => sum + entry.height, 0) + CLUSTER_GAP * (rows.length - 1);
+  const positions = {};
+  let top = -total / 2;
+  rows.forEach((entry) => {
+    let left = -entry.width / 2;
+    entry.items.forEach((cluster) => {
+      const centre = { x: left + cluster.radius, y: top + entry.height / 2 };
+      Object.entries(cluster.local).forEach(([id, point]) => {
+        positions[id] = { x: centre.x + point.x, y: centre.y + point.y };
+      });
+      left += 2 * cluster.radius + CLUSTER_GAP;
+    });
+    top += entry.height + CLUSTER_GAP;
+  });
+  return positions;
+};
+
 export const LAYOUTS = {
   concentric: concentricLayout,
   circle: circleLayout,
@@ -313,6 +518,8 @@ export const LAYOUTS = {
   spiral: spiralLayout,
   layered: layeredLayout,
   hubsize: hubsizeLayout,
+  peacock: peacockLayout,
+  grouped: groupedLayout,
 };
 
 // Undirected, distinct neighbour index from [source, target] pairs

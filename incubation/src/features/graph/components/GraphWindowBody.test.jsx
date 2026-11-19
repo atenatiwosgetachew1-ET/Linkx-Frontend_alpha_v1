@@ -16,15 +16,20 @@ import { getPinnedEvidence, pinEvidence, resetPinnedEvidenceCache } from '../lib
 import { OVERLAY_PREFS_KEY, resetOverlayPrefsCache } from '../lib/overlayPrefs.js';
 import { CLIPBOARD_KEY, resetClipboardCache } from '../lib/graphClipboard.js';
 import { getProfileSettings, resetProfileSettingsCache, setProfileSettings } from '../lib/nodeProfile.js';
+import { resetDomainFormattingCache, setDomainFormatting } from '../lib/conditionalFormatting.js';
+import { getGraphState, resetGraphLinkBus } from '../lib/graphLinkBus.js';
 import { bindGraphStatusSocket, clearGraphStatus, markGraphSessionClosed, markGraphSessionTerminated } from '../lib/graphStatus.js';
 
 // jsdom cannot draw: the canvas is replaced by a probe showing what it gets.
 // The latest props are kept so tests can play right-click / double-click.
 const canvasProps = { current: null };
+// The canvas's methods a test gives it (none by default: nothing captures).
+const canvasApi = { current: null };
 vi.mock('./GraphCanvas.jsx', () => ({
-  default: React.forwardRef(function GraphCanvasProbe(props) {
+  default: React.forwardRef(function GraphCanvasProbe(props, ref) {
     const { view, renderer } = props;
     canvasProps.current = props;
+    React.useImperativeHandle(ref, () => canvasApi.current, []);
     return <div data-testid="canvas" data-renderer={renderer} data-nodes={view.nodeIds.length} data-edges={view.edgeIds.length} />;
   }),
 }));
@@ -34,6 +39,18 @@ vi.mock('../../../shared/device/gpuCapability.js', async (importOriginal) => ({
   ...(await importOriginal()),
   getGpuCapability: vi.fn(() => ({ verdict: 'capable', reasons: [] })),
 }));
+
+// The logo is drawn by the browser (no image loading in jsdom).
+vi.mock('../report/graphReportPdf.js', async (importOriginal) => {
+  const original = await importOriginal();
+  return {
+    ...original,
+    rasterizeSvg: vi.fn(async () => null),
+    loadPortrait: vi.fn(async () => null),
+    renderGraphReportPdf: vi.fn((...args) => original.renderGraphReportPdf(...args)),
+  };
+});
+const { renderGraphReportPdf } = await import('../report/graphReportPdf.js');
 
 const { default: GraphWindowBody } = await import('./GraphWindowBody.jsx');
 
@@ -46,6 +63,7 @@ afterEach(() => {
   resetPinnedEvidenceCache();
   resetOverlayPrefsCache();
   resetClipboardCache();
+  resetGraphLinkBus();
 });
 
 const graphOf = (count) => ({
@@ -312,17 +330,35 @@ describe('GraphWindowBody right-click menu and double-click', () => {
 });
 
 describe('GraphWindowBody empty window', () => {
-  it('offers "Create new graph", which turns it into a blank canvas', async () => {
+  it('says a new graph starts by adding components (no button), and becomes one once something is added', async () => {
     renderGraph();
     expect(screen.getByText('No graph to render')).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Create new graph' }));
-    // The metadata update reaches a workspace window; here the prop is fixed,
-    // so the call is checked through a re-render with the new metadata.
+    expect(screen.getByText('Tip:').parentElement).toHaveTextContent('Tip: To create an instant graph, start by adding components from the canvas context menu.');
+    expect(screen.queryByRole('button', { name: 'Create new graph' })).not.toBeInTheDocument();
+    act(() => canvasProps.current.onContextMenu({ x: 20, y: 20, kind: 'canvas', id: null, selection: [] }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Add' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Add Node' }));
+    await waitFor(() => expect(screen.getByTestId('canvas')).toHaveAttribute('data-nodes', '1'));
+    expect(screen.queryByText('No graph to render')).not.toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Graph Alerts' })).toBeInTheDocument();
+    // Kept as a blank graph: here the window prop is fixed, so that is
+    // checked through a re-render with the new metadata (and a fresh store).
     cleanup();
+    clearGraphStores();
     renderGraph({ metadata: { graphBlank: true } });
     expect(screen.queryByText('No graph to render')).not.toBeInTheDocument();
     expect(screen.getByText('New graph · 0 nodes')).toBeInTheDocument();
     expect(screen.getByRole('combobox', { name: 'Source ID' })).toHaveAttribute('placeholder', 'Enter source ID');
+    // The three folded cards show on the blank graph too, dead (grey).
+    ['Merged & Grouped', 'Pinned Evidence', 'Graph Alerts'].forEach((name) => {
+      expect(screen.getByRole('region', { name })).toHaveClass('is-dead');
+    });
+  });
+
+  it('shows no cards before a graph is chosen or created', () => {
+    renderGraph();
+    expect(screen.queryByRole('region', { name: 'Graph Alerts' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Merged & Grouped' })).not.toBeInTheDocument();
   });
 
   it('says when a typed window ID matches no Source window', async () => {
@@ -455,7 +491,7 @@ describe('GraphWindowBody graph alerts (G2.4)', () => {
     expect(panel.querySelector('.graph_card_node')).toHaveTextContent('×1');
     expect(panel.querySelector('.graph_card_node_badge')).not.toBeNull();
     // Its themed tooltip: title, summary, severity chips.
-    const tip = screen.getByRole('tooltip', { hidden: true });
+    const tip = within(panel).getByRole('tooltip', { hidden: true });
     expect(screen.getByRole('button', { name: 'Expand Graph Alerts' })).toHaveAttribute('aria-describedby', tip.id);
     expect(tip).toHaveTextContent('Graph Alerts');
     expect(tip).toHaveTextContent('1 alert · 1 high');
@@ -512,8 +548,11 @@ describe('GraphWindowBody graph alerts (G2.4)', () => {
     await alertMenu('Disable Alert Rules');
     await waitFor(() => expect(store().hasMarkers('alert')).toBe(false));
     expect(screen.getByRole('region', { name: 'Graph Alerts' })).toHaveTextContent('Alert rules are off.');
-    await userEvent.click(screen.getByRole('button', { name: 'Expand Graph Alerts' }));
-    expect(screen.getByRole('button', { name: /Rescan/ })).toBeDisabled();
+    // Nothing to show: the folded card is dead and its bubble rechecks
+    // instead of opening.
+    expect(screen.getByRole('region', { name: 'Graph Alerts' })).toHaveClass('is-dead');
+    await userEvent.click(screen.getByRole('button', { name: 'Recheck Graph Alerts' }));
+    expect(screen.queryByRole('button', { name: /Rescan/ })).not.toBeInTheDocument();
     expect(graphWindow().metadata.graphSettings.alertRules).toBe(false);
     rightClick({ kind: 'canvas', id: null, selection: [] });
     await userEvent.click(screen.getByRole('menuitem', { name: 'Alert Rules' }));
@@ -720,14 +759,16 @@ describe('GraphWindowBody Pinned Evidence card', () => {
     expect(card).toHaveTextContent('None in this graph');
   });
 
-  it('stays closed without pinned items, and opens when something is pinned', async () => {
+  it('shows dead (grey, folded) without pinned items, and comes alive when something is pinned', async () => {
     await open();
-    await new Promise((resolve) => { setTimeout(resolve, 50); });
-    expect(screen.queryByRole('region', { name: 'Pinned Evidence' })).not.toBeInTheDocument();
+    const card = await screen.findByRole('region', { name: 'Pinned Evidence' });
+    expect(card).toHaveClass('is-dead');
+    expect(screen.getByRole('button', { name: 'Recheck Pinned Evidence' })).toBeInTheDocument();
     act(() => canvasProps.current.onContextMenu({ x: 20, y: 20, kind: 'node', id: '2', selection: ['2'] }));
     await userEvent.click(screen.getByRole('menuitem', { name: 'Evidence' }));
     await userEvent.click(screen.getByRole('menuitem', { name: 'Pin Evidence' }));
     expect(screen.getByRole('region', { name: 'Pinned Evidence' })).toHaveTextContent('1 pinned in this graph');
+    expect(screen.getByRole('region', { name: 'Pinned Evidence' })).not.toHaveClass('is-dead');
   });
 });
 
@@ -1039,6 +1080,18 @@ describe('GraphWindowBody graph editing (G3.1)', () => {
   };
   const canvas = () => screen.getByTestId('canvas');
 
+  it('the folded cards stay on a new graph once nodes are added', async () => {
+    renderGraph({ metadata: { graphBlank: true, graphSettings: { showLabels: true, performance: false } } });
+    expect(screen.getByRole('region', { name: 'Graph Alerts' })).toHaveClass('is-dead');
+    rightClick({ kind: 'canvas', id: null, selection: [] });
+    await choose('Add', 'Add Node');
+    await waitFor(() => expect(canvas()).toHaveAttribute('data-nodes', '1'));
+    await new Promise((resolve) => { setTimeout(resolve, 250); });
+    ['Merged & Grouped', 'Pinned Evidence', 'Graph Alerts'].forEach((name) => {
+      expect(screen.getByRole('region', { name })).toBeInTheDocument();
+    });
+  });
+
   it('Add Node on a new graph: one node, named as production when labels are on', async () => {
     renderGraph({ metadata: { graphBlank: true, graphSettings: { showLabels: true, performance: false } } });
     rightClick({ kind: 'canvas', id: null, selection: [] });
@@ -1104,7 +1157,7 @@ describe('GraphWindowBody graph editing (G3.1)', () => {
 });
 
 describe('GraphWindowBody actor profile', () => {
-  it('a click on a node shows its profile: a portrait and empty details; the background, Escape and Ctrl-clicks close it', async () => {
+  it('a click on a node shows its profile: a portrait and empty details; the background and Escape close it', async () => {
     cacheEvidenceGraph('tr-profile', { data: {}, ...graphOf(4) });
     renderGraph({ metadata: { evidence: { traceId: 'tr-profile', reportId: 1 } } });
     await waitFor(() => expect(screen.getByTestId('canvas')).toHaveAttribute('data-nodes', '4'));
@@ -1120,12 +1173,50 @@ describe('GraphWindowBody actor profile', () => {
     tap({ kind: 'node', id: '3', x: 40, y: 40 });
     await userEvent.keyboard('{Escape}');
     expect(screen.queryByRole('region', { name: 'Actor profile' })).not.toBeInTheDocument();
-    tap({ kind: 'node', id: '3', x: 40, y: 40, adding: true });
-    expect(screen.queryByRole('region', { name: 'Actor profile' })).not.toBeInTheDocument();
-    // Moving the view lets it go.
-    tap({ kind: 'node', id: '3', x: 40, y: 40 });
-    act(() => canvasProps.current.onViewportChange());
-    expect(screen.queryByRole('region', { name: 'Actor profile' })).not.toBeInTheDocument();
+  });
+
+  it('several cards (analyst decision 2026-11-18): Ctrl / Shift clicks add, up to 4 (then the oldest makes way), or take one away; a plain click shows one alone; × closes one; they follow the view', async () => {
+    cacheEvidenceGraph('tr-profiles', { data: {}, ...graphOf(6) });
+    canvasApi.current = { renderedPositionOf: (id) => ({ x: 100 + Number(id), y: 60 }) };
+    try {
+      renderGraph({ metadata: { evidence: { traceId: 'tr-profiles', reportId: 1 } } });
+      await waitFor(() => expect(screen.getByTestId('canvas')).toHaveAttribute('data-nodes', '6'));
+      const tap = (target) => act(() => canvasProps.current.onElementTap(target));
+      const cards = () => screen.queryAllByRole('region', { name: 'Actor profile' });
+      tap({ kind: 'node', id: '1', x: 40, y: 40 });
+      tap({ kind: 'node', id: '2', x: 60, y: 40, adding: true });
+      tap({ kind: 'node', id: '3', x: 80, y: 40, adding: true });
+      tap({ kind: 'node', id: '4', x: 100, y: 40, adding: true });
+      expect(cards()).toHaveLength(4);
+      const ids = () => cards().map((card) => card.getAttribute('data-node-id'));
+      expect(ids()).toEqual(['1', '2', '3', '4']);
+      // A fifth: the oldest (node 1) makes way, first in first out; no notice.
+      tap({ kind: 'node', id: '5', x: 120, y: 40, adding: true });
+      expect(ids()).toEqual(['2', '3', '4', '5']);
+      expect(screen.queryByText(/At most 4 profile cards/)).not.toBeInTheDocument();
+      // A sixth: node 2 goes next.
+      tap({ kind: 'node', id: '6', x: 140, y: 40, adding: true });
+      expect(ids()).toEqual(['3', '4', '5', '6']);
+      // Ctrl-click a shown one (node 4): it goes.
+      tap({ kind: 'node', id: '4', x: 100, y: 40, adding: true });
+      expect(ids()).toEqual(['3', '5', '6']);
+      // Node 1 comes back as the newest.
+      tap({ kind: 'node', id: '1', x: 40, y: 40, adding: true });
+      expect(ids()).toEqual(['3', '5', '6', '1']);
+      // × closes one.
+      await userEvent.click(within(cards()[0]).getByRole('button', { name: 'Close profile' }));
+      expect(ids()).toEqual(['5', '6', '1']);
+      // Moving the view: they stay, following their nodes.
+      act(() => canvasProps.current.onViewportChange());
+      await waitFor(() => expect(cards()).toHaveLength(3));
+      // A plain click: that one alone.
+      tap({ kind: 'node', id: '6', x: 40, y: 40 });
+      expect(cards()).toHaveLength(1);
+      tap(null);
+      expect(cards()).toHaveLength(0);
+    } finally {
+      canvasApi.current = null;
+    }
   });
 });
 
@@ -1177,6 +1268,210 @@ describe('GraphWindowBody actor profile, configured', () => {
   });
 });
 
+describe('GraphWindowBody conditional formatting (i2 benchmark #4)', () => {
+  const open = async () => {
+    cacheEvidenceGraph('tr-format', {
+      data: {},
+      nodes: [{ id: 1, label: 'A', risk: 'high' }, { id: 2, label: 'B', risk: 'low' }, { id: 3, label: 'C', risk: 'high' }],
+      edges: [{ from: 1, to: 2, amount: 5000 }, { from: 2, to: 3, amount: 10 }],
+    });
+    // A live window, so applied settings come back to it.
+    render(
+      <NotificationProvider>
+        <SessionContext.Provider value={{ apiFetch: vi.fn(), configuration: { active_domain: 'bank' } }}>
+          <WorkspaceProvider>
+            <LiveGraph metadata={{ evidence: { traceId: 'tr-format', reportId: 1 } }} />
+          </WorkspaceProvider>
+        </SessionContext.Provider>
+      </NotificationProvider>,
+    );
+    await waitFor(() => expect(screen.getByTestId('canvas')).toHaveAttribute('data-nodes', '3'));
+    await userEvent.click(screen.getByRole('button', { name: 'Conditional formatting' }));
+    return screen.getByRole('dialog', { name: 'Conditional formatting' });
+  };
+  const rules = () => canvasProps.current.settings.formatting.rules;
+
+  it('a node rule: a condition, its match count, a fill; applied to the window settings on Apply, one undo step', async () => {
+    const dialog = await open();
+    expect(dialog).toHaveTextContent('No rules yet');
+    await userEvent.click(within(dialog).getByRole('button', { name: '+ Node rule' }));
+    await userEvent.selectOptions(within(dialog).getByRole('combobox', { name: 'Property' }), 'risk');
+    await userEvent.type(within(dialog).getByLabelText('Value'), 'high');
+    expect(dialog).toHaveTextContent('Matches 2 nodes');
+    await userEvent.click(within(dialog).getAllByRole('button', { name: 'Colour #32CD32' })[0]);
+    expect(rules()).toEqual([]);
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Apply' }));
+    expect(screen.queryByRole('dialog', { name: 'Conditional formatting' })).not.toBeInTheDocument();
+    expect(rules()).toHaveLength(1);
+    expect(rules()[0]).toMatchObject({ target: 'node', conditions: [{ key: 'risk', op: 'eq', value: 'high' }], style: { fill: '#32CD32' } });
+    expect(screen.getByRole('button', { name: 'Conditional formatting' })).toHaveAttribute('data-tooltip', 'Conditional formatting (1 on)');
+    // Listed in the legend.
+    expect(screen.getByRole('note', { name: 'Relationship Types' })).toHaveTextContent('FormattingNodes where risk equals high');
+    await userEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    await waitFor(() => expect(rules()).toEqual([]));
+  });
+
+  it('Colour by a property makes one rule per value; a link rule with a number condition; order and on / off', async () => {
+    const dialog = await open();
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Colour by a property…' }));
+    await userEvent.selectOptions(within(dialog).getByRole('combobox', { name: 'Colour by property' }), 'risk');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Make rules' }));
+    expect(within(dialog).getByRole('list')).toHaveTextContent('risk = high');
+    expect(within(dialog).getByRole('list')).toHaveTextContent('risk = low');
+    await userEvent.click(within(dialog).getByRole('button', { name: '+ Link rule' }));
+    await userEvent.selectOptions(within(dialog).getByRole('combobox', { name: 'Property' }), 'amount');
+    await userEvent.selectOptions(within(dialog).getByRole('combobox', { name: 'Operator' }), 'gt');
+    await userEvent.type(within(dialog).getByLabelText('Value'), '1000');
+    expect(dialog).toHaveTextContent('Matches 1 link');
+    await userEvent.click(within(dialog).getByRole('radio', { name: 'Dashed' }));
+    await userEvent.click(within(dialog).getByRole('checkbox', { name: 'Rule 2 on' }));
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Move rule 1 down' }));
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Apply' }));
+    expect(rules().map((rule) => [rule.target, rule.on, rule.name])).toEqual([
+      ['node', false, 'risk = high'],
+      ['edge', true, ''],
+      ['node', true, 'risk = low'],
+    ]);
+    expect(rules()[1].style).toEqual({ color: '#e74c3c', lineStyle: 'dashed' });
+  });
+
+  it('Select them selects what the rule matches; Escape closes without changes', async () => {
+    const dialog = await open();
+    await userEvent.click(within(dialog).getByRole('button', { name: '+ Node rule' }));
+    await userEvent.selectOptions(within(dialog).getByRole('combobox', { name: 'Property' }), '@type');
+    await userEvent.type(within(dialog).getByLabelText('Value'), 'Nodes');
+    expect(dialog).toHaveTextContent('Matches 3 nodes');
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog', { name: 'Conditional formatting' })).not.toBeInTheDocument();
+    expect(rules()).toEqual([]);
+  });
+});
+
+describe('GraphWindowBody domain formatting rules', () => {
+  afterEach(() => resetDomainFormattingCache());
+
+  it('apply below the graph\'s own rules, listed read-only in the editor; a graph can turn them off', async () => {
+    // The domain's rules (bank in these tests), as the last Configuration save kept them.
+    setDomainFormatting('bank', [{ id: 'd1', name: 'High risk', target: 'node', conditions: [{ key: 'risk', op: 'eq', value: 'high' }], style: { fill: '#ff0000', size: 30 } }]);
+    cacheEvidenceGraph('tr-domain', { data: {}, nodes: [{ id: 1, label: 'A', risk: 'high' }, { id: 2, label: 'B' }], edges: [{ from: 1, to: 2 }] });
+    render(
+      <NotificationProvider>
+        <SessionContext.Provider value={{ apiFetch: vi.fn(), configuration: { active_domain: 'bank' } }}>
+          <WorkspaceProvider>
+            <LiveGraph metadata={{ evidence: { traceId: 'tr-domain', reportId: 1 }, graphSettings: { formatting: { rules: [{ id: 'g1', target: 'node', style: { fill: '#00ff00' } }] } } }} />
+          </WorkspaceProvider>
+        </SessionContext.Provider>
+      </NotificationProvider>,
+    );
+    await waitFor(() => expect(screen.getByTestId('canvas')).toHaveAttribute('data-nodes', '2'));
+    // The graph's rule first (it wins the fill), the domain's after.
+    expect(canvasProps.current.settings.formatting.rules.map((rule) => rule.id)).toEqual(['g1', 'd1']);
+    expect(screen.getByRole('note', { name: 'Relationship Types' })).toHaveTextContent('High risk');
+    await userEvent.click(screen.getByRole('button', { name: 'Conditional formatting' }));
+    const domain = screen.getByRole('region', { name: 'Domain rules' });
+    expect(domain).toHaveTextContent('Use domain rules · Banking');
+    expect(domain).toHaveTextContent('High risk1');
+    await userEvent.click(within(domain).getByRole('checkbox'));
+    await userEvent.click(screen.getByRole('button', { name: 'Apply' }));
+    await waitFor(() => expect(canvasProps.current.settings.formatting.rules.map((rule) => rule.id)).toEqual(['g1']));
+    expect(workspaceRef.windows[0].metadata.graphSettings.useDomainRules).toBe(false);
+  });
+
+  it('the configuration\'s own rules win over the device copy', async () => {
+    setDomainFormatting('bank', [{ id: 'device', target: 'node', style: { fill: '#111111' } }]);
+    cacheEvidenceGraph('tr-domain2', { data: {}, ...graphOf(2) });
+    render(
+      <NotificationProvider>
+        <SessionContext.Provider value={{ apiFetch: vi.fn(), configuration: { active_domain: 'bank', formatting_rules: [{ id: 'server', target: 'edge', style: { color: '#222222' } }] } }}>
+          <WorkspaceProvider>
+            <LiveGraph metadata={{ evidence: { traceId: 'tr-domain2', reportId: 1 } }} />
+          </WorkspaceProvider>
+        </SessionContext.Provider>
+      </NotificationProvider>,
+    );
+    await waitFor(() => expect(screen.getByTestId('canvas')).toHaveAttribute('data-nodes', '2'));
+    expect(canvasProps.current.settings.formatting.rules.map((rule) => rule.id)).toEqual(['server']);
+  });
+});
+
+describe('GraphWindowBody network measures (i2 benchmark #3)', () => {
+  it('Analyze ▸ Visualize by Betweenness sizes the drawn nodes by it, reports the top ones, and undoes in one step', async () => {
+    cacheEvidenceGraph('tr-measure', {
+      data: {},
+      nodes: ['h', 'x', 'y', 'z'].map((id) => ({ id, label: `N-${id}` })),
+      edges: [{ from: 'h', to: 'x' }, { from: 'h', to: 'y' }, { from: 'h', to: 'z' }],
+    });
+    renderGraph({ metadata: { evidence: { traceId: 'tr-measure', reportId: 1 } } });
+    await waitFor(() => expect(screen.getByTestId('canvas')).toHaveAttribute('data-nodes', '4'));
+    const store = getGraphStore('graph-1');
+    act(() => canvasProps.current.onContextMenu({ x: 20, y: 20, kind: 'canvas', id: null, selection: [] }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Analyze' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Visualize by Betweenness' }));
+    await waitFor(() => expect(store.getNode('h').size).toBe(40));
+    expect(store.getNode('x').size).toBe(14);
+    expect(await screen.findByText(/Betweenness: highest N-h \(1\.000\)\./)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    expect(store.getNode('h').size).toBeUndefined();
+  });
+});
+
+describe('GraphWindowBody link aggregation (i2 benchmark #2)', () => {
+  const open = async (linkAggregation = { on: true, mode: 'combined', totalKey: 'amount' }) => {
+    cacheEvidenceGraph('tr-agg', {
+      data: {},
+      nodes: [1, 2, 3].map((id) => ({ id, label: `N${id}` })),
+      edges: [{ id: 'x1', from: 1, to: 2, amount: 10 }, { id: 'x2', from: 2, to: 1, amount: 5 }, { id: 'x3', from: 2, to: 3 }],
+    });
+    renderGraph({ metadata: { evidence: { traceId: 'tr-agg', reportId: 1 }, graphSettings: { linkAggregation } } });
+    await waitFor(() => expect(screen.getByTestId('canvas')).toHaveAttribute('data-nodes', '3'));
+    const store = getGraphStore('graph-1');
+    const keyOf = (id) => store.graph().edges().find((key) => store.getEdge(key).id === id);
+    return { store, keyOf };
+  };
+  const rightClickEdge = (id) => act(() => canvasProps.current.onContextMenu({ x: 20, y: 20, kind: 'edge', id, selection: [], edgeSelection: [] }));
+
+  it('right-click on an aggregated link: its count, directions and total; Expand / Collapse Links; double-click toggles', async () => {
+    const { keyOf } = await open();
+    rightClickEdge(keyOf('x1'));
+    const menu = screen.getByRole('menu', { name: 'Aggregated Links (2)' });
+    expect(menu).toHaveTextContent('Links: 2');
+    expect(menu).toHaveTextContent('Directions: 1 → · 1 ←');
+    expect(menu).toHaveTextContent('Total amount: 15');
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Expand Links (2)' }));
+    expect(canvasProps.current.expandedLinks).toEqual(['1<->2']);
+    rightClickEdge(keyOf('x2'));
+    expect(screen.getByRole('menu', { name: 'Edge Information' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Collapse Links' }));
+    expect(canvasProps.current.expandedLinks).toEqual([]);
+    act(() => canvasProps.current.onEdgeDoubleClick(keyOf('x2')));
+    expect(canvasProps.current.expandedLinks).toEqual(['1<->2']);
+    act(() => canvasProps.current.onEdgeDoubleClick(keyOf('x1')));
+    expect(canvasProps.current.expandedLinks).toEqual([]);
+    // A link on its own has nothing to expand.
+    act(() => canvasProps.current.onEdgeDoubleClick(keyOf('x3')));
+    expect(canvasProps.current.expandedLinks).toEqual([]);
+  });
+
+  it('Customize on an aggregated link changes every link behind it', async () => {
+    const { store, keyOf } = await open();
+    act(() => canvasProps.current.onEdgeSelection([keyOf('x1')]));
+    expect(screen.getByRole('button', { name: 'Customize' })).toHaveAttribute('data-tooltip', 'Customize the selected 2 links');
+    await userEvent.click(screen.getByRole('button', { name: 'Customize' }));
+    await userEvent.click(screen.getByRole('radio', { name: 'Dashed' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Apply' }));
+    expect(store.getEdge(keyOf('x1')).edgeStyle).toBe('dashed');
+    expect(store.getEdge(keyOf('x2')).edgeStyle).toBe('dashed');
+    expect(store.getEdge(keyOf('x3')).edgeStyle).toBeUndefined();
+  });
+
+  it('off: links keep their own menu', async () => {
+    const { keyOf } = await open({ on: false });
+    rightClickEdge(keyOf('x1'));
+    expect(screen.getByRole('menu', { name: 'Edge Information' })).toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: /Expand Links/ })).not.toBeInTheDocument();
+  });
+});
+
 describe('GraphWindowBody Customize popup (replaces the G3.2 adjust boxes)', () => {
   const open = async () => {
     cacheEvidenceGraph('tr-adjust', { data: {}, ...graphOf(4) });
@@ -1197,7 +1492,7 @@ describe('GraphWindowBody Customize popup (replaces the G3.2 adjust boxes)', () 
     expect(screen.queryByRole('region', { name: /adjustments/ })).not.toBeInTheDocument();
     selectNodes(store, ['2']);
     expect(customize()).toBeEnabled();
-    expect(customize()).toHaveAttribute('title', 'Customize the selected 1 node');
+    expect(customize()).toHaveAttribute('data-tooltip', 'Customize the selected 1 node');
   });
 
   it('options on the left, a preview on the right; nothing changes until Apply, then once (one undo step)', async () => {
@@ -1513,10 +1808,11 @@ describe('GraphWindowBody Merged & Grouped card', () => {
     await userEvent.click(screen.getByRole('menuitem', { name }));
   };
 
-  it('stays closed while nothing is merged or grouped', async () => {
+  it('shows dead (grey, folded) while nothing is merged or grouped', async () => {
     await open();
-    await new Promise((resolve) => { setTimeout(resolve, 250); });
-    expect(screen.queryByRole('region', { name: 'Merged & Grouped' })).not.toBeInTheDocument();
+    const card = await screen.findByRole('region', { name: 'Merged & Grouped' });
+    expect(card).toHaveClass('is-dead');
+    expect(card).toHaveTextContent('None in this graph');
   });
 
   it('opens in front when nodes are grouped or merged, listing each with its members', async () => {
@@ -1529,6 +1825,13 @@ describe('GraphWindowBody Merged & Grouped card', () => {
     expect(card).toHaveTextContent('1 grouped');
     expect(card).toHaveTextContent('2 members');
     expect(card).toHaveTextContent('N2, N3');
+    // Its inside, listed under the group row; the chevron folds it.
+    const members = within(card).getByRole('list', { name: 'Members of Group' });
+    expect(within(members).getAllByRole('listitem').map((item) => item.textContent)).toEqual([expect.stringContaining('N2'), expect.stringContaining('N3')]);
+    await userEvent.click(within(card).getByRole('button', { name: 'Hide the members of Group' }));
+    expect(within(card).queryByRole('list', { name: 'Members of Group' })).not.toBeInTheDocument();
+    await userEvent.click(within(card).getByRole('button', { name: 'Show the members of Group' }));
+    expect(within(card).getByRole('list', { name: 'Members of Group' })).toBeInTheDocument();
     rightClick({ kind: 'node', id: '4', selection: ['4', '5'] });
     await choose('Edit', 'Merge Nodes');
     await userEvent.click(screen.getByRole('button', { name: 'Merge' }));
@@ -1800,5 +2103,277 @@ describe('GraphWindowBody timeline filter (i2 benchmark #1)', () => {
     renderGraph({ metadata: { evidence: { traceId: 'tr-nodate', reportId: 1 } } });
     await waitFor(() => expect(screen.getByTestId('canvas')).toHaveAttribute('data-nodes', '3'));
     expect(screen.getByText('No dates found on the shown nodes or links.')).toBeInTheDocument();
+  });
+});
+
+describe('GraphWindowBody Table window link (i2 benchmark #5)', () => {
+  it('publishes what it draws; Open as table opens this graph\'s table once, then focuses it', async () => {
+    cacheEvidenceGraph('tr-table', { data: {}, ...graphOf(40) });
+    renderGraph({ metadata: { evidence: { traceId: 'tr-table', reportId: 1 } } });
+    await waitFor(() => expect(screen.getByTestId('canvas')).toHaveAttribute('data-nodes', '25'));
+    expect(getGraphState('graph-1').nodeIds).toHaveLength(25);
+    expect(getGraphState('graph-1').live).toBe(true);
+    await userEvent.click(screen.getByRole('button', { name: 'Open as table' }));
+    const tables = () => workspaceRef.windows.filter((item) => item.type === WORKSPACE_WINDOW_TYPES.TABLE);
+    expect(tables()).toHaveLength(1);
+    expect(tables()[0].metadata.tableGraph).toBe('graph-1');
+    // Right-click ▸ Open as ▸ Table: the same table, focused.
+    act(() => canvasProps.current.onContextMenu({ x: 20, y: 20, kind: 'canvas', id: null, selection: [] }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Open as' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Table' }));
+    expect(tables()).toHaveLength(1);
+    expect(workspaceRef.activeWindowId).toBe(tables()[0].id);
+    // Its twin beside it: Open as ▸ Chart opens this graph's Chart window.
+    act(() => canvasProps.current.onContextMenu({ x: 20, y: 20, kind: 'canvas', id: null, selection: [] }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Open as' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Chart' }));
+    const charts = workspaceRef.windows.filter((item) => item.type === WORKSPACE_WINDOW_TYPES.CHART);
+    expect(charts).toHaveLength(1);
+    expect(charts[0].metadata.chartGraph).toBe('graph-1');
+  });
+
+  it("Open as chart (beside Open as table) opens this graph's Chart window, linked, once", async () => {
+    cacheEvidenceGraph('tr-chart', { data: {}, ...graphOf(10) });
+    renderGraph({ metadata: { evidence: { traceId: 'tr-chart', reportId: 1 } } });
+    await waitFor(() => expect(screen.getByTestId('canvas')).toHaveAttribute('data-nodes', '10'));
+    const charts = () => workspaceRef.windows.filter((item) => item.type === WORKSPACE_WINDOW_TYPES.CHART);
+    await userEvent.click(screen.getByRole('button', { name: 'Open as chart' }));
+    expect(charts()).toHaveLength(1);
+    expect(charts()[0].metadata.chartGraph).toBe('graph-1');
+    act(() => workspaceRef.focusWindow('graph-1'));
+    await userEvent.click(await screen.findByRole('button', { name: 'Open as chart' }));
+    expect(charts()).toHaveLength(1);
+    expect(workspaceRef.activeWindowId).toBe(charts()[0].id);
+  });
+});
+
+describe('GraphWindowBody files (G4.1)', () => {
+  const open = async (metadata = { evidence: { traceId: 'tr-files', reportId: 1 } }) => {
+    cacheEvidenceGraph('tr-files', { data: {}, ...graphOf(5) });
+    render(
+      <NotificationProvider>
+        <SessionContext.Provider value={{ apiFetch: vi.fn(), configuration: { active_domain: 'bank' } }}>
+          <WorkspaceProvider>
+            <LiveGraph metadata={metadata} />
+          </WorkspaceProvider>
+        </SessionContext.Provider>
+      </NotificationProvider>,
+    );
+  };
+  const graphWindow = () => workspaceRef.windows.find((entry) => entry.type === WORKSPACE_WINDOW_TYPES.GRAPH);
+  const pick = async (file) => {
+    await userEvent.upload(screen.getByLabelText('Graph file'), file);
+  };
+
+  it('Export ▸ Export JSON downloads what is drawn in production\'s format', async () => {
+    await open();
+    await waitFor(() => expect(screen.getByTestId('canvas')).toHaveAttribute('data-nodes', '5'));
+    const blobs = [];
+    const createObjectURL = vi.fn((blob) => { blobs.push(blob); return 'blob:x'; });
+    Object.assign(URL, { createObjectURL, revokeObjectURL: vi.fn() });
+    const clicked = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    await userEvent.click(screen.getByRole('button', { name: 'Export' }));
+    expect(screen.getByRole('menu', { name: 'Export' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Export JSON' }));
+    expect(clicked).toHaveBeenCalled();
+    const { readFileText } = await import('../lib/graphFile.js');
+    const data = JSON.parse(await readFileText(blobs[0]));
+    expect(data.graphData.type).toBe('Graph');
+    expect(data.graphData.nodes).toHaveLength(5);
+    expect(data.graphData.edges).toHaveLength(4);
+    clicked.mockRestore();
+  });
+
+  it('Take a snap says so when the canvas cannot capture', async () => {
+    await open();
+    await waitFor(() => expect(screen.getByTestId('canvas')).toHaveAttribute('data-nodes', '5'));
+    await userEvent.click(screen.getByRole('button', { name: 'Export' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Take a snap…' }));
+    expect(await screen.findByText('The graph is not ready to capture yet.')).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'Take a snap' })).not.toBeInTheDocument();
+  });
+
+  it('Take a snap: profile cards only for selected nodes (none selected: the choice is off), at most 4', async () => {
+    canvasApi.current = { snapshot: () => 'data:image/png;base64,VIEW', renderedPositionOf: () => ({ x: 40, y: 30 }) };
+    try {
+      await open();
+      await waitFor(() => expect(screen.getByTestId('canvas')).toHaveAttribute('data-nodes', '5'));
+      await userEvent.click(screen.getByRole('button', { name: 'Export' }));
+      await userEvent.click(screen.getByRole('menuitem', { name: 'Take a snap…' }));
+      let dialog = screen.getByRole('dialog', { name: 'Take a snap' });
+      expect(within(dialog).queryByRole('list', { name: 'Show the profiles of' })).not.toBeInTheDocument();
+      expect(within(dialog).getByText('Select nodes on the graph to show their profile cards in the picture.')).toBeInTheDocument();
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+      const store = getGraphStore(graphWindow().id);
+      act(() => store.setSelection(store.graph().nodes()));
+      await userEvent.click(screen.getByRole('button', { name: 'Export' }));
+      await userEvent.click(screen.getByRole('menuitem', { name: 'Take a snap…' }));
+      dialog = screen.getByRole('dialog', { name: 'Take a snap' });
+      const boxes = within(within(dialog).getByRole('list', { name: 'Show the profiles of' })).getAllByRole('checkbox');
+      expect(boxes).toHaveLength(5);
+      for (const box of boxes.slice(0, 4)) await userEvent.click(box);
+      expect(within(dialog).getByText('4 of 4')).toBeInTheDocument();
+      expect(boxes[4]).toBeDisabled();
+      await userEvent.click(boxes[0]);
+      expect(boxes[4]).toBeEnabled();
+    } finally {
+      canvasApi.current = null;
+    }
+  });
+
+  it('Take a snap / Print graph: a popup with the A4 page in the NBE frame (landscape), a node\u2019s profile card if wanted', async () => {
+    canvasApi.current = { snapshot: () => 'data:image/png;base64,VIEW', renderedPositionOf: () => ({ x: 40, y: 30 }) };
+    try {
+      await open();
+      await waitFor(() => expect(screen.getByTestId('canvas')).toHaveAttribute('data-nodes', '5'));
+      const store = getGraphStore(graphWindow().id);
+      const [first] = store.graph().nodes();
+      act(() => store.setSelection([first]));
+      const chartSnaps = await import('../../chart/lib/chartSnaps.js');
+      const graphSnap = await import('../lib/graphSnap.js');
+      const framed = vi.spyOn(chartSnaps, 'framePicture').mockResolvedValue('data:image/png;base64,PAGE');
+      const carded = vi.spyOn(graphSnap, 'withProfileCards').mockResolvedValue('data:image/png;base64,CARD');
+      const clicked = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+      await userEvent.click(screen.getByRole('button', { name: 'Export' }));
+      await userEvent.click(screen.getByRole('menuitem', { name: 'Take a snap…' }));
+      const dialog = screen.getByRole('dialog', { name: 'Take a snap' });
+      expect(within(dialog).getByRole('radio', { name: /Landscape/ })).toBeChecked();
+      // Download PDF is Print's (a snap is a PNG).
+      expect(within(dialog).queryByRole('button', { name: 'Download PDF' })).not.toBeInTheDocument();
+      await waitFor(() => expect(within(dialog).getByRole('img', { name: 'The graph on an A4 landscape page' })).toHaveAttribute('src', 'data:image/png;base64,PAGE'));
+      expect(framed.mock.calls.at(-1)[0]).toBe('data:image/png;base64,VIEW');
+      expect(framed.mock.calls.at(-1)[1]).toMatchObject({ orientation: 'landscape', title: 'LINK ANALYSIS \u00b7 GRAPH SNAP', source: expect.stringMatching(/^Source: .* \u00b7 5 nodes \u00b7 4 links drawn$/) });
+      // Cards for the selected nodes only (one here), drawn beside them.
+      const cards = within(dialog).getByRole('list', { name: 'Show the profiles of' });
+      const [box] = within(cards).getAllByRole('checkbox');
+      expect(within(cards).getAllByRole('checkbox')).toHaveLength(1);
+      expect(box).not.toBeChecked();
+      await userEvent.click(box);
+      await waitFor(() => expect(carded).toHaveBeenCalledWith('data:image/png;base64,VIEW', expect.objectContaining({ scale: 3, cards: [expect.objectContaining({ at: { x: 40, y: 30 } })] })));
+      expect(framed.mock.calls.at(-1)[0]).toBe('data:image/png;base64,CARD');
+      expect(within(dialog).getByText('1 of 4')).toBeInTheDocument();
+      // The ticked card is opened on the canvas (behind the popup), so the
+      // snap draws it as the canvas lays it out.
+      expect(screen.getAllByRole('region', { name: 'Actor profile' }).map((card) => card.getAttribute('data-node-id'))).toEqual([String(first)]);
+      await userEvent.click(within(dialog).getByRole('radio', { name: /Portrait/ }));
+      await waitFor(() => expect(framed.mock.calls.at(-1)[1].orientation).toBe('portrait'));
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Take snap' }));
+      await waitFor(() => expect(clicked).toHaveBeenCalledTimes(1), { timeout: 3000 });
+      expect(clicked.mock.contexts[0].href).toBe('data:image/png;base64,PAGE');
+      expect(screen.queryByRole('dialog', { name: 'Take a snap' })).not.toBeInTheDocument();
+      // Closed: the canvas has the cards it had before (none here).
+      expect(screen.queryAllByRole('region', { name: 'Actor profile' })).toHaveLength(0);
+      // Print graph: the same popup, printing the page.
+      const graphFile = await import('../lib/graphFile.js');
+      const printed = vi.spyOn(graphFile, 'printImage').mockImplementation(() => {});
+      await userEvent.click(screen.getByRole('button', { name: 'Export' }));
+      await userEvent.click(screen.getByRole('menuitem', { name: 'Print graph…' }));
+      const print = screen.getByRole('dialog', { name: 'Print graph' });
+      await waitFor(() => expect(within(print).getByRole('img', { name: /A4 landscape page/ })).toBeInTheDocument());
+      await userEvent.click(within(print).getByRole('button', { name: 'Print' }));
+      await waitFor(() => expect(printed).toHaveBeenCalledWith(['data:image/png;base64,PAGE'], { pages: true, orientation: 'landscape' }));
+      // Download PDF beside Print: the page as a PDF, nothing printed.
+      const pdf = vi.spyOn(chartSnaps, 'pagesToPdf').mockResolvedValue({ output: () => new Blob(['%PDF-1.3']) });
+      const blobUrl = { create: URL.createObjectURL, revoke: URL.revokeObjectURL };
+      URL.createObjectURL = () => 'blob:pdf';
+      URL.revokeObjectURL = () => {};
+      await userEvent.click(screen.getByRole('button', { name: 'Export' }));
+      await userEvent.click(screen.getByRole('menuitem', { name: 'Print graph…' }));
+      const keep = screen.getByRole('dialog', { name: 'Print graph' });
+      await waitFor(() => expect(within(keep).getByRole('img', { name: /A4 landscape page/ })).toBeInTheDocument());
+      await userEvent.click(within(keep).getByRole('button', { name: 'Download PDF' }));
+      await waitFor(() => expect(clicked).toHaveBeenCalledTimes(2));
+      expect(pdf).toHaveBeenCalledWith(['data:image/png;base64,PAGE'], expect.objectContaining({ orientation: 'landscape' }));
+      expect(clicked.mock.contexts[1].download).toMatch(/^LinkxGraph_.*_\d{8}-\d{4}\.pdf$/);
+      expect(printed).toHaveBeenCalledTimes(1);
+      URL.createObjectURL = blobUrl.create;
+      URL.revokeObjectURL = blobUrl.revoke;
+      pdf.mockRestore();
+      framed.mockRestore();
+      carded.mockRestore();
+      clicked.mockRestore();
+      printed.mockRestore();
+    } finally {
+      canvasApi.current = null;
+    }
+  });
+
+  it('Import graph replaces the evidence graph after confirming, and unlinks the window', async () => {
+    await open();
+    await waitFor(() => expect(screen.getByTestId('canvas')).toHaveAttribute('data-nodes', '5'));
+    const file = new File([JSON.stringify({ graphData: { type: 'Graph', nodes: [{ id: 'x', label: 'X' }, { id: 'y' }], edges: [{ from: 'x', to: 'y' }] }, networkOptions: {} })], 'g.json', { type: 'application/json' });
+    await pick(file);
+    expect(await screen.findByText('Any unsaved progress will be lost. Continue?')).toBeInTheDocument();
+    await userEvent.click(within(screen.getByRole('dialog', { name: 'Confirm Replace' })).getByRole('button', { name: 'Continue' }));
+    await waitFor(() => expect(screen.getByTestId('canvas')).toHaveAttribute('data-nodes', '2'));
+    expect(graphWindow().metadata.evidence).toBeNull();
+    expect(graphWindow().metadata.graphBlank).toBe(true);
+    expect(getGraphStore(graphWindow().id).getNode('x').label).toBe('X');
+    expect(await screen.findByText(/g\.json: 2 nodes, 1 links/)).toBeInTheDocument();
+  });
+
+  it('Import graph: cancelling keeps the graph; a bad file is reported', async () => {
+    await open();
+    await waitFor(() => expect(screen.getByTestId('canvas')).toHaveAttribute('data-nodes', '5'));
+    await pick(new File(['{"nodes":[{"id":1}],"edges":[]}'], 'g.json'));
+    await userEvent.click(within(await screen.findByRole('dialog', { name: 'Confirm Replace' })).getByText('Cancel'));
+    expect(screen.getByTestId('canvas')).toHaveAttribute('data-nodes', '5');
+    await pick(new File(['{"foo": 1}'], 'old.json'));
+    await userEvent.click(within(await screen.findByRole('dialog', { name: 'Confirm Replace' })).getByRole('button', { name: 'Continue' }));
+    expect(await screen.findByText('This JSON file does not contain a valid graph.')).toBeInTheDocument();
+    expect(screen.getByTestId('canvas')).toHaveAttribute('data-nodes', '5');
+  });
+
+  it('Import graph into an empty window: no confirmation; positions from our files are kept', async () => {
+    await open({});
+    const file = new File([JSON.stringify({ graphData: { type: 'Graph', nodes: [{ id: 'a', x: 5, y: 6 }, { id: 'b', x: -5, y: 0 }], edges: [] }, networkOptions: {} })], 'mine.json');
+    await pick(file);
+    await waitFor(() => expect(screen.getByTestId('canvas')).toHaveAttribute('data-nodes', '2'));
+    expect(screen.queryByText('Any unsaved progress will be lost. Continue?')).not.toBeInTheDocument();
+    expect(getGraphStore(graphWindow().id).getPosition('a')).toEqual({ x: 5, y: 6 });
+  });
+});
+
+describe('GraphWindowBody graph report (G4.2)', () => {
+  it('Export ▸ Generate report: the cover fields prefilled, findings drafted, then the PDF downloads', async () => {
+    cacheEvidenceGraph('tr-report', { data: {}, ...graphOf(5) });
+    render(
+      <NotificationProvider>
+        <SessionContext.Provider value={{ apiFetch: vi.fn(), configuration: { active_domain: 'bank' } }}>
+          <WorkspaceProvider>
+            <LiveGraph metadata={{ evidence: { traceId: 'tr-report', reportId: 9, externalReferenceId: 'R-9', domain: 'microfinance', systemRules: ['FUND_FLOW'] } }} />
+          </WorkspaceProvider>
+        </SessionContext.Provider>
+      </NotificationProvider>,
+    );
+    await waitFor(() => expect(screen.getByTestId('canvas')).toHaveAttribute('data-nodes', '5'));
+    await userEvent.click(screen.getByRole('button', { name: 'Export' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Generate report…' }));
+    const form = screen.getByRole('dialog', { name: 'Generate graph report' });
+    expect(within(form).getByLabelText('Analysis Reference ID')).toHaveValue('R-9');
+    expect(within(form).getByLabelText('Date & Time of Report').value).toMatch(/^\d\d\/\d\d\/\d\d \d\d:\d\d$/);
+    expect(within(form).getByLabelText('Key findings').value).toMatch(/N1 is the most connected entity, linked to 4 others\./);
+    // The two layers of flags: the backend's rule, the window's alert rules.
+    expect(within(form).getByLabelText('System Flagged Rule')).toHaveValue('FUND_FLOW');
+    expect(within(form).getByLabelText('Graph Alert').value).toMatch(/^High-degree: 3\+ links \(high from 8\); Heavy-edge: top 5% of link weights · \d+ alerts? raised$/);
+    await userEvent.type(within(form).getByLabelText('Case ID'), 'CASE-14');
+    // Identify entities by a column: the untouched draft follows it.
+    expect(within(form).getByLabelText('Identify entities by')).toHaveValue('');
+    await userEvent.selectOptions(within(form).getByLabelText('Identify entities by'), 'id');
+    expect(within(form).getByLabelText('Key findings').value).toMatch(/^1 is the most connected entity/);
+    const blobs = [];
+    Object.assign(URL, { createObjectURL: vi.fn((blob) => { blobs.push(blob); return 'blob:x'; }), revokeObjectURL: vi.fn() });
+    const clicked = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    await userEvent.click(within(form).getByRole('button', { name: 'Generate PDF' }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Generate graph report' })).not.toBeInTheDocument(), { timeout: 5000 });
+    expect(clicked).toHaveBeenCalled();
+    expect(blobs[0].type).toBe('application/pdf');
+    // The cover names the evidence's own domain, not the active one (bank).
+    expect(renderGraphReportPdf.mock.calls.at(-1)[0].cover.domain).toBe('Microfinance');
+    // A Graph Report, even of an evidence graph (the analyst may have changed it).
+    expect(renderGraphReportPdf.mock.calls.at(-1)[0].kind).toBe('graph');
+    expect(renderGraphReportPdf.mock.calls.at(-1)[0].cover.title).toMatch(/^Graph Report · /);
+    expect(clicked.mock.contexts.at(-1).download).toMatch(/^LinkxGraph_Report_R-9_\d+\.pdf$/);
+    clicked.mockRestore();
   });
 });

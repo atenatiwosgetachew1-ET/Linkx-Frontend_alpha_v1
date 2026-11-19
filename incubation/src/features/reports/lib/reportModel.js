@@ -112,6 +112,32 @@ export const getLeadingEntity = (payload) => {
   return String(node ? (node.account_number || node.calling_no || node.label || node.id || topId) : topId);
 };
 
+// The evidence's domain_distribution: how its data spreads over the domains
+// (e.g. a "domain": "all" evidence). Accepts { bank: 12, microfinance: 3 },
+// [{ domain, count }] (or name / key, value / share / percentage) and
+// ['bank', 'microfinance']. Returns [{ domain, count }] (count null when not
+// given), largest first, at most 8.
+export const getDomainDistribution = (payload) => {
+  const raw = payload?.domain_distribution;
+  const asCount = (value) => {
+    const number = Number(value);
+    return value !== null && value !== '' && Number.isFinite(number) && number >= 0 ? number : null;
+  };
+  let items = [];
+  if (Array.isArray(raw)) {
+    items = raw.map((item) => (item && typeof item === 'object'
+      ? { domain: item.domain ?? item.name ?? item.key, count: asCount(item.count ?? item.value ?? item.share ?? item.percentage) }
+      : { domain: item, count: null }));
+  } else if (raw && typeof raw === 'object') {
+    items = Object.entries(raw).map(([domain, value]) => ({ domain, count: asCount(value && typeof value === 'object' ? value.count ?? value.value : value) }));
+  }
+  return items
+    .map((item) => ({ domain: String(item.domain ?? '').trim().slice(0, 40), count: item.count }))
+    .filter((item) => item.domain && item.count !== 0)
+    .sort((a, b) => (b.count ?? -1) - (a.count ?? -1))
+    .slice(0, 8);
+};
+
 const listText = (value) => (Array.isArray(value) ? value.join(', ') : value ? String(value) : '');
 
 export const getAnomaly = (payload) => payload.anomaly_type || listText(payload.flagged_rules);

@@ -8,6 +8,10 @@
 // default greys) follow the theme, as production rewrites them in dark mode;
 // real colours are kept. Theme colours come from --graph-* tokens.
 
+import { aggregateLinks } from './linkAggregation.js';
+import { formatFor, lockedStyles } from './conditionalFormatting.js';
+import { nodeTypeOf } from './graphAnalysis.js';
+import { EDGE_STYLES } from './graphEditing.js';
 import { edgeTitle, edgeWidthsFor, nodeTitle, resolveEdgeStyle } from './graphModel.js';
 import { GRAPH_LIMITS } from './graphSettings.js';
 import { iconForTheme, resolveIconUrl } from './graphIcons.js';
@@ -213,11 +217,87 @@ export const bundleEdges = (entries, min = 2) => {
   return { primary, hidden };
 };
 
+/* ── Conditional formatting (G3.5 i2 #4) ─────────────────────────────── */
+
+// What rules read besides properties: node type, degree in the view, alert
+// and pinned highlights. Degree is counted only when a rule asks for it.
+export const formattingContext = (store, view, markers) => {
+  let degrees = null;
+  return {
+    typeOf: nodeTypeOf,
+    degree: (id) => {
+      if (!degrees) {
+        degrees = new Map();
+        view.edgeIds.forEach((key) => {
+          const edge = store.getEdge(key);
+          if (!edge) return;
+          [String(edge.from), String(edge.to)].forEach((end) => degrees.set(end, (degrees.get(end) || 0) + 1));
+        });
+      }
+      return degrees.get(String(id)) || 0;
+    },
+    alerted: (kind, id) => Boolean(markers?.alert?.[kind === 'node' ? 'nodes' : 'edges']?.has(String(id))),
+    pinned: (kind, id) => Boolean(markers?.pinned?.[kind === 'node' ? 'nodes' : 'edges']?.has(String(id))),
+  };
+};
+
+const applyNodeFormat = (element, format, iconMode) => {
+  if (!format) return;
+  const { style } = format;
+  const data = element.data;
+  data.formatted = format.rules.join(' ');
+  if (style.hide) {
+    data.ruleHidden = 1;
+    return;
+  }
+  if (style.fill) data.fill = style.fill;
+  if (style.border) data.border = style.border;
+  else if (style.fill && !data.border) data.border = style.fill;
+  if (style.labelColor) data.fontColor = style.labelColor;
+  if (style.shape) data.shape = SHAPES[style.shape] || data.shape;
+  if (style.size) {
+    data.diameter = style.size * 2;
+    if (data.boxed) delete data.boxed;
+  }
+  if (style.icon) {
+    const url = resolveIconUrl(style.icon);
+    if (url) {
+      data.image = iconForTheme(url, iconMode);
+      data.imageSize = `${Math.round(Math.max(0.3, (data.diameter - 20) / data.diameter) * 100)}%`;
+    }
+  }
+};
+
+const applyEdgeFormat = (element, format) => {
+  if (!format) return;
+  const { style } = format;
+  const data = element.data;
+  data.formatted = format.rules.join(' ');
+  if (style.hide) {
+    data.ruleHidden = 1;
+    return;
+  }
+  if (style.color) data.color = style.color;
+  if (style.width) data.width = style.width;
+  if (style.lineStyle) {
+    const dashes = EDGE_STYLES.find((entry) => entry.value === style.lineStyle)?.dashes || false;
+    data.lineStyle = DASH_STYLE(dashes);
+    data.dashPattern = dashes || [6, 3];
+  }
+};
+
 export const buildElements = (store, view, {
   showLabels = false, labels = {}, isCdr = false, iconMode = 'light', edgeWeight = '', showTitles = false, edgeBundling = false, edgeBundleMin = 2,
   glyphColors = null,
+  // Link aggregation ({ on, mode, totalKey, expanded }); on, it replaces
+  // edge bundling.
+  aggregation = null,
+  // Conditional formatting rules (lib/conditionalFormatting.js).
+  formatting = null,
 } = {}) => {
   const markers = store.getMarkers?.(view.viewKey);
+  const rules = formatting?.rules?.filter((rule) => rule.on) || [];
+  const formatCtx = rules.length ? formattingContext(store, view, markers) : null;
   // Node badges (G3.6): `glyphColors` { alert, pinned, flag, note, group,
   // merged } turns them on. Flagged: an end of a production NODE_FLAG edge.
   const flagged = new Set();
@@ -243,12 +323,15 @@ export const buildElements = (store, view, {
         element.data.glyphKinds = kinds;
       }
     }
+    if (rules.length) applyNodeFormat(element, formatFor(rules, 'node', id, node, formatCtx, lockedStyles('node', node)), iconMode);
     const position = store.getPosition(id);
     return position ? { ...element, position } : element;
   });
   const edgeEntries = view.edgeIds.map((key) => [key, store.getEdge(key)]);
   const widths = edgeWidthsFor(edgeEntries, edgeWeight, (id) => store.getNode(id));
-  const bundles = edgeBundling ? bundleEdges(edgeEntries, edgeBundleMin) : null;
+  const bundles = aggregation?.on
+    ? aggregateLinks(edgeEntries, aggregation)
+    : edgeBundling ? bundleEdges(edgeEntries, edgeBundleMin) : null;
   const edges = edgeEntries.filter(([key]) => !bundles?.hidden.has(key)).map(([key, edge]) => {
     const element = toCyEdge(key, edge, {
       isCdr,
@@ -257,10 +340,13 @@ export const buildElements = (store, view, {
         ? edgeTitle(edge, store.getNode(edge.from), store.getNode(edge.to), { isCdr, semanticTooltip: resolveEdgeStyle(edge, { isCdr }).tooltip })
         : '',
     });
+    // Rules after the edits (which they leave alone), before the bundling
+    // and the markers.
+    if (rules.length) applyEdgeFormat(element, formatFor(rules, 'edge', key, edge, formatCtx, lockedStyles('edge', edge)));
     // Bundled after the weights and edits, before the markers (production
     // order in renderVisibleGraphBatch).
     const bundle = bundles?.primary.get(key);
-    if (bundle) Object.assign(element.data, bundle, { bundled: 1 });
+    if (bundle) Object.assign(element.data, bundle, aggregation?.on ? {} : { bundled: 1 });
     // vis curvedCW: bowed by `roundness` of its length, clockwise.
     if (element.data.curve) {
       const a = store.getPosition(edge.from);
@@ -405,6 +491,13 @@ export const buildStylesheet = (theme, { curve = 'bezier', zoom = 1 } = {}) => {
     },
   },
   { selector: 'edge[color]', style: { 'line-color': 'data(color)', 'target-arrow-color': 'data(color)' } },
+  // Conditional formatting: hidden by a rule (a hidden node takes its links).
+  { selector: 'node[ruleHidden], edge[ruleHidden]', style: { display: 'none' } },
+  // Link aggregation: combined links both ways get an arrow at each end.
+  {
+    selector: 'edge[bothWays]',
+    style: { 'source-arrow-shape': 'triangle', 'source-arrow-color': (ele) => ele.data('color') || theme.edge },
+  },
   // Theme lines (vis smooth curvedCW).
   {
     selector: 'edge[curveDistance]',
@@ -424,6 +517,8 @@ export const buildStylesheet = (theme, { curve = 'bezier', zoom = 1 } = {}) => {
       'min-zoomed-font-size': 5,
     },
   },
+  // Link aggregation: the count label a little bolder (after edge[label]).
+  { selector: 'edge[aggregated]', style: { 'font-weight': 600, 'text-opacity': 1 } },
   // Marker overlays (MARKER_STYLES); the glow stands in for vis's shadow.
   {
     selector: 'node[marker]',

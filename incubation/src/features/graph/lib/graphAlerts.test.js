@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   DEFAULT_ALERT_RULES,
+  describeAlertRules,
   alertFocusNode,
   alertNodeName,
   alertPropertyKeys,
@@ -149,5 +150,14 @@ describe('alert panel wording (GA describeGraphAlert)', () => {
   it('summarises counts as production', () => {
     expect(alertSummary([])).toBe('No alerts — graph looks clean.');
     expect(alertSummary([{ severity: 'high' }, { severity: 'medium' }, { severity: 'medium' }])).toBe('3 alerts · 1 high · 2 medium');
+  });
+});
+
+describe('describeAlertRules (report cover)', () => {
+  it('says what the window alerts on, or that they are off', () => {
+    expect(describeAlertRules({}, true, 2)).toBe('High-degree: 3+ links (high from 8); Heavy-edge: top 5% of link weights · 2 alerts raised');
+    expect(describeAlertRules({ enableHeavyEdge: false, highDegreeMin: 5 }, true, 1)).toBe('High-degree: 5+ links (high from 8) · 1 alert raised');
+    expect(describeAlertRules({ enableHighDegree: false, enableHeavyEdge: false }, true)).toBe('No graph alert rule enabled');
+    expect(describeAlertRules({}, false, 3)).toBe('Graph alerts off');
   });
 });

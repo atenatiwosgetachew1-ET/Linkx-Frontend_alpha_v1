@@ -1,11 +1,17 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useNotifications } from '../../../shared/notifications/useNotifications.js';
 import { useSession } from '../../../shared/session/useSession.js';
 import { useWorkspace, useWorkspaceActions } from '../../../workspace/hooks/useWorkspace.js';
 import { WORKSPACE_WINDOW_TYPES } from '../../../workspace/state/workspaceTypes.js';
 import { buildEvidencePayload, fetchGraph } from '../../../services/graphApi.js';
-import { getActiveDomainKey } from '../../configuration/lib/configModel.js';
+import { AuthContext } from '../../../auth/authContext.js';
+import { formatDomainPillarLabel, getActiveDomainKey } from '../../configuration/lib/configModel.js';
+import GraphReportDialog from '../../graph/components/GraphReportDialog.jsx';
+import { getProfileSettings, resolveProfileSettings } from '../../graph/lib/nodeProfile.js';
+import { renderOffscreenSnapshot } from '../../graph/lib/offscreenSnapshot.js';
+import { downloadGraphReport, evidenceReportContext } from '../../graph/report/graphReportExport.js';
+import { entityName } from '../../graph/report/graphReportModel.js';
 import { cacheEvidenceGraph, getCachedEvidenceGraph } from '../lib/evidenceGraphs.js';
 import { cacheReportsPage, getCachedReportsPage } from '../lib/reportsPageCache.js';
 import {
@@ -18,6 +24,7 @@ import {
   buildReportsQuery,
   filterAndSortRecords,
   formatReportDate,
+  getDomainDistribution,
   getReportTab,
   isArchived,
   pageSummary,
@@ -111,11 +118,32 @@ const openRequestFrom = (metadata = {}) => {
   return { tab, run, seq: metadata.openSeq ?? 0 };
 };
 
+// What a Graph window (and the report) knows of an evidence report.
+const evidenceMetaOf = (record, traceId) => ({
+  traceId,
+  reportId: record.id,
+  externalReferenceId: record.externalReferenceId,
+  // The evidence's own domain (its report payload), so the graph report's
+  // cover names it rather than the analyst's active domain.
+  domain: String(record.payload?.domain || record.payload?.resolved_domain || '').trim().slice(0, 60),
+  // How its data spreads over the domains (e.g. a "domain": "all"
+  // evidence), shown beside the domain on the cover.
+  domainDistribution: getDomainDistribution(record.payload),
+  // The link analysis rule(s) that flagged it at ingestion: the report's
+  // "System rule" (analyst decision 2026-11-17).
+  // The fraudulence score and its band, stamped on the report's Summary
+  // (analyst decisions 2026-11-18).
+  score: record.scoreLabel ? { value: record.scoreLabel, band: record.scoreBand } : null,
+  systemRules: (record.flaggedRules.length ? record.flaggedRules : [record.anomaly].filter(Boolean)).slice(0, 20).map((rule) => String(rule).slice(0, 120)),
+});
+
 export default function ReportsWindowBody({ windowItem }) {
   const workspace = useWorkspace();
   const { apiFetch, configuration } = useSession();
   const { notify, dismissNotice } = useNotifications();
-  const isCdr = getActiveDomainKey(configuration) === 'cdr';
+  const domainKey = getActiveDomainKey(configuration);
+  const isCdr = domainKey === 'cdr';
+  const auth = useContext(AuthContext);
 
   const { updateWindowMetadata } = useWorkspaceActions();
   const windowId = windowItem?.id;
@@ -287,6 +315,43 @@ export default function ReportsWindowBody({ windowItem }) {
     return probingTraceId === selectedTraceId ? 'checking' : 'available';
   })();
 
+  // The evidence graph, from the cache or fetched (with progress notices).
+  // Null when there is none or the fetch fails (said in a notice).
+  const loadEvidenceGraph = async (traceId, record) => {
+    let noticeId = notify({ title: 'Loading', message: 'Checking evidence graph data…', level: 'info', source: 'Reports' });
+    try {
+      let graph = getCachedEvidenceGraph(traceId);
+      if (!graph) {
+        openControllerRef.current?.abort();
+        const controller = new AbortController();
+        openControllerRef.current = controller;
+        graph = await fetchGraph(apiFetch, buildEvidencePayload(traceId, record), {
+          signal: controller.signal,
+          onQueued: () => {
+            if (noticeId) dismissNotice(noticeId);
+            noticeId = notify({ title: 'Queued', message: 'Evidence graph request is queued…', level: 'info', source: 'Reports' });
+          },
+        });
+      }
+      if (noticeId) dismissNotice(noticeId);
+      noticeId = null;
+      if (!graph.nodes.length && !graph.edges.length) {
+        setGraphStatus((current) => ({ ...current, [traceId]: false }));
+        notify({ title: 'No graph', message: 'No graph data found for this evidence report.', level: 'warning', source: 'Reports' });
+        return null;
+      }
+      cacheEvidenceGraph(traceId, graph);
+      setGraphStatus((current) => ({ ...current, [traceId]: true }));
+      return graph;
+    } catch (openError) {
+      if (noticeId) dismissNotice(noticeId);
+      if (isAbort(openError)) return null;
+      setGraphStatus((current) => ({ ...current, [traceId]: false }));
+      notify({ title: 'Unavailable', message: openError?.message || 'Failed to fetch graph data.', level: 'error', source: 'Reports' });
+      return null;
+    }
+  };
+
   const openGraph = async () => {
     if (!selected || !selectedTraceId || openingTraceId) return;
     const traceId = selectedTraceId;
@@ -297,49 +362,69 @@ export default function ReportsWindowBody({ windowItem }) {
       return;
     }
     setOpeningTraceId(traceId);
-    let noticeId = notify({ title: 'Loading', message: 'Checking evidence graph data…', level: 'info', source: 'Reports' });
     try {
-      let graph = getCachedEvidenceGraph(traceId);
-      if (!graph) {
-        openControllerRef.current?.abort();
-        const controller = new AbortController();
-        openControllerRef.current = controller;
-        graph = await fetchGraph(apiFetch, buildEvidencePayload(traceId, selected), {
-          signal: controller.signal,
-          onQueued: () => {
-            if (noticeId) dismissNotice(noticeId);
-            noticeId = notify({ title: 'Queued', message: 'Evidence graph request is queued…', level: 'info', source: 'Reports' });
-          },
-        });
-      }
-      if (noticeId) dismissNotice(noticeId);
-      if (!graph.nodes.length && !graph.edges.length) {
-        setGraphStatus((current) => ({ ...current, [traceId]: false }));
-        notify({ title: 'No graph', message: 'No graph data found for this evidence report.', level: 'warning', source: 'Reports' });
-        return;
-      }
-      cacheEvidenceGraph(traceId, graph);
-      setGraphStatus((current) => ({ ...current, [traceId]: true }));
+      const graph = await loadEvidenceGraph(traceId, selected);
+      if (!graph) return;
       workspace.openWindow(WORKSPACE_WINDOW_TYPES.GRAPH, {
         title: 'Graph',
         customTitle: `Evidence ${selected.externalReferenceId || selected.id}`,
         metadata: {
-          evidence: {
-            traceId,
-            reportId: selected.id,
-            externalReferenceId: selected.externalReferenceId,
-          },
+          evidence: evidenceMetaOf(selected, traceId),
         },
       });
-    } catch (openError) {
-      if (noticeId) dismissNotice(noticeId);
-      if (isAbort(openError)) return;
-      setGraphStatus((current) => ({ ...current, [traceId]: false }));
-      notify({ title: 'Unavailable', message: openError?.message || 'Failed to fetch graph data.', level: 'error', source: 'Reports' });
     } finally {
       setOpeningTraceId(null);
     }
   };
+
+  // Download report (graph-chart-plan §3.6; analyst decision 2026-11-18):
+  // the built-in NBE graph report of the evidence graph, drawn without
+  // opening a Graph window. The same form as the Graph window's Generate
+  // report comes first, prefilled from the evidence.
+  const [reportJob, setReportJob] = useState(null);
+  const [reportLoading, setReportLoading] = useState(false);
+  const openReport = async () => {
+    if (!selected || !selectedTraceId || reportLoading) return;
+    const traceId = selectedTraceId;
+    const record = selected;
+    setReportLoading(true);
+    try {
+      const graph = await loadEvidenceGraph(traceId, record);
+      if (!graph) return;
+      const profileSettings = configuration?.actor_profile ? resolveProfileSettings(configuration, domainKey) : getProfileSettings(domainKey);
+      const context = evidenceReportContext({
+        graphData: graph,
+        evidence: evidenceMetaOf(record, traceId),
+        profileSettings,
+        isCdr,
+        formatDomain: formatDomainPillarLabel,
+      });
+      const user = auth?.user;
+      setReportJob({
+        context,
+        // An evidence without a domain of its own falls back to the active
+        // domain, as in the Graph window.
+        domain: context.domain || formatDomainPillarLabel(domainKey),
+        initial: context.initial({ analyst: String(user?.display_name || user?.username || '') }),
+      });
+    } finally {
+      setReportLoading(false);
+    }
+  };
+  const generateReport = async (values) => {
+    if (!reportJob) return;
+    try {
+      const input = reportJob.context.input(values.nameKey);
+      // The picture names entities as the report does (Identify entities by).
+      const snapshot = await renderOffscreenSnapshot(reportJob.context.store, { isCdr, ...values.snapshot, nameOf: (id) => entityName(input.graph, id, values.nameKey) });
+      await downloadGraphReport({ input, values, domain: reportJob.domain, snapshot });
+      setReportJob(null);
+      notify({ title: 'Success', message: 'Evidence report downloaded successfully.', level: 'success', source: 'Reports' });
+    } catch (error) {
+      notify({ title: 'Evidence report', message: `Could not generate the evidence report: ${error?.message || error}`, level: 'error', source: 'Reports' });
+    }
+  };
+
 
   const copyPayload = () => {
     if (!selected) return;
@@ -545,9 +630,12 @@ export default function ReportsWindowBody({ windowItem }) {
               onCopyPayload={copyPayload}
               graph={{ state: graphState, onOpen: openGraph }}
               download={{
-                available: false,
-                hint: 'The report PDF is rendered by the graph view; it arrives with the Graph window.',
-                onDownload: () => {},
+                available: graphState === 'available' && !reportLoading,
+                busy: reportLoading,
+                hint: graphState === 'available'
+                  ? 'The Evidence Report of this evidence, as the Service analysed it (PDF)'
+                  : 'Available for evidence reports with a graph',
+                onDownload: openReport,
               }}
             />
           )}
@@ -574,6 +662,17 @@ export default function ReportsWindowBody({ windowItem }) {
             </span>
           </div>
         </footer>
+        {reportJob ? (
+          <GraphReportDialog
+            initial={reportJob.initial}
+            nameKeys={reportJob.context.nameKeys}
+            draftFor={reportJob.context.draft}
+            kind="evidence"
+            snapshotDefaults={reportJob.context.snapshotDefaults}
+            onGenerate={generateReport}
+            onCancel={() => setReportJob(null)}
+          />
+        ) : null}
       </div>
     </div>
   );

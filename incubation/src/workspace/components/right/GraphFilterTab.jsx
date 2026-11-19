@@ -1,7 +1,7 @@
 import React from 'react';
 
 import { useActiveGraph } from '../../../features/graph/lib/useActiveGraph.js';
-import { ChartPanelPending, GraphFilterPanel } from '../../../features/graph/components/panel/GraphPanels.jsx';
+import { CompanionPanelNote, GraphFilterPanel } from '../../../features/graph/components/panel/GraphPanels.jsx';
 
 // Right panel → Filter: search the active Graph window (production graph
 // search; graph-chart-plan §3.11).
@@ -11,7 +11,7 @@ export default function GraphFilterTab({ workspace }) {
   return (
     <section className="workspace_context_section" aria-label="Graph filters">
       <h2>Filter</h2>
-      {graph.isChart ? <ChartPanelPending /> : <p className="workspace_context_hint">Select a Graph window.</p>}
+      {graph.companion ? <CompanionPanelNote kind={graph.companion} graphTitle={graph.companionGraph?.title || ''} /> : <p className="workspace_context_hint">Select a Graph window.</p>}
     </section>
   );
 }

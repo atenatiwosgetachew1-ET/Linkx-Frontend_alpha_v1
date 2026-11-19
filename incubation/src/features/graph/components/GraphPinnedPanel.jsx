@@ -39,7 +39,8 @@ export default function GraphPinnedPanel({ items, elsewhere, summary, onFocus, o
       title="Pinned Evidence"
       mark={<GraphCardNode tone="pinned" count={items.length} small />}
       summary={summary}
-      bubble={<GraphCardNode tone="pinned" count={items.length} />}
+      bubble={({ refresh, spinning }) => <GraphCardNode tone="pinned" count={items.length} refresh={refresh} spinning={spinning} />}
+      empty={!items.length}
       tip={items.length ? (
         <>
           {nodes ? <span className="graph_card_chip">{nodes} {nodes === 1 ? 'node' : 'nodes'}</span> : null}

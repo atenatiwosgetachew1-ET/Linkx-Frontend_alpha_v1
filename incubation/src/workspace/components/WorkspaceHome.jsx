@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useSyncExternalStore } from 'react';
+import { CHART_ICON, TABLE_ICON } from '../../shared/icons/windowIcons.js';
 import { WORKSPACE_WINDOW_TYPES } from '../state/workspaceTypes.js';
 import { useCan } from '../../auth/useCan.js';
 import { SOURCE_PERMISSIONS } from '../../auth/permissions.js';
@@ -201,10 +202,15 @@ function GraphIcon() {
 function ChartIcon() {
   return (
     <svg className="workspace_home_svg_icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
-      <line x1="18" y1="20" x2="18" y2="10" />
-      <line x1="12" y1="20" x2="12" y2="4" />
-      <line x1="6" y1="20" x2="6" y2="14" />
-      <line x1="3" y1="20" x2="21" y2="20" />
+      <path d={CHART_ICON} />
+    </svg>
+  );
+}
+
+function TableIcon() {
+  return (
+    <svg className="workspace_home_svg_icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
+      <path d={TABLE_ICON} />
     </svg>
   );
 }
@@ -1140,6 +1146,14 @@ function WorkspaceHome({ openWindowsCount = 0, onOpenWindow, onOpenTask, onRepor
                 onClick={() => onOpenWindow && onOpenWindow(WORKSPACE_WINDOW_TYPES.CHART)}
               >
                 <ChartIcon /> Explore chart
+              </button>
+              {/* The chart's twin (analyst decision 2026-11-18). */}
+              <button
+                type="button"
+                className="workspace_home_findings_btn is-table"
+                onClick={() => onOpenWindow && onOpenWindow(WORKSPACE_WINDOW_TYPES.TABLE)}
+              >
+                <TableIcon /> Explore table
               </button>
               <button
                 type="button"

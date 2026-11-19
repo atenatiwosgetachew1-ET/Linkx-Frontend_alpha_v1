@@ -79,6 +79,16 @@ export const AVAILABLE_ACTIONS = new Set([
   // G3.6 selection tools (after i2 Analyst's Notebook; not in production)
   'select_all', 'invert_selection', 'select_by_type', 'select_by_property', 'select_link_ends', 'show_hidden',
   'select_linked', 'select_same_type', 'hide_selected',
+  // Link aggregation (G3.5 i2 #2).
+  'expand_links', 'collapse_links',
+  // Network measures (G3.5 i2 #3).
+  'measure_betweenness', 'measure_closeness', 'measure_eigenvector',
+  // Conditional formatting (G3.5 i2 #4).
+  'conditional_formatting',
+  // Table window (G3.5 i2 #5).
+  // The graph's companion windows (twins: wherever one is offered, so is the
+  // other; analyst decision 2026-11-18).
+  'show_in_table', 'show_in_chart',
 ]);
 
 const item = (action, label, { disabled = false } = {}) => {
@@ -92,9 +102,16 @@ const item = (action, label, { disabled = false } = {}) => {
 };
 
 // Production edge information block (edge right-click).
-export const edgeMenuHeader = (edge = {}, { isCdr = false } = {}) => ({
-  title: 'Edge Information',
+// aggregate (link aggregation): { count, total, totalKey, forward, backward,
+// mode, expanded } of the pair the link belongs to.
+export const edgeMenuHeader = (edge = {}, { isCdr = false, aggregate = null } = {}) => ({
+  title: aggregate && !aggregate.expanded ? `Aggregated Links (${aggregate.count})` : 'Edge Information',
   rows: [
+    ...(aggregate && !aggregate.expanded ? [
+      ['Links', String(aggregate.count)],
+      ...(aggregate.mode === 'combined' ? [['Directions', `${aggregate.forward} → · ${aggregate.backward} ←`]] : []),
+      ...(aggregate.totalKey ? [[`Total ${aggregate.totalKey}`, aggregate.total === null ? 'N/A' : aggregate.totalText]] : []),
+    ] : []),
     ['Semantic', edge.edge_semantic || 'N/A'],
     [isCdr ? 'Call Session Flow' : 'Financial Flow', edge.financial_flow ? 'Yes' : 'No'],
     ['Directed Display', edge.directed_display ? 'Yes' : 'No'],
@@ -109,7 +126,10 @@ const CANVAS_GROUPS = [
   [null, ['paste']],
   ['Add', ['add_node', 'add_label', 'add_comment_box', 'add_text_block', 'add_event_frame', 'add_theme_line', 'add_ole_object']],
   ['Select', ['select_all', 'invert_selection', 'select_by_type', 'select_by_property', 'select_link_ends', 'show_hidden']],
-  ['Analyze', ['visual_degree', 'visual_property', 'filter_elements', 'apply_community_detection', 'link_traversal', 'cut_points', 'reset_node_styles']],
+  ['Analyze', ['visual_degree', 'measure_betweenness', 'measure_closeness', 'measure_eigenvector', 'conditional_formatting', 'visual_property', 'filter_elements', 'apply_community_detection', 'link_traversal', 'cut_points', 'reset_node_styles']],
+  // Not analysis: other views of this graph, named as the toolbar's Open as
+  // table / Open as chart (analyst decision 2026-11-18).
+  ['Open as', ['show_in_table', 'show_in_chart']],
   [null, ['clear_path']],
   ['Views', ['save_view', 'load_view', 'remove_saved_views']],
   ['Edge Bundling', ['toggle_edge_bundling', 'configure_edge_bundling']],
@@ -185,8 +205,17 @@ export const contextMenuItems = ({
   edgeSelectionCount = 0,
   hiddenCount = 0,
   drawnCount = 0,
+  // Link aggregation: the right-clicked link's pair (see edgeMenuHeader).
+  aggregate = null,
 } = {}) => {
-  if (kind === 'edge') return { header: edgeMenuHeader(edge || {}, { isCdr }), items: [] };
+  if (kind === 'edge') {
+    // Link aggregation: a merged pair expands; a link of an expanded pair
+    // collapses it again.
+    const linkItems = aggregate
+      ? [aggregate.expanded ? item('collapse_links', 'Collapse Links') : item('expand_links', `Expand Links (${aggregate.count})`)]
+      : [];
+    return { header: edgeMenuHeader(edge || {}, { isCdr, aggregate }), items: linkItems };
+  }
 
   const items = [];
   if (kind === 'canvas') {
@@ -206,6 +235,14 @@ export const contextMenuItems = ({
       item('select_link_ends', 'Select Link Ends', { disabled: edgeSelectionCount === 0 }),
       item('show_hidden', hiddenCount ? `Show Hidden Nodes (${hiddenCount})` : 'Show Hidden Nodes', { disabled: hiddenCount === 0 }),
       item('visual_degree', 'Visualize by Degree'),
+      // Network measures (G3.5 i2 #3; not in production).
+      item('measure_betweenness', 'Visualize by Betweenness', { disabled: drawnCount < 3 }),
+      item('measure_closeness', 'Visualize by Closeness', { disabled: drawnCount < 2 }),
+      item('measure_eigenvector', 'Visualize by Eigenvector', { disabled: drawnCount < 2 }),
+      item('conditional_formatting', 'Conditional Formatting…'),
+      // The Table and Chart windows (G3.5 i2 #5, G5; not in production).
+      item('show_in_table', 'Table', { disabled: drawnCount === 0 }),
+      item('show_in_chart', 'Chart', { disabled: drawnCount === 0 }),
       item('visual_property', 'Visualize by Property'),
       item('filter_elements', 'Filter Elements'),
       item('save_view', 'Save View'),
