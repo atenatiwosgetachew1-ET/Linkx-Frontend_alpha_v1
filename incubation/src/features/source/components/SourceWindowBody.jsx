@@ -22,6 +22,7 @@ import {
   toStorageFileItem,
   uploadBatchFiles,
   buildStreamPayload,
+  previewDataframeFilter,
   endStreamRequest,
   resolveStreamLogFile,
   startStreamRequest,
@@ -111,10 +112,13 @@ import {
   requestTaskFocus,
   setTaskHandlers,
   updateTask,
+  linkServerTask,
 } from '../../tasks/lib/taskRegistry.js';
 import { ModeChooser } from './ModeChooser.jsx';
 import { SessionBadge, SourceWindowHeading, WorkflowTimeline } from './sourceUi.jsx';
 import { WorkflowBody } from './steps/WorkflowBody.jsx';
+import DataframeFilterDialog from './DataframeFilterDialog.jsx';
+import { filterPayload, filterProblems } from '../lib/dataframeFilter.js';
 import { createLogger } from '../../../shared/logger.js';
 
 const log = createLogger('source');
@@ -130,6 +134,8 @@ export default function SourceWindowBody({ windowItem }) {
   );
   const can = useCan();
   const [validationMessage, setValidationMessage] = useState('');
+  // Dataframe ▸ Filter dataframe… open (analyst decision 2026-11-19).
+  const [filterOpen, setFilterOpen] = useState(false);
   const [toolValidationMessage, setToolValidationMessage] = useState('');
   // Production's per-action RBAC (getWindowActionPermission + requirePermission):
   // the action is refused with a "Permission denied" notice and an inline
@@ -361,7 +367,7 @@ export default function SourceWindowBody({ windowItem }) {
   const continueButtonLabel = isPreparing
     ? modeState.preparing
     : isStreamStep
-      ? (hasStreamRun ? 'Show results' : runActionLabel)
+      ? (hasStreamRun ? 'Show task' : runActionLabel)
       : isDataframeStep ? runActionLabel : 'Continue';
   const primaryActionDisabled = isPreparing || (isStreamStep
     ? !hasStreamRun && !canStream(modeState)
@@ -494,6 +500,15 @@ export default function SourceWindowBody({ windowItem }) {
       return;
     }
     const tool = sanitizeIdentifier(state.dataframeInfo?.tool || sourceDefaults.tool.name || 'neo4j', { maxLength: 80 });
+    // The analyst's dataframe filter, checked again against this dataframe
+    // and the chosen columns (the Service applies it; B-27).
+    const filterIssues = state.dataframeFilter
+      ? filterProblems(state.dataframeFilter, { columns: state.dataframeInfo?.columns || [], used: needsSourceTarget ? [state.sourceColumn, state.targetColumn] : [] })
+      : [];
+    if (filterIssues.length) {
+      setValidationMessage(`Dataframe filter: ${filterIssues[0]}`);
+      return;
+    }
     const payload = buildStreamPayload({
       sourceSessionId,
       mode: isRealtime ? 'realtime' : 'batch',
@@ -503,6 +518,7 @@ export default function SourceWindowBody({ windowItem }) {
       source: needsSourceTarget ? sanitizeText(state.sourceColumn, { maxLength: 120 }).trim() : '',
       target: needsSourceTarget ? sanitizeText(state.targetColumn, { maxLength: 120 }).trim() : '',
       relationship,
+      dataframeFilter: filterPayload(state.dataframeFilter),
     });
 
     setValidationMessage('');
@@ -584,6 +600,9 @@ export default function SourceWindowBody({ windowItem }) {
     }
 
     appendStreamLog(windowItem.id, started.queued ? 'Ingestion job queued on the Service.' : 'Stream accepted by the Service.');
+    // The run's task on the Service (H-2/H-7): its verdict, flags and
+    // lifecycle arrive with task_updated.
+    if (started.taskId) linkServerTask(taskId, started.taskId);
     // Stays "starting" until the first backend log line arrives (see the
     // effect below); the live indicator then follows the actual ingestion.
     if (started.logFile) followStreamLog(key, started.logFile, STREAM_STATUSES.STARTING);
@@ -713,7 +732,9 @@ export default function SourceWindowBody({ windowItem }) {
     return compactValidationErrors(
       validateConnectionValue(modeState.toolUrl, 'Tool URL'),
       modeState.toolUsername ? '' : 'Tool username is required.',
-      getSecret(windowItem.id, modeKey) || (isMaskedSecret(modeState.toolPassword) && modeState.toolPasswordRef) ? '' : 'Tool password is required.'
+      // A saved password ("***") goes as its ref, or empty: the Service then
+      // uses the one saved for this host, or answers password_required (H-10).
+      getSecret(windowItem.id, modeKey) || isMaskedSecret(modeState.toolPassword) ? '' : 'Tool password is required.'
     );
   };
 
@@ -1059,6 +1080,8 @@ export default function SourceWindowBody({ windowItem }) {
       patch({
         dataframeStatus: DATAFRAME_STATUSES.READY,
         dataframeInfo: info,
+        // A new dataframe starts unfiltered (a filter is made for its columns).
+        dataframeFilter: null,
         dataframeMessage: '',
         preparing: '',
         step: 'dataframe',
@@ -1397,7 +1420,7 @@ export default function SourceWindowBody({ windowItem }) {
     const autoConnectTool = async () => {
       const state = sourceStateRef.current[key] || {};
       if (!isSourceReady(state) || state.toolStatus === TOOL_STATUSES.CONNECTED || isToolBusy(state)) return;
-      const hasPassword = Boolean(getSecret(windowItem.id, key)) || (isMaskedSecret(state.toolPassword) && Boolean(state.toolPasswordRef));
+      const hasPassword = Boolean(getSecret(windowItem.id, key)) || isMaskedSecret(state.toolPassword);
       if (!state.toolUrl || !state.toolUsername || !hasPassword) {
         setToolValidationMessage(`${toolLabel} was not connected automatically: complete its ${!state.toolUrl ? 'URL' : !state.toolUsername ? 'username' : 'password'}, then connect the tool.`);
         return;
@@ -1615,8 +1638,28 @@ export default function SourceWindowBody({ windowItem }) {
           onPatchModeState={patchModeState}
           onOpenConfiguration={openConfigurationWindow}
           onOpenLibrary={openLibrariesWindow}
+          onOpenFilter={() => setFilterOpen(true)}
         />
         </div>
+        {filterOpen && modeState.dataframeInfo ? (
+          <DataframeFilterDialog
+            columns={modeState.dataframeInfo.columns || []}
+            totalRows={modeState.dataframeInfo.totalRows}
+            used={modeState.dataframeAction === 'Source / Target Mapping' ? [modeState.sourceColumn, modeState.targetColumn].filter(Boolean) : []}
+            initial={modeState.dataframeFilter}
+            onPreview={(dataframeFilter) => previewDataframeFilter(apiFetch, {
+              sourceSessionId: normalizeWindowSessionId(windowItem),
+              dataframeFilter,
+              ...(modeState.dataframeAction === 'Source / Target Mapping' ? { source: modeState.sourceColumn || '', target: modeState.targetColumn || '' } : {}),
+            })}
+            onApply={(dataframeFilter) => {
+              patchModeState({ dataframeFilter });
+              setFilterOpen(false);
+              setValidationMessage('');
+            }}
+            onCancel={() => setFilterOpen(false)}
+          />
+        ) : null}
         {busyLabel ? <WindowLoadScreen overlay label={busyLabel} onCancel={cancelBusyAction} /> : null}
         <footer className="source_window_choose_footer">
           <span>

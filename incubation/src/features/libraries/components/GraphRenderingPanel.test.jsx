@@ -23,7 +23,7 @@ afterEach(() => {
 describe('Libraries → Graph rendering', () => {
   it('is off by default and turns GPU rendering on for this device', async () => {
     render(<GraphRenderingPanel configuration={{}} />);
-    const toggle = screen.getByRole('checkbox', { name: /Use the GPU for graphs/ });
+    const toggle = screen.getByRole('switch', { name: /Use the GPU for graphs/ });
     expect(toggle).not.toBeChecked();
     expect(screen.getByText('standard drawing')).toBeInTheDocument();
     await userEvent.click(toggle);
@@ -35,7 +35,7 @@ describe('Libraries → Graph rendering', () => {
   it('cannot be turned on when the device is not capable', () => {
     capability.current = { verdict: 'not_capable', reasons: ['Software renderer detected (SwiftShader).'] };
     render(<GraphRenderingPanel configuration={{}} />);
-    expect(screen.getByRole('checkbox', { name: /Use the GPU for graphs/ })).toBeDisabled();
+    expect(screen.getByRole('switch', { name: /Use the GPU for graphs/ })).toBeDisabled();
     expect(screen.getAllByText('This device cannot draw graphs with its GPU.').length).toBeGreaterThan(0);
     expect(screen.getByText('Software renderer detected (SwiftShader).')).toBeInTheDocument();
   });
@@ -43,7 +43,7 @@ describe('Libraries → Graph rendering', () => {
   it('respects the system policy even when chosen on the device', () => {
     setGpuPreference(true);
     render(<GraphRenderingPanel configuration={{ graph_gpu_allowed: false }} />);
-    expect(screen.getByRole('checkbox', { name: /Use the GPU for graphs/ })).toBeDisabled();
+    expect(screen.getByRole('switch', { name: /Use the GPU for graphs/ })).toBeDisabled();
     expect(screen.getByText(/turned off for everyone by the system configuration/)).toBeInTheDocument();
     expect(resolveRenderer({ graph_gpu_allowed: false })).toBe('canvas');
   });

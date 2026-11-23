@@ -15,6 +15,7 @@ import { TABLE_PDF_MAX_ROWS, tablePdfFileName } from '../lib/tablePdf.js';
 import { buildTablePdf } from '../lib/tablePrint.js';
 import { tablePreview } from '../lib/tablePreview.js';
 import TablePrintDialog from './TablePrintDialog.jsx';
+import { getTableDefaults, subscribeTableDefaults } from '../lib/tableDefaults.js';
 import nbeLogoSvg from '../../graph/report/nbe_logo.svg?raw';
 import {
   TABLE_SCOPES, arrangeColumns, buildLinkRows, buildNodeRows, filterRows, normalizeTableState, sortRows,
@@ -108,7 +109,9 @@ export default function TableWindowBody({ windowItem }) {
   const { notify } = useNotifications();
   const windowId = windowItem.id;
   const metadata = useMemo(() => windowItem.metadata || {}, [windowItem.metadata]);
-  const state = useMemo(() => normalizeTableState(metadata.tableState), [metadata.tableState]);
+  // A window without a state of its own starts from Libraries ▸ Table defaults.
+  const defaults = useSyncExternalStore(subscribeTableDefaults, getTableDefaults);
+  const state = useMemo(() => normalizeTableState(metadata.tableState, defaults), [metadata.tableState, defaults]);
   const setState = useCallback((patch) => {
     updateWindowMetadata(windowId, { metadata: { tableState: { ...state, ...patch } } });
   }, [state, updateWindowMetadata, windowId]);
@@ -182,7 +185,14 @@ export default function TableWindowBody({ windowItem }) {
   const columns = useMemo(() => arrangeColumns(foundColumns, columnState), [columnState, foundColumns]);
   const shownColumns = useMemo(() => columns.filter((column) => !column.hidden), [columns]);
   const sort = state.sort[tabKey];
-  const [filter, setFilter] = useState('');
+  // The filter is kept with the window (analyst decision 2026-11-19: the
+  // graph report takes the rows as seen), saved once typing pauses.
+  const [filter, setFilter] = useState(() => state.filter);
+  useEffect(() => {
+    if (filter === state.filter) return undefined;
+    const timer = setTimeout(() => setState({ filter }), 300);
+    return () => clearTimeout(timer);
+  }, [filter, setState, state.filter]);
   const rows = useMemo(() => sortRows(filterRows(allRows, filter, shownColumns), sort), [allRows, filter, shownColumns, sort]);
 
   const selectedSet = useMemo(() => new Set(nodesTab ? selectedNodes : selectedEdges), [nodesTab, selectedEdges, selectedNodes]);
@@ -500,6 +510,8 @@ export default function TableWindowBody({ windowItem }) {
           <TablePrintDialog
             rowCounts={{ shown: rows.length, all: allRows.length, selected: (nodesTab ? selectedNodes : selectedEdges).length }}
             columns={columns.map((column) => ({ key: column.key, label: column.label, hidden: Boolean(column.hidden) }))}
+            defaultRowsMode={defaults.print.rows}
+            defaultOrientation={defaults.print.page}
             compose={composePrint}
             onSubmit={submitPrint}
             onCancel={() => setPrintOpen(false)}

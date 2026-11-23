@@ -6,11 +6,12 @@ import { SOURCE_PERMISSIONS } from '../../../auth/permissions.js';
 import { useSession } from '../../../shared/session/useSession.js';
 import { useNotifications } from '../../../shared/notifications/useNotifications.js';
 import { isSessionStreaming, openLinkedGraphWindow } from '../../graph/lib/graphLinkFlow.js';
+import { openAlertGraph } from '../../alerts/lib/alertRuntime.js';
 import { WORKSPACE_WINDOW_TYPES } from '../../../workspace/state/workspaceTypes.js';
 import { formatStreamLog } from '../../source/lib/sourceModel.js';
 import LogLines from '../../../shared/logs/LogLines.jsx';
-import { getStreamLogLines, subscribeStreamLog } from '../../source/lib/streamLogs.js';
-import { CHART_ICON, TABLE_ICON } from '../../../shared/icons/windowIcons.js';
+import { getStreamLogLines, getStreamRowTally, subscribeStreamLog } from '../../source/lib/streamLogs.js';
+import { formatRowProgress, rowProgress, tallyRowLines } from '../../source/lib/rowProgress.js';
 import {
   TASK_ORIGINS,
   canTerminateTask,
@@ -22,6 +23,8 @@ import {
   terminateTask,
 } from '../lib/taskRegistry.js';
 import { FLAG_STATES, taskFlagVerdict } from '../lib/taskFlags.js';
+import { getServerTaskScope, loadServerTasks } from '../lib/serverTasks.js';
+import TaskServicePanel from './TaskServicePanel.jsx';
 import {
   TASK_FILTERS,
   formatClock,
@@ -49,8 +52,6 @@ const ICONS = {
   tasks: ['M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2', 'M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v0a2 2 0 0 1-2 2h-2a2 2 0 0 1-2-2Z', 'm9 14 2 2 4-4'],
   graph: 'M7 8.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Zm10 12a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5ZM7 20.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Zm2.2-4.2 5.6-7.6M9.5 7.3l5 8.2',
   // The Chart window's icon (shared/icons/windowIcons.js).
-  chart: CHART_ICON,
-  table: TABLE_ICON,
   // Window with an arrow pointing out of it: jump to the Source window.
   source: ['M11 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5', 'M4 8.5h7', 'M14 4h6v6', 'M20 4l-8 8'],
   stop: 'M7 7h10v10H7z',
@@ -348,7 +349,7 @@ function TaskSummary({ task }) {
             </div>
             <dl className="tasks_props_tiles">
               <PropTile icon={ICONS.origin} label="Origin">
-                {task.origin === TASK_ORIGINS.QUICK ? 'Quick analysis panel' : (task.windowTitle || 'Source window')}
+                {task.origin === TASK_ORIGINS.QUICK ? 'Quick analysis panel' : task.origin === TASK_ORIGINS.PARENT ? `STR alert ${task.windowTitle || ''}`.trim() : (task.windowTitle || 'Source window')}
                 {task.background ? <span className="tasks_props_note"> · closed</span> : null}
               </PropTile>
               <PropTile icon={ICONS.input} label="Input">{task.input || '—'}</PropTile>
@@ -499,7 +500,7 @@ function useTaskLog(task) {
   const getLines = useCallback(() => (liveWindowId ? getStreamLogLines(liveWindowId) : emptyLines()), [liveWindowId]);
   const liveLines = useSyncExternalStore(subscribe, getLines);
   if (!task) return EMPTY_LINES;
-  if (task.origin === TASK_ORIGINS.QUICK) return task.log;
+  if (task.origin === TASK_ORIGINS.QUICK || task.origin === TASK_ORIGINS.PARENT) return task.log;
   return task.frozenLog || liveLines;
 }
 
@@ -552,7 +553,7 @@ function TaskRow({ task, now, isSelected, onSelect }) {
           <strong>{task.title}</strong>
           <small>#{task.number}</small>
         </span>
-        <span className="tasks_row_sub">{task.input || taskOriginLabel(task)}</span>
+        <span className="tasks_row_sub">{task.foreign && task.ownerName ? `${task.ownerName} · ` : ''}{task.input || taskOriginLabel(task)}</span>
         {isTaskActive(task) && typeof task.progress === 'number' && (
           <span className="tasks_progress" aria-hidden="true"><span style={{ width: `${task.progress}%` }} /></span>
         )}
@@ -561,6 +562,9 @@ function TaskRow({ task, now, isSelected, onSelect }) {
         <span className="tasks_row_time">{taskDuration(task, now)}</span>
         <span className="tasks_row_chips">
           {task.background && isTaskActive(task) && <span className="tasks_chip">Background</span>}
+          {task.lifecycle === 'expiring' || task.lifecycle === 'expired' || task.lifecycle === 'archived'
+            ? <span className={`tasks_chip is-${task.lifecycle}`}>{{ expiring: 'Expires soon', expired: 'Expired', archived: 'Archived' }[task.lifecycle]}</span>
+            : null}
           <span className={`tasks_row_status is-${task.status}`}>{taskStatusLabel(task)}</span>
         </span>
       </span>
@@ -568,7 +572,7 @@ function TaskRow({ task, now, isSelected, onSelect }) {
   );
 }
 
-function TaskDetail({ task, now, windows, workspace }) {
+function TaskDetail({ task, now, windows, workspace, dialogHost }) {
   // Production opens Graph windows only with graph:create (launcher gate).
   const canCreateGraph = useCan()(SOURCE_PERMISSIONS.GRAPH_CREATE);
   const { apiFetch } = useSession();
@@ -589,12 +593,14 @@ function TaskDetail({ task, now, windows, workspace }) {
     [task, lines],
   );
 
-  // One Graph / Chart window per task: focus it when it is already open.
+  // One Graph window per task: focus it when it is already open.
   // While the run is streaming, a Graph window is linked to its session like
   // production's Source "Open Graph" (/graph_link). Once it has finished the
   // link is no longer possible (production rule), so the window is bound to
   // the session without one and loads it from the relationships it knows.
   const openResultWindow = (type) => {
+    // An STR alert's run: the alert's own graph (bound to the alert).
+    if (task.origin === TASK_ORIGINS.PARENT && task.alertId && type === WORKSPACE_WINDOW_TYPES.GRAPH && openAlertGraph(task.alertId) != null) return;
     const existing = windows.find((windowItem) => windowItem.type === type && windowItem.metadata?.taskId === task.id);
     if (existing) {
       workspace.focusWindow(existing.id);
@@ -613,22 +619,14 @@ function TaskDetail({ task, now, windows, workspace }) {
       });
       return;
     }
-    // The analysis chart and table (twins; analyst decision 2026-11-18)
-    // follow the task's Graph window when one is open (G5); otherwise they
-    // offer the open Graph windows.
-    const companion = type === WORKSPACE_WINDOW_TYPES.CHART || type === WORKSPACE_WINDOW_TYPES.TABLE;
-    const taskGraph = companion
-      ? windows.find((windowItem) => windowItem.type === WORKSPACE_WINDOW_TYPES.GRAPH && windowItem.metadata?.taskId === task.id)
-      : null;
-    const linkKey = type === WORKSPACE_WINDOW_TYPES.TABLE ? 'tableGraph' : 'chartGraph';
     workspace.openWindow(type, {
-      title: type === WORKSPACE_WINDOW_TYPES.GRAPH ? 'Graph' : type === WORKSPACE_WINDOW_TYPES.TABLE ? 'Table' : 'Chart',
+      title: 'Graph',
       customTitle: `${task.title} #${task.number}`,
       metadata: {
         taskId: task.id,
         graphLinkSource: task.sourceSessionId,
         graphLinkAction: task.action,
-        ...(taskGraph ? { [linkKey]: taskGraph.id } : {}),
+        graphFinishedRun: true,
       },
     });
   };
@@ -642,8 +640,16 @@ function TaskDetail({ task, now, windows, workspace }) {
     }
   };
 
+  // "In progress (400/10,000)": rows analysed / rows to analyse, from the log.
+  // A live window log keeps its own tally (it outlives the line cap); a
+  // copied or own log is counted from its lines.
+  const rowCount = useMemo(() => {
+    if (!isActive) return '';
+    const live = task.origin === TASK_ORIGINS.SOURCE && !task.frozenLog && task.windowId ? getStreamRowTally(task.windowId) : null;
+    return formatRowProgress(rowProgress(live || tallyRowLines(lines), task.dataframe?.totalRows));
+  }, [isActive, task, lines]);
   const subtitle = task.statusText || task.message
-    || (isActive ? 'In progress' : `Finished ${formatDateTime(task.endedAt)}`);
+    || (isActive ? `In progress${rowCount ? ` (${rowCount})` : ''}` : `Finished ${formatDateTime(task.endedAt)}`);
 
   return (
     <section className="tasks_detail" aria-label={`Task ${task.title} #${task.number}`}>
@@ -693,24 +699,6 @@ function TaskDetail({ task, now, windows, workspace }) {
           >
             <Icon d={ICONS.graph} /> Show graph
           </button>
-          <button
-            type="button"
-            className="tasks_action linkx_tooltip_anchor"
-            disabled={!task.hasResults}
-            data-tooltip={resultsHint || 'Open the analysis chart'}
-            onClick={() => openResultWindow(WORKSPACE_WINDOW_TYPES.CHART)}
-          >
-            <Icon d={ICONS.chart} /> Show chart
-          </button>
-          <button
-            type="button"
-            className="tasks_action linkx_tooltip_anchor"
-            disabled={!task.hasResults}
-            data-tooltip={resultsHint || 'Open the analysis table'}
-            onClick={() => openResultWindow(WORKSPACE_WINDOW_TYPES.TABLE)}
-          >
-            <Icon d={ICONS.table} /> Show table
-          </button>
           {isActive && (
             <button
               type="button"
@@ -739,6 +727,8 @@ function TaskDetail({ task, now, windows, workspace }) {
 
       <FlagVerdict verdict={verdict} />
 
+      <TaskServicePanel task={task} dialogHost={dialogHost} />
+
       <TaskSummary task={task} />
 
       <TaskLog task={task} lines={lines} isActive={isActive} />
@@ -748,14 +738,27 @@ function TaskDetail({ task, now, windows, workspace }) {
 
 export default function TasksWindowBody() {
   const workspace = useWorkspace();
+  const { apiFetch } = useSession();
+  // "All tasks" needs tasks:read_all (H-9); archived tasks only when asked.
+  const canReadAll = useCan()('tasks:read_all');
+  const [scope, setScope] = useState(() => getServerTaskScope());
+  const [scopeMessage, setScopeMessage] = useState('');
+  const changeScope = async (next) => {
+    setScope(next);
+    setScopeMessage('');
+    const result = await loadServerTasks(apiFetch, next);
+    if (!result.ok && result.message) setScopeMessage(result.message);
+  };
   const { tasks, focus } = useSyncExternalStore(subscribeTasks, getTasksSnapshot);
   const [filter, setFilter] = useState('all');
   const [selectedId, setSelectedId] = useState(() => focus.taskId || tasks.find(isTaskActive)?.id || tasks[0]?.id || null);
   const [now, setNow] = useState(() => Date.now());
   const listRef = useRef(null);
+  // The element popups cover (Save as evidence), as a Graph window's report popup.
+  const [windowEl, setWindowEl] = useState(null);
   const hasActive = tasks.some(isTaskActive);
 
-  // "Show results" / "View task" select a task, even when this window is
+  // "Show task" / "View task" select a task, even when this window is
   // already open.
   const lastFocusSeq = useRef(focus.seq);
   useEffect(() => {
@@ -808,7 +811,7 @@ export default function TasksWindowBody() {
 
   return (
     <div className="workspace_window_body tasks_window_body">
-      <div className="tasks_window">
+      <div className="tasks_window" ref={setWindowEl}>
         <header className="tasks_window_header">
           <div className="tasks_window_heading">
             <Icon d={ICONS.tasks} className="tasks_window_heading_icon" />
@@ -836,6 +839,22 @@ export default function TasksWindowBody() {
               </button>
             ))}
           </div>
+          <span className="tasks_scope">
+            {canReadAll ? (
+              <label className="tasks_scope_owner">
+                Scope
+                <select className="tasks_select" value={scope.scope} onChange={(event) => changeScope({ ...scope, scope: event.target.value })}>
+                  <option value="mine">My tasks</option>
+                  <option value="all">All tasks</option>
+                </select>
+              </label>
+            ) : null}
+            <label className="tasks_scope_archived">
+              <input type="checkbox" checked={scope.archived} onChange={(event) => changeScope({ ...scope, archived: event.target.checked })} />
+              Archived
+            </label>
+          </span>
+          {scopeMessage ? <span className="tasks_scope_message" role="status">{scopeMessage}</span> : null}
           <button
             type="button"
             className="tasks_icon_button linkx_tooltip_anchor"
@@ -872,7 +891,7 @@ export default function TasksWindowBody() {
               {!ordered.length && <p className="tasks_list_empty">No tasks match this filter.</p>}
             </div>
             {selected ? (
-              <TaskDetail key={selected.id} task={selected} now={clock} windows={workspace.windows} workspace={workspace} />
+              <TaskDetail key={selected.id} task={selected} now={clock} windows={workspace.windows} workspace={workspace} dialogHost={windowEl} />
             ) : (
               <div className="tasks_detail is-empty"><p>Select a task to see its details.</p></div>
             )}

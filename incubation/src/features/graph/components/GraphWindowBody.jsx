@@ -1,4 +1,5 @@
 import React, { useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import WindowLoadScreen from '../../../shared/components/WindowLoadScreen.jsx';
 
 import { useSession } from '../../../shared/session/useSession.js';
 import { useNotifications } from '../../../shared/notifications/useNotifications.js';
@@ -9,7 +10,8 @@ import { getCachedEvidenceGraph, cacheEvidenceGraph } from '../../reports/lib/ev
 import { markGpuNotCapable } from '../../../shared/device/gpuCapability.js';
 import { getTasksSnapshot, subscribeTasks } from '../../tasks/lib/taskRegistry.js';
 import { disposeGraphStore, getGraphStore } from '../lib/graphStore.js';
-import { handleGraphActions, publishGraphState } from '../lib/graphLinkBus.js';
+import { getGraphState, handleGraphActions, publishGraphState } from '../lib/graphLinkBus.js';
+import { graphReportExtras } from '../report/reportExtras.js';
 import { CHART_ICON, TABLE_ICON, TIMELINE_ICON } from '../../../shared/icons/windowIcons.js';
 import {
   GRAPH_FILE_ACCEPT, GRAPH_FILE_MAX_BYTES, buildGraphExport, downloadBlob, downloadDataUrl, exportFileName, parseGraphFile, printImage, readFileText, snapshotFileName,
@@ -22,8 +24,10 @@ import { linkGraphToSession, linkableSources, resolveSourceWindow, unlinkGraph }
 import {
   DEFAULT_GRAPH_SETTINGS, GRAPH_LIMITS, applyPerformancePolicy, layoutSignatureOf, normalizeGraphSettings, viewKeyOf, visibleCapFor,
 } from '../lib/graphSettings.js';
+import { getGraphDefaults, subscribeGraphDefaults } from '../lib/graphDefaults.js';
 import { RENDERERS, markGpuSuggested, resolveRenderer, setGpuPreference, shouldSuggestGpu, subscribeGpuPreference } from '../lib/rendererPreference.js';
-import { WORKSPACE_WINDOW_TYPES } from '../../../workspace/state/workspaceTypes.js';
+import { WORKSPACE_WINDOW_TYPES, getWindowLimitBlock } from '../../../workspace/state/workspaceTypes.js';
+
 import { allPairsLinked, contextMenuItems } from '../lib/graphContextMenu.js';
 import {
   ALL_PATHS_LIMITS, ELEMENT_TYPES, PATH_MODES, applyElementFilters, degreeEncoding, detectCommunities, scoreEncoding,
@@ -63,7 +67,7 @@ import { aggregateLinks, formatLinkTotal } from '../lib/linkAggregation.js';
 import { MEASURES, topScores } from '../lib/networkMeasures.js';
 import { getProfileSettings, profileOf, resolveProfileSettings, subscribeProfileSettings } from '../lib/nodeProfile.js';
 import { AuthContext } from '../../../auth/authContext.js';
-import { describeReportDomain, draftFindings, entityName, reportDateTime, reportFacts, reportTimeline, DEFAULT_MARKING } from '../report/graphReportModel.js';
+import { describeReportDomain, draftFindings, entityName, reportDateTime, reportFacts, reportRangeCounts, reportTimeline, DEFAULT_MARKING } from '../report/graphReportModel.js';
 import { downloadGraphReport, systemRuleText } from '../report/graphReportExport.js';
 import GraphSnapDialog from './GraphSnapDialog.jsx';
 import { MAX_CARDS, readProfileCards, withCapturedCards, withProfileCards } from '../lib/graphSnap.js';
@@ -87,6 +91,12 @@ import { getNodeValue } from '../lib/graphModel.js';
 import GraphDialog from './GraphDialog.jsx';
 import GraphCanvas from './GraphCanvas.jsx';
 import GraphContextMenu from './GraphContextMenu.jsx';
+
+// The window limit as a menu item's reason, or '' while more may open.
+const windowLimitText = (windows) => {
+  const block = getWindowLimitBlock(windows, WORKSPACE_WINDOW_TYPES.TABLE);
+  return block ? `Window limit reached: at most ${block.limit} ${block.label} windows (${block.count} open). Close one to open another.` : '';
+};
 
 const Icon = ({ d }) => (
   <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -194,9 +204,12 @@ export default function GraphWindowBody({ windowItem }) {
   );
 
   // Settings live in the window's metadata (edited from the right panel).
+  // A window without settings of its own starts from Libraries ▸ Graph
+  // defaults (lib/graphDefaults.js).
+  const graphDefaults = useSyncExternalStore(subscribeGraphDefaults, getGraphDefaults);
   const settings = useMemo(
-    () => normalizeGraphSettings(metadata.graphSettings || DEFAULT_GRAPH_SETTINGS),
-    [metadata.graphSettings],
+    () => normalizeGraphSettings(metadata.graphSettings || graphDefaults),
+    [metadata.graphSettings, graphDefaults],
   );
 
   // Renderer: canvas unless GPU is allowed, chosen on this device and capable.
@@ -280,14 +293,14 @@ export default function GraphWindowBody({ windowItem }) {
     });
   }, [configuration, notify, openWindow, renderer, view.nodeIds.length, windowItem.title]);
 
-  // Production: the first draw of each fetched graph shows nodes 0–25 and
-  // drops any search.
+  // Production: the first draw of each fetched graph shows nodes 0–25 (or
+  // the count chosen in Libraries ▸ Graph defaults) and drops any search.
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
   const resetRange = useCallback(() => {
     const current = settingsRef.current;
     updateWindowMetadata(windowId, {
-      metadata: { graphSettings: { ...current, limit: { ...current.limit, min: 0, max: GRAPH_LIMITS.DEFAULT_VISIBLE } }, graphSearch: null },
+      metadata: { graphSettings: { ...current, limit: { ...current.limit, min: 0, max: getGraphDefaults().limit.max } }, graphSearch: null },
     });
   }, [updateWindowMetadata, windowId]);
 
@@ -333,8 +346,11 @@ export default function GraphWindowBody({ windowItem }) {
   }, [loadEvidence, source.kind, store]);
 
   /* ── Linked session: relationships load the graph ───────────────────── */
+  // A session whose fetch came back with nothing (no nodes, no relationships).
+  const [emptySession, setEmptySession] = useState('');
   const fetchRelationship = useCallback((relationship) => {
     if (!sessionId) return;
+    setEmptySession('');
     updateWindowMetadata(windowId, { metadata: { graphRelationship: relationship } });
     runGraphFetch({
       store,
@@ -345,12 +361,15 @@ export default function GraphWindowBody({ windowItem }) {
       onFirstChunk: resetRange,
       // Production closes the window here too, with the evidence message; a
       // linked window is kept (closing it would drop the link).
-      onEmpty: () => notify({
-        title: 'Graph Empty',
-        message: `No graph data found for ${relationship === '*' ? 'this session' : `relationship ${relationship}`}.`,
-        level: 'info',
-        source: windowItem.title,
-      }),
+      onEmpty: () => {
+        setEmptySession(sessionId);
+        notify({
+          title: 'Graph Empty',
+          message: `No graph data found for ${relationship === '*' ? 'this session' : `relationship ${relationship}`}.`,
+          level: 'info',
+          source: windowItem.title,
+        });
+      },
     });
   }, [apiFetch, notify, resetRange, sessionId, store, updateWindowMetadata, windowId, windowItem.title]);
 
@@ -359,13 +378,17 @@ export default function GraphWindowBody({ windowItem }) {
   // was picked or drawn yet, once per session.
   const autoAllRef = useRef(null);
   const hasRelationships = Boolean(session.relationships?.length);
+  // A finished run (opened from Tasks or an STR alert: graphFinishedRun)
+  // loads All at once: its relationship tabs may never come (a run that made
+  // nodes but no relationships), and its graph is already complete.
+  const finishedRun = Boolean(sessionId) && metadata.graphFinishedRun === true;
   useEffect(() => {
-    if (!sessionId || !hasRelationships || session.terminated || metadata.graphRelationship) return;
+    if (!sessionId || (!hasRelationships && !finishedRun) || session.terminated || metadata.graphRelationship) return;
     if (autoAllRef.current === sessionId) return;
     if (store.getStatus().state !== 'idle' || store.getSnapshot().nodes > 0) return;
     autoAllRef.current = sessionId;
     fetchRelationship('*');
-  }, [fetchRelationship, hasRelationships, metadata.graphRelationship, session.terminated, sessionId, store]);
+  }, [fetchRelationship, finishedRun, hasRelationships, metadata.graphRelationship, session.terminated, sessionId, store]);
 
   // Source terminated: production unlinks the windows and clears the
   // relationships, keeping what is drawn. Source closed: the window resets.
@@ -583,10 +606,13 @@ export default function GraphWindowBody({ windowItem }) {
       canPin: targetKeys.some((key) => !pinnedKeys.has(key)),
       canUnpin: targetKeys.some((key) => pinnedKeys.has(key)),
       aggregate: request.kind === 'edge' ? aggregateOf(request.id) : null,
+      tableOpen: workspace.windows.some((item) => item.type === WORKSPACE_WINDOW_TYPES.TABLE && item.metadata?.tableGraph === windowId),
+      chartOpen: workspace.windows.some((item) => item.type === WORKSPACE_WINDOW_TYPES.CHART && item.metadata?.chartGraph === windowId),
+      windowLimit: windowLimitText(workspace.windows),
     });
     if (!content.header && !content.items.length) return;
     setMenu({ ...request, content });
-  }, [aggregateOf, clipboard.nodes.length, isCdr, pinned, settings.alertRules, settings.edgeBundling, store, view.nodeIds, viewKey]);
+  }, [aggregateOf, clipboard.nodes.length, isCdr, pinned, settings.alertRules, settings.edgeBundling, store, view.nodeIds, viewKey, windowId, workspace.windows]);
 
   const notifyDrawingLimit = useCallback((skipped) => notify({
     title: 'Drawing limit reached',
@@ -1662,6 +1688,9 @@ export default function GraphWindowBody({ windowItem }) {
   /* ── Graph report (G4.2; analyst decisions 2026-11-17) ──────────────── */
   const auth = useContext(AuthContext);
   const [reportForm, setReportForm] = useState(null);
+  // How many subjects, profiles and pairs the report has in all (the
+  // popup's Range shows "of m"), counted once when it opens.
+  const [reportCounts, setReportCounts] = useState(null);
   // The report's inputs from this window, as plain data.
   const reportInput = (nameKey = '') => {
     const graph = store.graph();
@@ -1719,6 +1748,7 @@ export default function GraphWindowBody({ windowItem }) {
     // the Graph alert is this window's alert configuration.
     // The rules come from the evidence report and from the graph itself
     // (the relationships the analysis drew are labelled with their rule).
+    setReportCounts(reportRangeCounts(reportInput(nameKey)));
     setReportForm({
       title: `Graph Report · ${windowItem.title}`,
       caseId: '',
@@ -1733,7 +1763,6 @@ export default function GraphWindowBody({ windowItem }) {
       assessment: '',
       actions: '',
       marking: DEFAULT_MARKING,
-      includeLists: false,
     });
   };
   // The cover's domain: an evidence graph's own domain (its report payload),
@@ -1745,6 +1774,12 @@ export default function GraphWindowBody({ windowItem }) {
     ? describeReportDomain(source.evidence?.domain, source.evidence?.domainDistribution, formatDomainPillarLabel)
     : '';
   const reportDomain = evidenceDomain || (metadata.graphImported ? '' : formatDomainPillarLabel(domainKey));
+  // This graph's linked Chart and Table windows: the report takes all of
+  // their charts and tables (analyst decision 2026-11-19).
+  const reportCompanions = () => ({
+    chartWindows: workspace.windows.filter((item) => item.type === WORKSPACE_WINDOW_TYPES.CHART && item.metadata?.chartGraph === windowId),
+    tableWindows: workspace.windows.filter((item) => item.type === WORKSPACE_WINDOW_TYPES.TABLE && item.metadata?.tableGraph === windowId),
+  });
   const generateReport = async (values) => {
     try {
       // The picture names entities as the report does (Identify entities
@@ -1752,7 +1787,8 @@ export default function GraphWindowBody({ windowItem }) {
       const graph = store.graph();
       const nameOf = values.nameKey ? (id) => (graph.hasNode(id) ? entityName(graph, id, values.nameKey) : '') : null;
       const snapshotUrl = canvasRef.current?.snapshot?.({ full: true, maxSide: 2400, format: 'jpg', nameOf }) || null; // print resolution (~350 dpi at full width)
-      await downloadGraphReport({ input: reportInput(values.nameKey), values, domain: reportDomain, snapshot: snapshotUrl });
+      const { measures, tables } = await graphReportExtras({ store, link: getGraphState(windowId), ...reportCompanions(), nameKey: values.nameKey });
+      await downloadGraphReport({ input: reportInput(values.nameKey), values, domain: reportDomain, snapshot: snapshotUrl, measures, tables });
       setReportForm(null);
     } catch (error) {
       notify({ title: 'Graph report', message: `Could not generate the graph report: ${error?.message || error}`, level: 'error', source: windowItem.title });
@@ -1839,6 +1875,15 @@ export default function GraphWindowBody({ windowItem }) {
     const existing = workspace.windows.find((item) => item.type === WORKSPACE_WINDOW_TYPES.CHART && item.metadata?.chartGraph === windowId);
     if (existing) workspace.focusWindow(existing.id);
     else openWindow(WORKSPACE_WINDOW_TYPES.CHART, { title: 'Chart', metadata: { chartGraph: windowId } });
+  }, [openWindow, windowId, workspace]);
+  // Right-click ▸ Open as ▸ New Table / New Chart (analyst decision
+  // 2026-11-19): another window linked to this graph, beside those open,
+  // only within the window limit.
+  const openNewCompanion = useCallback((type) => {
+    if (getWindowLimitBlock(workspace.windows, type)) return;
+    openWindow(type, type === WORKSPACE_WINDOW_TYPES.TABLE
+      ? { title: 'Table', metadata: { tableGraph: windowId } }
+      : { title: 'Chart', metadata: { chartGraph: windowId } });
   }, [openWindow, windowId, workspace]);
 
   const openCustomize = useCallback(() => {
@@ -1987,6 +2032,10 @@ export default function GraphWindowBody({ windowItem }) {
       openTable();
     } else if (action === 'show_in_chart') {
       openChart();
+    } else if (action === 'new_table') {
+      openNewCompanion(WORKSPACE_WINDOW_TYPES.TABLE);
+    } else if (action === 'new_chart') {
+      openNewCompanion(WORKSPACE_WINDOW_TYPES.CHART);
     } else if (action.startsWith('measure_')) {
       runMeasure(action.slice('measure_'.length));
     } else if (action === 'visual_property') {
@@ -2027,7 +2076,7 @@ export default function GraphWindowBody({ windowItem }) {
     }
   }, [
     cap, configureAlertRules, configureEdgeBundling, confirmClearPinned, toggleEdgeBundling, runSelectAction, loadView, menu, removeViews, runEditAction, saveView, notifyDrawingLimit, record, report, runAlertScan, runAllPaths, runCommunities,
-    runCutPoints, runElementFilter, runShortestPath, runVisualProperty, setFrontCard, setPinnedPanel, showPinnedEvidence, store, toggleAlertRules, toggleLinks, runMeasure, setFormattingOpen, openTable, openChart,
+    runCutPoints, runElementFilter, runShortestPath, runVisualProperty, setFrontCard, setPinnedPanel, showPinnedEvidence, store, toggleAlertRules, toggleLinks, runMeasure, setFormattingOpen, openTable, openChart, openNewCompanion,
     view.nodeIds, viewKey,
   ]);
 
@@ -2071,7 +2120,7 @@ export default function GraphWindowBody({ windowItem }) {
 
   let overlay = null;
   if (busy && !(hasData && status.progressive)) {
-    overlay = <div className="graph_window_state" role="status"><span className="graph_window_spinner" aria-hidden="true" /><p>{status.message}</p></div>;
+    overlay = <div className="graph_window_state is-loading"><WindowLoadScreen label={status.message} /></div>;
   } else if (status.state === 'error') {
     overlay = (
       <div className="graph_window_state is-error" role="alert">
@@ -2081,13 +2130,17 @@ export default function GraphWindowBody({ windowItem }) {
       </div>
     );
   } else if (linking) {
-    overlay = <div className="graph_window_state" role="status"><span className="graph_window_spinner" aria-hidden="true" /><p>Linking to session {metadata.graphLinking}…</p></div>;
+    overlay = <div className="graph_window_state is-loading"><WindowLoadScreen label={`Linking to session ${metadata.graphLinking}…`} /></div>;
   } else if (!hasData && !(source.kind === 'none' && metadata.graphBlank)) {
     let title = 'No graph to render';
     let text = 'Open a graph from a report or a task, or link this window to a streaming Source session.';
     // Or start one here: adding anything makes this a new graph.
     let start = 'To create an instant graph, start by adding components from the canvas context menu.';
-    if (source.kind === 'session') {
+    if (source.kind === 'session' && emptySession === sessionId) {
+      title = 'No graph data';
+      text = `Session ${sessionId} returned no nodes and no relationships.`;
+      start = '';
+    } else if (source.kind === 'session') {
       title = relationships.length ? 'Choose a relationship' : 'Waiting for the linked session';
       text = relationships.length
         ? 'Pick a relationship tab above the canvas (or All) to load the graph.'
@@ -2442,6 +2495,8 @@ export default function GraphWindowBody({ windowItem }) {
               nameKeys={store.propertyKeys()}
               draftFor={reportDraft}
               kind="graph"
+              companions={{ charts: reportCompanions().chartWindows.map((item) => item.title), tables: reportCompanions().tableWindows.map((item) => item.title) }}
+              rangeCounts={reportCounts}
               onGenerate={generateReport}
               onCancel={() => setReportForm(null)}
             />

@@ -4,6 +4,7 @@ import ServiceAccountsPanel from './ServiceAccountsPanel.jsx';
 import VigilancePanel from './VigilancePanel.jsx';
 import { useAuth } from '../../../auth/useAuth.js';
 import { useCan } from '../../../auth/useCan.js';
+import { loadPermissionCatalog } from '../../../auth/permissions.js';
 import { useNotifications } from '../../../shared/notifications/useNotifications.js';
 import { useSession } from '../../../shared/session/useSession.js';
 import { useBackgroundAnimations } from '../../../utils/backgroundAnimations.js';
@@ -31,6 +32,10 @@ export default function SettingsWindowBody({ windowItem }) {
   const canManageUsers = canAccess('users:manage');
   const canManageSuperusers = canAccess('superuser:manage');
   const { apiFetch, configuration, mainSessionId } = useSession();
+  // The permission checkboxes follow the Service's own list (§4e).
+  useEffect(() => {
+    if (canManageUsers) loadPermissionCatalog(apiFetch);
+  }, [canManageUsers, apiFetch]);
   const activeDomain = getActiveDomainKey(configuration);
   const isCdr = activeDomain === 'cdr';
   // Reports is a single window: when it is already open, the new metadata
@@ -98,21 +103,21 @@ export default function SettingsWindowBody({ windowItem }) {
 
   return (
     <div className="workspace_window_body settings_window_body">
-      <div className="settings_window_workspace">
+      <div className="settings_window_workspace settings_theme_scope is-compact-header">
         <header className="settings_window_choose_header">
           <svg className="source_window_mode_icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
             <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2ZM15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
           </svg>
           <div>
             <h2>Settings</h2>
-            <p>{settingsTabDescriptions[activeTabMeta.id] || 'Manage workspace settings.'}</p>
-            <dl className="settings_window_session_chip">
-              <div>
-                <dt>Session</dt>
-                <dd>{sessionId || 'not initialized'}</dd>
-              </div>
-            </dl>
+            <p>Your profile, preferences and workspace administration.</p>
           </div>
+          <dl className="settings_window_session_chip">
+            <div>
+              <dt>Session</dt>
+              <dd title={sessionId || undefined}>{sessionId || 'not initialized'}</dd>
+            </div>
+          </dl>
         </header>
         <div className="settings_window_workflow_shell">
           {/* Same look as the Source window timeline (shared --timeline-* tokens),

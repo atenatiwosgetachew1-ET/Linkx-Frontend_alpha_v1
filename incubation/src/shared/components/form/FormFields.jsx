@@ -47,10 +47,33 @@ export const ListTextarea = React.memo(function ListTextarea({ name, value, onCo
   );
 });
 
-export function Field({ label, hint, wide = false, children }) {
+// A label's glyph (24px grid, stroked): `icon` is its path.
+function LabelIcon({ icon }) {
+  if (!icon) return null;
+  return (
+    <svg className="config_window_field_icon" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d={icon} />
+    </svg>
+  );
+}
+
+// An "i" beside a label: hovering (or focusing) it shows what the field is
+// for and what it accepts, in the app's tooltip.
+export function InfoTip({ text }) {
+  if (!text) return null;
+  return (
+    <span className="config_info linkx_tooltip_anchor" data-tooltip={text} role="img" aria-label={text} tabIndex={0}>
+      <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 16v-4M12 8h.01" />
+      </svg>
+    </span>
+  );
+}
+
+export function Field({ label, hint, icon, wide = false, children }) {
   return (
     <label className={`config_window_field${wide ? ' is-wide' : ''}`}>
-      <span className="config_window_field_label">{label}</span>
+      <span className="config_window_field_label"><LabelIcon icon={icon} />{label}</span>
       {children}
       {hint ? <small className="config_window_field_hint">{hint}</small> : null}
     </label>
@@ -59,12 +82,12 @@ export function Field({ label, hint, wide = false, children }) {
 
 // Known option list + a custom value. On save the custom value becomes the
 // active option and joins the list (production address/topic behaviour).
-export function OptionField({ label, hint, name, options, value, customName, customValue, customPlaceholder, onChange, onCommit, disabled }) {
+export function OptionField({ label, hint, icon, name, options, value, customName, customValue, customPlaceholder, onChange, onCommit, disabled }) {
   const list = Array.isArray(options) ? options : [];
   const hasValue = value && list.includes(value);
   return (
     <div className="config_window_field is-option">
-      <span className="config_window_field_label">{label}</span>
+      <span className="config_window_field_label"><LabelIcon icon={icon} />{label}</span>
       <div className="config_window_option_row">
         <select
           name={name}

@@ -53,7 +53,13 @@ describe('context menu items (production GB:2096)', () => {
     expect(topLevel(canvas)).toEqual(['Paste', 'Add', 'Select', 'Analyze', 'Open as', 'Views', 'Edge Bundling', 'Alert Rules', 'Pinned Evidence']);
     // The companion windows, twins, out of Analyze (not analysis).
     const openAs = canvas.items.find((entry) => entry.label === 'Open as');
-    expect(openAs.items.map((entry) => entry.label)).toEqual(['Table', 'Chart']);
+    expect(openAs.items.map((entry) => entry.label)).toEqual(['Table', 'Chart', 'New Table', 'New Chart']);
+    // At the window limit: a new window is refused, with the reason; an open Table / Chart can still be shown.
+    const full = contextMenuItems({ kind: 'canvas', drawnCount: 3, tableOpen: true, windowLimit: 'Window limit reached.' }).items.find((entry) => entry.label === 'Open as').items;
+    expect(full.map((entry) => [entry.label, entry.enabled, entry.hint || ''])).toEqual([
+      ['Table', true, ''], ['Chart', false, 'Window limit reached.'], ['New Table', false, 'Window limit reached.'], ['New Chart', false, 'Window limit reached.'],
+    ]);
+    expect(contextMenuItems({ kind: 'canvas', drawnCount: 3 }).items.find((entry) => entry.label === 'Open as').items.every((entry) => entry.enabled)).toBe(true);
     expect(canvas.items.find((entry) => entry.label === 'Analyze').items.map((entry) => entry.label)).not.toContain('Show in Table');
     expect(canvas.items[1].items.map((entry) => entry.label)).toEqual(['Add Node', 'Label', 'Comment Box', 'Text Block', 'Event Frame', 'Theme Line', 'OLE Object']);
     // G3.1 / G3.3: everything under Add works; Theme Line needs two selected nodes.

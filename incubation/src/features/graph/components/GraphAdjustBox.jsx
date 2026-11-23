@@ -1,6 +1,7 @@
-import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
 
-import { COLOR_SWATCHES, ICON_ALBUM, albumIconPath } from '../lib/graphEditing.js';
+import { COLOR_SWATCHES } from '../lib/graphEditing.js';
+import { albumSets, getIconSets, subscribeIconSets } from '../lib/iconSets.js';
 import { iconForTheme, resolveIconUrl, subscribeIconThemes } from '../lib/graphIcons.js';
 import { EVENT_TYPES, FONT_FACES } from '../lib/graphAnnotations.js';
 
@@ -75,6 +76,8 @@ export function Swatches({ onPick, value = '' }) {
 }
 
 export function IconAlbum({ mode, onPick, value = '' }) {
+  const iconSets = useSyncExternalStore(subscribeIconSets, getIconSets);
+  const sets = albumSets(iconSets);
   const [, redraw] = useState(0);
   useEffect(() => subscribeIconThemes(() => redraw((value) => value + 1)), []);
   const upload = () => {
@@ -94,10 +97,17 @@ export function IconAlbum({ mode, onPick, value = '' }) {
   };
   return (
     <div className="graph_adjust_album" role="listbox" aria-label="Icon album">
-      {ICON_ALBUM.map((name) => (
-        <button key={name} type="button" role="option" aria-selected={value === albumIconPath(name)} className={`graph_adjust_album_icon${value === albumIconPath(name) ? ' is-current' : ''}`} title={name} aria-label={name} onClick={() => onPick(albumIconPath(name))}>
-          <img src={iconForTheme(resolveIconUrl(name), mode)} alt="" />
-        </button>
+      {/* The sets turned on in Libraries ▸ Icon sets: the built-in one, then
+          the analyst's own, each under its name when there are several. */}
+      {sets.map((set) => (
+        <React.Fragment key={set.id}>
+          {sets.length > 1 ? <div className="graph_adjust_album_title" role="presentation">{set.name}</div> : null}
+          {set.icons.map((icon) => (
+            <button key={icon.id} type="button" role="option" aria-selected={value === icon.src} className={`graph_adjust_album_icon${value === icon.src ? ' is-current' : ''}`} title={icon.name} aria-label={icon.name} onClick={() => onPick(icon.src)}>
+              <img src={set.builtIn ? iconForTheme(resolveIconUrl(icon.name), mode) : icon.src} alt="" />
+            </button>
+          ))}
+        </React.Fragment>
       ))}
       <button type="button" className="graph_adjust_album_icon is-upload" title="Upload an image" aria-label="Upload an image" onClick={upload}>
         <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 16V4" /><path d="m6 10 6-6 6 6" /><path d="M4 20h16" /></svg>

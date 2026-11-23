@@ -41,10 +41,19 @@ export const REPORT_KINDS = Object.freeze({
     file: 'LinkxEvidence_Report',
     provenance: 'Provenance: an Evidence Report, drawn from the evidence record as the Service analysed it; nothing in its graph was changed by an analyst.',
   }),
+  // The findings reported back to the parent service for an STR alert
+  // (analyst decision 2026-11-19; features/alerts).
+  alert: Object.freeze({
+    id: 'alert',
+    name: 'STR Feedback Report',
+    header: 'STR FEEDBACK REPORT',
+    file: 'LinkxSTR_Feedback',
+    provenance: 'Provenance: an STR Feedback Report, the findings reported back to the parent service for its alert, drawn from the alert\u2019s graph and the results the analyst extracted.',
+  }),
 });
 export const reportKindOf = (kind) => REPORT_KINDS[kind] || REPORT_KINDS.graph;
 export const REPORT_LIMITS = Object.freeze({
-  text: 4000, line: 300, findings: 12, actions: 20, priority: 15, profiles: 4, strongest: 10, groups: 12, bridges: 10, alerts: 40, pinned: 30, rules: 20, listRows: 2000,
+  text: 4000, line: 300, findings: 200, actions: 200, standIn: 15, listRows: 2000,
 });
 export const DEFAULT_MARKING = 'CONFIDENTIAL · For authorised investigation use only';
 
@@ -231,14 +240,21 @@ export const reportTimeline = (graph, view) => {
 export const draftFindings = ({ graph, facts, alerts = [], timeline = null, nameKey = '' }) => {
   const nameOf = (g, id) => entityName(g, id, nameKey);
   const out = [];
-  const ranked = [...facts.degree.entries()].sort((a, b) => b[1] - a[1]);
-  if (ranked.length && ranked[0][1] > 0) {
-    const [id, links] = ranked[0];
-    out.push(`${nameOf(graph, id)} is the most connected entity, linked to ${count(links)} others.`);
+  // A tie is said as one (no entity or pair is picked out of equals).
+  const top = Math.max(0, ...facts.degree.values());
+  if (top > 0) {
+    const leaders = [...facts.degree.entries()].filter(([, links]) => links === top).map(([id]) => nameOf(graph, id));
+    out.push(leaders.length === 1
+      ? `${leaders[0]} is the most connected entity, linked to ${count(top)} ${top === 1 ? 'other' : 'others'}.`
+      : `${count(leaders.length)} entities share the most connections, ${count(top)} ${top === 1 ? 'other' : 'others'} each: ${nameList(leaders, 5)}.`);
   }
-  const strongest = [...facts.pairs].sort((a, b) => b.count - a.count || (b.total ?? 0) - (a.total ?? 0))[0];
+  const pairs = [...facts.pairs].sort((a, b) => b.count - a.count || (b.total ?? 0) - (a.total ?? 0));
+  const strongest = pairs[0];
   if (strongest && strongest.count > 1) {
-    out.push(`The strongest relationship is between ${nameOf(graph, strongest.a)} and ${nameOf(graph, strongest.b)}: ${count(strongest.count)} links${strongest.total !== null ? `, totalling ${total.format(strongest.total)}` : ''}.`);
+    const tied = pairs.filter((pair) => pair.count === strongest.count && (pair.total ?? 0) === (strongest.total ?? 0));
+    out.push(tied.length === 1
+      ? `The strongest relationship is between ${nameOf(graph, strongest.a)} and ${nameOf(graph, strongest.b)}: ${count(strongest.count)} links${strongest.total !== null ? `, totalling ${total.format(strongest.total)}` : ''}.`
+      : `${count(tied.length)} pairs share the strongest relationship, ${count(strongest.count)} links each${strongest.total !== null ? `, totalling ${total.format(strongest.total)}` : ''}: ${nameList(tied.map((pair) => `${nameOf(graph, pair.a)} and ${nameOf(graph, pair.b)}`), 3)}.`);
   }
   if (facts.bridges.size) out.push(`${count(facts.bridges.size)} ${facts.bridges.size === 1 ? 'entity bridges' : 'entities bridge'} otherwise separate parts of the network.`);
   if (alerts.length) {
@@ -248,7 +264,11 @@ export const draftFindings = ({ graph, facts, alerts = [], timeline = null, name
   if (timeline?.buckets?.length) {
     const { unit, buckets } = timeline.chart || timeline;
     const peak = [...buckets].sort((a, b) => b.count - a.count || a.start - b.start)[0];
-    out.push(`Dated activity runs from ${formatBucket(timeline.first, 'day')} to ${formatBucket(timeline.last, 'day')}, busiest in the ${unit === 'week' ? 'week of ' : ''}${formatBucket(peak.start, unit)} (${count(peak.count)} items).`);
+    const peaks = buckets.filter((bucket) => bucket.count === peak.count);
+    const range = `Dated activity runs from ${formatBucket(timeline.first, 'day')} to ${formatBucket(timeline.last, 'day')}`;
+    if (peaks.length === 1) out.push(`${range}, busiest in the ${unit === 'week' ? 'week of ' : ''}${formatBucket(peak.start, unit)} (${count(peak.count)} ${peak.count === 1 ? 'item' : 'items'}).`);
+    else if (peaks.length < buckets.length) out.push(`${range}; ${count(peaks.length)} ${unit === 'week' ? 'weeks' : 'periods'} share the most activity (${count(peak.count)} ${peak.count === 1 ? 'item' : 'items'} each): ${nameList(peaks.map((bucket) => formatBucket(bucket.start, unit)), 4)}.`);
+    else out.push(`${range}, evenly spread (${count(peak.count)} ${peak.count === 1 ? 'item' : 'items'} in each ${unit}).`);
   }
   return out;
 };
@@ -262,7 +282,7 @@ export const draftFindings = ({ graph, facts, alerts = [], timeline = null, name
 //   graphAlert: the window's graph alert configuration),
 //   nameKey: the node property naming entities ('' = label, else id),
 //   analyst: { findings (text, a line each), assessment, actions (text, a
-//     line each: "action | owner | status") , includeLists },
+//     line each: "action | owner | status") },
 //   source: { kind, evidence, sessionId, relationship, fileName },
 //   scope: { limit, searched, period, filtersOff: [labels] },
 //   alerts: [{ name, category, severity, short }], pinned: [{ name, kind, detail }],
@@ -271,8 +291,98 @@ export const draftFindings = ({ graph, facts, alerts = [], timeline = null, name
 //   (the actor profile: its shown fields, "—" when unknown, and the portrait link),
 //   hasSnapshot, generatedAt (Date),
 //   score: { value, band } (the evidence's fraudulence score, shown on the Summary),
-//   kind: 'graph' (default) | 'evidence' (REPORT_KINDS)
+//   kind: 'graph' (default) | 'evidence' (REPORT_KINDS),
+//   measures: [{ title, source (where the charts come from), cells: [{
+//     title, level, image }], skipped: [text] }] (the Measures section, a
+//     set per linked Chart window or the automatic set; drawn beforehand,
+//     chart/lib/chartReport.js), or none,
+//   tables: [{ title, source, columns: [{ label, numeric }], rows, total,
+//     note }] (Appendix B, C, …: the linked Table windows' or the default
+//     tables, table/lib/tableReport.js)
 // }
+// Types and their counts, the largest first; past `max`, the rest in one
+// "Other" row (the shares always add up to the whole).
+const typeRows = (types, whole, max) => {
+  const sorted = [...types.entries()].sort((a, b) => b[1] - a[1]);
+  const rows = sorted.slice(0, sorted.length > max ? max - 1 : max).map(([type, n]) => [plainText(type), count(n), percent(n, whole)]);
+  const rest = sorted.slice(rows.length);
+  if (rest.length) {
+    const n = rest.reduce((sum, [, value]) => sum + value, 0);
+    rows.push([`Other (${count(rest.length)} types)`, count(n), percent(n, whole)]);
+  }
+  return rows;
+};
+
+// The report's range (Generate report ▸ Range; analyst decision
+// 2026-11-19): a preset (Full / Standard / Brief) fills the four limits,
+// and changing one makes it Custom. null: all.
+export const REPORT_RANGE_FIELDS = Object.freeze([
+  { id: 'subjects', label: 'Subjects of interest' },
+  { id: 'profiles', label: 'Profile cards' },
+  { id: 'strongest', label: 'Strongest relationships' },
+  { id: 'rows', label: 'Rows per table' },
+]);
+export const REPORT_RANGE_PRESETS = Object.freeze({
+  full: Object.freeze({ label: 'Full', hint: 'Everything: every subject, profile, relationship and row', subjects: null, profiles: null, strongest: null, rows: null }),
+  standard: Object.freeze({ label: 'Standard', hint: 'The leading ones of each part, for a report of usual length', subjects: 25, profiles: 10, strongest: 25, rows: 50 }),
+  brief: Object.freeze({ label: 'Brief', hint: 'A short report: the top few of each part', subjects: 10, profiles: 4, strongest: 10, rows: 25 }),
+});
+export const DEFAULT_REPORT_RANGE = 'brief';
+export const reportRangeOf = (preset) => {
+  const chosen = REPORT_RANGE_PRESETS[preset] || REPORT_RANGE_PRESETS[DEFAULT_REPORT_RANGE];
+  return { preset: REPORT_RANGE_PRESETS[preset] ? preset : DEFAULT_REPORT_RANGE, ...Object.fromEntries(REPORT_RANGE_FIELDS.map(({ id }) => [id, chosen[id]])) };
+};
+// -> { preset, subjects, profiles, strongest, rows } (each a whole number
+// from 1, or null for all); none given: everything.
+export const normalizeReportRange = (range) => {
+  const limit = (value) => {
+    const n = Math.floor(Number(value));
+    return value === null || value === undefined || value === '' || !Number.isFinite(n) || n < 1 ? null : n;
+  };
+  return { preset: String(range?.preset || 'full'), ...Object.fromEntries(REPORT_RANGE_FIELDS.map(({ id }) => [id, limit(range?.[id])])) };
+};
+const upTo = (list, max) => (max == null ? list : list.slice(0, max));
+
+// The subjects: every pinned, alerted and bridging entity drawn (pinned,
+// then alerted, then the most connected); with none, the most connected
+// with a link stand in. -> { priority, standIn, subjectSet }
+const reportSubjects = (input, facts) => {
+  const pinnedIds = new Set(facts.nodeIds.filter((id) => input.markers?.pinned?.nodes?.has(id)));
+  const alertedIds = new Set(facts.nodeIds.filter((id) => input.markers?.alert?.nodes?.has(id)));
+  const byWeight = (a, b) => (Number(pinnedIds.has(b)) - Number(pinnedIds.has(a))) || (Number(alertedIds.has(b)) - Number(alertedIds.has(a))) || (facts.degree.get(b) - facts.degree.get(a)) || String(a).localeCompare(String(b), undefined, { numeric: true });
+  const contributors = facts.nodeIds.filter((id) => pinnedIds.has(id) || alertedIds.has(id) || facts.bridges.has(id)).sort(byWeight);
+  const standIn = !contributors.length;
+  const priority = standIn ? facts.nodeIds.filter((id) => facts.degree.get(id) > 0).sort(byWeight).slice(0, REPORT_LIMITS.standIn) : contributors;
+  return { priority, standIn, subjectSet: new Set(priority) };
+};
+
+// The subjects with a profile that knows something (a field or a
+// portrait), in their order. -> [{ id, fields, portrait }]
+const reportProfiles = (input, ids) => ids
+  .map((id) => {
+    const profile = input.profileOf?.(id) || null;
+    return Array.isArray(profile) ? { id, fields: profile, portrait: '' } : { id, fields: profile?.fields || null, portrait: profile?.portrait || '' };
+  })
+  .map((entry) => ({ ...entry, portrait: /^(https?:\/\/|data:image\/(png|jpe?g|gif|webp);)/i.test(String(entry.portrait || '')) ? String(entry.portrait) : '' }))
+  .filter((entry) => (entry.fields || []).some(([, value]) => plainText(value)) || entry.portrait);
+
+// Every pair touching a subject, and every repeated pair, the most links
+// (then the largest total) first.
+const reportStrongest = (facts, subjectSet) => [...facts.pairs]
+  .filter((pair) => subjectSet.has(pair.a) || subjectSet.has(pair.b) || pair.count > 1)
+  .sort((a, b) => b.count - a.count || (b.total ?? 0) - (a.total ?? 0));
+
+// How many of each the report has in all (the Range shows "of m").
+// input: as buildGraphReport's. -> { subjects, profiles, strongest }
+export const reportRangeCounts = (input) => {
+  const facts = reportFacts(input.graph, input.view, { weightKey: input.weightKey, markers: input.markers, groups: input.groups });
+  const { priority, subjectSet } = reportSubjects(input, facts);
+  return { subjects: priority.length, profiles: reportProfiles(input, priority).length, strongest: reportStrongest(facts, subjectSet).length };
+};
+
+// Names, the first `max` and how many more ("A, B and 3 more").
+const nameList = (names, max = 12) => (names.length > max ? `${names.slice(0, max).join(', ')} and ${count(names.length - max)} more` : names.join(', '));
+
 export const buildGraphReport = (input) => {
   const { graph, view } = input;
   const nameOf = (g, id) => entityName(g, id, input.nameKey);
@@ -294,8 +404,9 @@ export const buildGraphReport = (input) => {
   };
   const facts = reportFacts(graph, view, { weightKey: input.weightKey, markers: input.markers, groups: input.groups });
   const timeline = reportTimeline(graph, view);
-  const alerts = (input.alerts || []).slice(0, REPORT_LIMITS.alerts);
-  const pinned = (input.pinned || []).slice(0, REPORT_LIMITS.pinned);
+  // Every alert and pinned item (contributors: no cap, analyst decision 2026-11-19).
+  const alerts = input.alerts || [];
+  const pinned = input.pinned || [];
   const typed = lines(input.analyst?.findings, REPORT_LIMITS.findings);
   const findings = typed.length ? typed : draftFindings({ graph, facts, alerts: input.alerts || [], timeline, nameKey: input.nameKey });
   const sections = [];
@@ -340,7 +451,7 @@ export const buildGraphReport = (input) => {
       { type: 'subheading', text: 'Entity types' },
       {
         type: 'table', head: ['Type', 'Entities', 'Share'], widths: [0.5, 0.25, 0.25],
-        rows: [...facts.nodeTypes.entries()].sort((a, b) => b[1] - a[1]).slice(0, 12).map(([type, n]) => [plainText(type), count(n), percent(n, facts.nodeIds.length)]),
+        rows: typeRows(facts.nodeTypes, facts.nodeIds.length, 12),
       },
       { type: 'subheading', text: 'Scope' },
       { type: 'table', head: ['Item', 'Detail'], widths: [0.3, 0.7], rows: scopeRows },
@@ -348,52 +459,63 @@ export const buildGraphReport = (input) => {
   });
 
   // 3 Subjects of interest
-  const pinnedIds = new Set(facts.nodeIds.filter((id) => input.markers?.pinned?.nodes?.has(id)));
-  const priority = [...facts.nodeIds]
-    .sort((a, b) => (Number(pinnedIds.has(b)) - Number(pinnedIds.has(a))) || (facts.degree.get(b) - facts.degree.get(a)) || String(a).localeCompare(String(b), undefined, { numeric: true }))
-    .slice(0, REPORT_LIMITS.priority);
+  // Every contributor (analyst decision 2026-11-19), within the report's
+  // range (Generate report ▸ Range; analyst decision 2026-11-19: a cut is
+  // always said, "the first n of m").
+  const range = normalizeReportRange(input.range);
+  const { priority, standIn, subjectSet } = reportSubjects(input, facts);
+  const cutNote = (shown, all, what, order) => (shown < all ? ` The first ${count(shown)} of ${count(all)} ${what} are listed (${order}).` : '');
+  if (!priority.length && facts.nodeIds.length) {
+    // Nothing flagged and no link shown: no entity stands out.
+    sections.push({ id: 'subjects', eyebrow: 'Subjects · Who is involved', title: 'Subjects of interest', blocks: [
+      { type: 'paragraph', text: `No entity is pinned, alerted or bridging, and none of the ${count(facts.nodeIds.length)} entities shown has a link, so none stands out.` },
+    ] });
+  }
   if (priority.length) {
-    const profiles = priority.slice(0, REPORT_LIMITS.profiles)
-      .map((id) => {
-        const profile = input.profileOf?.(id) || null;
-        return Array.isArray(profile) ? { id, fields: profile, portrait: '' } : { id, fields: profile?.fields || null, portrait: profile?.portrait || '' };
-      })
-      // A card only for an entity its profile knows something about.
-      .map((entry) => ({ ...entry, portrait: /^(https?:\/\/|data:image\/(png|jpe?g|gif|webp);)/i.test(String(entry.portrait || '')) ? String(entry.portrait) : '' }))
-      .filter((entry) => (entry.fields || []).some(([, value]) => plainText(value)) || entry.portrait)
-      .map((entry) => ({
-        name: plainText(nameOf(graph, entry.id)),
-        type: plainText(nodeTypeOf(graph.getNodeAttributes(entry.id)) || ''),
-        links: facts.degree.get(entry.id) || 0,
-        tags: [...facts.flags(entry.id), ...(facts.bridges.has(entry.id) ? ['Bridge'] : [])],
-        fields: (entry.fields || []).map(([label, value]) => [plainText(label), plainText(value) || '—']),
-        portrait: entry.portrait, // a web link or an embedded image only (as the actor profile card)
-      }));
+    const listed = upTo(priority, range.subjects);
+    const allProfiles = reportProfiles(input, priority);
+    const profiles = upTo(allProfiles, range.profiles).map(({ id, fields, portrait }) => ({
+      name: plainText(nameOf(graph, id)),
+      type: plainText(nodeTypeOf(graph.getNodeAttributes(id)) || ''),
+      links: facts.degree.get(id) || 0,
+      tags: [...facts.flags(id), ...(facts.bridges.has(id) ? ['Bridge'] : [])],
+      fields: (fields || []).map(([label, value]) => [plainText(label), plainText(value) || '—']),
+      portrait, // a web link or an embedded image only (as the actor profile card)
+    }));
+    const order = 'pinned first, then alerted, then the most connected';
     sections.push({
       id: 'subjects',
       eyebrow: 'Subjects · Who is involved',
       title: 'Subjects of interest',
       blocks: [
-        { type: 'paragraph', text: 'Pinned evidence first, then the most connected entities shown.' },
+        { type: 'paragraph', text: (standIn
+          ? `No entity is pinned, alerted or bridging; the ${priority.length === 1 ? 'only entity with a link stands' : `${count(priority.length)} most connected entities shown stand`} in.`
+          : `Every pinned, alerted and bridging entity shown (${count(priority.length)}): ${order}.`) + cutNote(listed.length, priority.length, 'entities', standIn ? 'the most connected first' : order) },
         {
           // Notes drawn as flags, one colour per mark (analyst decision 2026-11-17).
           type: 'table', head: ['#', 'Entity', 'Type', 'Links', 'Notes'], widths: [0.06, 0.34, 0.18, 0.1, 0.32], flagColumn: 4,
-          rows: priority.map((id, index) => {
+          rows: listed.map((id, index) => {
             const notes = [...facts.flags(id), ...(facts.bridges.has(id) ? ['Bridge'] : [])];
             return [String(index + 1), plainText(nameOf(graph, id)), plainText(nodeTypeOf(graph.getNodeAttributes(id)) || '—'), count(facts.degree.get(id)), notes.join(', ') || '—'];
           }),
         },
-        ...(profiles.length ? [{ type: 'subheading', text: 'Profiles' }, { type: 'profiles', items: profiles }] : []),
+        ...(profiles.length ? [
+          { type: 'subheading', text: 'Profiles' },
+          ...(profiles.length < allProfiles.length ? [{ type: 'paragraph', tone: 'muted', text: `The first ${count(profiles.length)} of ${count(allProfiles.length)} profiles (${standIn ? 'the most connected first' : order}).` }] : []),
+          { type: 'profiles', items: profiles },
+        ] : []),
       ],
     });
   }
 
   // 4 Relationships and patterns
-  const strongest = [...facts.pairs].sort((a, b) => b.count - a.count || (b.total ?? 0) - (a.total ?? 0)).slice(0, REPORT_LIMITS.strongest);
+  const allStrongest = reportStrongest(facts, subjectSet);
+  const strongest = upTo(allStrongest, range.strongest);
   const patternBlocks = [];
   if (strongest.length) {
     patternBlocks.push(
       { type: 'subheading', text: 'Strongest relationships' },
+      { type: 'paragraph', text: `Every relationship of a subject of interest, and every pair linked more than once (${count(allStrongest.length)}), the most links first.${cutNote(strongest.length, allStrongest.length, 'pairs', 'the most links, then the largest total, first')}` },
       {
         type: 'table',
         head: ['Between', 'And', 'Type', 'Links', ...(input.weightKey ? [`Total ${plainText(input.weightKey, 30)}`] : [])],
@@ -406,14 +528,14 @@ export const buildGraphReport = (input) => {
     );
   }
   if (facts.bridges.size) {
-    const bridges = [...facts.bridges].sort((a, b) => facts.degree.get(b) - facts.degree.get(a)).slice(0, REPORT_LIMITS.bridges);
+    const bridges = [...facts.bridges].sort((a, b) => (facts.degree.get(b) - facts.degree.get(a)) || String(a).localeCompare(String(b), undefined, { numeric: true }));
     patternBlocks.push(
       { type: 'subheading', text: 'Bridging entities' },
       { type: 'paragraph', text: 'Removing one of these would split the network: they connect otherwise separate parts.' },
       { type: 'table', head: ['Entity', 'Type', 'Links'], widths: [0.5, 0.3, 0.2], rows: bridges.map((id) => [plainText(nameOf(graph, id)), plainText(nodeTypeOf(graph.getNodeAttributes(id)) || '—'), count(facts.degree.get(id))]) },
     );
   }
-  const groups = (input.groups || []).slice(0, REPORT_LIMITS.groups);
+  const groups = input.groups || [];
   if (groups.length) {
     patternBlocks.push(
       { type: 'subheading', text: 'Groups and merged entities' },
@@ -421,16 +543,32 @@ export const buildGraphReport = (input) => {
     );
   }
   if (facts.components.length > 1) {
-    patternBlocks.push({ type: 'paragraph', text: `The graph falls into ${count(facts.components.length)} separate parts; the largest holds ${count(facts.components[0])} entities${facts.isolated ? `, and ${count(facts.isolated)} ${facts.isolated === 1 ? 'entity has' : 'entities have'} no link shown` : ''}.` });
+    patternBlocks.push({ type: 'paragraph', text: facts.isolated === facts.nodeIds.length
+      ? `None of the ${count(facts.nodeIds.length)} entities shown has a link.`
+      : `The graph falls into ${count(facts.components.length)} separate parts; the largest holds ${count(facts.components[0])} ${facts.components[0] === 1 ? 'entity' : 'entities'}${facts.isolated ? `, and ${count(facts.isolated)} ${facts.isolated === 1 ? 'entity has' : 'entities have'} no link shown` : ''}.` });
   }
   if (input.markers?.path?.nodes?.size) {
-    patternBlocks.push({ type: 'paragraph', text: `A path is highlighted through ${count(input.markers.path.nodes.size)} entities: ${[...input.markers.path.nodes].slice(0, 12).map((id) => plainText(nameOf(graph, id))).join(', ')}.` });
+    patternBlocks.push({ type: 'paragraph', text: `A path is highlighted through ${count(input.markers.path.nodes.size)} ${input.markers.path.nodes.size === 1 ? 'entity' : 'entities'}: ${nameList([...input.markers.path.nodes].map((id) => plainText(nameOf(graph, id))))}.` });
   }
   if (patternBlocks.length) {
     sections.push({ id: 'patterns', eyebrow: 'Network · How they connect', title: 'Relationships and patterns', blocks: [
-      { type: 'table', head: ['Relationship type', 'Links', 'Share'], widths: [0.5, 0.25, 0.25], rows: [...facts.linkTypes.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10).map(([type, n]) => [plainText(type), count(n), percent(n, facts.edgeIds.length)]) },
+      { type: 'table', head: ['Relationship type', 'Links', 'Share'], widths: [0.5, 0.25, 0.25], rows: typeRows(facts.linkTypes, facts.edgeIds.length, 10) },
       ...patternBlocks,
     ] });
+  }
+
+  // Measures (analyst decision 2026-11-18): the charts, a framed cell each,
+  // two across; those the data could not support named.
+  // One set per linked Chart window (each under its title), or the
+  // automatic set (analyst decision 2026-11-19).
+  const measureSets = (Array.isArray(input.measures) ? input.measures : input.measures ? [input.measures] : []).filter((set) => set?.cells?.length);
+  if (measureSets.length) {
+    sections.push({ id: 'measures', eyebrow: 'Measures · What the numbers say', title: 'Measures', blocks: measureSets.flatMap((set) => [
+      ...(measureSets.length > 1 && plainText(set.title) ? [{ type: 'subheading', text: plainText(set.title) }] : []),
+      { type: 'paragraph', text: plainText(set.source, 300) || 'Network measures of the graph.' },
+      { type: 'charts', items: set.cells.map((cell) => ({ title: plainText(cell.title), level: plainText(cell.level), image: cell.image })) },
+      ...(set.skipped?.length ? [{ type: 'paragraph', tone: 'muted', text: `Not charted: ${set.skipped.map((entry) => plainText(entry, 200)).join(' ')}` }] : []),
+    ]) });
   }
 
   // 5 Timeline
@@ -460,7 +598,7 @@ export const buildGraphReport = (input) => {
       rows: pinned.map((item) => [plainText(item.name), item.kind === 'edge' ? 'Link' : 'Entity', plainText(item.detail)]),
     });
   }
-  const rules = (input.rules || []).slice(0, REPORT_LIMITS.rules);
+  const rules = input.rules || [];
   if (rules.length) {
     indicatorBlocks.push({ type: 'subheading', text: 'Indicator rules applied' }, {
       type: 'table', head: ['Rule', 'Applies to', 'Condition'], widths: [0.3, 0.15, 0.55],
@@ -501,25 +639,27 @@ export const buildGraphReport = (input) => {
       'Links: the number of distinct entities an entity is directly connected to in the graph; parallel links are counted once.',
       'Bridging entity: an entity whose removal would split a connected part of the graph (a cut point).',
       ...(plainText(input.cover?.systemRule) ? [`System rule: the link analysis rule that flagged this evidence when it was ingested and analysed (${plainText(input.cover.systemRule, 400)}).`] : []),
-      'Graph alerts: raised in the graph window by its alert rules (highly connected entities, unusually high-value links) at their configured thresholds, as given on the cover.',
+      ['evidence', 'alert'].includes(input.kind)
+        ? 'Graph alerts: not applied; the evidence report is drawn without a Graph window, so no window alert rules ran.'
+        : 'Graph alerts: raised in the graph window by its alert rules (highly connected entities, unusually high-value links) at their configured thresholds, as given on the cover.',
+      ...((input.tables || []).some((table) => table?.fromWindow && table.columns?.some((column) => column.label === 'Links'))
+        ? ['Links in a table taken from a Table window: every link the entity has in the graph, parallel links and links not drawn included, as the window shows it.']
+        : []),
     ] },
   ] });
 
-  // B Entity and link lists (optional)
-  if (input.analyst?.includeLists) {
-    const nodeRows = facts.nodeIds.slice(0, REPORT_LIMITS.listRows).map((id) => [plainText(nameOf(graph, id)), plainText(id, 60), plainText(nodeTypeOf(graph.getNodeAttributes(id)) || '—'), count(facts.degree.get(id))]);
-    const linkRows = facts.edgeIds.slice(0, REPORT_LIMITS.listRows).map((key) => {
-      const attributes = graph.getEdgeAttributes(key);
-      return [plainText(nameOf(graph, graph.source(key))), plainText(nameOf(graph, graph.target(key))), plainText(typeOfLink(attributes)), plainText(attributes.label ?? '')];
-    });
-    const cut = (shown, all) => (all > shown ? `The first ${count(shown)} of ${count(all)} are listed.` : undefined);
-    sections.push({ id: 'lists', appendix: 'B', eyebrow: 'Appendix · Records', title: 'Entity and link lists', blocks: [
-      { type: 'subheading', text: 'Entities' },
-      { type: 'table', head: ['Entity', 'ID', 'Type', 'Links'], widths: [0.38, 0.27, 0.23, 0.12], rows: nodeRows, note: cut(nodeRows.length, facts.nodeIds.length) },
-      { type: 'subheading', text: 'Links' },
-      { type: 'table', head: ['From', 'To', 'Type', 'Label'], widths: [0.3, 0.3, 0.2, 0.2], rows: linkRows, note: cut(linkRows.length, facts.edgeIds.length) },
+  // B, C, … The tables (analyst decision 2026-11-19): each linked Table
+  // window as the analyst left it, else the default tables
+  // (table/lib/tableReport.js).
+  (input.tables || []).filter((table) => table?.columns?.length).forEach((table, index) => {
+    const letter = String.fromCharCode(66 + index); // B, C, …
+    const rows = upTo(table.rows, range.rows);
+    const note = rows.length < table.total ? `The first ${count(rows.length)} of ${count(table.total)} rows are listed (in the table's order).` : '';
+    sections.push({ id: `table-${letter.toLowerCase()}`, appendix: letter, eyebrow: 'Appendix · Records', title: `Table: ${plainText(table.title)}`, blocks: [
+      { type: 'paragraph', tone: 'muted', text: `${plainText(table.source, 240)}. ${count(table.total)} ${table.total === 1 ? 'row' : 'rows'}.` },
+      { type: 'wideTable', head: table.columns.map((column) => plainText(column.label)), numeric: table.columns.map((column) => column.numeric), rows: rows.map((row) => row.map((value) => plainText(value, 400))), note: note || undefined },
     ] });
-  }
+  });
 
   // Numbering: 1..n for the body, letters for appendices.
   let number = 0;

@@ -8,9 +8,11 @@ import {
   SOURCE_MODES,
 } from '../../lib/sourceModel.js';
 import { DataframeField, SourceModeIcon } from '../sourceUi.jsx';
+import { countFilters, summarizeFilter } from '../../lib/dataframeFilter.js';
 
-export function DataframeStep({ mode, state, defaults, validationMessage, onPatchModeState, onOpenConfiguration, onOpenLibrary }) {
+export function DataframeStep({ mode, state, defaults, validationMessage, onPatchModeState, onOpenConfiguration, onOpenLibrary, onOpenFilter }) {
   const info = state.dataframeInfo;
+  const filterCount = countFilters(state.dataframeFilter);
   const isReady = state.dataframeStatus === DATAFRAME_STATUSES.READY && Boolean(info);
   // Real dataframe columns/rules once create_DF answered; configuration
   // (fetch_columns / rule names) is the fallback for flows not wired yet.
@@ -83,9 +85,26 @@ export function DataframeStep({ mode, state, defaults, validationMessage, onPatc
             <SourceModeIcon type="table" />
             <h3>Actions and Dataframe information</h3>
           </span>
-          <span className="source_window_panel_pill">
-            <SourceModeIcon type={isReady ? 'table' : 'clock'} />
-            {isReady ? 'Dataframe ready' + (info.storage || info.source ? ' · ' + (info.storage || info.source) : '') : 'Waiting for dataframe creation'}
+          <span className="source_window_dataframe_header_end">
+            <span className="source_window_panel_pill">
+              <SourceModeIcon type={isReady ? 'table' : 'clock'} />
+              {isReady ? 'Dataframe ready' + (info.storage || info.source ? ' · ' + (info.storage || info.source) : '') : 'Waiting for dataframe creation'}
+            </span>
+            {/* Filter (analyst decision 2026-11-19): strip columns and rows
+                the analyst does not want ingested or analysed; the count of
+                filters applied, the details inside the popup. */}
+            <button
+              type="button"
+              className={`source_window_df_filter_open${filterCount ? ' is-active' : ''}`}
+              disabled={!isReady || !info.columns.length || !onOpenFilter}
+              aria-label={filterCount ? `Filter dataframe (${filterCount} applied)` : 'Filter dataframe'}
+              title={filterCount ? `Filtered: ${summarizeFilter(state.dataframeFilter)}` : (isReady && !info.columns.length ? 'The Service gave no column names for this dataframe' : 'Filter the dataframe before ingestion and analysis')}
+              onClick={onOpenFilter}
+            >
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 5h18l-7 8v6l-4 2v-8Z" /></svg>
+              <span>Filter</span>
+              {filterCount ? <span className="source_window_df_filter_count" aria-hidden="true">{filterCount}</span> : null}
+            </button>
           </span>
         </header>
         <dl className="source_window_dataframe_metrics">

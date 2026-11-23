@@ -577,15 +577,18 @@
 	filter: brightness(1.08);
 }
 
-.tasks_action.is-danger {
+/* Terminate: the Source window's stream Terminate button (same tokens). */
+.tasks_action.is-danger,
+.tasks_action.is-danger:hover:not(:disabled) {
 	margin-left: 4px;
-	border-color: transparent;
-	color: var(--tasks-danger-text);
+	border-color: var(--stream-terminate-btn-border);
+	background: var(--stream-terminate-btn-bg);
+	color: var(--stream-terminate-btn-text);
 }
 
 .tasks_action.is-danger:hover:not(:disabled) {
-	border-color: color-mix(in srgb, var(--tasks-danger-text) 40%, transparent);
-	background: color-mix(in srgb, var(--tasks-danger-text) 8%, transparent);
+	filter: brightness(0.97);
+	box-shadow: 0 0 0 3px color-mix(in srgb, var(--stream-terminate-btn-border) 25%, transparent);
 }
 
 .tasks_action:disabled {
@@ -1704,4 +1707,136 @@
 		justify-content: flex-start;
 		width: 100%;
 	}
+}
+
+/* The task's record on the Service (lifecycle, Save as evidence; H-2, H-6). */
+.tasks_scope {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	margin-left: auto;
+	color: var(--tasks-muted-text);
+	font-size: 12px;
+}
+.tasks_select {
+	height: 28px;
+	padding: 0 8px;
+	border: 1px solid var(--tasks-button-border);
+	border-radius: 3px;
+	background: var(--tasks-button-bg);
+	color: var(--tasks-button-text);
+	font: inherit;
+}
+.tasks_scope_owner {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	white-space: nowrap;
+}
+.tasks_scope_archived {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+}
+.tasks_scope_message,
+.tasks_service_message {
+	color: var(--tasks-muted-text);
+	font-size: 12px;
+}
+.tasks_service {
+	display: grid;
+	gap: 8px;
+	padding: 10px 12px;
+	border: 1px solid var(--tasks-border);
+	border-radius: var(--tasks-radius);
+	background: var(--tasks-surface-bg);
+	color: var(--tasks-text);
+}
+.tasks_service:empty {
+	display: none;
+}
+.tasks_service.is-expired,
+.tasks_service.is-archived {
+	border-color: var(--tasks-status-failed);
+}
+.tasks_service_note {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+	margin: 0;
+	color: var(--tasks-muted-text);
+	font-size: 12px;
+}
+/* "Saved as evidence" badge: the same evidence token as the button
+   (gold gradient in NBE Daylight). */
+.tasks_evidence_badge {
+	display: inline-flex;
+	align-items: center;
+	padding: 2px 10px;
+	border: 1px solid var(--tasks-evidence-border);
+	border-radius: 999px;
+	background: var(--tasks-evidence-bg);
+	color: var(--tasks-evidence-text);
+	font-size: 11px;
+	font-weight: 600;
+	line-height: 1.5;
+	white-space: nowrap;
+}
+/* Open in Reports / Save as evidence sit at the right end of their row. */
+.tasks_service_note .tasks_service_end {
+	margin-left: auto;
+}
+.tasks_chip.is-expiring {
+	color: var(--tasks-status-starting);
+}
+.tasks_chip.is-expired,
+.tasks_chip.is-archived {
+	color: var(--tasks-status-failed);
+}
+
+/* Save as evidence: its own token (the NBE Daylight theme gives it the
+   official bronze → gold CTA gradient), in the button and the popup. */
+.tasks_window {
+	position: relative;
+}
+.tasks_action.tasks_evidence_button,
+.graph_customize_button.tasks_evidence_button {
+	border: 1px solid var(--tasks-evidence-border);
+	background: var(--tasks-evidence-bg);
+	color: var(--tasks-evidence-text);
+	font-weight: 600;
+}
+.tasks_action.tasks_evidence_button:hover:not(:disabled),
+.graph_customize_button.tasks_evidence_button:hover:not(:disabled) {
+	border-color: var(--tasks-evidence-border);
+	background: var(--tasks-evidence-bg);
+	filter: brightness(1.08);
+}
+
+/* The popup: the report popup's card, one column (no template preview). */
+.graph_customize.is-report.tasks_evidence_dialog {
+	width: min(480px, 100%);
+}
+.graph_customize.is-report.tasks_evidence_dialog .tasks_evidence_body {
+	grid-template-columns: minmax(0, 1fr);
+}
+/* The checkbox sits where the other rows' inputs start, so the hint under
+   it (indented to that column) lines up with it. */
+.tasks_evidence_dialog .tasks_evidence_check {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+	color: var(--graph-text);
+	font-size: 11px;
+	cursor: pointer;
+}
+.tasks_evidence_dialog .tasks_evidence_check input {
+	margin: 0;
+}
+.tasks_evidence_message {
+	margin: 8px 0 0;
+	color: var(--tasks-status-failed);
+	font-size: 11.5px;
 }

@@ -33,7 +33,7 @@ Ported from production `Reports` (src/App.jsx) into `src/features/reports/`:
 5. [x] Footer: record range (Filtered), Refresh, list PDF with the leading entities summary (CDR wording), Previous / Next.
 6. [x] Detail: type / source / status cards, payload metrics, score evidence (Volume vs Financial bonus), payload JSON with Copy.
 7. [x] Evidence graph: trace id rules, availability check (`/get_graph`, queued jobs), one fetch reused, Open graph states; opens a Graph window by trace id (`metadata.evidence`).
-8. [ ] **Download report** (evidence PDF): production renders it in a hidden `graphs_basic` iframe (`generate_evidence_report`), so it lands with Phase 2. The button is shown, disabled, with the reason.
+8. [x] **Download report** (evidence PDF): done 2026-11-18 (graph-chart-plan G4.3) without an iframe: the built-in NBE Evidence Report, drawn from the evidence graph.
 
 ### Phase 2: Graph and Chart windows (dependency of Phases 1, 3, 4)
 > Detailed plan: **`docs/graph-chart-plan.md`** (no iframes; phases G0–G6). It supersedes step 6 below.
@@ -44,14 +44,29 @@ Ported from production `Reports` (src/App.jsx) into `src/features/reports/`:
 8. Origin on tasks (analyst / parent) with an origin filter; verdict and flags from the backend instead of parsing the log, with the log parser as fallback.
 
 ### Phase 4: Parent alerts (needs H-3, H-4, H-5, H-9)
+> **Frontend built on a mock (2026-11-19; analyst decision):** `src/features/alerts/`. An STR is an alert report from the parent, worked in Reports ▸ Alert reports through three steps:
+> 1. **Analyse:** a task (origin "STR alert"), and the alert's graph opens in a Graph window bound to it.
+> 2. **Extract results:** Graph, Table and Charts from that window and its linked Table and Chart windows (else the defaults), plus a Summary of findings (verdict, findings, analyst comments). Each field can be included or left out.
+> 3. **Report back:** sent, then acknowledged or failed with Retry. Download PDF gives the "STR Feedback Report".
+>
+> **Notices** (with "Open in Reports"):
+> - arrival;
+> - data complete or incomplete;
+> - assigned or reassigned away;
+> - analysis started, finished or failed;
+> - feedback sent, acknowledged or failed.
+>
+> A new or newly assigned alert also counts on the Reports badge. The production `str_report_link_analysis` pop-up is not ported.
+>
+> **Modes:** `VITE_PARENT_ALERTS=mock` (or the development switch "Mock alerts" in the Alert reports toolbar) runs the mock service (`mock/mockAlertService.js`). `VITE_PARENT_ALERTS=live` uses `lib/alertService.js` on the H-3/H-4/H-5 endpoints and the socket events `parent_alert_assigned | reassigned | updated | analysis`. Unset, it is off and the tab is as before.
 9. Alert reports: **Assigned to me** (default) / **All** (supervisors); response status Awaiting analysis → Analysing → Feedback sent → Acknowledged (or Feedback failed).
 10. **Run link analysis** on an alert → task with `origin: parent` and the alert's reference id; replaces the unannounced `str_report_link_analysis` graph pop-up (the event attaches to the alert's task instead).
 11. **Send feedback** (assignee only): verdict, flags, summary, include graph; disabled with a reason after reassignment.
 12. Assignment notifications (`parent_alert_assigned` / `reassigned`) and a badge on the Reports launcher; also on sign-in.
 
 ### Phase 5: Manual runs to results (needs H-6)
-13. On the Tasks verdict line: **Save as evidence** and **Use as feedback for alert…** (lists the user's assigned alerts).
-14. Clean unsaved runs stay in Tasks history only.
+13. On the Tasks verdict line: **Save as evidence** (built 2026-11-20 against H-6: title, summary, keep the graph; "Save without the graph" on `graph_unavailable`; Open in Reports ▸ Service evidence ▸ Analysts) and **Use as feedback for alert…** (not built: the Service has no way to adopt a run, B-29).
+14. Clean unsaved runs stay in Tasks history only (the Service keeps them as tasks: expiring, expired → Reconfirm, archived).
 
 ## Done criteria per phase
 Tests (unit + component), theme tokens and picker coverage, `npm run lint`, `npx vitest run`, `npm run theme:check`, `npm run build`, and a production-parity check against `src/App.jsx` (`Reports`).

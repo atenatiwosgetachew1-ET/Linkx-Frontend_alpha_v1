@@ -43,7 +43,16 @@ export const SORT_OPTIONS = Object.freeze([
   { id: 'score_asc', label: 'Lowest fraud score', scoredOnly: true },
 ]);
 
+// Who asked for the evidence (H-1/H-6): sibling services' accounts, or an
+// analyst's saved run. Older records have no requester and count as service.
+export const REQUESTER_FILTERS = Object.freeze([
+  { id: 'all', label: 'All requesters' },
+  { id: 'service', label: 'Service accounts' },
+  { id: 'analyst', label: 'Analysts' },
+]);
+
 export const DEFAULT_FILTERS = Object.freeze({
+  requester: 'all',
   search: '',
   status: 'all',
   band: 'all',
@@ -66,22 +75,21 @@ export const parsePayload = (payload) => {
 const truthy = (value) => value === true || value === 'true' || value === 1;
 const falsy = (value) => value === false || value === 'false' || value === 0;
 
-// payload.trace_id, then the reference id, the record's trace id, its id.
+// The record's trace_id (H-1: the graph evidence id for /get_graph), else
+// as production: payload.trace_id, the reference id, the record's id.
 export const getReportTraceId = (record) => {
   if (!record) return null;
   const payload = record.payload && typeof record.payload === 'object' ? record.payload : parsePayload(record.payload);
-  return payload.trace_id || record.external_reference_id || record.trace_id || record.id || null;
+  return record.trace_id || payload.trace_id || record.external_reference_id || record.id || null;
 };
 
-// What the record itself claims about its graph: true / false / null
-// (unknown). Same precedence as production's isReportGraphPresent/Absent.
-export const getGraphClaim = (raw, payload) => {
-  if (truthy(payload.has_graph) || truthy(payload.include_graph)) return true;
-  if (truthy(raw.has_graph) || truthy(raw.graph_available) || truthy(payload.graph_available) || truthy(raw.include_graph)) return true;
-  if (falsy(raw.has_graph) || falsy(payload.has_graph) || falsy(raw.graph_available) || falsy(payload.graph_available)) return false;
-  if (falsy(raw.include_graph) || falsy(payload.include_graph)) return false;
-  if (payload.graph === null || payload.graph === false) return false;
-  if (Array.isArray(payload.nodes)) return payload.nodes.length > 0;
+// Whether the record has a graph: the Service's has_graph is the only flag
+// (H-1; true only when /get_graph returns nodes for trace_id). A record
+// without it (a Service before H-1) is unknown: null, and the Reports
+// window checks.
+export const getGraphClaim = (raw) => {
+  if (truthy(raw.has_graph)) return true;
+  if (falsy(raw.has_graph)) return false;
   return null;
 };
 
@@ -192,12 +200,15 @@ export const toReportRecord = (raw = {}, tabId = 'parent') => {
     scoreBand: band,
     anomaly: getAnomaly(payload),
     reason: getReason(payload),
-    leadingEntity: getLeadingEntity(payload),
+    leadingEntity: (raw.title && String(raw.title)) || getLeadingEntity(payload),
     flaggedRules,
     flags,
     verdict: raw.verdict || (isFlagged || ['high', 'critical', 'fatal'].includes(band) ? 'suspicious' : ''),
     isFlagged,
-    graphClaim: getGraphClaim(raw, payload),
+    graphClaim: getGraphClaim(raw),
+    // Moved to cold storage after 180 days (has_graph false; B-31 asks the
+    // Service for graph_archived): shown as archived, not as "no graph".
+    graphArchived: truthy(raw.graph_archived),
     runId: payload.run_id ?? null,
     payload,
     raw,
@@ -250,6 +261,7 @@ export const filterAndSortRecords = (records, filters, tabId) => {
 export const buildReportsQuery = ({ tabId, offset = 0, limit = REPORTS_PAGE_SIZE, filters = DEFAULT_FILTERS }) => {
   const tab = getReportTab(tabId);
   const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+  if (tab.id === 'evidence' && ['service', 'analyst'].includes(filters.requester)) params.set('requester_type', filters.requester);
   if (filters.status && filters.status !== 'all') params.set('status', filters.status);
   if (tab.scored && filters.band && filters.band !== 'all') {
     if (filters.band === 'fatal') params.set('min_fraud_score', '90');

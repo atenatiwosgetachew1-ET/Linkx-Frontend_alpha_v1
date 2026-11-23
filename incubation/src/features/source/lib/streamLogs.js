@@ -6,6 +6,7 @@
 // with useSyncExternalStore (subscribe/getLines). Listeners are notified at
 // most every FLUSH_MS, and the buffer is capped at MAX_LINES.
 
+import { createRowTally, tallyRowLine } from './rowProgress.js';
 import { formatLogTimestamp } from './sourceModel.js';
 
 const FLUSH_MS = 200;
@@ -18,7 +19,9 @@ let boundSocket = null;
 const entryFor = (windowId) => {
   const key = String(windowId);
   if (!streams.has(key)) {
-    streams.set(key, { sessionId: '', filename: '', lines: [], snapshot: EMPTY, listeners: new Set(), timer: null });
+    // rows: the run's row tally, kept as lines arrive so it outlives the
+    // MAX_LINES cap (rowProgress.js).
+    streams.set(key, { sessionId: '', filename: '', lines: [], snapshot: EMPTY, rows: createRowTally(), listeners: new Set(), timer: null });
   }
   return streams.get(key);
 };
@@ -31,6 +34,7 @@ const flush = (entry) => {
 
 const push = (entry, line) => {
   entry.lines.push(line);
+  if (line.source === 'backend') tallyRowLine(entry.rows, line.message);
   if (entry.lines.length > MAX_LINES) entry.lines.splice(0, entry.lines.length - MAX_LINES);
   if (!entry.timer) entry.timer = setTimeout(() => flush(entry), FLUSH_MS);
 };
@@ -110,6 +114,7 @@ export const appendStreamLog = (windowId, message, level = 'info') => {
 export const clearStreamLog = (windowId) => {
   const entry = entryFor(windowId);
   entry.lines = [];
+  entry.rows = createRowTally();
   flush(entry);
 };
 
@@ -118,6 +123,10 @@ export const subscribeStreamLog = (windowId, listener) => {
   entry.listeners.add(listener);
   return () => entry.listeners.delete(listener);
 };
+
+// The run's row tally so far (read alongside getStreamLogLines; it changes
+// only when lines arrive).
+export const getStreamRowTally = (windowId) => streams.get(String(windowId))?.rows || null;
 
 export const getStreamLogLines = (windowId) => streams.get(String(windowId))?.snapshot || EMPTY;
 

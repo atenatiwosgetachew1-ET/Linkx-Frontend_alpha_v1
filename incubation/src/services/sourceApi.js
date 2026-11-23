@@ -11,6 +11,8 @@ import {
   getConnectToolErrorMessage,
   getDisconnectSourceErrorMessage,
   getDisconnectToolErrorMessage,
+  getServiceRefusalCode,
+  getServiceRefusalMessage,
 } from './apiErrors.js';
 import { getQueuedJobId, getJobStatus, isQueuedJobResponse, getQueuedPollPath, pollJob, JOB_SUCCESS_STATUSES } from './jobs.js';
 import { normalizeSessionId } from './sessionApi.js';
@@ -100,8 +102,10 @@ const MASKED_SECRET_PATTERN = /^\*+$/;
 export const isMaskedSecret = (value) => MASKED_SECRET_PATTERN.test(String(value || '').trim());
 
 // Builds the /connect_to_tool body. When the password field still holds the
-// masked "***" from saved configuration, the backend resolves the real secret
-// from `password_ref`; without a ref the analyst must type the password.
+// masked "***" from saved configuration, the Service resolves the real secret
+// from `password_ref`; without a ref the password goes empty and the Service
+// uses the one saved to the account for that host, or answers
+// password_required (H-10).
 export const buildToolConnectPayload = ({ sourceSessionId, toolName = 'neo4j', url, username, password, passwordRef, database }) => {
   const sessionKey = normalizeSessionId(sourceSessionId);
   const cleanPassword = sanitizeSecret(password, { maxLength: 256 });
@@ -117,8 +121,8 @@ export const buildToolConnectPayload = ({ sourceSessionId, toolName = 'neo4j', u
   };
 
   if (isMaskedSecret(cleanPassword)) {
-    if (!cleanPasswordRef) return { ok: false, message: 'Enter the real Neo4j password before connecting.' };
-    payload.password_ref = cleanPasswordRef;
+    if (cleanPasswordRef) payload.password_ref = cleanPasswordRef;
+    else payload.password = '';
   }
   return { ok: true, payload };
 };
@@ -390,6 +394,11 @@ export const getStreamingErrorMessage = (input, fallback = 'The streaming reques
   const resultsText = typeof payload?.results === 'string' ? payload.results.trim() : '';
   if (message === 'Missing action_id or session_id') return 'Streaming request is missing required session state.';
   if (message === 'Invalid stream value') return 'Streaming settings were incomplete.';
+  const refusal = getServiceRefusalCode(input);
+  if (refusal) {
+    const text = getServiceRefusalMessage(input);
+    if (text) return text;
+  }
   if (message === 'neo4j_not_connected_for_session') return detail ? `Neo4j is not connected for this session. ${sanitizeBackendUserMessage(detail, '')}`.trim() : 'Neo4j is not connected for this session.';
   if (message === 'failed!' && resultsText) return sanitizeBackendUserMessage(resultsText, fallback);
   if (String(payload?.error || '').startsWith('Invalid action:')) return 'Unsupported action.';
@@ -397,7 +406,9 @@ export const getStreamingErrorMessage = (input, fallback = 'The streaming reques
 };
 
 // Body for /live_batch_files {id:'stream'} (production payload).
-export const buildStreamPayload = ({ sourceSessionId, mode, tool, action, rule, source, target, relationship }) => {
+// dataframeFilter: the analyst's filter as the Service reads it
+// (features/source/lib/dataframeFilter.js filterPayload; B-27), or null.
+export const buildStreamPayload = ({ sourceSessionId, mode, tool, action, rule, source, target, relationship, dataframeFilter = null }) => {
   const sessionKey = normalizeSessionId(sourceSessionId);
   const sourceMode = mode === 'realtime' ? 'realtime' : 'batch';
   const needsSourceTarget = action === 'Source / Target Relationship';
@@ -415,11 +426,58 @@ export const buildStreamPayload = ({ sourceSessionId, mode, tool, action, rule, 
       action,
       rule,
       ...(needsSourceTarget ? { source, target, relationship: relationship || 'HAS_RELATIONSHIP' } : {}),
+      ...(dataframeFilter ? { dataframe_filter: dataframeFilter } : {}),
     },
   };
 };
 
-// Starts the stream. Returns { accepted, queued, logFile, pollPath, jobId, data, message }.
+// The effect of a dataframe filter before ingestion (B-28): POST
+// /live_batch_files { id: 'preview_DF_filter', session_id, value: {
+// session_id, dataframe_filter, source?, target? } } (source and target so
+// the Service also refuses stripping them). -> { available: true,
+// totalRows, keptRows, keptColumns } or { available: false, message } (a
+// live source, no saved dataframe, or a refusal with its reason).
+export const previewDataframeFilter = async (apiFetch, { sourceSessionId, dataframeFilter, source = '', target = '' }, { signal } = {}) => {
+  const sessionKey = normalizeSessionId(sourceSessionId);
+  const unavailable = 'The Service cannot preview this filter; it is applied when the stream starts.';
+  try {
+    const data = await apiFetch('/live_batch_files', {
+      method: 'POST',
+      body: {
+        id: 'preview_DF_filter',
+        session_id: sessionKey,
+        value: { session_id: sessionKey, dataframe_filter: dataframeFilter, ...(source ? { source } : {}), ...(target ? { target } : {}) },
+      },
+      signal,
+    });
+    if (String(data?.message || '') === 'preview_not_available') {
+      const live = /live/i.test(String(data?.detail || ''));
+      return { available: false, message: live ? 'A live (broker or API) source cannot be previewed; the filter is applied to each batch.' : sanitizeBackendUserMessage(data?.detail, unavailable) };
+    }
+    const results = data?.results ?? data?.result ?? data;
+    const number = (...values) => {
+      const found = values.find((value) => value !== undefined && value !== null && value !== '' && Number.isFinite(Number(value)));
+      return found === undefined ? null : Number(found);
+    };
+    const totalRows = number(results?.total_rows, results?.totalRows);
+    const keptRows = number(results?.kept_rows, results?.keptRows, results?.filtered_rows);
+    if (!isSuccessResponse(data) || keptRows === null) {
+      return { available: false, message: isSuccessResponse(data) ? unavailable : sanitizeBackendUserMessage(data?.message, unavailable) };
+    }
+    return { available: true, totalRows, keptRows, keptColumns: number(results?.kept_columns, results?.keptColumns) };
+  } catch (error) {
+    if (error?.name === 'AbortError') throw error;
+    if ([404, 405, 501].includes(Number(error?.status))) return { available: false, message: unavailable };
+    return { available: false, message: getServiceRefusalMessage(error) || sanitizeBackendUserMessage(error?.data?.message || error?.message, unavailable) };
+  }
+};
+
+// The run's task on the Service (H-7: the stream answer carries task_id).
+export const resolveStreamTaskId = (response) => String(
+  response?.results?.task_id ?? response?.task_id ?? response?.job?.payload?.task_id ?? response?.results?.job?.payload?.task_id ?? ''
+).trim();
+
+// Starts the stream. Returns { accepted, queued, logFile, pollPath, jobId, taskId, data, message }.
 export const startStreamRequest = async (apiFetch, payload, { signal } = {}) => {
   try {
     const data = await apiFetch('/live_batch_files', { method: 'POST', body: payload, signal });
@@ -432,6 +490,7 @@ export const startStreamRequest = async (apiFetch, payload, { signal } = {}) => 
       logFile: resolveStreamLogFile(data),
       pollPath: queued ? getQueuedPollPath(data) : null,
       jobId: getQueuedJobId(data),
+      taskId: resolveStreamTaskId(data),
       message: accepted ? '' : getStreamingErrorMessage(data, 'The stream did not initialize. Check the selected action and try again.'),
     };
   } catch (error) {

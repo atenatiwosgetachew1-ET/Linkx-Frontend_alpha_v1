@@ -1,6 +1,7 @@
 import { DEFAULT_SCHEMA, SCHEMA_NAMES } from './chartColors.js';
 import { CHART_METRICS, metricById } from './chartMetrics.js';
 import { DEFAULT_HISTOGRAM } from './chartHistogram.js';
+import { BUILTIN_CHART_DEFAULTS } from './chartDefaults.js';
 import { detectCommunities } from '../../graph/lib/graphAnalysis.js';
 import { timelineItems, timelineKeys } from '../../graph/lib/graphTimeline.js';
 
@@ -41,7 +42,11 @@ const paramOf = (value) => (value && (value.subject === 'node' || value.subject 
   ? { subject: value.subject, key: value.key.slice(0, 120) }
   : { ...DEFAULT_HISTOGRAM });
 
-export const normalizeChartState = (input = {}) => {
+// defaults: what a window without a state of its own starts from
+// (Libraries ▸ Charts; chartDefaults.js).
+export const normalizeChartState = (input = {}, defaults = BUILTIN_CHART_DEFAULTS) => {
+  // Nothing saved yet: a new window.
+  const blank = !input || Object.keys(input).length === 0;
   const seen = new Set();
   const kept = (Array.isArray(input?.cards) ? input.cards : []).filter((card) => card && metricById(card.metric));
   const count = Math.min(kept.length, MAX_CARDS);
@@ -64,12 +69,15 @@ export const normalizeChartState = (input = {}) => {
     }));
   return {
     v: CHART_STATE_VERSION,
-    scope: SCOPES.includes(input?.scope) ? input.scope : 'drawn',
+    scope: SCOPES.includes(input?.scope) ? input.scope : defaults.scope,
     cards,
-    global: { colorful: colourOf(input?.global?.colorful), schema: schemaOf(input?.global?.schema) },
-    mode: CHART_MODES.includes(input?.mode) ? input.mode : 'auto',
+    global: {
+      colorful: blank ? defaults.colorful : colourOf(input?.global?.colorful),
+      schema: SCHEMA_NAMES.includes(input?.global?.schema) ? input.global.schema : (blank ? defaults.schema : DEFAULT_SCHEMA),
+    },
+    mode: CHART_MODES.includes(input?.mode) ? input.mode : defaults.mode,
     seeded: typeof input?.seeded === 'string' ? input.seeded.slice(0, 80) : '',
-    follow: input?.follow !== false,
+    follow: input?.follow === undefined && blank ? defaults.follow : input?.follow !== false,
     // How many cards have been created: the next card's tone step.
     toneCount: Number.isInteger(input?.toneCount) && input.toneCount >= 0 ? input.toneCount : cards.length,
   };

@@ -225,6 +225,7 @@ export const defaultSourceState = {
     uploadedFiles: [],
     dataframeStatus: DATAFRAME_STATUSES.NONE,
     dataframeInfo: null,
+    dataframeFilter: null,
     dataframeMessage: '',
     preparing: '',
     streamStatus: STREAM_STATUSES.IDLE,
@@ -253,6 +254,7 @@ export const defaultSourceState = {
     toolDatabase: '',
     dataframeStatus: DATAFRAME_STATUSES.NONE,
     dataframeInfo: null,
+    dataframeFilter: null,
     dataframeMessage: '',
     preparing: '',
     streamStatus: STREAM_STATUSES.IDLE,
@@ -428,6 +430,7 @@ export const STORAGE_SEARCH_RESET_PATCH = Object.freeze({
 export const STALE_DATAFRAME_PATCH = Object.freeze({
   dataframeStatus: DATAFRAME_STATUSES.NONE,
   dataframeInfo: null,
+  dataframeFilter: null,
   dataframeMessage: '',
 });
 

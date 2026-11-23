@@ -25,8 +25,11 @@ describe('buildToolConnectPayload', () => {
     expect(built.payload.password_ref).toBe('ref-1');
   });
 
-  it('refuses a masked password without a ref', () => {
-    expect(buildToolConnectPayload({ ...base, password: '***' }).ok).toBe(false);
+  it('sends a masked password without a ref as empty: the Service uses the saved one (H-10)', () => {
+    const built = buildToolConnectPayload({ ...base, password: '***' });
+    expect(built.ok).toBe(true);
+    expect(built.payload.password).toBe('');
+    expect(built.payload.password_ref).toBeUndefined();
   });
 });
 

@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import WindowLoadScreen from '../../../shared/components/WindowLoadScreen.jsx';
 
 import { Section } from '../../../shared/components/form/FormFields.jsx';
 import Modal from '../../../shared/components/Modal.jsx';
+import { Masthead, PageHero, Stat, Stats } from './SettingsPage.jsx';
 
 const HEALTH_POLL_MS = 10000;
 const isSuccessStatus = (status) => ['success', 'succeeded'].includes(String(status || '').toLowerCase());
@@ -71,6 +73,10 @@ async function downloadSummaryPdf(data, isCdr) {
   }
   doc.save(`xvigilance_summary_${new Date().toISOString().replace(/[:.]/g, '-')}.pdf`);
 }
+
+const ActionIcon = ({ d }) => (
+  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={d} /></svg>
+);
 
 // Production SmartVigilancePanel: xVigilance engine health, audit log,
 // pause/resume, rewind and findings.
@@ -204,7 +210,7 @@ export default function VigilancePanel({ apiFetch, canManage, isCdr, notify, onO
     }
   };
 
-  if (loading && !data) return <p className="settings_hint">Loading xVigilance health…</p>;
+  if (loading && !data) return <WindowLoadScreen className="is-block" label="Loading xVigilance health…" />;
   if (error && !data) {
     return (
       <Section title="Linkx Vigilance">
@@ -224,62 +230,107 @@ export default function VigilancePanel({ apiFetch, canManage, isCdr, notify, onO
 
   const { checkpoint } = data;
   const status = checkpoint.is_paused ? 'paused' : (checkpoint.status || 'inactive');
+  const isRunning = (run) => String(run.status || '').toLowerCase().includes('run');
   const runs = Array.isArray(data.recent_runs)
-    ? [...data.recent_runs].sort((a, b) => Number(String(b.status || '').toLowerCase().includes('run')) - Number(String(a.status || '').toLowerCase().includes('run')))
+    ? [...data.recent_runs].sort((a, b) => Number(isRunning(b)) - Number(isRunning(a)))
     : [];
+  // Figures of the loaded runs (the audit log below).
+  const finished = runs.filter((run) => !isRunning(run));
+  const succeeded = finished.filter((run) => isSuccessStatus(run.status)).length;
+  const failed = finished.length - succeeded;
+  const durations = finished.map((run) => Number(run.duration_ms)).filter((value) => Number.isFinite(value) && value >= 0);
+  const averageMs = durations.length ? Math.round(durations.reduce((sum, value) => sum + value, 0) / durations.length) : null;
+  const formatCount = (value) => (Number.isFinite(Number(value)) && value !== null && value !== '' ? Number(value).toLocaleString() : (value ?? '–'));
+  const unit = isCdr ? 'calls / sessions analyzed' : 'records analyzed';
 
   return (
-    <>
+    <div className="settings_page vigilance is-fill">
       {error ? <div className="settings_error">{error} (showing the last loaded data)</div> : null}
-      <Section
-        title={isCdr ? 'CDR ingestion progress tracker' : 'Progress tracker'}
-        description={`${isCdr ? 'Last window end time' : 'Last window end'}: ${checkpoint.last_window_end || 'N/A'}`}
-        actions={(
-          <>
-            <span className={`vigilance_status_pill is-${status}`}>{status}</span>
-            {canManage ? (
-              <label className="settings_toggle_row config_window_toggle" title={checkpoint.is_paused ? 'Resume engine' : 'Pause engine'}>
-                <input type="checkbox" checked={!checkpoint.is_paused} disabled={togglingPause} onChange={() => togglePause(!checkpoint.is_paused)} />
-                <span>{togglingPause ? 'Updating…' : checkpoint.is_paused ? 'Engine off' : 'Engine on'}</span>
-              </label>
-            ) : null}
-          </>
-        )}
-      >
-        <p className="vigilance_feed"><span>{isCdr ? 'Data stream' : 'Feed name'}</span> {describeFeed(checkpoint.feed_name, isCdr)}</p>
-      </Section>
 
-      <Section
-        title={isCdr ? 'Total digested calls & sessions' : 'Total digested counter'}
-        actions={(
-          <>
-            {canManage ? <button type="button" className="settings_button is-danger" onClick={() => setRewindOpen(true)}>{isCdr ? 'Re-analyze CDR history' : 'Re-analyze history'}</button> : null}
-            <button type="button" className="settings_button" disabled={exporting} onClick={exportSummary}>{exporting ? 'Preparing…' : 'Download summary'}</button>
-            <button type="button" className="settings_button" onClick={() => onOpenFindings({ tab: 'xvigilance' })}>Show findings</button>
-          </>
-        )}
-      >
-        <p className="vigilance_counter">
-          <strong>{Number(checkpoint.total_graph_analyzed || 0).toLocaleString()}</strong>
-          <span>{isCdr ? 'calls / sessions analyzed' : 'records analyzed'}</span>
-        </p>
-      </Section>
+      <Masthead>
+        <PageHero
+          tone={status}
+          eyebrow="Linkx Vigilance"
+          title={describeFeed(checkpoint.feed_name, isCdr)}
+          titleHint={isCdr ? 'Data stream' : 'Feed name'}
+          media={(
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" />
+            </svg>
+          )}
+          meta={(
+            <>
+              <span>{isCdr ? 'CDR ingestion progress tracker' : 'Progress tracker'}</span>
+              <i aria-hidden="true">·</i>
+              <span>{isCdr ? 'Last window end time' : 'Last window end'}</span>
+              <strong>{checkpoint.last_window_end || 'N/A'}</strong>
+            </>
+          )}
+        >
+          <span className={`settings_pill is-${status}${status === 'active' ? ' is-live' : ''}`}><i aria-hidden="true" />{status}</span>
+          {canManage ? (
+            <label className="settings_switch" title={checkpoint.is_paused ? 'Resume engine' : 'Pause engine'}>
+              <span>{togglingPause ? 'Updating…' : checkpoint.is_paused ? 'Engine off' : 'Engine on'}</span>
+              <input type="checkbox" role="switch" checked={!checkpoint.is_paused} disabled={togglingPause} onChange={() => togglePause(!checkpoint.is_paused)} />
+            </label>
+          ) : null}
+        </PageHero>
+        <Stats label="Engine figures" columns={4}>
+          <Stat lead icon="layers" label={isCdr ? 'Total digested calls & sessions' : 'Total digested counter'} value={Number(checkpoint.total_graph_analyzed || 0).toLocaleString()} note={unit} />
+          <Stat icon="check" tone="success" label="Succeeded" value={succeeded.toLocaleString()} note={`of ${finished.length.toLocaleString()} finished runs`} />
+          <Stat icon="cross" tone={failed ? 'danger' : ''} label="Failed" value={failed.toLocaleString()} note={failed ? 'open a run for its error' : 'none in the log'} />
+          <Stat icon="clock" label="Average duration" value={averageMs == null ? '–' : averageMs.toLocaleString()} note="ms per run" />
+        </Stats>
+      </Masthead>
 
-      <Section title={isCdr ? 'CDR stream audit log' : 'Audit log'} description="Click a run to open its findings. Refreshes every 10 seconds.">
+      <section className="settings_block" aria-label={isCdr ? 'CDR stream audit log' : 'Audit log'}>
+        <header className="settings_block_header vigilance_log_header">
+          <div className="vigilance_log_heading">
+            <h4>{isCdr ? 'CDR stream audit log' : 'Audit log'}</h4>
+            <span className="vigilance_log_count">{runs.length.toLocaleString()} {runs.length === 1 ? 'run' : 'runs'}</span>
+            <span className="vigilance_log_live" title="Refreshes every 10 seconds."><i aria-hidden="true" />Live · 10s</span>
+          </div>
+          {canManage ? (
+            <button type="button" className="vigilance_action is-danger vigilance_log_rewind" onClick={() => setRewindOpen(true)}>
+              <ActionIcon d="M1 4v6h6M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+              {isCdr ? 'Re-analyze CDR history' : 'Re-analyze history'}
+            </button>
+          ) : null}
+          <p className="vigilance_log_note">Click a run to open its findings. Refreshes every 10 seconds.</p>
+          <div className="vigilance_log_actions">
+            <button type="button" className="vigilance_action" disabled={exporting} onClick={exportSummary}>
+              <ActionIcon d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
+              {exporting ? 'Preparing…' : 'Download summary'}
+            </button>
+            <button type="button" className="vigilance_action is-primary" onClick={() => onOpenFindings({ tab: 'xvigilance' })}>
+              Show findings
+              <ActionIcon d="M5 12h14M12 5l7 7-7 7" />
+            </button>
+          </div>
+        </header>
         <div className="config_window_table_wrap is-scroll vigilance_runs">
           <table className="config_window_table">
             <thead>
-              <tr><th>Run ID</th><th>Window</th><th>Duration (ms)</th><th>{isCdr ? 'Calls (CDRs)' : 'Records'}</th><th>Status</th><th aria-label="Actions" /></tr>
+              <tr>
+                <th>Run ID</th>
+                <th>Window</th>
+                <th className="is-number">Duration (ms)</th>
+                <th className="is-number">{isCdr ? 'Calls (CDRs)' : 'Records'}</th>
+                <th>Status</th>
+                <th aria-label="Actions" />
+              </tr>
             </thead>
             <tbody>
               {runs.length === 0 ? (
                 <tr><td colSpan={6} className="config_window_table_empty">No runs found.</td></tr>
               ) : runs.map((run) => {
                 const ok = isSuccessStatus(run.status);
+                const running = isRunning(run);
+                const tone = running ? 'running' : ok ? 'succeeded' : 'failed';
                 return (
                   <tr
                     key={run.run_id}
-                    className={`vigilance_run${ok ? '' : ' is-failed'}${checkingRunId === run.run_id ? ' is-checking' : ''}`}
+                    className={`vigilance_run is-${tone}${checkingRunId === run.run_id ? ' is-checking' : ''}`}
                     onClick={() => openRunFindings(run)}
                     onKeyDown={(event) => {
                       if (event.key === 'Enter' || event.key === ' ') {
@@ -291,15 +342,20 @@ export default function VigilancePanel({ apiFetch, canManage, isCdr, notify, onO
                     aria-label={`Open findings for run ${run.run_id}`}
                     title="View findings for this run"
                   >
-                    <td>{run.run_id}</td>
-                    <td>{run.window_start} – {run.window_end}</td>
-                    <td>{run.duration_ms}</td>
-                    <td>{run.records_count}</td>
-                    <td><span className={`config_window_status is-${ok ? 'succeeded' : 'failed'}`}>{run.status}</span></td>
-                    <td className="config_window_table_actions">
+                    <td className="vigilance_run_id">{run.run_id}</td>
+                    <td className="vigilance_run_window">
+                      <span>{run.window_start}</span>
+                      <i aria-hidden="true">→</i>
+                      <span>{run.window_end}</span>
+                    </td>
+                    <td className="is-number">{formatCount(run.duration_ms)}</td>
+                    <td className="is-number">{formatCount(run.records_count)}</td>
+                    <td><span className={`vigilance_run_status is-${tone}`}><i aria-hidden="true" />{run.status}</span></td>
+                    <td className="config_window_table_actions vigilance_run_actions">
                       {!ok && run.error_message ? (
-                        <button type="button" className="settings_button is-danger" onClick={(event) => { event.stopPropagation(); setErrorTrace(run.error_message); }}>View error</button>
+                        <button type="button" className="settings_link_button vigilance_run_error" onClick={(event) => { event.stopPropagation(); setErrorTrace(run.error_message); }}>View error</button>
                       ) : null}
+                      <span className="vigilance_run_chevron" aria-hidden="true">›</span>
                     </td>
                   </tr>
                 );
@@ -307,7 +363,7 @@ export default function VigilancePanel({ apiFetch, canManage, isCdr, notify, onO
             </tbody>
           </table>
         </div>
-      </Section>
+      </section>
 
       {rewindOpen ? (
         <Modal
@@ -336,6 +392,6 @@ export default function VigilancePanel({ apiFetch, canManage, isCdr, notify, onO
           <pre className="vigilance_error_trace">{errorTrace}</pre>
         </Modal>
       ) : null}
-    </>
+    </div>
   );
 }

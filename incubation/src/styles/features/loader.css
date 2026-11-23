@@ -63,6 +63,21 @@
 	animation: linkx-loader-slide var(--loader-cycle) ease-in-out infinite;
 }
 
+/* Inside a page, a list or a popup (rather than filling a window body):
+   it takes a block of its own while that part is being fetched. */
+.linkx_window_loader.is-block {
+	flex: 1 1 auto;
+	height: auto;
+	min-height: 150px;
+}
+
+/* On the Graph window's canvas: centred in the state layer. */
+.graph_window_state.is-loading .linkx_window_loader {
+	height: auto;
+	min-height: 0;
+	max-width: none;
+}
+
 /* Covers the window body during long-running actions. Fades in after a short
    delay so quick requests don't flash it. */
 .linkx_window_loader.is-overlay {

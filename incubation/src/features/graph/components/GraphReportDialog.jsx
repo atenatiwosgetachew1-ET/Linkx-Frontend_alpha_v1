@@ -1,6 +1,8 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
 
-import { DEFAULT_MARKING, REPORT_LIMITS, reportKindOf } from '../report/graphReportModel.js';
+import {
+  DEFAULT_MARKING, DEFAULT_REPORT_RANGE, REPORT_LIMITS, REPORT_RANGE_FIELDS, REPORT_RANGE_PRESETS, reportKindOf, reportRangeOf,
+} from '../report/graphReportModel.js';
 import { defaultReportTemplate } from '../report/reportTemplates.js';
 import { ORDER_BY_DEGREE, SNAPSHOT_LAYOUTS, SNAPSHOT_MAX_NODES } from '../lib/offscreenSnapshot.js';
 
@@ -16,7 +18,7 @@ import { ORDER_BY_DEGREE, SNAPSHOT_LAYOUTS, SNAPSHOT_MAX_NODES } from '../lib/of
 // right, where Customize shows its preview.
 //
 // initial: { title, caseId, reference, dateTime, analyst, systemRule, graphAlert, purpose,
-//   nameKey, findings, assessment, actions, marking, includeLists };
+//   nameKey, findings, assessment, actions, marking };
 // nameKeys: node properties to identify entities by ('' = label);
 // draftFor(nameKey) -> the findings draft naming entities that way (it
 // follows the choice until the analyst edits it); onGenerate(values) ->
@@ -26,10 +28,30 @@ import { ORDER_BY_DEGREE, SNAPSHOT_LAYOUTS, SNAPSHOT_MAX_NODES } from '../lib/of
 // whose graph is drawn without a window; analyst decision 2026-11-18); the
 // choice comes back as values.snapshot.
 // kind: 'graph' | 'evidence' names the report (REPORT_KINDS).
-export default function GraphReportDialog({ initial, nameKeys = [], draftFor, onGenerate, onCancel, snapshotDefaults = null, kind = 'graph' }) {
+// companions: { charts, tables } the titles of this graph's linked Chart
+// and Table windows. The report takes all of them; with none, the
+// automatic charts and the default tables (analyst decision 2026-11-19).
+// A Graph report only: the evidence report always takes the automatic
+// charts and the default tables (it is the original record).
+// rangeCounts: { subjects, profiles, strongest } how many the report has
+// in all (the Range shows "of m"), or null. The Range comes back as
+// values.range ({ preset, subjects, profiles, strongest, rows }; null: all).
+export default function GraphReportDialog({ initial, nameKeys = [], draftFor, onGenerate, onCancel, snapshotDefaults = null, kind = 'graph', companions = { charts: [], tables: [] }, rangeCounts = null }) {
   const template = defaultReportTemplate();
   const reportKind = reportKindOf(kind);
-  const [values, setValues] = useState(() => (snapshotDefaults ? { ...initial, snapshot: { ...snapshotDefaults } } : initial));
+  const linkedCharts = kind === 'graph' ? companions?.charts || [] : [];
+  const linkedTables = kind === 'graph' ? companions?.tables || [] : [];
+  const [values, setValues] = useState(() => {
+    // Range: the Brief preset to start with (analyst decision 2026-11-19).
+    const start = { ...initial, range: initial.range || reportRangeOf(DEFAULT_REPORT_RANGE) };
+    return snapshotDefaults ? { ...start, snapshot: { ...snapshotDefaults } } : start;
+  });
+  // A preset fills the four limits; changing one makes the range Custom.
+  const pickPreset = (preset) => setValues((current) => ({ ...current, range: preset === 'custom' ? { ...current.range, preset } : reportRangeOf(preset) }));
+  const setLimit = (id, text) => setValues((current) => {
+    const n = Math.floor(Number(text));
+    return { ...current, range: { ...current.range, preset: 'custom', [id]: text === '' || !Number.isFinite(n) || n < 1 ? null : n } };
+  });
   const setSnapshot = (name, value) => setValues((current) => ({ ...current, snapshot: { ...current.snapshot, [name]: value } }));
   const draftRef = useRef(initial.findings);
   const pickNameKey = (nameKey) => setValues((current) => {
@@ -239,10 +261,64 @@ export default function GraphReportDialog({ initial, nameKeys = [], draftFor, on
                 {area('assessment', 'Assessment', 'What the evidence means. Left empty, the report marks it "To be completed by the analyst".', 4)}
                 {area('actions', 'Follow-up actions', 'One per line: action | owner | status (owner and status optional).', 3)}
                 {field('marking', 'Distribution marking', { max: 120, placeholder: DEFAULT_MARKING })}
-                <label className="graph_report_check">
-                  <input type="checkbox" checked={values.includeLists} onChange={(event) => set('includeLists', event.target.checked)} />
-                  <span>Add the entity and link lists (Appendix B)</span>
-                </label>
+              </>
+            ))}
+            {section('Charts and tables', (
+              <dl className="graph_report_sources">
+                <dt>Measures (charts)</dt>
+                <dd>
+                  {linkedCharts.length
+                    ? `The charts of ${linkedCharts.join(', ')}, with their colours and scope.`
+                    : `The automatic set: global figures, degree, betweenness, flow, distributions, communities and the heat matrix${kind === 'graph' ? ' (no Chart window is linked to this graph)' : ''}.`}
+                </dd>
+                <dt>Tables (Appendix B on)</dt>
+                <dd>
+                  {linkedTables.length
+                    ? `The tables of ${linkedTables.join(', ')}: their rows, filter, columns and sort.`
+                    : `The default tables: every entity and every relationship, flagged ones first${kind === 'graph' ? ' (no Table window is linked to this graph)' : ''}.`}
+                </dd>
+              </dl>
+            ))}
+            {section('Range', (
+              <>
+                <div className="graph_report_row">
+                  <label className="graph_customize_field">
+                    <span className="graph_customize_field_label">Preset</span>
+                    <select className="graph_customize_input" value={values.range.preset} aria-describedby={hintId('rangePreset')} onChange={(event) => pickPreset(event.target.value)}>
+                      {Object.entries(REPORT_RANGE_PRESETS).map(([id, preset]) => <option key={id} value={id}>{preset.label}</option>)}
+                      <option value="custom">Custom</option>
+                    </select>
+                  </label>
+                  {hint('rangePreset', values.range.preset === 'custom'
+                    ? 'Your own limits (change the preset to start again from it).'
+                    : `${REPORT_RANGE_PRESETS[values.range.preset]?.hint || ''}. Change a limit below to make it your own.`)}
+                </div>
+                {REPORT_RANGE_FIELDS.map(({ id, label }) => {
+                  const all = rangeCounts?.[id];
+                  return (
+                    <div className="graph_report_row" key={id}>
+                      <label className="graph_customize_field">
+                        <span className="graph_customize_field_label">{label}</span>
+                        <input
+                          className="graph_customize_input graph_report_limit"
+                          type="number"
+                          min={1}
+                          step={1}
+                          inputMode="numeric"
+                          placeholder="All"
+                          value={values.range[id] ?? ''}
+                          aria-describedby={hintId(`range-${id}`)}
+                          onChange={(event) => setLimit(id, event.target.value)}
+                        />
+                      </label>
+                      {hint(`range-${id}`, id === 'rows'
+                        ? (values.range.rows == null ? 'Every row of each table (at most 2,000).' : `Up to ${values.range.rows.toLocaleString('en-GB')} rows in each table, in its order.`)
+                        : all == null
+                          ? (values.range[id] == null ? 'All.' : `Up to ${values.range[id].toLocaleString('en-GB')}.`)
+                          : `${Math.min(values.range[id] ?? all, all).toLocaleString('en-GB')} of ${all.toLocaleString('en-GB')}.`)}
+                    </div>
+                  );
+                })}
               </>
             ))}
           </div>
@@ -256,8 +332,18 @@ export default function GraphReportDialog({ initial, nameKeys = [], draftFor, on
               {kind === 'evidence' ? 'Evidence Report: the evidence as the Service analysed it.' : 'Graph Report: this window\u2019s graph, with any analyst changes.'}
             </figcaption>
             <ul className="graph_report_contents" aria-label="Sections in the report">
-              {template.sections.filter((name) => !/Appendix B/.test(name) || values.includeLists).map((name) => <li key={name}>{name}</li>)}
+              {template.sections.map((name) => <li key={name}>{name}</li>)}
             </ul>
+            {/* The range at a glance: how much of each part the report takes. */}
+            <p className="graph_customize_caption graph_report_range_summary" aria-label="Report range">
+              {(REPORT_RANGE_PRESETS[values.range.preset]?.label || 'Custom')}:{' '}
+              {REPORT_RANGE_FIELDS.map(({ id, label }) => {
+                const all = rangeCounts?.[id];
+                const limit = values.range[id];
+                const text = all != null ? `${Math.min(limit ?? all, all).toLocaleString('en-GB')} of ${all.toLocaleString('en-GB')}` : limit == null ? 'all' : `up to ${limit.toLocaleString('en-GB')}`;
+                return `${label} ${text}`;
+              }).join(' · ')}
+            </p>
           </figure>
         </div>
         <footer className="graph_customize_footer">

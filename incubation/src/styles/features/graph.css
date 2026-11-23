@@ -864,7 +864,7 @@
 	display: grid;
 	place-items: center;
 	padding: 12px;
-	background: color-mix(in srgb, var(--graph-canvas-bg) 45%, transparent);
+	background: var(--linkx-popup-backdrop, color-mix(in srgb, var(--graph-canvas-bg) 45%, transparent));
 }
 
 .graph_dialog {
@@ -1078,6 +1078,18 @@
 	border: 1px solid var(--graph-border);
 	border-radius: 4px;
 	scrollbar-width: thin;
+}
+
+/* A set's name over its icons, when several sets are offered
+   (Libraries ▸ Icon sets). */
+.graph_adjust_album_title {
+	grid-column: 1 / -1;
+	padding: 4px 2px 1px;
+	color: var(--graph-muted-text);
+	font-size: 10px;
+	font-weight: 700;
+	letter-spacing: 0.05em;
+	text-transform: uppercase;
 }
 
 .graph_adjust_album_icon {
@@ -1326,22 +1338,16 @@
 }
 
 .graph_timeline_header {
-	display: flex;
-	flex-wrap: nowrap;
-	align-items: flex-start;
-	gap: 8px;
+	/* Start | player | end: the two sides share the room left equally, so
+	   the player sits in the middle of the bar (analyst decision 2026-11-19). */
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+	grid-template-areas: 'start player end';
+	align-items: center;
+	gap: 6px 10px;
 }
 
-.graph_timeline_header > strong,
-.graph_timeline_reset,
-.graph_timeline_fold {
-	flex: none;
-	min-height: 22px;
-	white-space: nowrap;
-}
-
-.graph_timeline_controls {
-	flex: 1 1 auto;
+.graph_timeline_side {
 	/* As tall as the title, so a lone line (no dates) sits level with it. */
 	min-height: 22px;
 	min-width: 0;
@@ -1351,9 +1357,54 @@
 	gap: 6px 8px;
 }
 
-.graph_timeline_controls select {
+.graph_timeline_side.is-start {
+	grid-area: start;
+}
+
+.graph_timeline_side.is-end {
+	grid-area: end;
+	justify-content: flex-end;
+}
+
+.graph_timeline_header .graph_timeline_media {
+	grid-area: player;
+	justify-self: center;
+}
+
+.graph_timeline_header strong,
+.graph_timeline_reset,
+.graph_timeline_fold {
+	flex: none;
+	min-height: 22px;
+	white-space: nowrap;
+}
+
+.graph_timeline_side select {
 	min-width: 0;
 	flex: 0 1 auto;
+}
+
+/* Speed: its label to the left of the choice. */
+.graph_timeline_speed {
+	flex: none;
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	white-space: nowrap;
+	color: var(--graph-muted-text);
+}
+
+/* Too narrow for the three on one line: the player on its own line below,
+   centred across the bar. */
+@container (max-width: 760px) {
+	.graph_timeline_header {
+		grid-template-columns: minmax(0, 1fr) auto;
+		grid-template-areas: 'start end' 'player player';
+	}
+
+	.graph_timeline_header .graph_timeline_media {
+		margin: 6px 0 2px;
+	}
 }
 
 /* Narrow strips: the title keeps only its icon. */
@@ -1420,46 +1471,55 @@
 }
 
 .graph_timeline_media {
-	/* Takes the room left in the header row. */
-	flex: 1 1 150px;
+	/* The player: a compact, plain deck (no tint), the round Play button in
+	   its middle, centred, larger than the deck (analyst decision 2026-11-19). */
+	flex: none;
 	display: flex;
 	align-items: center;
 	gap: 3px;
-	min-width: 120px;
+	height: 24px;
+	padding: 0 6px;
+	border: 1px solid var(--graph-border);
+	border-radius: 12px;
+	background: var(--graph-toolbar-bg);
 }
 
 .graph_timeline_media_button {
 	display: grid;
 	place-items: center;
-	flex: 1 1 0;
-	min-width: 32px;
-	height: 22px;
+	flex: none;
+	width: 52px;
+	height: 18px;
 	padding: 0;
-	border: 1px solid var(--graph-border);
-	border-radius: 4px;
-	background: var(--graph-toolbar-bg);
+	border: 0;
+	border-radius: 9px;
+	background: transparent;
 	color: var(--graph-text);
 	cursor: pointer;
-}
-
-.graph_timeline_media_button.is-play {
-	flex-grow: 1.6;
-	border-color: var(--graph-accent);
-	color: var(--graph-accent);
+	transition: background-color 0.12s ease, color 0.12s ease, transform 0.12s ease;
 }
 
 .graph_timeline_media_button:hover:not(:disabled) {
-	background: color-mix(in srgb, var(--graph-accent) 12%, var(--graph-toolbar-bg));
+	background: color-mix(in srgb, var(--graph-text) 10%, transparent);
+}
+
+.graph_timeline_media_button:active:not(:disabled) {
+	transform: scale(0.94);
+}
+
+.graph_timeline_media_button:focus-visible {
+	outline: 2px solid var(--graph-accent);
+	outline-offset: 1px;
 }
 
 .graph_timeline_media_button:disabled {
-	opacity: 0.4;
+	opacity: 0.35;
 	cursor: default;
 }
 
 .graph_timeline_media_button svg {
-	width: 13px;
-	height: 13px;
+	width: 12px;
+	height: 12px;
 	fill: currentColor;
 }
 
@@ -1468,6 +1528,60 @@
 	stroke: currentColor;
 	stroke-width: 2.4;
 	stroke-linecap: round;
+}
+
+/* Play: a circle, larger than the deck, centred on it (it rises past the
+   deck's top and bottom alike). */
+.graph_timeline_media_button.is-play {
+	position: relative;
+	z-index: 2;
+	flex: 0 0 36px;
+	box-sizing: border-box;
+	width: 36px;
+	height: 36px;
+	min-width: 36px;
+	aspect-ratio: 1;
+	margin: 0 5px;
+	border: 2px solid var(--graph-toolbar-bg);
+	border-radius: 50%;
+	background: var(--graph-accent);
+	color: #fff;
+	box-shadow: 0 2px 6px color-mix(in srgb, var(--graph-accent) 40%, transparent), 0 0 0 1px var(--graph-border);
+}
+
+.graph_timeline_media_button.is-play svg {
+	width: 16px;
+	height: 16px;
+}
+
+.graph_timeline_media_button.is-play:hover:not(:disabled) {
+	background: color-mix(in srgb, var(--graph-accent) 86%, #000);
+	color: #fff;
+}
+
+.graph_timeline_media_button.is-play[aria-pressed='true'] {
+	background: color-mix(in srgb, var(--graph-accent) 80%, #000);
+}
+
+.graph_timeline_media_button.is-play:disabled {
+	opacity: 0.5;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.graph_timeline_media_button {
+		transition: none;
+	}
+}
+
+/* Narrow strips, where the controls wrap: a smaller Play (it would cover
+   the lines above and below). */
+@container (max-width: 560px) {
+	.graph_timeline_media_button.is-play {
+		flex-basis: 30px;
+		width: 30px;
+		height: 30px;
+		min-width: 30px;
+	}
 }
 
 .graph_timeline_fold {
@@ -3166,7 +3280,7 @@
 	place-items: center;
 	padding: 12px;
 	container-type: inline-size;
-	background: color-mix(in srgb, var(--graph-canvas-bg) 45%, transparent);
+	background: var(--linkx-popup-backdrop, color-mix(in srgb, var(--graph-canvas-bg) 45%, transparent));
 	animation: graph_customize_fade 0.14s ease-out;
 }
 
@@ -3174,6 +3288,9 @@
 	display: flex;
 	flex-direction: column;
 	width: min(540px, 100%);
+	/* Never a sliver, however little the popup holds (but no taller than
+	   the room it has). */
+	min-height: min(280px, 100%);
 	max-height: 100%;
 	overflow: hidden;
 	/* As the on-graph cards (Graph Alerts, Pinned Evidence, Merged &
@@ -3219,8 +3336,8 @@
 	display: flex;
 	align-items: center;
 	gap: 10px;
-	min-height: 40px;
-	padding: 0 12px 0 16px;
+	min-height: 52px;
+	padding: 0 20px 0 24px;
 	box-sizing: border-box;
 }
 
@@ -3299,8 +3416,8 @@
 .graph_customize_body {
 	display: grid;
 	grid-template-columns: minmax(0, 1fr) 200px;
-	gap: 16px;
-	padding: 6px 16px 12px;
+	gap: 20px;
+	padding: 14px 24px 20px;
 	min-height: 0;
 	overflow: hidden;
 }
@@ -3689,8 +3806,11 @@ textarea.graph_customize_input {
 	display: flex;
 	align-items: center;
 	gap: 6px;
-	padding: 10px 12px 10px 16px;
-	border-top: 1px solid color-mix(in srgb, var(--customize-accent) 14%, var(--graph-border));
+	/* Stays at the bottom when the popup is taller than its content. */
+	margin-top: auto;
+	padding: 14px 20px 14px 24px;
+	/* A faint line above the footer. */
+	border-top: 1px solid color-mix(in srgb, var(--graph-border) 45%, transparent);
 }
 
 .graph_customize_footer .graph_customize_hint {
@@ -3701,7 +3821,7 @@ textarea.graph_customize_input {
 	height: 24px;
 	padding: 0 10px;
 	border: 0;
-	border-radius: 4px;
+	border-radius: 3px;
 	background: transparent;
 	color: var(--graph-text);
 	font-size: 11px;
@@ -3794,6 +3914,34 @@ textarea.graph_customize_input {
 .graph_report_hint {
 	padding-left: 158px;
 	line-height: 1.3;
+}
+
+/* Range: the limits are short numbers. */
+.graph_report_limit {
+	max-width: 110px;
+}
+
+.graph_report_range_summary {
+	margin: 8px 0 0;
+}
+
+/* Charts and tables: what the report will take (no choice to make). */
+.graph_report_sources {
+	display: grid;
+	grid-template-columns: 150px minmax(0, 1fr);
+	gap: 6px 8px;
+	margin: 0;
+	font-size: 12px;
+	line-height: 1.35;
+}
+
+.graph_report_sources dt {
+	color: var(--muted-text, inherit);
+	opacity: 0.8;
+}
+
+.graph_report_sources dd {
+	margin: 0;
 }
 
 .graph_report_area {
@@ -4259,11 +4407,11 @@ textarea.graph_customize_input {
 	letter-spacing: 0.04em;
 }
 
-/* Footer: Apply as a solid pill with a soft accent glow. */
+/* Footer: Apply solid, with a soft accent glow. */
 .graph_customize_button {
 	height: 26px;
 	padding: 0 12px;
-	border-radius: 999px;
+	border-radius: 3px;
 	transition: background 0.15s, box-shadow 0.15s, transform 0.1s;
 }
 

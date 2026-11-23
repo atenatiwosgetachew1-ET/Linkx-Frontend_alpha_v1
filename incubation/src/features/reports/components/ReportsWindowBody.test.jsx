@@ -24,6 +24,13 @@ vi.mock('../../graph/report/graphReportPdf.js', async (importOriginal) => {
     renderGraphReportPdf: vi.fn((...args) => original.renderGraphReportPdf(...args)),
   };
 });
+const reportCharts = vi.hoisted(() => ({ calls: [] }));
+vi.mock('../../chart/lib/chartReport.js', () => ({
+  reportChartCells: vi.fn(async (options) => {
+    reportCharts.calls.push(options);
+    return { cells: [{ title: 'Degree Centrality', level: 'Node', image: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==' }], skipped: [] };
+  }),
+}));
 vi.mock('../../graph/lib/offscreenSnapshot.js', async (importOriginal) => ({ ...(await importOriginal()), renderOffscreenSnapshot: vi.fn(async () => null) }));
 const { renderGraphReportPdf } = await import('../../graph/report/graphReportPdf.js');
 const { renderOffscreenSnapshot } = await import('../../graph/lib/offscreenSnapshot.js');
@@ -254,6 +261,12 @@ describe('ReportsWindowBody', () => {
     expect(blobs[0].type).toBe('application/pdf');
     expect(clicked).toHaveBeenCalled();
     expect(workspaceRef.windows.filter((item) => item.type === WORKSPACE_WINDOW_TYPES.GRAPH)).toHaveLength(0);
+    // Measures: the automatic set over the whole evidence graph (never an analyst's windows).
+    expect(reportCharts.calls.at(-1)).toMatchObject({ scope: 'all', nameKey: 'id' });
+    expect(reportCharts.calls.at(-1).cards).toBeUndefined();
+    expect(report.sections.find((section) => section.id === 'measures').blocks[0].text).toMatch(/^An automatic set of measures over the evidence graph/);
+    // And the default tables over the whole evidence graph.
+    expect(report.sections.filter((section) => section.id.startsWith('table-')).map((section) => section.title)).toEqual(['Table: Entities', 'Table: Relationships']);
     clicked.mockRestore();
   });
 
@@ -314,5 +327,29 @@ describe('ReportsWindowBody', () => {
     });
     expect(await screen.findByText('Fan-out')).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'System reports' })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('STR alerts (mock on): the Alert reports tab lists the alerts, mine or all, opens one from a notice, with its procedure', async () => {
+    const { setAlertsMode, upsertAlert, resetAlerts } = await import('../../alerts/lib/alertStore.js');
+    setAlertsMode('mock', { userId: 'u1' });
+    const raw = (id, ref, fields = {}) => ({
+      id, alert_id: id, external_reference_id: ref, title: `Alert ${ref}`, report_type: 'STR', source_system: 'Parent service (mock)', mock: true,
+      payload: { subject: `Alert ${ref}` }, intake_status: 'complete', response_status: 'awaiting_analysis', assignee_user_id: 'u1', assignee_username: 'Me', created_at: '2026-11-19T08:00:00Z', ...fields,
+    });
+    act(() => {
+      upsertAlert(raw('m1', 'STR-1'));
+      upsertAlert(raw('m2', 'STR-2', { assignee_user_id: 'u2', assignee_username: 'A. Bekele', response_status: 'acknowledged' }));
+    });
+    const { apiFetch } = renderReports({ metadata: { reportsTab: 'parent', reportsSelect: 'm1', openSeq: 5 } });
+    // Mine by default; the alert from the notice is open with its procedure.
+    expect(await screen.findByRole('combobox', { name: 'Assigned' })).toHaveValue('mine');
+    expect(screen.getAllByRole('row').filter((row) => row.classList.contains('reports_row'))).toHaveLength(1);
+    expect(screen.getAllByRole('row').find((row) => row.classList.contains('reports_row'))).toHaveTextContent('Awaiting analysis');
+    expect(screen.getByLabelText('STR alert procedure')).toBeInTheDocument();
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Assigned' }), 'all');
+    expect(screen.getAllByRole('row').filter((row) => row.classList.contains('reports_row'))).toHaveLength(2);
+    // The Service's Alert reports list is not asked for while the mock runs.
+    expect(apiFetch.mock.calls.some(([url]) => String(url).startsWith('/api/v1/reports/parent'))).toBe(false);
+    resetAlerts();
   });
 });

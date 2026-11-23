@@ -158,10 +158,24 @@ export const arrangeColumns = (columns, { order = [], hidden = [] } = {}) => {
   return [...placed, ...rest].map((key) => ({ ...byKey.get(key), hidden: hiddenSet.has(key) }));
 };
 
-// Window metadata -> settings, normalized.
-export const normalizeTableState = (input = {}) => {
-  const tab = TABLE_TABS.includes(input?.tab) ? input.tab : 'nodes';
-  const scope = TABLE_SCOPES.some((entry) => entry.id === input?.scope) ? input.scope : 'drawn';
+// What a Table window starts from when nothing says otherwise (Libraries ▸
+// Table defaults replaces it; lib/tableDefaults.js): `hidden` and `sort`
+// per tab, over the built-in columns.
+export const BUILTIN_TABLE_START = Object.freeze({
+  tab: 'nodes',
+  scope: 'drawn',
+  follow: true,
+  hidden: Object.freeze({ nodes: Object.freeze([]), links: Object.freeze([]) }),
+  sort: Object.freeze({ nodes: null, links: null }),
+});
+
+// Window metadata -> settings, normalized. defaults: what a window without
+// a state of its own starts from.
+export const normalizeTableState = (input = {}, defaults = BUILTIN_TABLE_START) => {
+  // Nothing saved yet: a new window.
+  const blank = !input || Object.keys(input).length === 0;
+  const tab = TABLE_TABS.includes(input?.tab) ? input.tab : defaults.tab;
+  const scope = TABLE_SCOPES.some((entry) => entry.id === input?.scope) ? input.scope : defaults.scope;
   const columnsOf = (value) => ({
     order: Array.isArray(value?.order) ? value.order.map(String).slice(0, 400) : [],
     hidden: Array.isArray(value?.hidden) ? value.hidden.map(String).slice(0, 400) : [],
@@ -170,8 +184,15 @@ export const normalizeTableState = (input = {}) => {
   return {
     tab,
     scope,
-    follow: input?.follow !== false,
-    columns: { nodes: columnsOf(input?.columns?.nodes), links: columnsOf(input?.columns?.links) },
-    sort: { nodes: sortOf(input?.sort?.nodes), links: sortOf(input?.sort?.links) },
+    follow: blank ? defaults.follow !== false : input?.follow !== false,
+    columns: blank
+      ? { nodes: columnsOf({ hidden: defaults.hidden?.nodes }), links: columnsOf({ hidden: defaults.hidden?.links }) }
+      : { nodes: columnsOf(input?.columns?.nodes), links: columnsOf(input?.columns?.links) },
+    sort: blank
+      ? { nodes: sortOf(defaults.sort?.nodes), links: sortOf(defaults.sort?.links) }
+      : { nodes: sortOf(input?.sort?.nodes), links: sortOf(input?.sort?.links) },
+    // The typed filter, kept with the window (the graph report takes the
+    // rows as seen; analyst decision 2026-11-19).
+    filter: typeof input?.filter === 'string' ? input.filter.slice(0, 200) : '',
   };
 };

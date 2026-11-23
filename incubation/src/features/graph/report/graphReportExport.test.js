@@ -23,11 +23,10 @@ describe('evidenceReportContext', () => {
       title: 'Evidence Report · EV-1',
       purpose: 'Link analysis of 4 entities and 3 relationships.',
       graphAlert: 'Not applied (generated from Reports)',
-      includeLists: false,
     });
     expect(initial.systemRule.split(', ')[0]).toBe('SMURFING');
-    expect(initial.findings).toMatch(/A is the most connected entity/);
-    expect(context.draft('full_name')).toMatch(/Abebe is the most connected entity/);
+    expect(initial.findings).toMatch(/^2 entities share the most connections, 2 others each: A, C\./); // a tie is said as one
+    expect(context.draft('full_name')).toMatch(/^2 entities share the most connections, 2 others each: Abebe, C\./);
     expect(context.nameKeys).toContain('full_name');
     expect(context.domain).toBe('ALL (BANK 3 · CDR 1)');
     const input = context.input('');

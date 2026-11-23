@@ -178,7 +178,7 @@ export const figuresCell = ({ title, level = '', items = [], theme = {}, size = 
   return cell.canvas.toDataURL('image/png');
 };
 
-// The snap's frame (the NBE LinkX Chart Snap template, Libraries ▸ Charts;
+// The snap's frame (the NBE LinkX Chart Snap template, Libraries ▸ Report templates;
 // analyst decision 2026-11-18), in three parts: a navy header (the NBE logo
 // left; "LINK ANALYSIS · CHART SNAP", the source and the details right), a
 // white body holding the cells (two across an A4 page, more pages as

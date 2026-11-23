@@ -1,4 +1,5 @@
-import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import WindowLoadScreen from '../../../shared/components/WindowLoadScreen.jsx';
 
 import { useNotifications } from '../../../shared/notifications/useNotifications.js';
 import { useSession } from '../../../shared/session/useSession.js';
@@ -10,14 +11,16 @@ import { formatDomainPillarLabel, getActiveDomainKey } from '../../configuration
 import GraphReportDialog from '../../graph/components/GraphReportDialog.jsx';
 import { getProfileSettings, resolveProfileSettings } from '../../graph/lib/nodeProfile.js';
 import { renderOffscreenSnapshot } from '../../graph/lib/offscreenSnapshot.js';
+import { evidenceReportExtras } from '../../graph/report/reportExtras.js';
 import { downloadGraphReport, evidenceReportContext } from '../../graph/report/graphReportExport.js';
-import { entityName } from '../../graph/report/graphReportModel.js';
+import { entityName, reportRangeCounts } from '../../graph/report/graphReportModel.js';
 import { cacheEvidenceGraph, getCachedEvidenceGraph } from '../lib/evidenceGraphs.js';
 import { cacheReportsPage, getCachedReportsPage } from '../lib/reportsPageCache.js';
 import {
   DEFAULT_FILTERS,
   REPORTS_PAGE_SIZE,
   REPORT_TABS,
+  REQUESTER_FILTERS,
   SCORE_BANDS,
   SORT_OPTIONS,
   STATUS_FILTERS,
@@ -32,6 +35,12 @@ import {
   vigilanceRunView,
 } from '../lib/reportModel.js';
 import ReportDetail from './ReportDetail.jsx';
+import AlertWorkflow from '../../alerts/components/AlertWorkflow.jsx';
+import { getAlertsSnapshot, subscribeAlerts } from '../../alerts/lib/alertStore.js';
+import { isMockSwitchOn, mockSwitchAvailable, setMockSwitch, subscribeAlertMode } from '../../alerts/lib/alertMode.js';
+import { responseInfo } from '../../alerts/lib/alertModel.js';
+import { getAlertScope, reloadAlerts, simulateAlert } from '../../alerts/lib/alertRuntime.js';
+import { useCan } from '../../../auth/useCan.js';
 
 const ICONS = {
   reports: ['M9 17v-2M12 17v-4M15 17v-6', 'M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5.6a1 1 0 0 1 .7.3l5.4 5.4a1 1 0 0 1 .3.7V19a2 2 0 0 1-2 2Z'],
@@ -115,7 +124,21 @@ function SortMenu({ value, options, onChange }) {
 const openRequestFrom = (metadata = {}) => {
   const tab = REPORT_TABS.some((item) => item.id === metadata.reportsTab) ? metadata.reportsTab : null;
   const run = metadata.vigilanceRun ? vigilanceRunView(metadata.vigilanceRun) : null;
-  return { tab, run, seq: metadata.openSeq ?? 0 };
+  // reportsSelect: a record to show (e.g. an STR alert from its notice);
+  // reportsRequester: the evidence tab's requester filter (a saved run).
+  const requester = ['service', 'analyst'].includes(metadata.reportsRequester) ? metadata.reportsRequester : null;
+  return { tab, run, select: metadata.reportsSelect ?? null, requester, seq: metadata.openSeq ?? 0 };
+};
+
+// STR alerts (analysis-results-plan Phase 4) as Alert reports rows: the
+// report record, with the alert and its response status.
+const ALERT_TONE = { pending: 'pending', progress: 'pending', resolved: 'resolved', error: 'error' };
+// A report imported without an alert (no alert_id) is listed as it is.
+const alertRow = (alert) => {
+  const record = toReportRecord(alert.raw, 'parent');
+  if (!alert.isAlert) return { ...record, id: alert.id, alert: null };
+  const info = responseInfo(alert.response);
+  return { ...record, id: alert.id, status: info.label, statusTone: alert.response === 'feedback_sent' ? 'success' : ALERT_TONE[info.tone] || 'pending', alert };
 };
 
 // What a Graph window (and the report) knows of an evidence report.
@@ -157,10 +180,10 @@ export default function ReportsWindowBody({ windowItem }) {
     return {
       seq: request.seq,
       tabId: request.tab || 'parent',
-      filters: request.run ? { ...DEFAULT_FILTERS, from: request.run.from, to: request.run.to } : DEFAULT_FILTERS,
+      filters: { ...(request.run ? { ...DEFAULT_FILTERS, from: request.run.from, to: request.run.to } : DEFAULT_FILTERS), ...(request.requester ? { requester: request.requester } : {}) },
       highlightRunId: request.run?.runId ?? null,
       offset: 0,
-      selectedId: null,
+      selectedId: request.select,
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [tabId, setTabId] = useState(initial.tabId);
@@ -176,6 +199,7 @@ export default function ReportsWindowBody({ windowItem }) {
   const [probingTraceId, setProbingTraceId] = useState(null);
   const [openingTraceId, setOpeningTraceId] = useState(null);
   const [exporting, setExporting] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
   const loadRef = useRef(null);
   const openControllerRef = useRef(null);
   const tab = getReportTab(tabId);
@@ -186,10 +210,13 @@ export default function ReportsWindowBody({ windowItem }) {
     const request = openRequestFrom(windowItem?.metadata);
     if (request.seq === lastSeq.current) return;
     lastSeq.current = request.seq;
+    // A new request always reloads (a record saved since, e.g. a run saved
+    // as evidence, must be in the list to be selected).
+    setReloadKey((key) => key + 1);
     if (request.tab) setTabId(request.tab);
     setOffset(0);
-    setSelectedId(null);
-    setFilters(request.run ? { ...DEFAULT_FILTERS, from: request.run.from, to: request.run.to } : DEFAULT_FILTERS);
+    setSelectedId(request.select ?? null);
+    setFilters({ ...(request.run ? { ...DEFAULT_FILTERS, from: request.run.from, to: request.run.to } : DEFAULT_FILTERS), ...(request.requester ? { requester: request.requester } : {}) });
     setHighlightRunId(request.run?.runId ?? null);
   }, [windowItem?.metadata]);
 
@@ -210,7 +237,27 @@ export default function ReportsWindowBody({ windowItem }) {
 
   // Server-side load: tab, page, status, band and dates. Search filters the
   // loaded page instantly and is sent as `q` on the next load (production).
+  // STR alerts: with the alert service on, the Alert reports tab lists its
+  // alerts (the mock's, or the Service's once H-3 is delivered).
+  const alertsState = useSyncExternalStore(subscribeAlerts, getAlertsSnapshot);
+  // The alert service (the Service's, or the mock) lists the Alert reports.
+  const alertsActive = alertsState.mode !== 'off';
+  const isMockAlerts = alertsState.mode === 'mock';
+  const mockSwitch = useSyncExternalStore(subscribeAlertMode, isMockSwitchOn);
+  // "All alerts" needs alerts:read_all (H-3); the Service lists "mine" by default.
+  const canReadAllAlerts = useCan()('alerts:read_all');
+  const [alertScope, setAlertScope] = useState(() => (getAlertScope() === 'all' ? 'all' : 'mine')); // 'mine' | 'all'
+  const [alertScopeError, setAlertScopeError] = useState('');
+  const changeAlertScope = async (next) => {
+    setAlertScope(next);
+    setAlertScopeError('');
+    const result = await reloadAlerts(next === 'all' ? 'all' : 'me');
+    if (!result.ok && result.message) setAlertScopeError(result.message);
+  };
+  const alertTab = tabId === 'parent' && alertsActive;
+
   const load = useCallback(async () => {
+    if (tabId === 'parent' && getAlertsSnapshot().mode !== 'off') return;
     loadRef.current?.abort();
     const controller = new AbortController();
     loadRef.current = controller;
@@ -230,7 +277,7 @@ export default function ReportsWindowBody({ windowItem }) {
     } finally {
       if (loadRef.current === controller) setLoading(false);
     }
-  }, [apiFetch, windowId, tabId, offset, filters.status, filters.band, filters.from, filters.to]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [apiFetch, windowId, tabId, offset, filters.status, filters.band, filters.from, filters.to, filters.requester, alertsState.mode, reloadKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     load();
@@ -242,9 +289,13 @@ export default function ReportsWindowBody({ windowItem }) {
   }, []);
 
   const pageForTab = page?.tabId === tabId ? page : null;
-  const rawRecords = useMemo(() => pageForTab?.records || [], [pageForTab]);
-  const total = pageForTab?.total || 0;
-  const records = useMemo(() => rawRecords.map((raw) => toReportRecord(raw, tabId)), [rawRecords, tabId]);
+  const alertRows = useMemo(
+    () => (alertTab ? alertsState.alerts.filter((alert) => alertScope === 'all' || alert.mine).map(alertRow) : null),
+    [alertTab, alertsState.alerts, alertScope],
+  );
+  const rawRecords = useMemo(() => (alertRows ? alertRows.map((row) => row.raw) : pageForTab?.records || []), [alertRows, pageForTab]);
+  const total = alertRows ? alertRows.length : pageForTab?.total || 0;
+  const records = useMemo(() => alertRows || rawRecords.map((raw) => toReportRecord(raw, tabId)), [alertRows, rawRecords, tabId]);
   const visible = useMemo(() => filterAndSortRecords(records, filters, tabId), [records, filters, tabId]);
   const selected = records.find((record) => String(record.id) === String(selectedId)) || null;
 
@@ -281,8 +332,9 @@ export default function ReportsWindowBody({ windowItem }) {
   useEffect(() => {
     if (!selected || tabId !== 'evidence' || !selectedTraceId) return undefined;
     if (graphStatus[selectedTraceId] !== undefined) return undefined;
-    if (selected.graphClaim === false) {
-      setGraphStatus((current) => ({ ...current, [selectedTraceId]: false }));
+    // has_graph is the Service's word (H-1): no fetch to find out.
+    if (selected.graphClaim === false || selected.graphClaim === true) {
+      setGraphStatus((current) => ({ ...current, [selectedTraceId]: selected.graphClaim }));
       return undefined;
     }
     if (getCachedEvidenceGraph(selectedTraceId)) {
@@ -308,6 +360,7 @@ export default function ReportsWindowBody({ windowItem }) {
 
   const graphState = (() => {
     if (tabId !== 'evidence') return 'unsupported';
+    if (selected?.graphArchived && selected?.graphClaim !== true) return 'archived';
     if (!selectedTraceId) return 'unavailable';
     if (openingTraceId === selectedTraceId) return 'loading';
     if (graphStatus[selectedTraceId] === false || selected?.graphClaim === false) return 'unavailable';
@@ -406,6 +459,8 @@ export default function ReportsWindowBody({ windowItem }) {
         // domain, as in the Graph window.
         domain: context.domain || formatDomainPillarLabel(domainKey),
         initial: context.initial({ analyst: String(user?.display_name || user?.username || '') }),
+        // The popup's Range shows "of m".
+        rangeCounts: reportRangeCounts(context.input('')),
       });
     } finally {
       setReportLoading(false);
@@ -417,7 +472,11 @@ export default function ReportsWindowBody({ windowItem }) {
       const input = reportJob.context.input(values.nameKey);
       // The picture names entities as the report does (Identify entities by).
       const snapshot = await renderOffscreenSnapshot(reportJob.context.store, { isCdr, ...values.snapshot, nameOf: (id) => entityName(input.graph, id, values.nameKey) });
-      await downloadGraphReport({ input, values, domain: reportJob.domain, snapshot });
+      // The automatic charts and the default tables over the whole evidence
+      // graph (the evidence report never takes an analyst's windows;
+      // analyst decisions 2026-11-18 and 2026-11-19).
+      const { measures, tables } = await evidenceReportExtras({ store: reportJob.context.store, nameKey: values.nameKey });
+      await downloadGraphReport({ input, values, domain: reportJob.domain, snapshot, measures, tables });
       setReportJob(null);
       notify({ title: 'Success', message: 'Evidence report downloaded successfully.', level: 'success', source: 'Reports' });
     } catch (error) {
@@ -479,7 +538,7 @@ export default function ReportsWindowBody({ windowItem }) {
       );
     }
     if (loading && !rawRecords.length) {
-      return <div className="reports_state" role="status"><p>Loading reports…</p></div>;
+      return <WindowLoadScreen className="is-block" label="Loading reports…" />;
     }
     return (
       <div className="reports_table_wrap">
@@ -608,6 +667,29 @@ export default function ReportsWindowBody({ windowItem }) {
               </span>
             </>
           )}
+          {tabId === 'parent' && alertsActive && (canReadAllAlerts || isMockAlerts) ? (
+            <select className="reports_select" aria-label="Assigned" value={alertScope} onChange={(event) => changeAlertScope(event.target.value)}>
+              <option value="mine">Assigned to me</option>
+              <option value="all">All alerts</option>
+            </select>
+          ) : null}
+          {tabId === 'parent' && alertScopeError ? <span className="reports_inline_error" role="status">{alertScopeError}</span> : null}
+          {tabId === 'evidence' ? (
+            <select className="reports_select" aria-label="Requested by" value={filters.requester} onChange={(event) => updateFilter('requester', event.target.value)}>
+              {REQUESTER_FILTERS.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
+            </select>
+          ) : null}
+          {tabId === 'parent' && mockSwitchAvailable() ? (
+            <span className="reports_mock_controls">
+              <label className="reports_mock_switch" title="Development only: STR alerts from a mock parent service">
+                <input type="checkbox" checked={mockSwitch} onChange={(event) => setMockSwitch(event.target.checked)} />
+                Mock alerts
+              </label>
+              {isMockAlerts ? (
+                <button type="button" className="reports_action" onClick={() => simulateAlert('new')}>New mock alert</button>
+              ) : null}
+            </span>
+          ) : null}
           <button type="button" className="reports_icon_button linkx_tooltip_anchor" data-tooltip="Reset filters" aria-label="Reset filters" onClick={resetFilters}>
             <Icon d={ICONS.reset} />
           </button>
@@ -624,6 +706,7 @@ export default function ReportsWindowBody({ windowItem }) {
           </section>
           {selected && (
             <ReportDetail
+              workflow={selected.alert ? <AlertWorkflow alertId={selected.alert.id} mockControls={isMockAlerts} /> : null}
               record={selected}
               isCdr={isCdr}
               onClose={() => setSelectedId(null)}
@@ -669,6 +752,7 @@ export default function ReportsWindowBody({ windowItem }) {
             draftFor={reportJob.context.draft}
             kind="evidence"
             snapshotDefaults={reportJob.context.snapshotDefaults}
+            rangeCounts={reportJob.rangeCounts}
             onGenerate={generateReport}
             onCancel={() => setReportJob(null)}
           />

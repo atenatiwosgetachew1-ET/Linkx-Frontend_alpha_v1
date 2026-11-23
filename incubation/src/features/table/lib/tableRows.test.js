@@ -74,6 +74,8 @@ describe('tableRows', () => {
       follow: false,
       columns: { nodes: { order: [], hidden: [] }, links: { order: [], hidden: [] } },
       sort: { nodes: null, links: { key: 'amount', dir: 'desc' } },
+      filter: '',
     });
+    expect(normalizeTableState({ filter: 'Abebe' }).filter).toBe('Abebe');
   });
 });

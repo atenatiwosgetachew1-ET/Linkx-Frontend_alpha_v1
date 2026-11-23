@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 
-import { Section } from '../../../shared/components/form/FormFields.jsx';
+import WindowLoadScreen from '../../../shared/components/WindowLoadScreen.jsx';
+import { Field, InfoTip } from '../../../shared/components/form/FormFields.jsx';
+import { Block, Masthead, PageHero, Pill, SettingsPage, Stat, Stats } from '../../settings/components/SettingsPage.jsx';
 import { fetchCleanupAudit, requestSessionCleanup } from '../../../services/configurationApi.js';
 import { sanitizeText } from '../../../utils/inputSecurity.js';
 import { useNotifications } from '../../../shared/notifications/useNotifications.js';
@@ -8,6 +10,36 @@ import { useNotifications } from '../../../shared/notifications/useNotifications
 const ID_PATTERN = /[^A-Za-z0-9_.:-]/g;
 const sanitizeId = (value, maxLength) => String(value || '').replace(ID_PATTERN, '').slice(0, maxLength);
 const CLEANUP_TYPES = ['session', 'session_tree', 'window', 'run', 'neo4j_session'];
+
+// Glyphs for the field labels (24px grid, stroked).
+const ICONS = {
+  session: 'M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4',
+  type: 'M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5',
+  run: 'M5 3l14 9-14 9V3z',
+  status: 'M22 11.08V12a10 10 0 1 1-5.93-9.14M22 4L12 14.01l-3-3',
+  limit: 'M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01',
+};
+const OK_STATUSES = ['succeeded', 'success', 'completed'];
+const BAD_STATUSES = ['failed', 'error'];
+const statusTone = (status) => {
+  const value = String(status || '').toLowerCase();
+  return OK_STATUSES.includes(value) ? ' is-ok' : BAD_STATUSES.includes(value) ? ' is-bad' : '';
+};
+
+const hero = (pill) => (
+  <PageHero
+    tone={pill ? 'locked' : ''}
+    eyebrow="Activity log"
+    title="Session cleanup"
+    pill={pill}
+    meta="Preview or queue the cleanup of session artifacts (dataframes, graphs, Neo4j data), and review what was cleaned."
+    media={(
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5M12 7v5l3 2" />
+      </svg>
+    )}
+  />
+);
 
 const formatDate = (value) => {
   if (!value) return '—';
@@ -95,9 +127,10 @@ export default function ActivityLogPanel({ apiFetch, canManage, defaultSessionId
 
   if (!canManage) {
     return (
-      <Section title="Activity log">
+      <SettingsPage className="config_page config_activity">
+        <Masthead>{hero(<Pill tone="neutral">Requires users:manage</Pill>)}</Masthead>
         <p className="settings_hint">You need users:manage to view cleanup activity logs.</p>
-      </Section>
+      </SettingsPage>
     );
   }
 
@@ -109,59 +142,102 @@ export default function ActivityLogPanel({ apiFetch, canManage, defaultSessionId
     setCleanupMessage('');
   };
 
-  return (
-    <>
-      <Section title="Manual cleanup" description="Preview or queue cleanup of session artifacts (dataframes, graphs, Neo4j data).">
-        <div className="config_window_grid is-compact">
-          <label className="config_window_field"><span className="config_window_field_label">Session ID</span><input className="settings_input" value={draft.session_id} placeholder="1_815493" onChange={updateDraft('session_id')} /></label>
-          <label className="config_window_field">
-            <span className="config_window_field_label">Cleanup type</span>
-            <select className="settings_input" value={draft.cleanup_type} onChange={updateDraft('cleanup_type')}>
-              <option value="">Auto</option>
-              <option value="session">Session</option>
-              <option value="session_tree">Session tree</option>
-              <option value="window">Window</option>
-              <option value="run">Run</option>
-              <option value="neo4j_session">Neo4j session</option>
-            </select>
-          </label>
-          <label className="config_window_field"><span className="config_window_field_label">Run ID</span><input className="settings_input" value={draft.run_id} placeholder="Optional" onChange={updateDraft('run_id')} /></label>
-        </div>
-        <label className="settings_toggle_row config_window_toggle">
-          <input type="checkbox" checked={draft.preserve_session_config !== false} onChange={updateDraft('preserve_session_config')} />
-          <span>Preserve session configuration</span>
-        </label>
-        <div className="config_window_inline_actions">
-          <button type="button" className="settings_button" disabled={cleanupBusy} onClick={() => submitCleanup(true)}>{cleanupBusy ? 'Working…' : 'Preview cleanup'}</button>
-          <button type="button" className="settings_button is-danger" disabled={cleanupBusy} onClick={() => submitCleanup(false)}>{cleanupBusy ? 'Working…' : 'Queue cleanup'}</button>
-          {cleanupMessage ? <span className="settings_hint">{cleanupMessage}</span> : null}
-        </div>
-        {preview ? (
-          <dl className="config_window_domain_meta">
-            <div><dt>Type</dt><dd>{preview.cleanup_type || 'auto'}</dd></div>
-            <div><dt>Status</dt><dd>{preview.status || 'unknown'}</dd></div>
-            <div><dt>Dry run</dt><dd>{preview.dry_run ? 'yes' : 'no'}</dd></div>
-            {preview.cleanup_id ? <div><dt>Cleanup ID</dt><dd>{preview.cleanup_id}</dd></div> : null}
-          </dl>
-        ) : null}
-      </Section>
+  // The page's figures: the whole log's size, then what this page of it holds.
+  const succeeded = audit.items.filter((item) => OK_STATUSES.includes(String(item.status || '').toLowerCase())).length;
+  const failed = audit.items.filter((item) => BAD_STATUSES.includes(String(item.status || '').toLowerCase())).length;
+  const removed = audit.items.reduce((sum, item) => sum + (Number(item.artifacts?.deleted_count) || 0), 0);
+  const first = audit.total ? audit.offset + 1 : 0;
+  const last = audit.offset + audit.items.length;
 
-      <Section title="Cleanup activity">
-        <div className="config_window_grid is-compact">
-          <label className="config_window_field"><span className="config_window_field_label">Session ID</span><input className="settings_input" value={filters.session_id} placeholder="1_895258" onChange={updateFilter('session_id')} /></label>
-          <label className="config_window_field"><span className="config_window_field_label">Cleanup type</span><input className="settings_input" value={filters.cleanup_type} placeholder="window" onChange={updateFilter('cleanup_type')} /></label>
-          <label className="config_window_field"><span className="config_window_field_label">Status</span><input className="settings_input" value={filters.status} placeholder="succeeded" onChange={updateFilter('status')} /></label>
-          <label className="config_window_field"><span className="config_window_field_label">Limit</span><input className="settings_input" type="number" min="1" max="100" value={filters.limit} onChange={updateFilter('limit')} /></label>
+  return (
+    <SettingsPage className="config_page config_activity">
+      <Masthead>
+        {hero(null)}
+        <Stats label="Cleanup figures" columns={4}>
+          <Stat lead icon="list" label="Log entries" value={Number(audit.total || 0).toLocaleString()} note="match the filters" />
+          <Stat icon="check" tone="success" label="Succeeded" value={succeeded.toLocaleString()} note="on this page" />
+          <Stat icon="cross" tone={failed ? 'danger' : ''} label="Failed" value={failed.toLocaleString()} note="on this page" />
+          <Stat icon="layers" label="Artifacts removed" value={removed.toLocaleString()} note="on this page" />
+        </Stats>
+      </Masthead>
+
+      <Block
+        title="Manual cleanup"
+        description="Preview first to see what would be removed; queue to remove it."
+        actions={(
+          <>
+            <button type="button" className="settings_button" disabled={cleanupBusy} onClick={() => submitCleanup(true)}>{cleanupBusy ? 'Working…' : 'Preview cleanup'}</button>
+            <button type="button" className="settings_button is-danger" disabled={cleanupBusy} onClick={() => submitCleanup(false)}>{cleanupBusy ? 'Working…' : 'Queue cleanup'}</button>
+          </>
+        )}
+      >
+        <div className="config_card">
+          <div className="config_card_grid is-thirds">
+            <Field icon={ICONS.session} label="Session ID">
+              <input className="settings_input" value={draft.session_id} placeholder="1_815493" onChange={updateDraft('session_id')} />
+            </Field>
+            <Field icon={ICONS.type} label="Cleanup type">
+              <select className="settings_input" value={draft.cleanup_type} onChange={updateDraft('cleanup_type')}>
+                <option value="">Auto</option>
+                <option value="session">Session</option>
+                <option value="session_tree">Session tree</option>
+                <option value="window">Window</option>
+                <option value="run">Run</option>
+                <option value="neo4j_session">Neo4j session</option>
+              </select>
+            </Field>
+            <Field icon={ICONS.run} label="Run ID">
+              <input className="settings_input" value={draft.run_id} placeholder="Optional" onChange={updateDraft('run_id')} />
+            </Field>
+          </div>
+          <label className="settings_switch config_switch_row">
+            <span>Preserve session configuration<InfoTip text="Keep the session's saved configuration; only its artifacts are removed." /></span>
+            <input type="checkbox" role="switch" checked={draft.preserve_session_config !== false} onChange={updateDraft('preserve_session_config')} />
+          </label>
+          {cleanupMessage ? <p className="settings_hint" role="status">{cleanupMessage}</p> : null}
+          {preview ? (
+            <dl className="config_result" aria-label="Cleanup result">
+              <div><dt>Type</dt><dd>{preview.cleanup_type || 'auto'}</dd></div>
+              <div><dt>Status</dt><dd>{preview.status || 'unknown'}</dd></div>
+              <div><dt>Dry run</dt><dd>{preview.dry_run ? 'yes' : 'no'}</dd></div>
+              {preview.cleanup_id ? <div><dt>Cleanup ID</dt><dd title={preview.cleanup_id}>{preview.cleanup_id}</dd></div> : null}
+            </dl>
+          ) : null}
         </div>
-        <div className="config_window_inline_actions">
-          <button type="button" className="settings_button" disabled={loading} onClick={() => loadAudit(0)}>{loading ? 'Loading…' : 'Refresh'}</button>
-          <button type="button" className="settings_button" disabled={!canPrev} onClick={() => loadAudit(Math.max(0, audit.offset - audit.limit))}>Prev</button>
-          <button type="button" className="settings_button" disabled={!canNext} onClick={() => loadAudit(audit.offset + audit.limit)}>Next</button>
-          <span className="settings_hint">{audit.total ? audit.offset + 1 : 0}–{audit.offset + audit.items.length} of {audit.total}</span>
+      </Block>
+
+      <Block
+        title="Cleanup activity"
+        description="What was cleaned, newest first. Set the filters, then Refresh."
+        actions={(
+          <>
+            <span className="config_table_range">{first.toLocaleString()}–{last.toLocaleString()} of {Number(audit.total || 0).toLocaleString()}</span>
+            <button type="button" className="settings_button" disabled={!canPrev} onClick={() => loadAudit(Math.max(0, audit.offset - audit.limit))}>Prev</button>
+            <button type="button" className="settings_button" disabled={!canNext} onClick={() => loadAudit(audit.offset + audit.limit)}>Next</button>
+            <button type="button" className="settings_button settings_primary" disabled={loading} onClick={() => loadAudit(0)}>{loading ? 'Loading…' : 'Refresh'}</button>
+          </>
+        )}
+      >
+        <div className="config_card">
+          <div className="config_card_grid is-filters">
+            <Field icon={ICONS.session} label="Session ID">
+              <input className="settings_input" value={filters.session_id} placeholder="1_895258" onChange={updateFilter('session_id')} />
+            </Field>
+            <Field icon={ICONS.type} label="Cleanup type">
+              <input className="settings_input" value={filters.cleanup_type} placeholder="window" onChange={updateFilter('cleanup_type')} />
+            </Field>
+            <Field icon={ICONS.status} label="Status">
+              <input className="settings_input" value={filters.status} placeholder="succeeded" onChange={updateFilter('status')} />
+            </Field>
+            <Field icon={ICONS.limit} label={<>Limit<InfoTip text="Rows per page. Range 1 to 100 · Default 20" /></>}>
+              <input className="settings_input" type="number" min="1" max="100" value={filters.limit} onChange={updateFilter('limit')} />
+            </Field>
+          </div>
         </div>
-        {error ? <div className="settings_error">{error}</div> : null}
-        <div className="config_window_table_wrap">
-          <table className="config_window_table">
+        {error ? <div className="settings_error" role="alert">{error}</div> : null}
+        {loading && audit.items.length === 0 ? <WindowLoadScreen className="is-block" label="Loading cleanup activity…" /> : null}
+        <div className="config_window_table_wrap" hidden={loading && audit.items.length === 0}>
+          <table className="config_window_table" aria-label="Cleanup activity">
             <thead><tr><th>Created</th><th>Session</th><th>Type</th><th>Status</th><th>Owner</th><th>Artifacts</th><th>Error</th></tr></thead>
             <tbody>
               {audit.items.length === 0 && !loading ? (
@@ -171,7 +247,7 @@ export default function ActivityLogPanel({ apiFetch, canManage, defaultSessionId
                   <td>{formatDate(item.created_at || item.started_at)}</td>
                   <td title={item.session_id || ''}>{item.session_id || '—'}</td>
                   <td>{item.cleanup_type || '—'}</td>
-                  <td><span className={`config_window_status is-${String(item.status || 'unknown').toLowerCase()}`}>{item.status || 'unknown'}</span></td>
+                  <td><span className={`config_window_status${statusTone(item.status)}`}>{item.status || 'unknown'}</span></td>
                   <td>{item.session?.owner_user_id ?? '—'}</td>
                   <td>{item.artifacts?.deleted_count ?? 0}/{item.artifacts?.count ?? 0}</td>
                   <td className="config_window_table_snippet" title={item.error_message || ''}>{item.error_message || '—'}</td>
@@ -180,7 +256,7 @@ export default function ActivityLogPanel({ apiFetch, canManage, defaultSessionId
             </tbody>
           </table>
         </div>
-      </Section>
-    </>
+      </Block>
+    </SettingsPage>
   );
 }

@@ -575,3 +575,300 @@
 .source_window_stream_log_empty {
 	padding-top: 8px;
 }
+
+/* ── Dataframe ▸ Filter dataframe… (analyst decisions 2026-11-19) ── */
+.source_window_workspace {
+	position: relative;
+}
+
+.source_window_df_filter_backdrop {
+	z-index: 25;
+}
+
+/* The card header's end: the status pill, then Filter in the corner. */
+.source_window_dataframe_header_end {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	margin-left: auto;
+}
+
+.source_window_df_filter_open {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	height: 28px;
+	padding: 0 10px;
+	border: 1px solid var(--source-card-border);
+	border-radius: 6px;
+	background: var(--source-card-bg);
+	color: var(--source-text);
+	font-size: 12px;
+	font-weight: 600;
+	cursor: pointer;
+}
+
+.source_window_df_filter_open svg {
+	stroke: var(--source-accent);
+}
+
+.source_window_df_filter_open:hover:not(:disabled),
+.source_window_df_filter_open.is-active {
+	border-color: var(--source-accent);
+	background: color-mix(in srgb, var(--source-accent) 10%, var(--source-card-bg));
+}
+
+.source_window_df_filter_open:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+.source_window_df_filter_count {
+	display: inline-grid;
+	place-items: center;
+	min-width: 18px;
+	height: 18px;
+	padding: 0 5px;
+	border-radius: 9px;
+	background: var(--source-accent);
+	color: var(--source-card-bg);
+	font-size: 11px;
+	line-height: 1;
+}
+
+/* The popup: one column, tabs over one fixed-height panel, the summary
+   under it. */
+.source_window_df_filter {
+	width: min(640px, 100%);
+}
+
+.source_window_df_filter_tabs {
+	display: flex;
+	gap: 2px;
+	padding: 0 14px;
+	border-bottom: 1px solid var(--graph-border);
+}
+
+.source_window_df_filter_tab {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	margin-bottom: -1px;
+	padding: 8px 12px;
+	border: 0;
+	border-bottom: 2px solid transparent;
+	background: transparent;
+	color: var(--graph-muted-text);
+	font: inherit;
+	font-size: 12px;
+	font-weight: 600;
+	cursor: pointer;
+}
+
+.source_window_df_filter_tab[aria-selected='true'] {
+	border-bottom-color: var(--graph-accent);
+	color: var(--graph-text);
+}
+
+.source_window_df_filter_tab:focus-visible {
+	outline: 2px solid var(--graph-accent);
+	outline-offset: -2px;
+}
+
+.source_window_df_filter_badge {
+	padding: 1px 6px;
+	border-radius: 8px;
+	background: color-mix(in srgb, var(--graph-text) 9%, transparent);
+	font-size: 10px;
+	font-weight: 600;
+}
+
+.source_window_df_filter_panel {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	height: 248px;
+	min-height: 0;
+	padding: 10px 14px;
+	overflow: hidden;
+}
+
+.source_window_df_filter_toolbar {
+	display: flex;
+	flex: none;
+	gap: 6px;
+}
+
+.source_window_df_filter_toolbar > input,
+.source_window_df_filter_toolbar > select {
+	flex: 1 1 0;
+	min-width: 0;
+}
+
+.source_window_df_filter_columns {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+	align-content: start;
+	gap: 0 10px;
+	flex: 1 1 auto;
+	min-height: 0;
+	margin: 0;
+	padding: 4px 6px;
+	overflow: auto;
+	border: 1px solid var(--graph-border);
+	border-radius: 3px;
+	list-style: none;
+}
+
+.source_window_df_filter_check {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+	padding: 3px 0;
+	font-size: 12px;
+	cursor: pointer;
+}
+
+.source_window_df_filter_check input {
+	flex: none;
+	margin: 0;
+}
+
+.source_window_df_filter_check span {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.source_window_df_filter_check small {
+	flex: none;
+	margin-left: auto;
+	font-size: 10px;
+	color: var(--graph-muted-text);
+}
+
+.source_window_df_filter_check.is-stripped span {
+	text-decoration: line-through;
+	opacity: 0.55;
+}
+
+.source_window_df_filter_options {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 2px 18px;
+}
+
+.source_window_df_filter_subhead {
+	font-size: 11px;
+	font-weight: 600;
+	color: var(--graph-muted-text);
+}
+
+.source_window_df_filter_conditions {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	flex: 1 1 auto;
+	min-height: 0;
+	margin: 0;
+	padding: 0;
+	overflow: auto;
+	list-style: none;
+}
+
+.source_window_df_filter_condition {
+	display: grid;
+	grid-template-columns: 42px minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1.3fr) 24px;
+	gap: 6px;
+	align-items: center;
+}
+
+.source_window_df_filter_condition.is-two {
+	grid-template-columns: 42px minmax(0, 1.1fr) minmax(0, 1fr) minmax(0, 0.75fr) minmax(0, 0.75fr) 24px;
+}
+
+.source_window_df_filter_join {
+	font-size: 11px;
+	font-weight: 600;
+	color: var(--graph-muted-text);
+	text-align: right;
+}
+
+.source_window_df_filter_remove {
+	width: 24px;
+	height: 24px;
+	padding: 0;
+	border: 0;
+	border-radius: 3px;
+	background: transparent;
+	color: var(--graph-muted-text);
+	font-size: 16px;
+	line-height: 1;
+	cursor: pointer;
+}
+
+.source_window_df_filter_remove:hover {
+	background: color-mix(in srgb, var(--graph-text) 9%, transparent);
+	color: var(--graph-text);
+}
+
+.source_window_df_filter_none {
+	margin: 0;
+	color: var(--graph-muted-text);
+	font-size: 12px;
+}
+
+.source_window_df_filter_note {
+	flex: none;
+	color: var(--graph-muted-text);
+	font-size: 11px;
+}
+
+/* What is ingested. */
+.source_window_df_filter_summary {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: 10px 14px;
+	border-top: 1px solid var(--graph-border);
+	background: color-mix(in srgb, var(--graph-text) 3%, transparent);
+}
+
+.source_window_df_filter_counts {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 4px 16px;
+	font-size: 12px;
+	color: var(--graph-muted-text);
+}
+
+.source_window_df_filter_counts b {
+	color: var(--graph-text);
+}
+
+.source_window_df_filter_counts button {
+	margin-left: auto;
+}
+
+.source_window_df_filter_lines {
+	max-height: 72px;
+	margin: 0;
+	padding-left: 16px;
+	overflow: auto;
+	font-size: 12px;
+	line-height: 1.4;
+}
+
+@container (max-width: 560px) {
+	.source_window_df_filter_condition,
+	.source_window_df_filter_condition.is-two {
+		grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 24px;
+	}
+
+	.source_window_df_filter_join {
+		display: none;
+	}
+}

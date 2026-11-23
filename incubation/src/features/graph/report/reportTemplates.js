@@ -17,8 +17,8 @@ export const REPORT_TEMPLATES = Object.freeze([
     thumbnail,
     description: 'The default graph report: an NBE cover with the case and the flags, then the investigation round the graph.',
     sections: Object.freeze([
-      'Cover', 'Summary', 'The graph', 'Subjects of interest', 'Relationships and patterns',
-      'Timeline', 'Alerts and indicators', 'Assessment and next steps', 'Method (Appendix A)', 'Entity and link lists (Appendix B, optional)',
+      'Cover', 'Summary', 'The graph', 'Subjects of interest', 'Relationships and patterns', 'Measures (charts)',
+      'Timeline', 'Alerts and indicators', 'Assessment and next steps', 'Method (Appendix A)', 'Tables (Appendix B on)',
     ]),
     usedBy: 'Graph window ▸ Export ▸ Generate report…; Reports ▸ Download report',
   }),

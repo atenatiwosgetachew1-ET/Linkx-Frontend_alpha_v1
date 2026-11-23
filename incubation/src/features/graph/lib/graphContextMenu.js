@@ -89,15 +89,20 @@ export const AVAILABLE_ACTIONS = new Set([
   // The graph's companion windows (twins: wherever one is offered, so is the
   // other; analyst decision 2026-11-18).
   'show_in_table', 'show_in_chart',
+  // Another Table / Chart window beside those open (analyst decision
+  // 2026-11-19), within the window limit.
+  'new_table', 'new_chart',
 ]);
 
-const item = (action, label, { disabled = false } = {}) => {
+// hint: why a disabled item is disabled (its tooltip).
+const item = (action, label, { disabled = false, hint = '' } = {}) => {
   const ported = AVAILABLE_ACTIONS.has(action);
   return {
     action,
     label,
     enabled: ported && !disabled,
     ...(ported ? {} : { pending: PENDING[ACTION_PHASE[action]] || PENDING.analysis }),
+    ...(ported && disabled && hint ? { hint } : {}),
   };
 };
 
@@ -129,7 +134,7 @@ const CANVAS_GROUPS = [
   ['Analyze', ['visual_degree', 'measure_betweenness', 'measure_closeness', 'measure_eigenvector', 'conditional_formatting', 'visual_property', 'filter_elements', 'apply_community_detection', 'link_traversal', 'cut_points', 'reset_node_styles']],
   // Not analysis: other views of this graph, named as the toolbar's Open as
   // table / Open as chart (analyst decision 2026-11-18).
-  ['Open as', ['show_in_table', 'show_in_chart']],
+  ['Open as', ['show_in_table', 'show_in_chart', 'new_table', 'new_chart']],
   [null, ['clear_path']],
   ['Views', ['save_view', 'load_view', 'remove_saved_views']],
   ['Edge Bundling', ['toggle_edge_bundling', 'configure_edge_bundling']],
@@ -207,6 +212,11 @@ export const contextMenuItems = ({
   drawnCount = 0,
   // Link aggregation: the right-clicked link's pair (see edgeMenuHeader).
   aggregate = null,
+  // Open as: whether this graph has a Table / Chart window, and the window
+  // limit's text when no more Graph / Chart / Table windows may open.
+  tableOpen = false,
+  chartOpen = false,
+  windowLimit = '',
 } = {}) => {
   if (kind === 'edge') {
     // Link aggregation: a merged pair expands; a link of an expanded pair
@@ -241,8 +251,13 @@ export const contextMenuItems = ({
       item('measure_eigenvector', 'Visualize by Eigenvector', { disabled: drawnCount < 2 }),
       item('conditional_formatting', 'Conditional Formatting…'),
       // The Table and Chart windows (G3.5 i2 #5, G5; not in production).
-      item('show_in_table', 'Table', { disabled: drawnCount === 0 }),
-      item('show_in_chart', 'Chart', { disabled: drawnCount === 0 }),
+      // Table / Chart: this graph's window (a new one when there is none);
+      // New Table / New Chart: another, always new (analyst decision
+      // 2026-11-19). A new window only within the limit.
+      item('show_in_table', 'Table', { disabled: drawnCount === 0 || (!tableOpen && Boolean(windowLimit)), hint: windowLimit }),
+      item('show_in_chart', 'Chart', { disabled: drawnCount === 0 || (!chartOpen && Boolean(windowLimit)), hint: windowLimit }),
+      item('new_table', 'New Table', { disabled: drawnCount === 0 || Boolean(windowLimit), hint: windowLimit }),
+      item('new_chart', 'New Chart', { disabled: drawnCount === 0 || Boolean(windowLimit), hint: windowLimit }),
       item('visual_property', 'Visualize by Property'),
       item('filter_elements', 'Filter Elements'),
       item('save_view', 'Save View'),

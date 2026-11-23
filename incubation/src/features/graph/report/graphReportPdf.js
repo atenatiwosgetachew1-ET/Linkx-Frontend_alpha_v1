@@ -14,9 +14,17 @@
 // until a Unicode font is bundled.
 
 import { REPORT_TEMPLATE, reportKindOf } from './graphReportModel.js';
+import { planColumnWidths } from '../../table/lib/tableColumns.js';
 
 const PAGE = { width: 210, height: 297, margin: 18, top: 30, bottom: 22 };
 const CONTENT = PAGE.width - PAGE.margin * 2;
+// A Measures chart cell (mm): two across the content width, in the snap
+// cell's proportions (CELLS.group: 368 x 262 px).
+const CHART_CELL = (() => {
+  const gap = 4;
+  const width = (CONTENT - gap) / 2;
+  return Object.freeze({ gap, width, height: width * (262 / 368) });
+})();
 const COLOR = {
   navy: [19, 29, 41],
   navySoft: [31, 43, 58],
@@ -340,6 +348,8 @@ export async function renderGraphReportPdf(report, { snapshot = null, logo = nul
     if (block.type === 'bars') return 56;
     if (block.type === 'figures') return 20;
     if (block.type === 'signature') return 36;
+    if (block.type === 'charts') return Math.ceil(block.items.length / 2) * (CHART_CELL.height + 4);
+    if (block.type === 'wideTable') return block.rows.length ? tableHeight(Math.min(block.rows.length, 3)) : 0;
     return 10;
   };
   // The first part of a block that must sit under its subheading.
@@ -411,6 +421,55 @@ export async function renderGraphReportPdf(report, { snapshot = null, logo = nul
       doc.text(pdfText(item.label), x + 14, y + 11.6, { maxWidth: width - 16 });
     });
     y += height + 5;
+  };
+  // Measures: the chart cells two across (their picture's proportions), a
+  // row kept whole on a page.
+  const charts = (items) => {
+    for (let index = 0; index < items.length; index += 2) {
+      ensure(CHART_CELL.height + 4);
+      items.slice(index, index + 2).forEach((item, column) => {
+        const x = PAGE.margin + column * (CHART_CELL.width + CHART_CELL.gap);
+        try {
+          doc.addImage(item.image, /^data:image\/jpe?g/i.test(item.image) ? 'JPEG' : 'PNG', x, y, CHART_CELL.width, CHART_CELL.height, undefined, 'FAST');
+        } catch {
+          setColor(doc, COLOR.border, 'draw');
+          doc.rect(x, y, CHART_CELL.width, CHART_CELL.height);
+          setColor(doc, COLOR.muted);
+          doc.setFontSize(9);
+          doc.text(pdfText(item.title), x + 4, y + 8);
+        }
+      });
+      y += CHART_CELL.height + 4;
+    }
+  };
+  // The linked Table window's table: columns never squeezed (as Print
+  // table: planned widths, the columns past the page continue on the next
+  // pages after all the rows, the Label column repeated).
+  const wideTable = ({ head, rows, numeric = [], note }) => {
+    if (!rows.length) return;
+    ensure(tableHeight(Math.min(rows.length, 3)));
+    const fontSize = 7.5;
+    const body = rows.map((row) => row.map(pdfText));
+    const labels = head.map(pdfText);
+    const repeat = Math.max(0, labels.indexOf('Label'));
+    const widths = planColumnWidths(doc, labels, body, { fontSize, available: CONTENT, repeat });
+    autoTable(doc, {
+      startY: y,
+      head: [labels],
+      body,
+      margin: { left: PAGE.margin, right: PAGE.margin, top: PAGE.top, bottom: PAGE.bottom },
+      theme: 'grid',
+      showHead: 'everyPage',
+      styles: { font: 'helvetica', fontSize, cellPadding: 1.4, textColor: COLOR.text, lineColor: COLOR.border, lineWidth: 0.2, overflow: 'linebreak', valign: 'top' },
+      headStyles: { fillColor: COLOR.navy, textColor: COLOR.white, fontStyle: 'bold', lineColor: COLOR.navy },
+      alternateRowStyles: { fillColor: COLOR.stripe },
+      columnStyles: Object.fromEntries(widths.map((width, index) => [index, { cellWidth: width, ...(numeric[index] ? { halign: 'right' } : {}) }])),
+      horizontalPageBreak: true,
+      horizontalPageBreakRepeat: repeat,
+      horizontalPageBreakBehaviour: 'afterAllRows',
+    });
+    y = doc.lastAutoTable.finalY + 4;
+    if (note) paragraph(note, { size: 8, color: COLOR.muted });
   };
   const table = ({ head, rows, widths, note, flagColumn = null }) => {
     if (!rows.length) return;
@@ -733,6 +792,8 @@ export async function renderGraphReportPdf(report, { snapshot = null, logo = nul
       else if (block.type === 'bullets') bullets(block.items);
       else if (block.type === 'figures') figures(block.items);
       else if (block.type === 'table') table(block);
+      else if (block.type === 'charts') charts(block.items);
+      else if (block.type === 'wideTable') wideTable(block);
       else if (block.type === 'image') {
         // The graph is sized so the rest of its section fits on the same
         // page (analyst decision 2026-11-17), between 70 and 150 mm tall.
@@ -792,11 +853,12 @@ export async function renderGraphReportPdf(report, { snapshot = null, logo = nul
     doc.text(pdfText(report.cover.marking), PAGE.margin, PAGE.height - 10);
     doc.text(`${page - 1} / ${pages - 1}`, PAGE.width - PAGE.margin, PAGE.height - 10, { align: 'right' });
   }
-  // CONFIDENTIAL across every page (analyst decision 2026-11-18: every
-  // report and picture the service exports carries it).
-  for (let page = 1; page <= pages; page += 1) {
+  // CONFIDENTIAL across every page but the cover (analyst decisions
+  // 2026-11-18 and 2026-11-19: the cover carries the marking, not the
+  // watermark).
+  for (let page = 2; page <= pages; page += 1) {
     doc.setPage(page);
-    drawWatermark(doc, { cover: page === 1 });
+    drawWatermark(doc);
   }
   return doc;
 }

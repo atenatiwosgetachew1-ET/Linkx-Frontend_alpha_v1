@@ -204,8 +204,31 @@ export const FLAG_STATES = Object.freeze({
   UNDETERMINED: 'undetermined',
 });
 
+// The Service's verdict and flags (H-7: on the task, provisional per batch,
+// final at the end), when it has them; the log is not a contract.
+const serverVerdict = (task) => {
+  const entries = task.flags && typeof task.flags === 'object' ? Object.entries(task.flags) : [];
+  if (!task.verdict && !entries.length) return null;
+  // Counts are cumulative (the latest per rule); older records have none.
+  const flags = entries
+    .filter(([, value]) => value === null || Number(value) > 0)
+    .map(([name, value]) => ({ name, count: value === null ? 0 : Number(value) }))
+    .sort((a, b) => b.count - a.count);
+  const count = flags.reduce((sum, flag) => sum + flag.count, 0);
+  const isActive = task.status === TASK_STATUSES.STARTING || task.status === TASK_STATUSES.RUNNING;
+  if (flags.length) return { state: FLAG_STATES.SUSPICIOUS, flags, count, label: 'Suspicious', detail: isActive ? 'Provisional' : '' };
+  if (isActive) return { state: FLAG_STATES.PENDING, flags, count, label: 'Analysing', detail: 'No flags so far' };
+  if (task.verdict === 'clean') return { state: FLAG_STATES.CLEAN, flags, count, label: 'Clean', detail: 'No flags raised' };
+  if (task.verdict === 'undetermined') {
+    return { state: FLAG_STATES.UNDETERMINED, flags, count, label: 'Not determined', detail: task.status === TASK_STATUSES.FAILED ? 'The run failed before a verdict' : 'Stopped before a verdict' };
+  }
+  return null;
+};
+
 // -> { state, flags, count, label, detail }
 export const taskFlagVerdict = (task, lines = [], { backendOnly = true } = {}) => {
+  const fromService = serverVerdict(task);
+  if (fromService) return fromService;
   const { flags, count, cleanSeen } = scanFlagLines(lines, { backendOnly });
   if (flags.length || count > 0) {
     return {

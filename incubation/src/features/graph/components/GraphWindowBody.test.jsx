@@ -52,6 +52,14 @@ vi.mock('../report/graphReportPdf.js', async (importOriginal) => {
 });
 const { renderGraphReportPdf } = await import('../report/graphReportPdf.js');
 
+// The report's charts stand in (jsdom cannot draw them): what they were asked.
+const reportCharts = vi.hoisted(() => ({ calls: [] }));
+vi.mock('../../chart/lib/chartReport.js', () => ({
+  reportChartCells: vi.fn(async (options) => {
+    reportCharts.calls.push(options);
+    return { cells: [{ title: 'Degree Centrality', level: 'Node', image: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==' }], skipped: ['Flow In / Out / Net: No link has an amount.'] };
+  }),
+}));
 const { default: GraphWindowBody } = await import('./GraphWindowBody.jsx');
 
 afterEach(() => {
@@ -212,7 +220,7 @@ describe('GraphWindowBody linked to a session', () => {
     return workspace.windows.map((item) => <GraphWindowBody key={item.id} windowItem={item} />);
   }
 
-  const openLinked = (apiFetch) => {
+  const openLinked = (apiFetch, extra = {}) => {
     render(
       <NotificationProvider>
         <SessionContext.Provider value={{ apiFetch, configuration: { active_domain: 'bank' } }}>
@@ -223,7 +231,7 @@ describe('GraphWindowBody linked to a session', () => {
       </NotificationProvider>,
     );
     act(() => {
-      workspaceRef.openWindow(WORKSPACE_WINDOW_TYPES.GRAPH, { id: 'graph-7', metadata: { graphLinkSource: '3_17' } });
+      workspaceRef.openWindow(WORKSPACE_WINDOW_TYPES.GRAPH, { id: 'graph-7', metadata: { graphLinkSource: '3_17', ...extra } });
     });
   };
 
@@ -248,6 +256,21 @@ describe('GraphWindowBody linked to a session', () => {
     expect(tab).toHaveTextContent('Fund flow');
     expect(tab.style.getPropertyValue('--chip-bg')).toBe('#2563eb');
     expect(screen.getByRole('tab', { name: 'All (*)' })).toHaveAttribute('aria-selected', 'false');
+  });
+
+  it('a finished run loads All at once, without waiting for relationship tabs (a run with nodes only)', async () => {
+    statusSocket();
+    const apiFetch = vi.fn(async () => ({ results: { graph: { nodes: graphOf(3).nodes, edges: [] } } }));
+    openLinked(apiFetch, { graphFinishedRun: true });
+    await waitFor(() => expect(screen.getByTestId('canvas')).toHaveAttribute('data-nodes', '3'));
+    expect(apiFetch).toHaveBeenCalledWith('/get_graph', expect.objectContaining({ body: { id: 'relationship', source_id: '3_17', relationship: '*' } }));
+  });
+
+  it('a finished run with nothing in its session says so', async () => {
+    statusSocket();
+    openLinked(vi.fn(async () => ({ results: { graph: { nodes: [], edges: [] } } })), { graphFinishedRun: true });
+    expect(await screen.findByText('No graph data')).toBeInTheDocument();
+    expect(screen.getByText('Session 3_17 returned no nodes and no relationships.')).toBeInTheDocument();
   });
 
   it('keeps the window when a relationship has no data', async () => {
@@ -2046,6 +2069,22 @@ describe('GraphWindowBody timeline filter (i2 benchmark #1)', () => {
     expect(screen.getByRole('button', { name: 'Play' })).toBeInTheDocument(); // still paused
   });
 
+  it('Rewind / Fast forward jump up to five dated periods, as far as they go', async () => {
+    await openDaily('tr-jump');
+    const period = () => screen.getByRole('status', { name: 'Timeline period' }).textContent;
+    const day = () => Number(period().match(/\b(\d{1,2})\b/)[1]);
+    // Dated: 1, 3, 5 and 8 March. From no period, Fast forward passes them all: the last.
+    await userEvent.click(screen.getByRole('button', { name: 'Fast forward' }));
+    expect(day()).toBe(8);
+    expect(screen.getByRole('button', { name: 'Fast forward' })).toBeDisabled();
+    await userEvent.click(screen.getByRole('button', { name: 'Rewind' }));
+    expect(day()).toBe(1);
+    expect(screen.getByRole('button', { name: 'Rewind' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Rewind' })).toHaveAttribute('title', 'Rewind: 5 periods back');
+    // The player in order: Previous, Rewind, Play, Fast forward, Next.
+    expect(within(screen.getByRole('group', { name: 'Timeline player' })).getAllByRole('button').map((button) => button.getAttribute('aria-label'))).toEqual(['Previous period', 'Rewind', 'Play', 'Fast forward', 'Next period']);
+  });
+
   it('Play skips the bars with nothing dated in them', async () => {
     await openDaily('tr-skip');
     await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Play speed' }), '4');
@@ -2130,6 +2169,29 @@ describe('GraphWindowBody Table window link (i2 benchmark #5)', () => {
     const charts = workspaceRef.windows.filter((item) => item.type === WORKSPACE_WINDOW_TYPES.CHART);
     expect(charts).toHaveLength(1);
     expect(charts[0].metadata.chartGraph).toBe('graph-1');
+    // Open as ▸ New Table / New Chart: another, beside those open, linked to this graph.
+    act(() => canvasProps.current.onContextMenu({ x: 20, y: 20, kind: 'canvas', id: null, selection: [] }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Open as' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'New Table' }));
+    expect(tables()).toHaveLength(2);
+    expect(tables()[1].metadata.tableGraph).toBe('graph-1');
+    act(() => canvasProps.current.onContextMenu({ x: 20, y: 20, kind: 'canvas', id: null, selection: [] }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Open as' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'New Chart' }));
+    expect(workspaceRef.windows.filter((item) => item.type === WORKSPACE_WINDOW_TYPES.CHART)).toHaveLength(2);
+    // Five Graph / Chart / Table windows: the limit (one more opened elsewhere if need be). New ones are refused, with the reason.
+    const companions = () => workspaceRef.windows.filter((item) => [WORKSPACE_WINDOW_TYPES.GRAPH, WORKSPACE_WINDOW_TYPES.CHART, WORKSPACE_WINDOW_TYPES.TABLE].includes(item.type));
+    while (companions().length < 5) act(() => { workspaceRef.openWindow(WORKSPACE_WINDOW_TYPES.CHART, { title: 'Other chart', metadata: {} }); });
+    const tableCount = tables().length;
+    act(() => canvasProps.current.onContextMenu({ x: 20, y: 20, kind: 'canvas', id: null, selection: [] }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Open as' }));
+    const newTable = screen.getByRole('menuitem', { name: 'New Table' });
+    expect(newTable).toHaveAttribute('aria-disabled', 'true');
+    expect(newTable.getAttribute('title')).toMatch(/^Window limit reached: at most 5 Graph, Chart and Table windows \(5 open\)/);
+    await userEvent.click(newTable);
+    expect(tables()).toHaveLength(tableCount);
+    // This graph's own Table is still shown (focused, nothing new).
+    expect(screen.getByRole('menuitem', { name: 'Table' })).toHaveAttribute('aria-disabled', 'false');
   });
 
   it("Open as chart (beside Open as table) opens this graph's Chart window, linked, once", async () => {
@@ -2374,6 +2436,70 @@ describe('GraphWindowBody graph report (G4.2)', () => {
     expect(renderGraphReportPdf.mock.calls.at(-1)[0].kind).toBe('graph');
     expect(renderGraphReportPdf.mock.calls.at(-1)[0].cover.title).toMatch(/^Graph Report · /);
     expect(clicked.mock.contexts.at(-1).download).toMatch(/^LinkxGraph_Report_R-9_\d+\.pdf$/);
+    // Measures: no Chart window linked, so the automatic set over the drawn graph.
+    expect(reportCharts.calls.at(-1)).toMatchObject({ scope: 'drawn', nameKey: 'id' });
+    expect(reportCharts.calls.at(-1).cards).toBeUndefined();
+    const measures = renderGraphReportPdf.mock.calls.at(-1)[0].sections.find((section) => section.id === 'measures');
+    expect(measures.title).toBe('Measures');
+    expect(measures.blocks.find((block) => block.type === 'charts').items.map((item) => item.title)).toEqual(['Degree Centrality']);
+    expect(measures.blocks.at(-1).text).toMatch(/^Not charted: Flow In/);
+    // Tables: no Table window linked, so the default tables (entities, then relationships).
+    const tables = renderGraphReportPdf.mock.calls.at(-1)[0].sections.filter((section) => section.id.startsWith('table-'));
+    expect(tables.map((section) => `${section.number} ${section.title}`)).toEqual(['B Table: Entities', 'C Table: Relationships']);
+    expect(tables[0].blocks.find((block) => block.type === 'wideTable').head).toEqual(['Label', 'ID', 'Type', 'Links', 'Flags']);
+    expect(tables[0].blocks.find((block) => block.type === 'wideTable').rows[0][0]).toBe('N1'); // the most connected first
+    clicked.mockRestore();
+  });
+
+  it('Generate report takes every linked Chart window\u2019s charts and every linked Table window\u2019s table, filter included', async () => {
+    cacheEvidenceGraph('tr-report2', { data: {}, ...graphOf(5) });
+    render(
+      <NotificationProvider>
+        <SessionContext.Provider value={{ apiFetch: vi.fn(), configuration: { active_domain: 'bank' } }}>
+          <WorkspaceProvider>
+            <LiveGraph metadata={{ evidence: { traceId: 'tr-report2', reportId: 9, externalReferenceId: 'R-9' } }} />
+          </WorkspaceProvider>
+        </SessionContext.Provider>
+      </NotificationProvider>,
+    );
+    await waitFor(() => expect(screen.getByTestId('canvas')).toHaveAttribute('data-nodes', '5'));
+    const graphId = workspaceRef.windows.find((item) => item.type === WORKSPACE_WINDOW_TYPES.GRAPH).id;
+    act(() => {
+      workspaceRef.openWindow(WORKSPACE_WINDOW_TYPES.CHART, { id: 'chart-9', title: 'Chart 9', metadata: { chartGraph: graphId, chartState: { scope: 'all', cards: [{ metric: 'pagerank' }] } } });
+      workspaceRef.openWindow(WORKSPACE_WINDOW_TYPES.CHART, { id: 'chart-10', title: 'Chart 10', metadata: { chartGraph: graphId, chartState: { scope: 'drawn', cards: [{ metric: 'degree' }] } } });
+      workspaceRef.openWindow(WORKSPACE_WINDOW_TYPES.TABLE, { id: 'table-9', title: 'Table 9', metadata: { tableGraph: graphId, tableState: { tab: 'nodes', scope: 'all', sort: { nodes: { key: '@label', dir: 'desc' } }, columns: { nodes: { order: [], hidden: ['@id', '@flags'] } } } } });
+      workspaceRef.openWindow(WORKSPACE_WINDOW_TYPES.TABLE, { id: 'table-10', title: 'Table 10', metadata: { tableGraph: graphId, tableState: { tab: 'nodes', scope: 'all', filter: 'N2' } } });
+      workspaceRef.focusWindow(graphId);
+    });
+    await userEvent.click(screen.getByRole('button', { name: 'Export' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Generate report…' }));
+    const form = screen.getByRole('dialog', { name: 'Generate graph report' });
+    // Every linked window, said in the popup (no choice to make).
+    expect(form).toHaveTextContent(/The charts of Chart 9.*, Chart 10.*, with their colours and scope\./);
+    expect(form).toHaveTextContent(/The tables of Table 9.*, Table 10.*: their rows, filter, columns and sort\./);
+    expect(within(form).getByRole('list', { name: 'Sections in the report' })).toHaveTextContent('Measures (charts)');
+    Object.assign(URL, { createObjectURL: vi.fn(() => 'blob:x'), revokeObjectURL: vi.fn() });
+    const clicked = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    await userEvent.click(within(form).getByRole('button', { name: 'Generate PDF' }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Generate graph report' })).not.toBeInTheDocument(), { timeout: 5000 });
+    // The Chart window's cards and scope.
+    expect(reportCharts.calls.at(-2)).toMatchObject({ scope: 'all', cards: [expect.objectContaining({ metric: 'pagerank' })] });
+    expect(reportCharts.calls.at(-1)).toMatchObject({ scope: 'drawn', cards: [expect.objectContaining({ metric: 'degree' })] });
+    const report = renderGraphReportPdf.mock.calls.at(-1)[0];
+    // One set per Chart window, each under its title.
+    const measureBlocks = report.sections.find((section) => section.id === 'measures').blocks;
+    expect(measureBlocks.filter((block) => block.type === 'subheading').map((block) => block.text)).toEqual([expect.stringMatching(/^Chart 9/), expect.stringMatching(/^Chart 10/)]);
+    expect(measureBlocks[1].text).toMatch(/^The charts of Chart 9.* \(the analyst's\), over the whole graph\./);
+    // Appendix B: Table 9's rows, columns (hidden ones left out) and sort.
+    const appendix = report.sections.find((section) => section.id === 'table-b');
+    expect(appendix.title).toBe('Table: Nodes');
+    const table = appendix.blocks.find((block) => block.type === 'wideTable');
+    expect(table.head).toEqual(['Label', 'Type', 'Links']);
+    expect(table.rows.map((row) => row[0])).toEqual(['N5', 'N4', 'N3', 'N2', 'N1']);
+    // Appendix C: Table 10 with its filter kept.
+    const filtered = report.sections.find((section) => section.id === 'table-c');
+    expect(filtered.blocks[0].text).toMatch(/filter "N2"/);
+    expect(filtered.blocks.find((block) => block.type === 'wideTable').rows.map((row) => row[0])).toEqual(['N2']);
     clicked.mockRestore();
   });
 });

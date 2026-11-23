@@ -24,10 +24,12 @@ const ORIENTATIONS = Object.freeze([
   { id: 'landscape', label: 'Landscape', hint: 'A4 on its side' },
 ]);
 
-export default function TablePrintDialog({ title = 'Print table', rowCounts, columns, compose, onSubmit, onCancel }) {
-  const [rowsMode, setRowsMode] = useState('shown');
+// defaultRowsMode / defaultOrientation: how the dialog starts (Libraries ▸
+// Table defaults).
+export default function TablePrintDialog({ title = 'Print table', rowCounts, columns, defaultRowsMode = 'shown', defaultOrientation = 'auto', compose, onSubmit, onCancel }) {
+  const [rowsMode, setRowsMode] = useState(() => (ROW_MODES.some((mode) => mode.id === defaultRowsMode) ? defaultRowsMode : 'shown'));
   const [chosen, setChosen] = useState(() => new Set(columns.filter((column) => !column.hidden).map((column) => column.key)));
-  const [orientation, setOrientation] = useState('auto');
+  const [orientation, setOrientation] = useState(() => (ORIENTATIONS.some((entry) => entry.id === defaultOrientation) ? defaultOrientation : 'auto'));
   const [busy, setBusy] = useState('');
   const ref = useRef(null);
   const allRef = useRef(null);

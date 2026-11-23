@@ -69,7 +69,9 @@ export const normalizeAdminUserList = (data) => {
     ...item,
     id: item.id ?? item.username,
     username: item.username || '',
-    display_name: item.display_name || item.name || item.username || '',
+    // Not filled from the username: it is sent back on save, and would
+    // overwrite an empty display name.
+    display_name: item.display_name || item.name || '',
     roles: Array.isArray(item.roles) ? item.roles : [],
     permissions: Array.isArray(item.permissions) ? item.permissions : [],
     is_active: item.is_active !== false,

@@ -2,7 +2,16 @@
 
 **For:** the backend team / backend agent of the LinkX link-analysis service.
 **From:** the incubation frontend (`/var/www/linkx-frontend/incubation`).
-**Status:** proposal. The frontend will build against the shapes below; anything you change, tell us and we adapt. Items are numbered **H-1…H-17** so answers can refer to them.
+**Updated:** 2026-11-19.
+**Status:** proposal. The frontend is already built against the shapes below; where you change a shape, tell us and we adapt one adapter. Items are numbered **H-1…H-18** so answers can refer to them.
+
+**How to use this file.** This file and `docs/backend-requests.md` (items **B-1…B-28**) together are the full list of what the frontend needs from the Service. This file covers analysis tasks, evidence records, the STR alert workflow, and session/connection confirmations. `backend-requests.md` covers security, configuration, the Source window and graph-file items. §5 lists the B-items that are still open.
+
+**What the frontend already does (2026-11-19).**
+- **Reports window:** three tabs (Alert reports, System reports, Service evidence) read through one adapter mapped to H-1.
+- **Graph, Table and Chart windows:** evidence graphs, reports and PDFs (the Graph Report and the Evidence Report, with charts and tables).
+- **Source window:** the dataframe filter (B-27 / B-28).
+- **STR alert workflow** (§2c): the full procedure (arrival, assignment, Analyse, Extract results, Report back), with every notice. It runs today against a **mock parent-alert service** that uses exactly the shapes and events of H-3, H-4 and H-5. When you deliver them, the frontend switches from the mock to the live adapter with one setting (`VITE_PARENT_ALERTS=live`); no screen changes.
 
 ---
 
@@ -35,7 +44,7 @@ Sibling service ──► run  ─┘   (backend only; never shown as a UI task)
 ### What exists today (as the production frontend uses it)
 - `GET /api/v1/reports/parent | /xvigilance | /evidence` with `limit, offset, status, score_band, min_fraud_score, q, start_date, end_date` → `{ data: [...], count }`. Records carry `id, status, external_reference_id, trace_id?, payload (JSON string or object: trace_id, has_graph, include_graph, nodes…), has_graph?, graph_available?, include_graph?, fraud_score?…`. Graph availability is currently guessed from ~10 different flags.
 - `POST /api/v1/reports/xvigilance/state | /rewind`, `GET /api/v1/reports/xvigilance/health?limit=50`.
-- Socket: the browser emits `str_report_register_receiver { session_id, socket_id }`; the backend emits `str_report_link_analysis { analysis session id, socket_emit list, wait_for_prepare?, defer_graph_open? }` and `notification { code: "str_report_prepare_receiver" }`. The frontend then opens a graph immediately, without recording it as work.
+- Socket: the browser emits `str_report_register_receiver { session_id, socket_id }`; the backend emits `str_report_link_analysis { analysis session id, socket_emit list, wait_for_prepare?, defer_graph_open? }` and `notification { code: "str_report_prepare_receiver" }`. Production then opens a graph immediately, without recording it as work. **The incubation frontend does not port that pop-up** (analyst decision 2026-11-19). An STR is an alert report from the parent, recorded in Reports and worked through the procedure in §2c. Until H-3 to H-5 exist, `str_report_link_analysis` only raises a notice.
 - Analysis jobs: `/jobs/:id` polling; stream logs over the socket (`log_stream_plug` / `stream_logs`); per-batch flag lines `[Info] Incremental analysis for batch <id> flags: {'FUND_FLOW': 9, ...}`.
 - Earlier requests in `docs/backend-requests.md`: **B-20** (task list) and **B-21** (verdict in the log) are **superseded by H-2 and H-7** below.
 
@@ -98,49 +107,116 @@ All three report endpoints return the **same shape**; keep the existing URLs for
 - Keep a stream running after `/close_source_window` while its job is active, or confirm the frontend must keep the source session open until the stream ends (what it does today).
 - **Acceptance:** a run started in the UI appears in the list after a reload with its final status, verdict and flags.
 
-### H-3. Parent alerts: assignment and response status (P0)
+### The STR alert procedure (read before H-3, H-4 and H-5)
+
+**What an STR is here.** A suspicious transaction report forwarded by the parent service as an **alert assigned to one LinkX analyst**. The parent owns the case and the assignment; LinkX analyses and answers. In the frontend, the assigned analyst works it in **Reports ▸ Alert reports** through three steps:
+
+1. **Analyse:** run link analysis on the alert's data. This records a task (Tasks window, origin "STR alert") and opens the alert's graph in a Graph window.
+2. **Extract results:** gather four fields from that Graph window and its linked Table and Chart windows, or from the defaults when none are open:
+   - **Graph:** a picture of it;
+   - **Table:** the tables;
+   - **Charts:** the chart pictures;
+   - **Summary of findings:** verdict, rule flags, key findings and the **analyst's comments**.
+
+   Each field can be included or left out.
+3. **Report back:** send the feedback to the parent for that alert, then follow its delivery until it is acknowledged (or fails, and is retried).
+
+The analyst gets a notice, with an "Open in Reports" action, at each stage:
+- a new alert arrives;
+- its data completes, or arrives incomplete;
+- it is assigned to them, or reassigned away;
+- its analysis starts, finishes or fails;
+- the feedback is sent, acknowledged or fails.
+
+A new or newly assigned alert also counts on the Reports launcher badge.
+
+**The mock the frontend runs today** (`src/features/alerts/mock/mockAlertService.js`) produces exactly the records and events below. Please match them, or tell us what differs.
+
+### H-3. Parent alerts: arrival, assignment and response status (P0)
 Parent alert records (H-1, `requester_type: "parent"`) additionally carry:
 
 ```jsonc
 {
+  // Arrival: the alert's data as the parent sends it
+  "intake_status": "receiving" | "complete" | "incomplete",
+  "expected_records": 340, "received_records": 120,      // optional, shown while receiving
+  "intake_note": "40 of 200 records did not arrive",      // why it is incomplete
+  // Assignment (the parent's; LinkX never changes it)
   "assignee_user_id": "…", "assignee_username": "…",
-  "assigned_at": "ISO", "assigned_by": "parent user/display name",
-  "response_status": "awaiting_analysis" | "analysing" | "feedback_sent" | "acknowledged" | "feedback_failed",
+  "assigned_at": "ISO", "assigned_by": "parent user / desk name",
+  // Response
+  "response_status": "awaiting_analysis" | "analysing" | "analysed" | "feedback_sent" | "acknowledged" | "feedback_failed",
+  "response_note": "reason when feedback_failed",
+  "task_id": "the alert's latest analysis task",
+  "verdict": "clean" | "suspicious" | "undetermined" | null, "flags": { "RULE": 3 },
+  "trace_id": "graph evidence id of the analysis (H-1)", "has_graph": true,
   "feedback_sent_at": "ISO|null", "acknowledged_at": "ISO|null",
-  "parent_case_status": "…"   // read-only mirror for display, optional; LinkX never edits it
+  "parent_case_status": "…"   // optional read-only mirror for display
 }
 ```
 
-- `GET /api/v1/reports/parent?assignee=me` (default view) and `?assignee=all` (supervisors).
-- Socket events to the assignee's browser session(s): `parent_alert_assigned`, `parent_alert_reassigned` (also to the previous assignee), `parent_alert_updated` — payload `{ alert }` in the H-1/H-3 shape. Users offline at the time see it on their next list load (no extra endpoint needed).
-- **The parent is the source of truth for assignment.** LinkX never reassigns on its own.
-- **Acceptance:** assigning an alert in the parent makes it appear in the assignee's "Assigned to me" list and raises the socket event within seconds.
+- **New response state `analysed`:** the run finished and feedback is not yet sent. The frontend also shows its own transient "Sending feedback" while the H-5 request is in flight; you do not need that state.
+- **Only `intake_status: "complete"` alerts can be analysed.** The frontend blocks Analyse while `receiving` or `incomplete`, and says why.
+- **Lists:** `GET /api/v1/reports/parent?assignee=me` (the default view, "Assigned to me") and `?assignee=all` (supervisors, "All alerts").
+- **Socket events** to the assignee's browser sessions. The payload is `{ alert }` in the shape above.
+  - `parent_alert_assigned`: a new alert, or one newly assigned to this user.
+  - `parent_alert_reassigned`: sent to both the previous and the new assignee.
+  - `parent_alert_updated`: any other change (data arriving or completing, response status, acknowledgement).
 
-### H-4. Start link analysis for a parent alert (P0)
-`POST /api/v1/reports/parent/:id/analysis` → `{ task: Task, source_session_id, socket_emit? }`
+  The frontend works out what changed by comparing with the record it holds. One generic update event is enough, as long as it carries the full record. Users who were offline see the current state on their next list load.
+- **Acceptance:**
+  1. Assigning an alert in the parent makes it appear in the assignee's "Assigned to me" list, and raises `parent_alert_assigned` within seconds.
+  2. Its data completing raises `parent_alert_updated` with `intake_status: "complete"`.
 
-- Allowed only for the current assignee (or a supervisor, H-9); otherwise `403 { code: "not_assignee" }`.
-- Creates a task with `origin: "parent"`, `external_reference_id`, and sets `response_status: "analysing"`.
-- **Replaces the unannounced `str_report_link_analysis` graph pop-up.** If the parent still pushes that event, include `external_reference_id` (and `task_id` when known) so the frontend can attach it to the alert's task instead of opening a bare graph.
-- **Acceptance:** the run shows in Tasks, linked to the alert, and its graph opens from the task.
+### H-4. Start link analysis for an alert (P0)
+`POST /api/v1/reports/parent/:id/analysis` returns `{ task: Task, source_session_id, trace_id?, alert? }`.
 
-### H-5. Send feedback to the parent (P0)
-`POST /api/v1/reports/parent/:id/feedback`
+- **Who may run it:** only the current assignee (or a supervisor, H-9); otherwise `403 { code: "not_assignee" }`. An alert whose data is not complete is refused with `409 { code: "intake_not_complete" }`.
+- **What it does:** creates a task with `origin: "parent"` and `external_reference_id` (H-2), and sets `response_status: "analysing"`. It returns the updated `alert` when convenient.
+- **Progress** goes over the socket to the assignee, as `parent_alert_analysis`:
+
+  ```jsonc
+  { "alert_id": "…", "task_id": "…", "phase": "progress", "line": "[Info] Applying rules: FUND_FLOW, …" }
+  { "alert_id": "…", "task_id": "…", "phase": "completed", "flags": { "FUND_FLOW": 2, "STRUCTURING": 5 }, "trace_id": "…" }
+  { "alert_id": "…", "task_id": "…", "phase": "failed", "message": "user-safe reason" }
+  ```
+
+  On `completed`, set `response_status: "analysed"`, with `flags`, `trace_id` and `has_graph: true` on the alert. The frontend then fetches the graph by `trace_id`, exactly as for Service evidence (`POST /get_graph` with the evidence payload), and opens it in a Graph window bound to the alert.
+- **Replaces the unannounced `str_report_link_analysis` graph pop-up.** If the parent still pushes that event, include `external_reference_id` (and `task_id` when known), so the frontend can attach it to the alert instead of opening a bare graph.
+- **Acceptance:** the run shows in Tasks, linked to the alert. Its progress lines show in the task. Its graph opens from the alert and from the task.
+
+### H-5. Send the findings back to the parent (P0)
+`POST /api/v1/reports/parent/:id/feedback`. The analyst chooses what goes in; fields left out are sent as `null` / `[]`.
 
 ```jsonc
 {
-  "task_id": "…",                       // the analysis the feedback is based on
+  "task_id": "…",                                   // the analysis the findings come from
   "verdict": "clean" | "suspicious" | "undetermined",
-  "flags": { "RULE": 123 },
-  "summary": "analyst's note (plain text)",
-  "include_graph": true
+  "flags": { "FUND_FLOW": 2 },
+  "summary": {
+    "findings": ["Abebe Alemu is the most connected entity, linked to 6 others.", "…"],   // one line each
+    "analyst_comments": "free text, at most 4 000 characters"
+  },
+  "include": { "graph": true, "table": true, "charts": true, "summary": true },
+  "graph": { "image": "data:image/jpeg;base64,…", "nodes": 18, "links": 25 },          // or null
+  "tables": [{ "title": "Entities", "source": "…", "columns": ["Label", "ID", "Type", "Links", "Flags"], "rows": [["…"]], "total": 18 }],
+  "charts": [{ "title": "Degree Centrality", "level": "Node", "image": "data:image/jpeg;base64,…" }]
 }
 ```
 
-- Allowed only for the current assignee (or supervisor). Rejected if the alert was reassigned (`409 { code: "reassigned" }`).
-- Creates/updates the evidence record (H-1) and delivers it to the parent; sets `response_status: "feedback_sent"`, later `"acknowledged"` when the parent confirms, or `"feedback_failed"` with a reason.
-- **Idempotent** per `(alert id, task id)`: a retry must not send twice.
-- **Please answer:** how is feedback delivered (callback, queue, socket, parent polls)? Does the parent acknowledge? Can feedback be sent more than once per alert (e.g. corrected)?
+- **Sizes the frontend sends:**
+  - images are JPEG or PNG data URLs, roughly 100 to 600 KB each;
+  - a table has at most 2 000 rows;
+  - a typical request is under 5 MB.
+
+  Please accept at least 10 MB on this endpoint, or tell us your limit so the frontend can warn first.
+- **Who may send it:** only the current assignee (or a supervisor). A reassigned alert is refused with `409 { code: "reassigned" }`.
+- **What it does:** creates or updates the evidence record (H-1) and delivers it to the parent. It answers `{ alert }` with `response_status: "feedback_sent"`. Later, raise `parent_alert_updated` with `"acknowledged"` when the parent confirms, or with `"feedback_failed"` and `response_note` when delivery fails. A synchronous delivery failure may instead answer `502 { code: "delivery_failed", message }`. The frontend shows it and offers **Retry**.
+- **Idempotent** per `(alert id, task id)`: a retry must not deliver twice.
+- **Please answer:**
+  - How is feedback delivered (callback, queue, socket, the parent polling)?
+  - Does the parent always acknowledge?
+  - Can findings be corrected and sent again after `acknowledged`? Today the frontend locks the alert once the feedback is sent.
 
 ### H-6. Save an analyst's run as evidence (P1)
 `POST /api/v1/reports/evidence { task_id, summary?, include_graph }` → evidence record with `requester_type: "analyst"`, `requester_id: <user id>`.
@@ -264,6 +340,9 @@ Please confirm:
 
 ---
 
+### H-18. Dataframe filter before ingestion (P1, see B-27 / B-28)
+The Source window lets the analyst strip columns and keep or remove rows before ingestion. The filter travels as `value.dataframe_filter` on `POST /live_batch_files { id: 'stream' }` (**B-27**). A preview can be asked with `preview_DF_filter` (**B-28**). The full contract and acceptance tests are in `backend-requests.md`. Please also record the filter on the H-2 task, so an audit shows what was excluded.
+
 ## 3. Open questions (please answer in writing)
 
 1. **User identity:** how does a parent user id map to a LinkX user (same SSO subject, username, or a mapping table)? Assignment (H-3) depends on it.
@@ -274,8 +353,25 @@ Please confirm:
 6. **Retention:** how long are tasks and evidence kept (audit/regulatory requirement)?
 
 ## 4. Priority and order
-1. **P0:** H-10 first (it blocks analysts now; re-test on the fixed frontend first), H-11 (the lock loop), then H-1, H-2, H-3, H-4, H-5, H-7 (the frontend's Phases 1–3 depend on them).
-2. **P1:** H-6, H-8, H-9, H-12, H-13, H-14, H-16.
-3. **P2:** H-15.
+1. **P0:**
+   - H-10 first (it blocks analysts now; re-test on the fixed frontend first);
+   - H-11 (the lock loop);
+   - then H-1, H-2 and H-7 (tasks and records);
+   - then H-3, H-4 and H-5 (the STR procedure; the frontend is ready and waiting on them).
+2. **P1:** H-6, H-8, H-9, H-12, H-13, H-14, H-16, H-17, H-18 (with B-27).
+3. **P2:** H-15, B-28.
 
-Until these land, the frontend keeps tasks in memory (as today) and reads the current report endpoints, mapping their fields to the H-1 shape in one adapter so the switch is a single change.
+Until these land, the frontend:
+- keeps tasks in memory, as today;
+- reads the current report endpoints, mapped to H-1 in one adapter;
+- runs the STR procedure on its mock.
+
+Each switch is a single change.
+
+## 5. Also open in `docs/backend-requests.md`
+Items there that the frontend still waits on:
+- **Security and contract (P0/P1):** B-1 to B-12. These are server-side RBAC, secrets, concurrency, error contract, job cancellation and so on.
+- **Domain configuration:** B-23 (keep `actor_profile`), B-24 (keep `formatting_rules`).
+- **Graph files and reports:** B-25 (encrypted `.lxg` graph files), B-26 (actor profile portraits readable by the report, same origin or CORS).
+- **Source window:** B-27 (apply `dataframe_filter` before ingestion), B-28 (preview it).
+- **Superseded by this file:** B-20 → H-2, B-21 → H-7, B-22 → this file as a whole.

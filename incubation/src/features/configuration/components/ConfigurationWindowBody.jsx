@@ -456,25 +456,25 @@ export default function ConfigurationWindowBody({ windowItem }) {
 
   return (
     <div className="workspace_window_body settings_window_body configuration_window_body">
-      <div className="settings_window_workspace">
+      <div className="settings_window_workspace configuration_theme_scope is-compact-header">
         <header className="settings_window_choose_header">
           <svg className="source_window_mode_icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
             <path d="M14.7 6.3a4 4 0 0 0-5 5L4.5 16.5a2.1 2.1 0 0 0 3 3l5.2-5.2a4 4 0 0 0 5-5l-2.6 2.6-3-3z" />
           </svg>
           <div>
             <h2>Configuration</h2>
-            <p>{activeTabMeta?.description}</p>
-            <dl className="settings_window_session_chip config_window_chips">
-              <div>
-                <dt>Session</dt>
-                <dd>{mainSessionId || 'not initialized'}</dd>
-              </div>
-              <div>
-                <dt>Domain</dt>
-                <dd>{formatDomainPillarLabel(getActiveDomainKey(draft))}</dd>
-              </div>
-            </dl>
+            <p>The session's domain, connections, tools and analysis rules.</p>
           </div>
+          <dl className="settings_window_session_chip config_window_chips">
+            <div>
+              <dt>Session</dt>
+              <dd title={mainSessionId || undefined}>{mainSessionId || 'not initialized'}</dd>
+            </div>
+            <div>
+              <dt>Domain</dt>
+              <dd>{formatDomainPillarLabel(getActiveDomainKey(draft))}</dd>
+            </div>
+          </dl>
         </header>
         <div className="settings_window_workflow_shell">
           <nav className="settings_window_timeline source_window_timeline is-tabs" aria-label="Configuration tabs">

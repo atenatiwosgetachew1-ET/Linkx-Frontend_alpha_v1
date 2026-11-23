@@ -1,7 +1,7 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
-import { DraftInput, Field, ListTextarea, OptionField, Section } from '../../../shared/components/form/FormFields.jsx';
+import { DraftInput, Field, InfoTip, ListTextarea, OptionField } from '../../../shared/components/form/FormFields.jsx';
 import {
   checkIsBuiltinRule,
   formatDomainPillarLabel,
@@ -20,8 +20,20 @@ import { sanitizeText } from '../../../utils/inputSecurity.js';
 import { CONFIG_PROFILE_KEY, PROFILE_FIELDS, profileToConfiguration, resolveProfileSettings } from '../../graph/lib/nodeProfile.js';
 import { CONFIG_FORMATTING_KEY, describeRule, resolveDomainFormatting } from '../../graph/lib/conditionalFormatting.js';
 import GraphFormattingBox, { RuleSample } from '../../graph/components/GraphFormattingBox.jsx';
+import { Block, Masthead, Option, PageHero, Pill, SettingsPage, Stat, Stats } from '../../settings/components/SettingsPage.jsx';
 
 const truthy = (value) => value === true || value === 'true';
+
+// TEMPORARY (style check): extra domain pills that are not real domains.
+// They show the pill states and do nothing when clicked. Remove this
+// constant and its two uses below once the look is settled.
+const MOCK_DOMAINS = import.meta.env.MODE === 'test' ? [] : [
+  { key: 'mock_insurance', label: 'Insurance', ready: true },
+  { key: 'mock_telecom', label: 'Telecom', ready: true },
+  { key: 'mock_customs', label: 'Customs & Trade', ready: false },
+  { key: 'mock_tax', label: 'Tax Revenue', ready: false },
+  { key: 'mock_long', label: 'Anti-Money-Laundering Unit', ready: true },
+];
 
 /* ── System ─────────────────────────────────────────────────────────── */
 
@@ -34,13 +46,7 @@ export function SystemPanel({ draft, onChange, onSwitchDomain, isSwitchingDomain
   const tables = Array.isArray(activeConn.storage_tables) ? activeConn.storage_tables : (Array.isArray(draft?.storage_tables) ? draft.storage_tables : []);
   const sourceCol = activeConn.default_source_col || draft?.default_source_col || '';
   const targetCol = activeConn.default_target_col || draft?.default_target_col || '';
-  const meta = [
-    ['Target DB', activeConn.storage_database || draft?.active_storage_database || '—'],
-    ['Storage port', activeConn.storage_port || draft?.api_port || '5000'],
-    ['Date field', activeConn.date_column || draft?.date_column || '—'],
-    ['Source / target', sourceCol && targetCol ? `${sourceCol} → ${targetCol}` : 'Auto'],
-    ['Storage path', activeConn.storage_path || draft?.storage_path || '—'],
-  ];
+  const tablesText = tables.join(', ');
 
   const editable = Array.isArray(idlePolicyMeta?.editableFields) ? idlePolicyMeta.editableFields : [];
   const policyBusy = idlePolicyMeta?.isLoading || idlePolicyMeta?.isSaving;
@@ -51,103 +57,142 @@ export function SystemPanel({ draft, onChange, onSwitchDomain, isSwitchingDomain
     const next = Math.max(min, Math.min(1440, Number.parseInt(value, 10) || 0));
     onIdleSettingsChange((previous) => ({ ...previous, [key]: next * 60000 }));
   };
+  const isReady = (key) => (domainConnections[key] ? domainConnections[key].configured !== false : true);
+  const timeouts = [
+    ['warningMs', 'Warn after', 0, 1439, 'idle_warning_ms', 'Minutes without activity before the idle warning shows. Range 0 to 1,439 · whole minutes'],
+    ['lockMs', 'Lock after', 1, 1440, 'idle_lock_ms', 'Minutes without activity before the session locks. Range 1 to 1,440 · whole minutes'],
+    ['timeoutMs', 'Log out after', 1, 1440, 'max_idle_timeout_ms', 'Minutes without activity before the account is logged out. Range 1 to 1,440 · whole minutes'],
+  ];
+  const services = [
+    { icon: 'link', title: 'Automate across services', description: 'Let the services hand work on to each other.', checked: truthy(draft?.automation), onChange: (checked) => onChange('automation', checked) },
+    { icon: 'globe', title: 'Remote requests', description: 'Allow requests to remote endpoints.', checked: truthy(draft?.remote), onChange: (checked) => onChange('remote', checked) },
+    { icon: 'edit', title: 'Auto fill fields', description: 'Fill Source window fields from this configuration.', checked: isConfigAutoFillEnabled(draft), onChange: (checked) => onChange('auto_fill_fields', checked) },
+  ];
+  const policyNotes = [
+    Number.isFinite(idlePolicyMeta?.authTokenSeconds) ? `Auth token lifetime: ${Math.max(1, Math.round(idlePolicyMeta.authTokenSeconds / 60))} minute(s).` : '',
+    idlePolicyMeta?.isLoading ? 'Refreshing session policy…' : '',
+    idlePolicyMeta?.isSaving ? 'Saving session policy…' : '',
+  ].filter(Boolean);
 
   return (
-    <>
-      <Section
-        title="Domain pillar (session)"
-        description="Active investigative pillar for this session. Switching re-projects database catalogs, ports, storage paths and schema mappings on the Service."
+    <SettingsPage className="config_page config_system">
+      <Masthead>
+        <PageHero
+          tone={configured ? 'active' : 'danger'}
+          eyebrow="Domain pillar (session)"
+          title={formatDomainPillarLabel(activeDomain)}
+          pill={<Pill tone={configured ? 'active' : ''} dot>{configured ? 'Configured' : 'Unconfigured'}</Pill>}
+          meta="The active investigative pillar. Switching re-projects database catalogs, ports, storage paths and schema mappings on the Service."
+          media={(
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 21h18M5 21V10M9.5 21V10M14.5 21V10M19 21V10M12 3l9 5H3l9-5z" />
+            </svg>
+          )}
+        />
+        <Stats label="Active domain" columns={5} className="config_system_facts">
+          <Stat text icon="database" label="Target DB" value={activeConn.storage_database || draft?.active_storage_database || '—'} />
+          <Stat text icon="server" label="Storage port" value={String(activeConn.storage_port || draft?.api_port || '5000')} />
+          <Stat text icon="clock" label="Date field" value={activeConn.date_column || draft?.date_column || '—'} />
+          <Stat text icon="list" label="Source / target" value={sourceCol && targetCol ? `${sourceCol} → ${targetCol}` : 'Auto'} />
+          <Stat text icon="layers" label="Storage path" value={activeConn.storage_path || draft?.storage_path || '—'} />
+        </Stats>
+      </Masthead>
+
+      {tables.length > 0 ? (
+        <p className="config_system_tables" title={tablesText}>
+          <span>Tables</span>
+          {tables.map((table) => <code key={table}>{table}</code>)}
+        </p>
+      ) : null}
+
+      <Block
+        title="Switch domain pillar"
+        description={isSwitchingDomain ? 'Switching pillar and projecting configuration…' : 'Takes effect immediately for this session and every Source window.'}
       >
-        <Field label="Active domain pillar" hint={isSwitchingDomain ? 'Switching pillar and projecting configuration…' : 'Takes effect immediately for this session and every Source window.'}>
-          <select
-            className="settings_input"
-            value={activeDomain}
-            disabled={isSwitchingDomain || !canWrite}
-            onChange={(event) => onSwitchDomain(event.target.value)}
-          >
-            {registeredDomains.map((key) => {
-              const conn = domainConnections[key];
-              const ready = conn ? conn.configured !== false : true;
-              return <option key={key} value={key}>{formatDomainPillarLabel(key)} ({ready ? 'Ready' : 'Unconfigured'})</option>;
-            })}
-          </select>
-        </Field>
-        <div className={`config_window_domain_card ${configured ? 'is-ready' : 'is-unconfigured'}`}>
-          <div className="config_window_domain_card_header">
-            <strong>{formatDomainPillarLabel(activeDomain)}</strong>
-            <span>{configured ? '● Configured' : '○ Unconfigured'}</span>
-          </div>
-          <dl className="config_window_domain_meta">
-            {meta.map(([key, value]) => (
-              <div key={key}>
-                <dt>{key}</dt>
-                <dd title={String(value)}>{value}</dd>
-              </div>
-            ))}
-          </dl>
-          {tables.length > 0 ? <p className="config_window_domain_tables" title={tables.join(', ')}><span>Tables:</span> {tables.join(', ')}</p> : null}
+        <div className="config_system_domains" role="radiogroup" aria-label="Active domain pillar">
+          {registeredDomains.map((key) => {
+            const ready = isReady(key);
+            return (
+              <button
+                key={key}
+                type="button"
+                role="radio"
+                aria-checked={key === activeDomain}
+                className={`config_system_domain${key === activeDomain ? ' is-on' : ''}${ready ? '' : ' is-unready'}`}
+                disabled={isSwitchingDomain || !canWrite}
+                title={canWrite ? (ready ? 'Ready' : 'Unconfigured') : 'You need config:write to switch the domain pillar.'}
+                onClick={() => { if (key !== activeDomain) onSwitchDomain(key); }}
+              >
+                <i aria-hidden="true" />
+                {formatDomainPillarLabel(key)}
+                <small>{ready ? 'Ready' : 'Unconfigured'}</small>
+              </button>
+            );
+          })}
+          {MOCK_DOMAINS.map((mock) => (
+            <button
+              key={mock.key}
+              type="button"
+              role="radio"
+              aria-checked={false}
+              className={`config_system_domain${mock.ready ? '' : ' is-unready'}`}
+              disabled={isSwitchingDomain || !canWrite}
+              title="Mock pill for checking styles: it does nothing"
+            >
+              <i aria-hidden="true" />
+              {mock.label}
+              <small>{mock.ready ? 'Ready' : 'Unconfigured'}</small>
+            </button>
+          ))}
         </div>
-      </Section>
+      </Block>
 
       <fieldset className="config_window_write_gate" disabled={!canWrite} title={canWrite ? undefined : 'You need config:write to change these settings.'}>
-      <Section
-        title="Session timeout policy"
-        description={`Loaded from and saved to the Service session policy. Source: ${idlePolicyMeta?.source || 'session'}.`}
-      >
-        <div className="config_window_grid is-compact">
-          <Field label="Warn after (min)">
-            <DraftInput name="warningMs" type="number" min="0" max="1439" value={minutes(idleSettings?.warningMs, 0)} disabled={!canEditPolicy('idle_warning_ms')} onCommit={updateMinutes} />
-          </Field>
-          <Field label="Lock after (min)">
-            <DraftInput name="lockMs" type="number" min="1" max="1440" value={minutes(idleSettings?.lockMs, 1)} disabled={!canEditPolicy('idle_lock_ms')} onCommit={updateMinutes} />
-          </Field>
-          <Field label="Logout after (min)">
-            <DraftInput name="timeoutMs" type="number" min="1" max="1440" value={minutes(idleSettings?.timeoutMs, 1)} disabled={!canEditPolicy('max_idle_timeout_ms')} onCommit={updateMinutes} />
-          </Field>
-        </div>
-        <label className="settings_toggle_row config_window_toggle">
-          <input
-            type="checkbox"
-            checked={idleSettings?.lockRequiresReauth !== false}
-            disabled={!canEditPolicy('lock_requires_reauth')}
-            onChange={(event) => onIdleSettingsChange((previous) => ({ ...previous, lockRequiresReauth: event.target.checked }))}
-          />
-          <span>Require re-auth after lock</span>
-        </label>
-        {Number.isFinite(idlePolicyMeta?.authTokenSeconds) ? <p className="settings_hint">Auth token lifetime: {Math.max(1, Math.round(idlePolicyMeta.authTokenSeconds / 60))} minute(s).</p> : null}
-        {idlePolicyMeta?.isLoading ? <p className="settings_hint">Refreshing session policy…</p> : null}
-        {idlePolicyMeta?.isSaving ? <p className="settings_hint">Saving session policy…</p> : null}
-        {idlePolicyMeta?.error ? <div className="settings_error">{idlePolicyMeta.error}</div> : null}
-      </Section>
+        <Block
+          title="Session timeout policy"
+          description={`Loaded from and saved to the Service session policy. Source: ${idlePolicyMeta?.source || 'session'}.`}
+        >
+          <div className="config_system_timeouts">
+            {timeouts.map(([name, label, min, max, field, info]) => (
+              <label key={name} className="config_system_timeout">
+                <span className="config_system_timeout_label">{label}<InfoTip text={info} /></span>
+                <span className="config_system_timeout_value">
+                  <DraftInput name={name} type="number" min={min} max={max} aria-label={`${label} (min)`} value={minutes(idleSettings?.[name], min)} disabled={!canEditPolicy(field)} onCommit={updateMinutes} />
+                  <small>min</small>
+                </span>
+              </label>
+            ))}
+          </div>
+          <div className="settings_options">
+            <Option
+              icon="lock"
+              title="Require re-auth after lock"
+              description="Ask for the password again to unlock the session."
+              checked={idleSettings?.lockRequiresReauth !== false}
+              disabled={!canWrite || !canEditPolicy('lock_requires_reauth')}
+              onChange={(checked) => onIdleSettingsChange((previous) => ({ ...previous, lockRequiresReauth: checked }))}
+            />
+          </div>
+          {policyNotes.map((note) => <p key={note} className="settings_hint">{note}</p>)}
+          {idlePolicyMeta?.error ? <div className="settings_error">{idlePolicyMeta.error}</div> : null}
+        </Block>
 
-      <Section title="Miscellaneous" description="Saved with the configuration.">
-        <div className="settings_toggle_list">
-          <label className="settings_toggle_row">
-            <input type="checkbox" checked={truthy(draft?.automation)} onChange={(event) => onChange('automation', event.target.checked)} />
-            <span>Automate across services</span>
-          </label>
-          <label className="settings_toggle_row">
-            <input type="checkbox" checked={truthy(draft?.remote)} onChange={(event) => onChange('remote', event.target.checked)} />
-            <span>Remote requests</span>
-          </label>
-          <label className="settings_toggle_row">
-            <input type="checkbox" checked={isConfigAutoFillEnabled(draft)} onChange={(event) => onChange('auto_fill_fields', event.target.checked)} />
-            <span>Auto fill fields</span>
-          </label>
-        </div>
-      </Section>
-
+        <Block title="Services" description="Saved with the configuration.">
+          <div className="settings_options" role="group" aria-label="Services">
+            {services.map((service) => <Option key={service.title} {...service} disabled={!canWrite} />)}
+          </div>
+        </Block>
       </fieldset>
 
-      <Section title="Notes">
-        <ul className="config_window_notes">
+      <Block title="Notes">
+        <ul className="config_window_notes config_system_notes">
           <li>Modifications apply to the next instances (new connections and Source windows).</li>
           <li>Removing a rule deletes it permanently.</li>
           <li>Saving is required to add new rules.</li>
           <li>Remember to back up (Export).</li>
         </ul>
-      </Section>
-    </>
+      </Block>
+    </SettingsPage>
   );
 }
 
@@ -169,125 +214,180 @@ const ENDPOINT_FIELDS = [
   ['search_api_endpoint_hive_strict', 'Hive strict endpoint'],
 ];
 
-// Read-only users get every control disabled natively through <fieldset>.
-function WriteGate({ canWrite, children }) {
-  return (
-    <fieldset className="config_window_write_gate" disabled={!canWrite}>
-      {!canWrite ? <p className="settings_hint config_window_readonly_hint">Read-only: you need config:write to change these settings.</p> : null}
-      {children}
-    </fieldset>
-  );
-}
+// Glyphs for the field labels (24px grid, stroked).
+const FIELD_ICONS = {
+  server: 'M5 2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zM5 14h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2zM6 6h.01M6 18h.01',
+  topic: 'M4 9h16M4 15h16M10 3L8 21M16 3l-2 18',
+  database: 'M12 8c4.97 0 9-1.34 9-3s-4.03-3-9-3-9 1.34-9 3 4.03 3 9 3zM21 12c0 1.66-4 3-9 3s-9-1.34-9-3M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5',
+  port: 'M12 22v-5M9 8V2M15 8V2M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8z',
+  folder: 'M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z',
+  table: 'M3 3h18v18H3zM3 9h18M3 15h18M9 3v18',
+  link: 'M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71',
+  columns: 'M3 3h18v18H3zM9 3v18M15 3v18',
+  search: 'M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.35-4.35',
+  limit: 'M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6',
+  lock: 'M5 11h14a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2zM7 11V7a5 5 0 0 1 10 0v4',
+  user: 'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
+  tool: 'M14.7 6.3a4 4 0 0 0-5 5L4.5 16.5a2.1 2.1 0 0 0 3 3l5.2-5.2a4 4 0 0 0 5-5l-2.6 2.6-3-3z',
+  screen: 'M4 3h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM8 21h8M12 17v4',
+};
+
+const countOf = (list) => (Array.isArray(list) ? list.filter(Boolean).length : 0);
 
 export function ConnectionsPanel({ draft, onChange, canWrite }) {
   const largeSearchBackend = normalizeLargeSearchBackend(draft?.large_search_backend);
+  const tableCount = countOf(draft?.storage_tables);
+  const endpointCount = ENDPOINT_FIELDS.filter(([name]) => String(draft?.[name] || '').trim()).length;
   return (
-    <WriteGate canWrite={canWrite}>
-      <Section title="Broker" description="Kafka addresses and topics offered to realtime Source windows.">
-        <div className="config_window_grid">
-          <OptionField
-            label="IP address"
-            name="active_kafka_adress"
-            options={draft?.kafka_addresses}
-            value={draft?.active_kafka_adress}
-            customName="kafka_custom_address"
-            customValue={draft?.kafka_custom_address}
-            customPlaceholder="Custom Kafka / API address"
-            onChange={onChange}
-            onCommit={onChange}
-          />
-          <OptionField
-            label="Topic"
-            name="active_kafka_topic"
-            options={draft?.kafka_topics}
-            value={draft?.active_kafka_topic}
-            customName="kafka_custom_topic"
-            customValue={draft?.kafka_custom_topic}
-            customPlaceholder="Custom Kafka topic"
-            onChange={onChange}
-            onCommit={onChange}
-          />
-        </div>
-      </Section>
+    <SettingsPage className="config_page config_connections">
+      <Masthead>
+        <PageHero
+          eyebrow="Connections"
+          title="Broker, storage and search"
+          pill={canWrite ? null : <Pill tone="neutral">Read-only</Pill>}
+          meta="The endpoints offered to Source windows. Saved with the configuration."
+          media={(
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M6 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM18 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM6 9v3a6 6 0 0 0 6 6h3M18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM18 9v6" />
+            </svg>
+          )}
+        />
+        <Stats label="Connection figures" columns={4}>
+          <Stat text icon="bolt" label="Broker" value={draft?.active_kafka_adress || '—'} note={draft?.active_kafka_topic ? `topic ${draft.active_kafka_topic}` : 'no topic chosen'} />
+          <Stat text icon="database" label="Storage" value={draft?.active_storage_address || '—'} note={draft?.active_storage_database ? `database ${draft.active_storage_database}` : 'no database chosen'} />
+          <Stat icon="layers" label="Tables" value={tableCount.toLocaleString()} note="storage tables" />
+          <Stat icon="globe" label="Search endpoints" value={endpointCount.toLocaleString()} note={`of ${ENDPOINT_FIELDS.length} set · ${largeSearchBackend === 'elastic_scroll' ? 'Elastic scroll' : 'Hive / Spark'}`} />
+        </Stats>
+      </Masthead>
 
-      <Section title="Storage" description="HDFS / Hive storage used by batch Source windows.">
-        <div className="config_window_grid">
-          <OptionField
-            label="IP address"
-            name="active_storage_address"
-            options={draft?.storage_addresses}
-            value={draft?.active_storage_address}
-            customName="storage_custom_address"
-            customValue={draft?.storage_custom_address}
-            customPlaceholder="Custom HDFS address"
-            onChange={onChange}
-            onCommit={onChange}
-          />
-          <OptionField
-            label="Database"
-            name="active_storage_database"
-            options={draft?.storage_databases}
-            value={draft?.active_storage_database}
-            customName="storage_database_custom"
-            customValue={draft?.storage_database_custom}
-            customPlaceholder="Custom database name"
-            onChange={onChange}
-            onCommit={onChange}
-          />
-        </div>
-        <div className="config_window_grid is-compact">
-          {PORT_FIELDS.map(([name, label]) => (
-            <Field key={name} label={`${label} port`}>
-              <DraftInput name={name} value={draft?.[name] || ''} placeholder={`${label} port`} onCommit={onChange} />
-            </Field>
-          ))}
-        </div>
-        <Field label="Storage path" hint="Base folder searched by the Storage step. Switching the domain pillar re-projects it.">
-          <DraftInput name="storage_path" value={draft?.storage_path || ''} placeholder="/user/<domain>/cleaned_partitioned" onCommit={onChange} />
-        </Field>
-        <Field label="Tables (comma separated)">
-          <ListTextarea name="storage_tables" value={draft?.storage_tables} placeholder="table_a, table_b" onCommit={onChange} />
-        </Field>
-      </Section>
+      <fieldset className="config_window_write_gate" disabled={!canWrite}>
+        {!canWrite ? <p className="settings_hint config_window_readonly_hint">Read-only: you need config:write to change these settings.</p> : null}
 
-      <Section title="Search" description="Endpoints and columns used by file, Elastic and Hive searches.">
-        <div className="config_window_grid">
-          {ENDPOINT_FIELDS.map(([name, label, wide]) => (
-            <Field key={name} label={label} wide={wide}>
-              <DraftInput name={name} value={draft?.[name] || ''} placeholder={label} onCommit={onChange} />
-            </Field>
-          ))}
-        </div>
-        <Field label="Search columns – fuzzy (comma separated)">
-          <ListTextarea name="search_columns_fuzzy" value={draft?.search_columns_fuzzy} onCommit={onChange} />
-        </Field>
-        <Field label="Search columns – strict (comma separated)">
-          <ListTextarea name="search_columns_strict" value={draft?.search_columns_strict} onCommit={onChange} />
-        </Field>
-        <Field label="Fetch columns (comma separated)">
-          <ListTextarea name="fetch_columns" value={draft?.fetch_columns} onCommit={onChange} />
-        </Field>
-        <div className="config_window_grid">
-          <Field label="Large search retrieval">
-            <select className="settings_input" value={largeSearchBackend} onChange={(event) => onChange('large_search_backend', event.target.value)}>
-              <option value="hive">Hive / Spark query</option>
-              <option value="elastic_scroll">Elasticsearch scroll</option>
-            </select>
-          </Field>
-          <Field label="Elasticsearch scroll limit" hint="Used when large fuzzy search results are converted into a dataframe.">
-            <DraftInput
-              name="elastic_scroll_limit"
-              type="number"
-              min="1"
-              step="1000"
-              value={normalizeElasticScrollLimit(draft?.elastic_scroll_limit)}
-              disabled={largeSearchBackend !== 'elastic_scroll'}
-              onCommit={onChange}
-            />
-          </Field>
-        </div>
-      </Section>
-    </WriteGate>
+        <Block title="Broker" description="Kafka addresses and topics offered to realtime Source windows.">
+          <div className="config_card">
+            <div className="config_card_grid">
+              <OptionField
+                icon={FIELD_ICONS.server}
+                label="IP address"
+                name="active_kafka_adress"
+                options={draft?.kafka_addresses}
+                value={draft?.active_kafka_adress}
+                customName="kafka_custom_address"
+                customValue={draft?.kafka_custom_address}
+                customPlaceholder="Custom Kafka / API address"
+                onChange={onChange}
+                onCommit={onChange}
+              />
+              <OptionField
+                icon={FIELD_ICONS.topic}
+                label="Topic"
+                name="active_kafka_topic"
+                options={draft?.kafka_topics}
+                value={draft?.active_kafka_topic}
+                customName="kafka_custom_topic"
+                customValue={draft?.kafka_custom_topic}
+                customPlaceholder="Custom Kafka topic"
+                onChange={onChange}
+                onCommit={onChange}
+              />
+            </div>
+          </div>
+        </Block>
+
+        <Block title="Storage" description="HDFS / Hive storage used by batch Source windows.">
+          <div className="config_card">
+            <div className="config_card_grid">
+              <OptionField
+                icon={FIELD_ICONS.server}
+                label="IP address"
+                name="active_storage_address"
+                options={draft?.storage_addresses}
+                value={draft?.active_storage_address}
+                customName="storage_custom_address"
+                customValue={draft?.storage_custom_address}
+                customPlaceholder="Custom HDFS address"
+                onChange={onChange}
+                onCommit={onChange}
+              />
+              <OptionField
+                icon={FIELD_ICONS.database}
+                label="Database"
+                name="active_storage_database"
+                options={draft?.storage_databases}
+                value={draft?.active_storage_database}
+                customName="storage_database_custom"
+                customValue={draft?.storage_database_custom}
+                customPlaceholder="Custom database name"
+                onChange={onChange}
+                onCommit={onChange}
+              />
+            </div>
+            <p className="config_card_label">Ports</p>
+            <div className="config_card_grid is-ports">
+              {PORT_FIELDS.map(([name, label]) => (
+                <Field key={name} icon={FIELD_ICONS.port} label={label}>
+                  <DraftInput name={name} aria-label={`${label} port`} value={draft?.[name] || ''} placeholder="port" onCommit={onChange} />
+                </Field>
+              ))}
+            </div>
+            <p className="config_card_label">Location</p>
+            <div className="config_card_grid">
+              <Field icon={FIELD_ICONS.folder} label="Storage path" hint="Base folder searched by the Storage step. Switching the domain pillar re-projects it.">
+                <DraftInput name="storage_path" value={draft?.storage_path || ''} placeholder="/user/<domain>/cleaned_partitioned" onCommit={onChange} />
+              </Field>
+              <Field icon={FIELD_ICONS.table} label="Tables" hint="Comma separated.">
+                <ListTextarea name="storage_tables" value={draft?.storage_tables} placeholder="table_a, table_b" onCommit={onChange} />
+              </Field>
+            </div>
+          </div>
+        </Block>
+
+        <Block title="Search" description="Endpoints and columns used by file, Elastic and Hive searches.">
+          <div className="config_card">
+            <p className="config_card_label">Endpoints</p>
+            <div className="config_card_grid">
+              {ENDPOINT_FIELDS.map(([name, label, wide]) => (
+                <Field key={name} icon={FIELD_ICONS.link} label={label} wide={wide}>
+                  <DraftInput name={name} value={draft?.[name] || ''} placeholder={label} onCommit={onChange} />
+                </Field>
+              ))}
+            </div>
+            <p className="config_card_label">Columns</p>
+            <div className="config_card_grid is-stacked">
+              <Field icon={FIELD_ICONS.columns} label="Search columns – fuzzy" hint="Comma separated.">
+                <ListTextarea name="search_columns_fuzzy" value={draft?.search_columns_fuzzy} onCommit={onChange} />
+              </Field>
+              <Field icon={FIELD_ICONS.columns} label="Search columns – strict" hint="Comma separated.">
+                <ListTextarea name="search_columns_strict" value={draft?.search_columns_strict} onCommit={onChange} />
+              </Field>
+              <Field icon={FIELD_ICONS.columns} label="Fetch columns" hint="Comma separated.">
+                <ListTextarea name="fetch_columns" value={draft?.fetch_columns} onCommit={onChange} />
+              </Field>
+            </div>
+            <p className="config_card_label">Large searches</p>
+            <div className="config_card_grid">
+              <Field icon={FIELD_ICONS.search} label="Large search retrieval">
+                <select className="settings_input" value={largeSearchBackend} onChange={(event) => onChange('large_search_backend', event.target.value)}>
+                  <option value="hive">Hive / Spark query</option>
+                  <option value="elastic_scroll">Elasticsearch scroll</option>
+                </select>
+              </Field>
+              <Field icon={FIELD_ICONS.limit} label="Elasticsearch scroll limit" hint="Used when large fuzzy search results are converted into a dataframe.">
+                <DraftInput
+                  name="elastic_scroll_limit"
+                  type="number"
+                  min="1"
+                  step="1000"
+                  value={normalizeElasticScrollLimit(draft?.elastic_scroll_limit)}
+                  disabled={largeSearchBackend !== 'elastic_scroll'}
+                  onCommit={onChange}
+                />
+              </Field>
+            </div>
+          </div>
+        </Block>
+      </fieldset>
+    </SettingsPage>
   );
 }
 
@@ -302,8 +402,11 @@ function ToolPasswordField({ draft, onChange }) {
   const clearing = Boolean(draft?.active_tool_password_clear);
   return (
     <div className="config_window_field">
-      <span className="config_window_field_label">Password{isSaved && !clearing ? ' · saved' : ''}</span>
-      <div className="config_window_option_row">
+      <span className="config_window_field_label">
+        <svg className="config_window_field_icon" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={FIELD_ICONS.lock} /></svg>
+        Password{isSaved && !clearing ? ' · saved' : ''}
+      </span>
+      <div className="config_password_row">
         <DraftInput
           name="active_tool_password"
           type="password"
@@ -330,47 +433,94 @@ function ToolPasswordField({ draft, onChange }) {
 
 export function ToolsPanel({ draft, onChange, canWrite }) {
   const databaseOptions = draft?.active_tool_database ? [draft.active_tool_database] : [];
+  const rawPassword = String(draft?.active_tool_password || '');
+  const passwordState = draft?.active_tool_password_clear
+    ? 'password will be cleared'
+    : (rawPassword || draft?.active_tool_password_ref ? 'password saved' : 'no password');
+  const tableCount = countOf(draft?.active_tool_tables);
   return (
-    <WriteGate canWrite={canWrite}>
-    <Section title="Analysis tool" description="Graph tool (Neo4j) defaults used when Source windows connect a tool.">
-      <div className="config_window_grid">
-        <OptionField
-          label="Tool"
-          name="active_tool"
-          options={draft?.tools}
-          value={draft?.active_tool}
-          onChange={onChange}
+    <SettingsPage className="config_page config_tools">
+      <Masthead>
+        <PageHero
+          eyebrow="Tools"
+          title={draft?.active_tool ? String(draft.active_tool) : 'Analysis tool'}
+          pill={canWrite ? null : <Pill tone="neutral">Read-only</Pill>}
+          meta="Graph tool (Neo4j) defaults used when Source windows connect a tool."
+          media={(
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M6 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM18 12a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM9 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM8.6 7.5l6.8 1M16 11.5l-5 4.2M6.8 8.9L8.3 15" />
+            </svg>
+          )}
         />
-        <Field label="URL address">
-          <DraftInput name="active_tool_url" value={draft?.active_tool_url || ''} placeholder="bolt://host:7687" onCommit={onChange} />
-        </Field>
-        <Field label="Protocol port">
-          <DraftInput name="tool_protocol_port" value={draft?.tool_protocol_port || ''} placeholder="Tool port" onCommit={onChange} />
-        </Field>
-        <Field label="Web UI port">
-          <DraftInput name="tool_web_port" value={draft?.tool_web_port || ''} placeholder="UI port" onCommit={onChange} />
-        </Field>
-        <Field label="Username">
-          <DraftInput name="active_tool_username" value={draft?.active_tool_username || ''} placeholder="Username" autoComplete="off" onCommit={onChange} />
-        </Field>
-        <ToolPasswordField draft={draft} onChange={onChange} />
-        <OptionField
-          label="Database"
-          name="active_tool_database"
-          options={databaseOptions}
-          value={draft?.active_tool_database}
-          customName="custom_tool_database"
-          customValue={draft?.custom_tool_database}
-          customPlaceholder="Custom database name"
-          onChange={onChange}
-          onCommit={onChange}
-        />
-      </div>
-      <Field label="Tables (comma separated)">
-        <ListTextarea name="active_tool_tables" value={draft?.active_tool_tables} onCommit={onChange} />
-      </Field>
-    </Section>
-    </WriteGate>
+        <Stats label="Tool figures" columns={4}>
+          <Stat text icon="globe" label="URL address" value={draft?.active_tool_url || '—'} note={draft?.tool_protocol_port ? `port ${draft.tool_protocol_port}` : 'no protocol port'} />
+          <Stat text icon="database" label="Database" value={draft?.active_tool_database || draft?.custom_tool_database || '—'} note="graph database" />
+          <Stat text icon="key" label="Account" value={draft?.active_tool_username || '—'} note={passwordState} />
+          <Stat icon="layers" label="Tables" value={tableCount.toLocaleString()} note="tool tables" />
+        </Stats>
+      </Masthead>
+
+      <fieldset className="config_window_write_gate" disabled={!canWrite}>
+        {!canWrite ? <p className="settings_hint config_window_readonly_hint">Read-only: you need config:write to change these settings.</p> : null}
+
+        <Block title="Connection" description="Which tool, and where it is reached.">
+          <div className="config_card">
+            <div className="config_card_grid">
+              <OptionField
+                icon={FIELD_ICONS.tool}
+                label="Tool"
+                name="active_tool"
+                options={draft?.tools}
+                value={draft?.active_tool}
+                onChange={onChange}
+              />
+              <Field icon={FIELD_ICONS.link} label="URL address">
+                <DraftInput name="active_tool_url" value={draft?.active_tool_url || ''} placeholder="bolt://host:7687" onCommit={onChange} />
+              </Field>
+              <Field icon={FIELD_ICONS.port} label="Protocol port">
+                <DraftInput name="tool_protocol_port" value={draft?.tool_protocol_port || ''} placeholder="Tool port" onCommit={onChange} />
+              </Field>
+              <Field icon={FIELD_ICONS.screen} label="Web UI port">
+                <DraftInput name="tool_web_port" value={draft?.tool_web_port || ''} placeholder="UI port" onCommit={onChange} />
+              </Field>
+            </div>
+          </div>
+        </Block>
+
+        <Block title="Sign-in" description="The account the tool is opened with.">
+          <div className="config_card">
+            <div className="config_card_grid">
+              <Field icon={FIELD_ICONS.user} label="Username">
+                <DraftInput name="active_tool_username" value={draft?.active_tool_username || ''} placeholder="Username" autoComplete="off" onCommit={onChange} />
+              </Field>
+              <ToolPasswordField draft={draft} onChange={onChange} />
+            </div>
+          </div>
+        </Block>
+
+        <Block title="Data" description="The database and tables the tool works on.">
+          <div className="config_card">
+            <div className="config_card_grid is-stacked">
+              <OptionField
+                icon={FIELD_ICONS.database}
+                label="Database"
+                name="active_tool_database"
+                options={databaseOptions}
+                value={draft?.active_tool_database}
+                customName="custom_tool_database"
+                customValue={draft?.custom_tool_database}
+                customPlaceholder="Custom database name"
+                onChange={onChange}
+                onCommit={onChange}
+              />
+              <Field icon={FIELD_ICONS.table} label="Tables" hint="Comma separated.">
+                <ListTextarea name="active_tool_tables" value={draft?.active_tool_tables} onCommit={onChange} />
+              </Field>
+            </div>
+          </div>
+        </Block>
+      </fieldset>
+    </SettingsPage>
   );
 }
 
@@ -421,38 +571,98 @@ export function RulesPanel({
     ? ['Emergency / Service Hotlines', 'SIM_BOX', 'WANGIRI', 'HIGH_RISK', 'Trusted', 'Risk']
     : ['Trusted', 'Risk', 'PEP', 'Sanction'];
 
+  // The page's figures.
+  const domain = getActiveDomainKey(draft);
+  const activeRuleItem = ruleNames.find((ruleItem) => getRuleItemName(ruleItem) === activeRule);
+  const activeIsBuiltin = Boolean(activeRuleItem) && checkIsBuiltinRule(activeRuleItem, draft, knownBuiltinRules);
+  const mappedCount = columnMapping.filter((entry) => String(entry.key || '').trim() && String(entry.value || '').trim()).length;
+  const passingCount = entities.filter((entry) => entry.pass_through === true).length;
+  const profile = resolveProfileSettings(draft, domain);
+  const shownFields = profile.fields.filter((field) => field.shown).length;
+  const formattingRules = resolveDomainFormatting(draft, domain);
+  const formattingOn = formattingRules.filter((rule) => rule.on).length;
+
   return (
-    <WriteGate canWrite={canWrite}>
-      <Section
+    <SettingsPage className="config_page config_rules">
+      <Masthead>
+        <PageHero
+          tone={activeRule ? 'active' : 'inactive'}
+          eyebrow="Active rule"
+          title={activeRule || 'No active rule'}
+          pill={(
+            <>
+              {activeIsBuiltin ? <Pill tone="neutral">Built-in</Pill> : null}
+              {canWrite ? null : <Pill tone="neutral">Read-only</Pill>}
+            </>
+          )}
+          meta="The rule this session applies by default, and how its data is mapped, classified and drawn."
+          media={(
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 3v18M5 7h14M5 7l-3 7a4 4 0 0 0 6 0L5 7zM19 7l-3 7a4 4 0 0 0 6 0l-3-7zM8 21h8" />
+            </svg>
+          )}
+        />
+        <Stats label="Rule figures" columns={5} className="config_rules_figures">
+          <Stat lead icon="list" label="Rules" value={ruleNames.length.toLocaleString()} note="loaded" />
+          <Stat icon="layers" label="Column mapping" value={mappedCount.toLocaleString()} note={`of ${columnMapping.length.toLocaleString()} rows filled`} />
+          <Stat icon="shield" label="Classified entities" value={entities.length.toLocaleString()} note={`${passingCount.toLocaleString()} passing through`} />
+          <Stat icon="users" label="Profile fields" value={shownFields.toLocaleString()} note={profile.enabled ? `of ${profile.fields.length} shown` : 'profile card off'} />
+          <Stat icon="sun" label="Formatting rules" value={formattingRules.length.toLocaleString()} note={`${formattingOn.toLocaleString()} on`} />
+        </Stats>
+      </Masthead>
+
+      <fieldset className="config_window_write_gate" disabled={!canWrite}>
+        {!canWrite ? <p className="settings_hint config_window_readonly_hint">Read-only: you need config:write to change these settings.</p> : null}
+
+      <Block
         title="Active rule"
         description={`The rule this session applies by default. ${ruleNames.length} rule${ruleNames.length === 1 ? '' : 's'} loaded.`}
         actions={<button type="button" className="settings_button" onClick={onManageRules} title="Upload or remove rules in the Libraries window">Manage rules</button>}
       >
-        <div className="config_window_option_row">
-          <select
-            className="settings_input"
-            aria-label="Active rule"
-            value={activeRule}
-            onChange={(event) => onChange('active_rule', sanitizeText(event.target.value, { maxLength: 120 }))}
-          >
-            {ruleNames.length === 0 ? <option value="">No rules loaded</option> : null}
-            {ruleNames.map((ruleItem) => {
-              const name = getRuleItemName(ruleItem);
-              const builtin = checkIsBuiltinRule(ruleItem, draft, knownBuiltinRules);
-              return <option key={name} value={name}>{builtin && !/\(built-in\)$/i.test(name) ? `${name} (Built-in)` : name}</option>;
-            })}
-          </select>
+        <div className={`config_card config_active_rule${activeRule ? '' : ' is-empty'}`}>
+          <span className="config_active_rule_icon" aria-hidden="true">
+            {/* A banknote between two transfer arrows: financial transactions. */}
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M4 8h16a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z" />
+              <path d="M12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4z" />
+              <path d="M7 4.5h10l-2-2M17 19.5H7l2 2" />
+            </svg>
+          </span>
+          <div className="config_active_rule_text">
+            <small>{activeRule ? 'Applied to this session by default' : 'Nothing is applied by default'}</small>
+            <strong title={activeRule || undefined}>{activeRule || 'No rule chosen'}</strong>
+            <span className="config_active_rule_tags">
+              {activeRule ? <em>In use</em> : <em>Choose a rule</em>}
+              {activeIsBuiltin ? <em>Built-in</em> : null}
+            </span>
+          </div>
+          <div className="config_window_field config_active_rule_pick">
+            <span className="config_window_field_label">Change the active rule</span>
+            <select
+              className="settings_input"
+              aria-label="Active rule"
+              value={activeRule}
+              onChange={(event) => onChange('active_rule', sanitizeText(event.target.value, { maxLength: 120 }))}
+            >
+              {ruleNames.length === 0 ? <option value="">No rules loaded</option> : null}
+              {ruleNames.map((ruleItem) => {
+                const name = getRuleItemName(ruleItem);
+                const builtin = checkIsBuiltinRule(ruleItem, draft, knownBuiltinRules);
+                return <option key={name} value={name}>{builtin && !/\(built-in\)$/i.test(name) ? `${name} (Built-in)` : name}</option>;
+              })}
+            </select>
+            <small className="config_window_field_hint">Rule sets are uploaded and removed in Libraries → Rules.</small>
+          </div>
         </div>
-        <p className="settings_hint">Rule sets are uploaded and removed in Libraries → Rules.</p>
-      </Section>
+      </Block>
 
-      <Section
+      <Block
         title="Column mapping"
         description="Maps database columns to data model columns."
         actions={<button type="button" className="settings_button" onClick={() => setColumnMapping([...columnMapping, { key: '', value: '' }])}>Add row</button>}
       >
         <div className="config_window_table_wrap">
-          <table className="config_window_table">
+          <table className="config_window_table" aria-label="Column mapping">
             <thead>
               <tr><th>#</th><th>Database column</th><th>Data model column</th><th aria-label="Actions" /></tr>
             </thead>
@@ -469,16 +679,16 @@ export function RulesPanel({
                     <input className="settings_input" value={entry.value} placeholder={isCdr ? 'e.g. START_TIME' : 'e.g. TRANSACTIONDATE'} onChange={(event) => setColumnMapping(columnMapping.map((item, i) => (i === index ? { ...item, value: sanitizeText(event.target.value, { maxLength: 160 }) } : item)))} />
                   </td>
                   <td className="config_window_table_actions">
-                    <button type="button" className="settings_button is-danger" onClick={() => setColumnMapping(columnMapping.filter((_, i) => i !== index))}>Remove</button>
+                    <RemoveRowButton label={`Remove mapping row ${index + 1}`} onClick={() => setColumnMapping(columnMapping.filter((_, i) => i !== index))} />
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-      </Section>
+      </Block>
 
-      <Section
+      <Block
         title={isCdr ? 'Classified entities (telecom whitelist / watchlist)' : 'Classified entities'}
         description={canEditEntities ? 'Trusted entries are passed through; risk entries are flagged.' : 'You need config:write to edit classified entities.'}
         actions={canEditEntities ? (
@@ -489,7 +699,7 @@ export function RulesPanel({
         ) : null}
       >
         <div className="config_window_table_wrap">
-          <table className="config_window_table">
+          <table className="config_window_table" aria-label="Classified entities">
             <thead>
               <tr>
                 <th>#</th>
@@ -512,14 +722,14 @@ export function RulesPanel({
                   <td><input className="settings_input" value={entry.value || ''} disabled={!canEditEntities} onChange={(event) => editEntity(index, 'value', event.target.value)} /></td>
                   <td><input className="settings_input" list="config-window-category-options" value={entry.category || 'Trusted'} disabled={!canEditEntities} onChange={(event) => editEntity(index, 'category', event.target.value)} /></td>
                   <td>
-                    <label className={`config_window_pass ${entry.pass_through ? 'is-passing' : 'is-restricted'}`}>
-                      <input type="checkbox" checked={entry.pass_through === true} disabled={!canEditEntities} onChange={(event) => editEntity(index, 'pass_through', event.target.checked)} />
-                      <span>{entry.pass_through ? 'Passing' : 'Restricted'}</span>
+                    <label className={`settings_switch config_window_pass ${entry.pass_through ? 'is-passing' : 'is-restricted'}`}>
+                      <input type="checkbox" role="switch" aria-label={`Pass through, row ${index + 1}`} checked={entry.pass_through === true} disabled={!canEditEntities} onChange={(event) => editEntity(index, 'pass_through', event.target.checked)} />
+                      <span aria-hidden="true">{entry.pass_through ? 'Passing' : 'Restricted'}</span>
                     </label>
                   </td>
                   {canEditEntities ? (
                     <td className="config_window_table_actions">
-                      <button type="button" className="settings_button is-danger" onClick={() => setEntities(entities.filter((_, i) => i !== index))}>Remove</button>
+                      <RemoveRowButton label={`Remove entity row ${index + 1}`} onClick={() => setEntities(entities.filter((_, i) => i !== index))} />
                     </td>
                   ) : null}
                 </tr>
@@ -530,11 +740,23 @@ export function RulesPanel({
         <datalist id="config-window-category-options">
           {categoryOptions.map((option) => <option key={option} value={option} />)}
         </datalist>
-      </Section>
+      </Block>
 
       <ProfileMappingSection draft={draft} onChange={onChange} />
       <FormattingRulesSection draft={draft} onChange={onChange} />
-    </WriteGate>
+      </fieldset>
+    </SettingsPage>
+  );
+}
+
+// A table row's remove action: a bin, named for screen readers.
+function RemoveRowButton({ label, onClick }) {
+  return (
+    <button type="button" className="config_row_remove" aria-label={label} title="Remove" onClick={onClick}>
+      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6" />
+      </svg>
+    </button>
   );
 }
 
@@ -554,15 +776,16 @@ function FormattingRulesSection({ draft, onChange }) {
   // The editor covers the window's body only (its header stays visible).
   const host = editing ? anchorRef.current?.closest('.configuration_window_body') : null;
   return (
-    <Section
+    <Block
       title="Formatting rules"
       description="Conditional formatting every Graph window of this domain applies, below its own rules: when a node or link matches, how it is drawn."
       actions={<button type="button" className="settings_button" onClick={() => setEditing(true)}>Edit rules…</button>}
     >
       {rules.length ? (
         <ol className="config_window_rule_list" aria-label="Formatting rules">
-          {rules.map((rule) => (
+          {rules.map((rule, index) => (
             <li key={rule.id} className={rule.on ? '' : 'is-off'}>
+              <i aria-hidden="true">{index + 1}</i>
               <RuleSample rule={rule} />
               <span>{rule.name || describeRule(rule)}</span>
               {rule.on ? null : <small>off</small>}
@@ -580,7 +803,7 @@ function FormattingRulesSection({ draft, onChange }) {
           onClose={() => setEditing(false)}
         />
       )) : null}
-    </Section>
+    </Block>
   );
 }
 
@@ -595,14 +818,19 @@ function ProfileMappingSection({ draft, onChange }) {
   const setField = (key, patch) => update({ ...profile, fields: profile.fields.map((field) => (field.key === key ? { ...field, ...patch } : field)) });
   const property = (value) => sanitizeText(value, { maxLength: 120 });
   return (
-    <Section
+    <Block
       title="Profile mapping fields"
       description="What the actor profile card shows when a node is clicked in a Graph window: the node property behind the portrait and each detail."
     >
-      <label className="config_window_profile_switch">
-        <input type="checkbox" checked={profile.enabled} onChange={(event) => update({ ...profile, enabled: event.target.checked })} />
-        <span>Show the actor profile on node click</span>
-      </label>
+      <div className="settings_options">
+        <Option
+          icon="user"
+          title="Show the actor profile on node click"
+          description="Open the profile card when a node is clicked in a Graph window."
+          checked={profile.enabled}
+          onChange={(checked) => update({ ...profile, enabled: checked })}
+        />
+      </div>
       <div className="config_window_table_wrap">
         <table className="config_window_table" aria-label="Profile mapping fields">
           <thead>
@@ -641,7 +869,9 @@ function ProfileMappingSection({ draft, onChange }) {
                     />
                   </td>
                   <td>
-                    <input type="checkbox" aria-label={`Show ${label}`} checked={field.shown} disabled={!profile.enabled} onChange={(event) => setField(field.key, { shown: event.target.checked })} />
+                    <label className="settings_switch">
+                      <input type="checkbox" role="switch" aria-label={`Show ${label}`} checked={field.shown} disabled={!profile.enabled} onChange={(event) => setField(field.key, { shown: event.target.checked })} />
+                    </label>
                   </td>
                 </tr>
               );
@@ -650,6 +880,6 @@ function ProfileMappingSection({ draft, onChange }) {
         </table>
       </div>
       <p className="settings_hint">Property names as they appear in the graph's node data (exact spelling). The portrait takes an https or data:image link.</p>
-    </Section>
+    </Block>
   );
 }

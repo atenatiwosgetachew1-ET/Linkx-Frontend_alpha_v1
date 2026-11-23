@@ -6,7 +6,8 @@
 import { useCallback, useMemo, useSyncExternalStore } from 'react';
 
 import { WORKSPACE_WINDOW_TYPES } from '../../../workspace/state/workspaceTypes.js';
-import { DEFAULT_GRAPH_SETTINGS, normalizeGraphSettings } from './graphSettings.js';
+import { normalizeGraphSettings } from './graphSettings.js';
+import { getGraphDefaults, subscribeGraphDefaults } from './graphDefaults.js';
 import { getGraphStore } from './graphStore.js';
 
 const EMPTY_SNAPSHOT = { version: 0, nodes: 0, edges: 0, danglingEdges: 0, selection: [], status: { state: 'idle' }, viewStats: { nodes: 0, edges: 0, searched: false } };
@@ -23,9 +24,11 @@ export function useActiveGraph(workspace) {
   const store = useMemo(() => (windowId ? getGraphStore(windowId) : null), [windowId]);
   const snapshot = useSyncExternalStore(store ? store.subscribe : noopSubscribe, store ? store.getSnapshot : () => EMPTY_SNAPSHOT);
 
+  // As the Graph window reads them: its own, else Libraries ▸ Graph defaults.
+  const graphDefaults = useSyncExternalStore(subscribeGraphDefaults, getGraphDefaults);
   const settings = useMemo(
-    () => normalizeGraphSettings(windowItem?.metadata?.graphSettings || DEFAULT_GRAPH_SETTINGS),
-    [windowItem?.metadata?.graphSettings],
+    () => normalizeGraphSettings(windowItem?.metadata?.graphSettings || graphDefaults),
+    [windowItem?.metadata?.graphSettings, graphDefaults],
   );
   const search = windowItem?.metadata?.graphSearch || DEFAULT_GRAPH_SEARCH;
 

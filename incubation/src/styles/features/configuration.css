@@ -8,6 +8,169 @@
 	position: relative;
 }
 
+/* The Configuration window alone: its frame takes the Settings window's
+   compact look (is-compact-header), and the shared window-frame variables
+   read the Configuration's own tokens here, so restyling them touches no
+   other window. */
+.configuration_theme_scope {
+	/* Frame */
+	--window-footer-text-color: var(--config-frame-window-footer-text-color);
+	--window-footer-info-icon-color: var(--config-frame-window-footer-info-icon-color);
+	--window-footer-btn-border: var(--config-frame-window-footer-btn-border);
+	--window-footer-btn-text: var(--config-frame-window-footer-btn-text);
+	--window-footer-btn-bg-angle: var(--config-frame-window-footer-btn-bg-angle);
+	--window-footer-btn-bg-top: var(--config-frame-window-footer-btn-bg-top);
+	--window-footer-btn-bg-bottom: var(--config-frame-window-footer-btn-bg-bottom);
+	--window-footer-btn-hover-border: var(--config-frame-window-footer-btn-hover-border);
+	--window-footer-btn-hover-text: var(--config-frame-window-footer-btn-hover-text);
+	--window-footer-btn-hover-bg-angle: var(--config-frame-window-footer-btn-hover-bg-angle);
+	--window-footer-btn-hover-bg-top: var(--config-frame-window-footer-btn-hover-bg-top);
+	--window-footer-btn-hover-bg-bottom: var(--config-frame-window-footer-btn-hover-bg-bottom);
+	--window-footer-btn-pressed-border: var(--config-frame-window-footer-btn-pressed-border);
+	--window-footer-btn-pressed-text: var(--config-frame-window-footer-btn-pressed-text);
+	--window-footer-btn-pressed-bg-angle: var(--config-frame-window-footer-btn-pressed-bg-angle);
+	--window-footer-btn-pressed-bg-top: var(--config-frame-window-footer-btn-pressed-bg-top);
+	--window-footer-btn-pressed-bg-bottom: var(--config-frame-window-footer-btn-pressed-bg-bottom);
+	--window-footer-btn-disabled-border: var(--config-frame-window-footer-btn-disabled-border);
+	--window-footer-btn-disabled-text: var(--config-frame-window-footer-btn-disabled-text);
+	--window-footer-btn-disabled-bg: var(--config-frame-window-footer-btn-disabled-bg);
+	--window-cards-container-subtext: var(--config-frame-window-cards-container-subtext);
+	--session-chip-border: var(--config-frame-session-chip-border);
+	--session-chip-bg: var(--config-frame-session-chip-bg);
+	--session-chip-label-color: var(--config-frame-session-chip-label-color);
+	--session-chip-value-color: var(--config-frame-session-chip-value-color);
+	--timeline-border: var(--config-frame-timeline-border);
+	--timeline-bg: var(--config-frame-timeline-bg);
+	--timeline-progress-label-color: var(--config-frame-timeline-progress-label-color);
+	--timeline-progress-value-color: var(--config-frame-timeline-progress-value-color);
+	--timeline-progress-track: var(--config-frame-timeline-progress-track);
+	--timeline-progress-fill-start: var(--config-frame-timeline-progress-fill-start);
+	--timeline-progress-fill-end: var(--config-frame-timeline-progress-fill-end);
+	--timeline-step-border: var(--config-frame-timeline-step-border);
+	--timeline-step-bg: var(--config-frame-timeline-step-bg);
+	--timeline-step-line-track: var(--config-frame-timeline-step-line-track);
+	--timeline-step-line-color: var(--config-frame-timeline-step-line-color);
+	--timeline-step-hover-bg: var(--config-frame-timeline-step-hover-bg);
+	--timeline-step-hover-border: var(--config-frame-timeline-step-hover-border);
+	--timeline-step-active-bg: var(--config-frame-timeline-step-active-bg);
+	--timeline-step-active-border: var(--config-frame-timeline-step-active-border);
+	--timeline-step-active-bar: var(--config-frame-timeline-step-active-bar);
+	--timeline-step-circle-inactive-border: var(--config-frame-timeline-step-circle-inactive-border);
+	--timeline-step-circle-inactive-bg: var(--config-frame-timeline-step-circle-inactive-bg);
+	--timeline-step-circle-inactive-text: var(--config-frame-timeline-step-circle-inactive-text);
+	--timeline-step-circle-active-border: var(--config-frame-timeline-step-circle-active-border);
+	--timeline-step-circle-active-bg: var(--config-frame-timeline-step-circle-active-bg);
+	--timeline-step-circle-active-text: var(--config-frame-timeline-step-circle-active-text);
+	--timeline-step-circle-active-ring: var(--config-frame-timeline-step-circle-active-ring);
+	--timeline-step-circle-fulfilled-border: var(--config-frame-timeline-step-circle-fulfilled-border);
+	--timeline-step-circle-fulfilled-bg-angle: var(--config-frame-timeline-step-circle-fulfilled-bg-angle);
+	--timeline-step-circle-fulfilled-bg-top: var(--config-frame-timeline-step-circle-fulfilled-bg-top);
+	--timeline-step-circle-fulfilled-bg-bottom: var(--config-frame-timeline-step-circle-fulfilled-bg-bottom);
+	--timeline-step-circle-fulfilled-text: var(--config-frame-timeline-step-circle-fulfilled-text);
+	--timeline-step-circle-fulfilled-shadow: var(--config-frame-timeline-step-circle-fulfilled-shadow);
+	--timeline-step-locked-border: var(--config-frame-timeline-step-locked-border);
+	--timeline-step-locked-text: var(--config-frame-timeline-step-locked-text);
+	--timeline-step-title-color: var(--config-frame-timeline-step-title-color);
+	--timeline-step-desc-color: var(--config-frame-timeline-step-desc-color);
+	--timeline-step-active-title-color: var(--config-frame-timeline-step-active-title-color);
+	--timeline-step-active-desc-color: var(--config-frame-timeline-step-active-desc-color);
+	--settings-window-choose-header-text: var(--config-frame-window-choose-header-text);
+	--settings-window-timeline-tabs-before-bg: var(--config-frame-window-timeline-tabs-before-bg);
+	/* Pages (the Settings page family, used by the tabs) */
+	--settings-secret-notice-border: var(--config-page-secret-notice-border);
+	--settings-secret-notice-bg: var(--config-page-secret-notice-bg);
+	--settings-secret-notice-strong-text: var(--config-page-secret-notice-strong-text);
+	--settings-secret-notice-code-bg: var(--config-page-secret-notice-code-bg);
+	--settings-secret-notice-code-text: var(--config-page-secret-notice-code-text);
+	--settings-link-button-text: var(--config-page-link-button-text);
+	--settings-link-button-small-text: var(--config-page-link-button-small-text);
+	--settings-block-header-small-text: var(--config-page-block-header-small-text);
+	--settings-page-hairline: var(--config-page-page-hairline);
+	--settings-page-state-tone: var(--config-page-page-state-tone);
+	--settings-hero-border: var(--config-page-hero-border);
+	--settings-hero-bg: var(--config-page-hero-bg);
+	--settings-hero-active-state-tone: var(--config-page-hero-active-state-tone);
+	--settings-hero-paused-state-tone: var(--config-page-hero-paused-state-tone);
+	--settings-hero-danger-state-tone: var(--config-page-hero-danger-state-tone);
+	--settings-eyebrow-text: var(--config-page-eyebrow-text);
+	--settings-hero-title-h4-text: var(--config-page-hero-title-h4-text);
+	--settings-hero-meta-text: var(--config-page-hero-meta-text);
+	--settings-hero-meta-strong-text: var(--config-page-hero-meta-strong-text);
+	--settings-pill-border: var(--config-page-pill-border);
+	--settings-pill-bg: var(--config-page-pill-bg);
+	--settings-pill-text: var(--config-page-pill-text);
+	--settings-pill-active-border: var(--config-page-pill-active-border);
+	--settings-pill-active-bg: var(--config-page-pill-active-bg);
+	--settings-pill-active-text: var(--config-page-pill-active-text);
+	--settings-pill-paused-border: var(--config-page-pill-paused-border);
+	--settings-pill-paused-bg: var(--config-page-pill-paused-bg);
+	--settings-pill-paused-text: var(--config-page-pill-paused-text);
+	--settings-switch-text: var(--config-page-switch-text);
+	--settings-switch-input-border: var(--config-page-switch-input-border);
+	--settings-switch-input-bg: var(--config-page-switch-input-bg);
+	--settings-switch-input-after-bg: var(--config-page-switch-input-after-bg);
+	--settings-switch-input-after-shadow: var(--config-page-switch-input-after-shadow);
+	--settings-switch-input-checked-border: var(--config-page-switch-input-checked-border);
+	--settings-switch-input-checked-bg: var(--config-page-switch-input-checked-bg);
+	--settings-switch-input-focus-outline: var(--config-page-switch-input-focus-outline);
+	--settings-stats-hairline: var(--config-page-stats-hairline);
+	--settings-stats-bg: var(--config-page-stats-bg);
+	--settings-stats-bg-2: var(--config-page-stats-bg-2);
+	--settings-stat-dt-text: var(--config-page-stat-dt-text);
+	--settings-stat-dd-text: var(--config-page-stat-dd-text);
+	--settings-stat-dd-success-text: var(--config-page-stat-dd-success-text);
+	--settings-stat-dd-danger-text: var(--config-page-stat-dd-danger-text);
+	--settings-stat-icon-tone: var(--config-page-stat-icon-tone);
+	--settings-stat-icon-success-tone: var(--config-page-stat-icon-success-tone);
+	--settings-stat-icon-danger-tone: var(--config-page-stat-icon-danger-tone);
+	--settings-stat-dd-empty-text: var(--config-page-stat-dd-empty-text);
+	--settings-stat-small-text: var(--config-page-stat-small-text);
+	--settings-masthead-hairline: var(--config-page-masthead-hairline);
+	--settings-masthead-shadow: var(--config-page-masthead-shadow);
+	--settings-masthead-shadow-2: var(--config-page-masthead-shadow-2);
+	--settings-masthead-shadow-3: var(--config-page-masthead-shadow-3);
+	--settings-masthead-shadow-4: var(--config-page-masthead-shadow-4);
+	--settings-masthead-bg: var(--config-page-masthead-bg);
+	--settings-masthead-bg-2: var(--config-page-masthead-bg-2);
+	--settings-hero-media-border: var(--config-page-hero-media-border);
+	--settings-hero-media-bg: var(--config-page-hero-media-bg);
+	--settings-hero-media-text: var(--config-page-hero-media-text);
+	--settings-hero-meta-i-text: var(--config-page-hero-meta-i-text);
+	--settings-facts-dt-text: var(--config-page-facts-dt-text);
+	--settings-facts-dd-text: var(--config-page-facts-dd-text);
+	--settings-facts-dd-empty-text: var(--config-page-facts-dd-empty-text);
+	--settings-option-border: var(--config-page-option-border);
+	--settings-option-bg: var(--config-page-option-bg);
+	--settings-option-hover-border: var(--config-page-option-hover-border);
+	--settings-option-hover-shadow: var(--config-page-option-hover-shadow);
+	--settings-option-focus-border: var(--config-page-option-focus-border);
+	--settings-option-on-border: var(--config-page-option-on-border);
+	--settings-option-on-bg: var(--config-page-option-on-bg);
+	--settings-option-on-bg-2: var(--config-page-option-on-bg-2);
+	--settings-option-icon-text: var(--config-page-option-icon-text);
+	--settings-option-icon-on-text: var(--config-page-option-icon-on-text);
+	--settings-option-strong-text: var(--config-page-option-strong-text);
+	--settings-option-small-text: var(--config-page-option-small-text);
+	--settings-option-state-text: var(--config-page-option-state-text);
+	--settings-option-state-on-text: var(--config-page-option-state-on-text);
+	--settings-block-header-h4-text: var(--config-page-block-header-h4-text);
+	--settings-block-header-p-text: var(--config-page-block-header-p-text);
+	--settings-hero-state-tone: var(--config-page-hero-state-tone);
+	--settings-launch-card-border: var(--config-page-launch-card-border);
+	--settings-launch-card-hover-border: var(--config-page-launch-card-hover-border);
+	--settings-launch-card-hover-shadow: var(--config-page-launch-card-hover-shadow);
+	--settings-launch-card-focus-outline: var(--config-page-launch-card-focus-outline);
+	--settings-launch-icon-text: var(--config-page-launch-icon-text);
+	--settings-launch-text-strong-text: var(--config-page-launch-text-strong-text);
+	--settings-launch-text-small-text: var(--config-page-launch-text-small-text);
+}
+
+/* Two chips (session, domain) side by side at the header's far end. */
+.settings_window_workspace.is-compact-header .config_window_chips {
+	flex-wrap: nowrap;
+	gap: 6px;
+}
+
 .config_window_surface {
 	gap: 16px;
 }
@@ -141,78 +304,891 @@
 	line-height: 1.7;
 }
 
-/* Domain pillar card */
-.config_window_domain_card {
+/* ── System tab: a page of the Settings family (masthead, figures strip,
+   blocks, option cards); these are the parts only it has. ── */
+
+/* The active domain's storage tables, as quiet chips on one line. */
+.config_system_tables {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 5px;
+	margin: 0;
+	font-size: 11px;
+}
+
+.config_system_tables span {
+	margin-right: 3px;
+	color: var(--config-system-tables-label-text);
+	font-weight: 600;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+}
+
+.config_system_tables code {
+	padding: 1px 6px;
+	border: 1px solid var(--config-system-table-chip-border);
+	border-radius: 3px;
+	background: var(--config-system-table-chip-bg);
+	color: var(--config-system-table-chip-text);
+	font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+	font-size: 10.5px;
+}
+
+/* The domain pillars, as pills: the active one filled, its dot lit; each
+   says whether it is configured. */
+.config_system_domains {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.config_system_domain {
+	display: inline-flex;
+	align-items: center;
+	gap: 7px;
+	padding: 5px 12px 5px 10px;
+	border: 1px solid var(--config-system-domain-pill-border);
+	border-radius: 999px;
+	background: var(--config-system-domain-pill-bg);
+	color: var(--config-system-domain-pill-text);
+	font: inherit;
+	font-size: 12px;
+	font-weight: 500;
+	white-space: nowrap;
+	cursor: pointer;
+	transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.config_system_domain i {
+	flex: none;
+	width: 7px;
+	height: 7px;
+	border-radius: 50%;
+	background: var(--config-system-domain-pill-dot);
+}
+
+/* Only the active pillar's dot is lit. */
+.config_system_domain.is-on i {
+	background: var(--config-system-domain-pill-on-dot);
+}
+
+.config_system_domain small {
+	color: var(--config-system-domain-pill-ready-text);
+	font-size: 10.5px;
+}
+
+.config_system_domain.is-unready small {
+	color: var(--config-system-domain-pill-unready-text);
+}
+
+.config_system_domain.is-on small {
+	color: var(--config-system-domain-pill-on-status-text);
+}
+
+/* The active pillar does not react to the pointer. */
+.config_system_domain:hover:not(:disabled):not(.is-on) {
+	border-color: var(--config-system-domain-pill-hover-border);
+	background: var(--config-system-domain-pill-hover-bg);
+	color: var(--config-system-domain-pill-hover-text);
+}
+
+.config_system_domain.is-on {
+	border-color: var(--config-system-domain-pill-on-border);
+	background: var(--config-system-domain-pill-on-bg);
+	color: var(--config-system-domain-pill-on-text);
+	font-weight: 600;
+	cursor: default;
+}
+
+.config_system_domain:disabled:not(.is-on) {
+	opacity: 0.55;
+	cursor: default;
+}
+
+.config_system_domain:focus-visible {
+	outline: 2px solid var(--config-system-domain-pill-focus-outline);
+	outline-offset: 1px;
+}
+
+/* The three timeouts on one row: a label over a short number and its unit. */
+.config_system_timeouts {
 	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
 	gap: 10px;
-	padding: 12px 14px;
-	border: 1px solid var(--settings-card-border);
-	border-left: 3px solid var(--settings-accent);
-	border-radius: 4px;
 }
 
-.config_window_domain_card.is-unconfigured {
-	border-left-color: var(--settings-danger-text);
+.config_system_timeout {
+	display: grid;
+	gap: 5px;
+	min-width: 0;
+	color: var(--config-system-field-label-text);
+	font-size: 12px;
 }
 
-.config_window_domain_card_header {
+.config_system_timeout_value {
 	display: flex;
 	align-items: center;
-	justify-content: space-between;
-	gap: 10px;
-	color: var(--settings-text);
-	font-size: 13px;
+	gap: 6px;
 }
 
-.config_window_domain_card_header span {
-	color: var(--settings-accent-text);
+.config_system_timeout_value .settings_input {
+	flex: 1;
+	width: 100%;
+	min-width: 0;
+	min-height: 32px;
+	height: 32px;
+	box-sizing: border-box;
+}
+
+.config_system_timeout_value small {
+	color: var(--config-system-field-unit-text);
 	font-size: 11px;
-	font-weight: 600;
 }
 
-.config_window_domain_card.is-unconfigured .config_window_domain_card_header span {
-	color: var(--settings-danger-text);
+.config_system .settings_options {
+	grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
 }
 
-.config_window_domain_meta {
+.config_system_notes {
+	padding-left: 16px;
+	color: var(--config-system-notes-text);
+	line-height: 1.6;
+}
+
+.config_system_notes li::marker {
+	color: var(--config-system-notes-mark);
+}
+
+@container settings-page (max-width: 560px) {
+	.config_system_timeouts {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.config_system_facts {
+		--settings-stats-columns: repeat(2, minmax(0, 1fr));
+	}
+}
+
+/* ── Form cards (the tabs that edit the configuration, once on the
+   Settings page family: .config_page). A block's fields sit in one card,
+   under quiet group labels; labels carry a glyph; inputs are compact. ── */
+.config_card {
 	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-	gap: 8px 14px;
+	gap: 12px;
+	min-width: 0;
+	padding: 14px;
+	border: 1px solid var(--config-form-card-border);
+	border-radius: 4px;
+	background: var(--config-form-card-bg);
+}
+
+.config_card_grid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 12px 14px;
+	align-items: start;
+}
+
+/* Each field on a line of its own. */
+.config_card_grid.is-stacked {
+	grid-template-columns: minmax(0, 1fr);
+}
+
+.config_card_grid.is-ports {
+	grid-template-columns: repeat(5, minmax(0, 1fr));
+	gap: 10px;
+}
+
+/* A group inside a card: a small heading with a line running to the end. */
+.config_card_label {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	margin: 4px 0 -2px;
+	color: var(--config-form-group-label-text);
+	font-size: 10px;
+	font-weight: 700;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+}
+
+.config_card_label::after {
+	content: "";
+	flex: 1;
+	height: 1px;
+	background: var(--config-form-group-line);
+}
+
+.config_page .config_window_field {
+	gap: 5px;
+}
+
+.config_page .config_window_field_label {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	color: var(--config-form-label-text);
+	font-size: 11.5px;
+	font-weight: 500;
+}
+
+.config_window_field_icon {
+	flex: none;
+	color: var(--config-form-label-icon);
+}
+
+/* The "i" beside a label: hover or focus it for what the field accepts. */
+.config_info {
+	display: inline-grid;
+	flex: none;
+	place-items: center;
+	width: 14px;
+	height: 14px;
+	margin-left: 5px;
+	border-radius: 50%;
+	color: var(--config-form-info-icon);
+	vertical-align: -2px;
+	cursor: help;
+	transition: color 120ms ease;
+}
+
+.config_window_field_label .config_info {
+	margin-left: 0;
+}
+
+.config_info:hover,
+.config_info:focus-visible {
+	color: var(--config-form-info-icon-hover);
+	outline: none;
+}
+
+.config_info.linkx_tooltip_anchor::before {
+	font-weight: 500 !important;
+	text-align: left !important;
+	text-transform: none !important;
+	letter-spacing: 0 !important;
+}
+
+.config_system_timeout_label {
+	display: flex;
+	align-items: center;
+}
+
+.config_page .config_window_field_hint {
+	color: var(--config-form-hint-text);
+	font-size: 10.5px;
+}
+
+.config_page .config_card .settings_input {
+	min-height: 32px;
+	padding: 0 10px;
+	border-color: var(--config-form-input-border);
+	border-radius: 3px;
+	background: var(--config-form-input-bg);
+	color: var(--config-form-input-text);
+	font-size: 12px;
+	transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+
+.config_page .config_card .settings_input::placeholder {
+	color: var(--config-form-input-placeholder);
+}
+
+.config_page .config_card .settings_input:hover:not(:disabled) {
+	border-color: var(--config-form-input-hover-border);
+}
+
+.config_page .config_card .settings_input:focus {
+	border-color: var(--config-form-input-focus-border);
+	box-shadow: 0 0 0 3px var(--config-form-input-focus-ring);
+	outline: none;
+}
+
+.config_page .config_card .settings_input:disabled {
+	background: var(--config-form-input-disabled-bg);
+	color: var(--config-form-input-disabled-text);
+	cursor: not-allowed;
+}
+
+.config_page .config_card .config_window_textarea {
+	min-height: 52px;
+	padding: 7px 10px;
+}
+
+.config_page .config_window_option_row {
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 6px;
+}
+
+/* A choice with no custom value beside it takes the whole field. */
+.config_page .config_window_option_row > :only-child {
+	grid-column: 1 / -1;
+}
+
+/* A password and its Clear / Keep button on one line. */
+.config_password_row {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.config_password_row .settings_input {
+	flex: 1;
+}
+
+.config_password_row .settings_button {
+	flex: none;
+	min-width: 0;
+	height: 32px !important;
+	min-height: 32px !important;
+	padding: 0 12px !important;
+	border-radius: 3px;
+}
+
+.config_page .config_window_readonly_hint {
+	border-color: var(--config-form-readonly-border);
+	color: var(--config-form-readonly-text);
+	font-size: 12px;
+}
+
+@container settings-page (max-width: 620px) {
+	.config_card_grid {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.config_card_grid.is-ports {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+}
+
+/* ── Tables and rule lists on the page family (.config_page): a quiet
+   header band, hairline rows that tint on hover, compact inputs, a bin to
+   remove a row, switches for on / off. ── */
+.config_page .config_window_table_wrap {
+	border-color: var(--config-table-border);
+	background: var(--config-table-bg);
+}
+
+.config_page .config_window_table th,
+.config_page .config_window_table td {
+	padding: 5px 8px;
+	border-bottom-color: var(--config-table-row-line);
+	color: var(--config-table-cell-text);
+}
+
+.config_page .config_window_table th {
+	padding: 7px 8px;
+	background: var(--config-table-head-bg);
+	color: var(--config-table-head-text);
+	font-size: 10.5px;
+	font-weight: 700;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+}
+
+.config_page .config_window_table tbody tr:hover td {
+	background: var(--config-table-row-hover-bg);
+}
+
+.config_page .config_window_table .settings_input {
+	min-height: 28px;
+	border-color: var(--config-form-input-border);
+	border-radius: 3px;
+	background: var(--config-form-input-bg);
+	color: var(--config-form-input-text);
+	transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+
+.config_page .config_window_table .settings_input::placeholder {
+	color: var(--config-form-input-placeholder);
+}
+
+.config_page .config_window_table .settings_input:focus {
+	border-color: var(--config-form-input-focus-border);
+	box-shadow: 0 0 0 2px var(--config-form-input-focus-ring);
+	outline: none;
+}
+
+.config_page .config_window_table .settings_input:disabled {
+	background: var(--config-form-input-disabled-bg);
+	color: var(--config-form-input-disabled-text);
+}
+
+.config_page .config_window_table_index {
+	color: var(--config-table-index-text) !important;
+	font-variant-numeric: tabular-nums;
+}
+
+.config_page .config_window_table_empty {
+	padding: 18px 8px !important;
+	color: var(--config-table-empty-text) !important;
+}
+
+.config_row_remove {
+	display: grid;
+	place-items: center;
+	width: 26px;
+	height: 26px;
+	padding: 0;
+	border: 0;
+	border-radius: 3px;
+	background: none;
+	color: var(--config-table-remove-text);
+	cursor: pointer;
+	transition: background-color 120ms ease, color 120ms ease;
+}
+
+.config_row_remove:hover:not(:disabled) {
+	background: var(--config-table-remove-hover-bg);
+	color: var(--config-table-remove-hover-text);
+}
+
+.config_row_remove:focus-visible {
+	outline: 2px solid var(--config-form-input-focus-border);
+	outline-offset: 1px;
+}
+
+.config_row_remove:disabled {
+	opacity: 0.45;
+	cursor: default;
+}
+
+/* Pass through: a switch and its state in words. */
+.config_page .config_window_pass {
+	gap: 8px;
+	font-size: 11px;
+}
+
+.config_page .config_window_pass.is-passing {
+	color: var(--config-table-pass-on-text);
+}
+
+.config_page .config_window_pass.is-restricted {
+	color: var(--config-table-pass-off-text);
+}
+
+.config_page .config_window_table .settings_switch input:disabled {
+	cursor: default;
+}
+
+/* ── Detection sensitivity: threshold fields three across, switch rows,
+   score sliders with a value badge, and score tiers as short rows. ── */
+.config_card_grid.is-thresholds {
+	grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+	align-items: end;
+}
+
+/* A yes / no threshold: its name, then its switch at the end. */
+.settings_switch.config_switch_row {
+	justify-content: space-between;
+	min-height: 32px;
+	padding: 0 10px;
+	border: 1px solid var(--config-form-switch-row-border);
+	border-radius: 3px;
+	color: var(--config-form-switch-row-text);
+	font-size: 12px;
+	font-weight: 500;
+	white-space: normal;
+}
+
+/* Base scores: one tile per typology. Its name and its score on the first
+   line, a slim slider under them whose filled part follows the score and
+   whose colour runs from green (low) to red (high). */
+.config_page .config_window_slider_grid {
+	grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+	gap: 10px 12px;
+}
+
+.config_page .config_window_slider.config_score {
+	grid-template-columns: minmax(0, 1fr) auto;
+	gap: 9px 10px;
+	padding: 10px 12px 12px;
+	border: 1px solid var(--config-form-slider-tile-border);
+	border-radius: 4px;
+	background: var(--config-form-slider-tile-bg);
+	/* The score's colour: from the low colour (0) to the high one (100),
+	   through the hues between them (green, yellow, orange, red). */
+	--score-color: color-mix(in hsl, var(--config-form-slider-high) var(--score-fill, 0%), var(--config-form-slider-low));
+	transition: border-color 140ms ease;
+}
+
+.config_page .config_window_slider.config_score:hover,
+.config_page .config_window_slider.config_score:focus-within {
+	border-color: var(--score-color);
+}
+
+.config_page .config_score span {
+	color: var(--config-form-slider-label-text);
+	font-size: 11.5px;
+	font-weight: 500;
+}
+
+.config_page .config_score b {
+	min-width: 30px;
+	padding: 1px 6px;
+	border-radius: 3px;
+	background: color-mix(in srgb, var(--score-color) 18%, transparent);
+	box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--score-color) 55%, transparent);
+	color: var(--config-form-slider-value-text);
+	font-size: 11px;
+	font-variant-numeric: tabular-nums;
+	text-align: center;
+}
+
+.config_page .config_score input[type="range"] {
+	grid-column: 1 / -1;
+	width: 100%;
+	height: 16px;
 	margin: 0;
+	background: transparent;
+	cursor: pointer;
+	-webkit-appearance: none;
+	appearance: none;
 }
 
-.config_window_domain_meta div {
+.config_page .config_score input[type="range"]::-webkit-slider-runnable-track {
+	height: 4px;
+	border-radius: 999px;
+	background: linear-gradient(to right, var(--score-color) var(--score-fill, 0%), var(--config-form-slider-track) var(--score-fill, 0%));
+}
+
+.config_page .config_score input[type="range"]::-moz-range-track {
+	height: 4px;
+	border-radius: 999px;
+	background: var(--config-form-slider-track);
+}
+
+.config_page .config_score input[type="range"]::-moz-range-progress {
+	height: 4px;
+	border-radius: 999px;
+	background: var(--score-color);
+}
+
+.config_page .config_score input[type="range"]::-webkit-slider-thumb {
+	width: 14px;
+	height: 14px;
+	margin-top: -5px;
+	border: 2px solid var(--score-color);
+	border-radius: 50%;
+	background: var(--config-form-slider-thumb-bg);
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+	transition: transform 120ms ease;
+	-webkit-appearance: none;
+	appearance: none;
+}
+
+.config_page .config_score input[type="range"]::-moz-range-thumb {
+	width: 10px;
+	height: 10px;
+	border: 2px solid var(--score-color);
+	border-radius: 50%;
+	background: var(--config-form-slider-thumb-bg);
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+}
+
+.config_page .config_score input[type="range"]:hover:not(:disabled)::-webkit-slider-thumb,
+.config_page .config_score input[type="range"]:focus-visible::-webkit-slider-thumb {
+	transform: scale(1.2);
+}
+
+.config_page .config_score input[type="range"]:focus-visible {
+	outline: none;
+}
+
+.config_page .config_score input[type="range"]:disabled {
+	cursor: default;
+	opacity: 0.6;
+}
+
+.config_tier_columns {
 	display: grid;
-	gap: 2px;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 12px 22px;
+	align-items: start;
+}
+
+.config_tier_columns > div {
+	display: grid;
+	gap: 12px;
 	min-width: 0;
 }
 
-.config_window_domain_meta dt {
-	color: var(--settings-text-muted);
-	font-size: 11px;
+.config_tier_columns .config_card_label {
+	margin: 4px 0 -2px;
 }
 
-.config_window_domain_meta dd {
+.config_tiers {
+	display: grid;
+	gap: 8px;
+	justify-items: start;
+}
+
+.config_tier {
+	display: grid;
+	grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto auto;
+	align-items: end;
+	gap: 10px;
+	width: 100%;
+}
+
+.config_tier .config_row_remove {
+	margin-bottom: 3px;
+}
+
+.config_tier_note {
+	margin-bottom: 8px;
+	color: var(--config-form-tier-note-text);
+	font-size: 11px;
+	white-space: nowrap;
+}
+
+.config_page .config_window_add_row {
+	min-width: 0;
+	height: 30px !important;
+	min-height: 30px !important;
+	padding: 0 12px !important;
+	border-radius: 3px;
+}
+
+@container settings-page (max-width: 760px) {
+	.config_tier_columns {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}
+
+@container settings-page (max-width: 620px) {
+	.config_tier {
+		grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+	}
+
+	.config_tier_note {
+		grid-column: 1 / -1;
+		grid-row: 2;
+		margin: 0;
+	}
+}
+
+/* ── Activity log: the cleanup form, its result, the log's filters and
+   paging, and status tags in the table. ── */
+.config_card_grid.is-thirds {
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.config_card_grid.is-filters {
+	grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(0, 0.6fr);
+}
+
+/* What a preview or a queued cleanup answered, as a row of facts. */
+.config_result {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	margin: 0;
+}
+
+.config_result div {
+	display: flex;
+	align-items: baseline;
+	gap: 7px;
+	min-width: 0;
+	padding: 4px 9px;
+	border: 1px solid var(--config-result-border);
+	border-radius: 3px;
+}
+
+.config_result dt {
+	color: var(--config-result-label-text);
+	font-size: 10px;
+	font-weight: 700;
+	letter-spacing: 0.05em;
+	text-transform: uppercase;
+}
+
+.config_result dd {
 	margin: 0;
 	overflow: hidden;
-	color: var(--settings-text);
+	color: var(--config-result-value-text);
 	font-size: 12px;
 	font-weight: 600;
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
 
-.config_window_domain_tables {
-	margin: 0;
+.config_table_range {
+	color: var(--config-table-range-text);
+	font-size: 11px;
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+
+.config_page .config_window_status {
+	padding: 1px 7px;
+	border-color: var(--config-table-status-border);
+	border-radius: 3px;
+	color: var(--config-table-status-text);
+	font-size: 10.5px;
+	font-weight: 600;
+	text-transform: capitalize;
+}
+
+.config_page .config_window_status.is-ok {
+	border-color: var(--config-table-status-ok-border);
+	color: var(--config-table-status-ok-text);
+}
+
+.config_page .config_window_status.is-bad {
+	border-color: var(--config-table-status-bad-border);
+	color: var(--config-table-status-bad-text);
+}
+
+@container settings-page (max-width: 620px) {
+	.config_card_grid.is-thirds,
+	.config_card_grid.is-filters {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}
+
+/* The active rule: the tab's main setting, so its card stands out. The
+   accent washes in from the corner; an icon tile and the rule's name lead,
+   the select to change it at the far end. Without a rule it turns to the
+   danger tone. */
+.config_card.config_active_rule {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 14px 16px;
+	padding: 16px;
+	border-color: var(--config-active-rule-border);
+	background:
+		radial-gradient(130% 110px at 0 0, var(--config-active-rule-wash), transparent 70%),
+		var(--config-active-rule-bg);
+	box-shadow: 0 4px 14px -8px var(--config-active-rule-shadow);
+}
+
+.config_card.config_active_rule.is-empty {
+	border-color: var(--config-active-rule-empty-border);
+	border-style: dashed;
+	background:
+		radial-gradient(130% 110px at 0 0, var(--config-active-rule-empty-wash), transparent 70%),
+		var(--config-active-rule-bg);
+	box-shadow: none;
+}
+
+.config_active_rule_icon {
+	display: grid;
+	flex: none;
+	place-items: center;
+	width: 42px;
+	height: 42px;
+	border-radius: 8px;
+	background: var(--config-active-rule-icon-bg);
+	color: var(--config-active-rule-icon-text);
+}
+
+.config_active_rule.is-empty .config_active_rule_icon {
+	background: var(--config-active-rule-empty-border);
+}
+
+.config_active_rule_text {
+	display: grid;
+	flex: 1 1 220px;
+	gap: 3px;
+	min-width: 0;
+}
+
+.config_active_rule_text small {
+	color: var(--config-active-rule-eyebrow-text);
+	font-size: 10px;
+	font-weight: 700;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+}
+
+.config_active_rule_text strong {
 	overflow: hidden;
-	color: var(--settings-text-secondary);
-	font-size: 12px;
+	color: var(--config-active-rule-name-text);
+	font-size: 16px;
+	font-weight: 700;
+	line-height: 1.25;
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
 
-.config_window_domain_tables span {
-	color: var(--settings-text-muted);
+.config_active_rule_tags {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 5px;
+	margin-top: 2px;
+}
+
+.config_active_rule_tags em {
+	padding: 1px 7px;
+	border: 1px solid var(--config-active-rule-tag-border);
+	border-radius: 3px;
+	color: var(--config-active-rule-tag-text);
+	font-size: 10px;
+	font-style: normal;
+	font-weight: 700;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+}
+
+.config_active_rule.is-empty .config_active_rule_tags em {
+	border-color: var(--config-active-rule-empty-border);
+	color: var(--config-active-rule-empty-border);
+}
+
+.config_active_rule_pick {
+	flex: 1 1 260px;
+	max-width: 420px;
+}
+
+/* The domain's formatting rules: numbered rows, each with its sample. */
+.config_page .config_window_rule_list {
+	gap: 5px;
+}
+
+.config_page .config_window_rule_list li {
+	gap: 10px;
+	padding: 6px 10px;
+	border: 1px solid var(--config-rule-item-border);
+	border-radius: 3px;
+	background: var(--config-rule-item-bg);
+	color: var(--config-rule-item-text);
+	font-size: 12px;
+}
+
+.config_page .config_window_rule_list li > i {
+	flex: none;
+	min-width: 14px;
+	color: var(--config-rule-item-number-text);
+	font-size: 11px;
+	font-style: normal;
+	font-variant-numeric: tabular-nums;
+}
+
+.config_page .config_window_rule_list li > span {
+	flex: 1;
+	min-width: 0;
+}
+
+.config_page .config_window_rule_list small {
+	color: var(--config-rule-item-off-text);
+	font-size: 10.5px;
+	font-weight: 600;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+}
+
+.config_rules .settings_options {
+	grid-template-columns: minmax(0, 1fr);
+}
+
+@container settings-page (max-width: 620px) {
+	.config_rules_figures {
+		--settings-stats-columns: repeat(2, minmax(0, 1fr));
+	}
 }
 
 /* Tables */
@@ -406,7 +1382,7 @@
 	display: grid;
 	place-items: center;
 	padding: 16px;
-	background: var(--linkx-overlay-bg);
+	background: var(--linkx-popup-backdrop, var(--linkx-overlay-bg));
 	backdrop-filter: blur(2px);
 }
 
@@ -480,48 +1456,314 @@
 	}
 }
 
-/* ── Libraries window (shares the Settings / Configuration surface) ───── */
-.libraries_rules_filter {
-	max-width: 260px;
-	margin-bottom: 10px;
+/* ── Libraries window: the Settings / Configuration frame and page family.
+   Its frame, pages, form cards and tables read the Libraries' own tokens
+   here, so restyling them touches no other window. ───── */
+.libraries_theme_scope {
+	/* Frame */
+	--window-footer-text-color: var(--libraries-frame-window-footer-text-color);
+	--window-footer-info-icon-color: var(--libraries-frame-window-footer-info-icon-color);
+	--window-footer-btn-border: var(--libraries-frame-window-footer-btn-border);
+	--window-footer-btn-text: var(--libraries-frame-window-footer-btn-text);
+	--window-footer-btn-bg-angle: var(--libraries-frame-window-footer-btn-bg-angle);
+	--window-footer-btn-bg-top: var(--libraries-frame-window-footer-btn-bg-top);
+	--window-footer-btn-bg-bottom: var(--libraries-frame-window-footer-btn-bg-bottom);
+	--window-footer-btn-hover-border: var(--libraries-frame-window-footer-btn-hover-border);
+	--window-footer-btn-hover-text: var(--libraries-frame-window-footer-btn-hover-text);
+	--window-footer-btn-hover-bg-angle: var(--libraries-frame-window-footer-btn-hover-bg-angle);
+	--window-footer-btn-hover-bg-top: var(--libraries-frame-window-footer-btn-hover-bg-top);
+	--window-footer-btn-hover-bg-bottom: var(--libraries-frame-window-footer-btn-hover-bg-bottom);
+	--window-footer-btn-pressed-border: var(--libraries-frame-window-footer-btn-pressed-border);
+	--window-footer-btn-pressed-text: var(--libraries-frame-window-footer-btn-pressed-text);
+	--window-footer-btn-pressed-bg-angle: var(--libraries-frame-window-footer-btn-pressed-bg-angle);
+	--window-footer-btn-pressed-bg-top: var(--libraries-frame-window-footer-btn-pressed-bg-top);
+	--window-footer-btn-pressed-bg-bottom: var(--libraries-frame-window-footer-btn-pressed-bg-bottom);
+	--window-footer-btn-disabled-border: var(--libraries-frame-window-footer-btn-disabled-border);
+	--window-footer-btn-disabled-text: var(--libraries-frame-window-footer-btn-disabled-text);
+	--window-footer-btn-disabled-bg: var(--libraries-frame-window-footer-btn-disabled-bg);
+	--window-cards-container-subtext: var(--libraries-frame-window-cards-container-subtext);
+	--session-chip-border: var(--libraries-frame-session-chip-border);
+	--session-chip-bg: var(--libraries-frame-session-chip-bg);
+	--session-chip-label-color: var(--libraries-frame-session-chip-label-color);
+	--session-chip-value-color: var(--libraries-frame-session-chip-value-color);
+	--timeline-border: var(--libraries-frame-timeline-border);
+	--timeline-bg: var(--libraries-frame-timeline-bg);
+	--timeline-progress-label-color: var(--libraries-frame-timeline-progress-label-color);
+	--timeline-progress-value-color: var(--libraries-frame-timeline-progress-value-color);
+	--timeline-progress-track: var(--libraries-frame-timeline-progress-track);
+	--timeline-progress-fill-start: var(--libraries-frame-timeline-progress-fill-start);
+	--timeline-progress-fill-end: var(--libraries-frame-timeline-progress-fill-end);
+	--timeline-step-border: var(--libraries-frame-timeline-step-border);
+	--timeline-step-bg: var(--libraries-frame-timeline-step-bg);
+	--timeline-step-line-track: var(--libraries-frame-timeline-step-line-track);
+	--timeline-step-line-color: var(--libraries-frame-timeline-step-line-color);
+	--timeline-step-hover-bg: var(--libraries-frame-timeline-step-hover-bg);
+	--timeline-step-hover-border: var(--libraries-frame-timeline-step-hover-border);
+	--timeline-step-active-bg: var(--libraries-frame-timeline-step-active-bg);
+	--timeline-step-active-border: var(--libraries-frame-timeline-step-active-border);
+	--timeline-step-active-bar: var(--libraries-frame-timeline-step-active-bar);
+	--timeline-step-circle-inactive-border: var(--libraries-frame-timeline-step-circle-inactive-border);
+	--timeline-step-circle-inactive-bg: var(--libraries-frame-timeline-step-circle-inactive-bg);
+	--timeline-step-circle-inactive-text: var(--libraries-frame-timeline-step-circle-inactive-text);
+	--timeline-step-circle-active-border: var(--libraries-frame-timeline-step-circle-active-border);
+	--timeline-step-circle-active-bg: var(--libraries-frame-timeline-step-circle-active-bg);
+	--timeline-step-circle-active-text: var(--libraries-frame-timeline-step-circle-active-text);
+	--timeline-step-circle-active-ring: var(--libraries-frame-timeline-step-circle-active-ring);
+	--timeline-step-circle-fulfilled-border: var(--libraries-frame-timeline-step-circle-fulfilled-border);
+	--timeline-step-circle-fulfilled-bg-angle: var(--libraries-frame-timeline-step-circle-fulfilled-bg-angle);
+	--timeline-step-circle-fulfilled-bg-top: var(--libraries-frame-timeline-step-circle-fulfilled-bg-top);
+	--timeline-step-circle-fulfilled-bg-bottom: var(--libraries-frame-timeline-step-circle-fulfilled-bg-bottom);
+	--timeline-step-circle-fulfilled-text: var(--libraries-frame-timeline-step-circle-fulfilled-text);
+	--timeline-step-circle-fulfilled-shadow: var(--libraries-frame-timeline-step-circle-fulfilled-shadow);
+	--timeline-step-locked-border: var(--libraries-frame-timeline-step-locked-border);
+	--timeline-step-locked-text: var(--libraries-frame-timeline-step-locked-text);
+	--timeline-step-title-color: var(--libraries-frame-timeline-step-title-color);
+	--timeline-step-desc-color: var(--libraries-frame-timeline-step-desc-color);
+	--timeline-step-active-title-color: var(--libraries-frame-timeline-step-active-title-color);
+	--timeline-step-active-desc-color: var(--libraries-frame-timeline-step-active-desc-color);
+	--settings-window-choose-header-text: var(--libraries-frame-window-choose-header-text);
+	--settings-window-timeline-tabs-before-bg: var(--libraries-frame-window-timeline-tabs-before-bg);
+	/* Pages (the Settings page family, used by the sections) */
+	--settings-secret-notice-border: var(--libraries-page-secret-notice-border);
+	--settings-secret-notice-bg: var(--libraries-page-secret-notice-bg);
+	--settings-secret-notice-strong-text: var(--libraries-page-secret-notice-strong-text);
+	--settings-secret-notice-code-bg: var(--libraries-page-secret-notice-code-bg);
+	--settings-secret-notice-code-text: var(--libraries-page-secret-notice-code-text);
+	--settings-link-button-text: var(--libraries-page-link-button-text);
+	--settings-link-button-small-text: var(--libraries-page-link-button-small-text);
+	--settings-block-header-small-text: var(--libraries-page-block-header-small-text);
+	--settings-page-hairline: var(--libraries-page-page-hairline);
+	--settings-page-state-tone: var(--libraries-page-page-state-tone);
+	--settings-hero-border: var(--libraries-page-hero-border);
+	--settings-hero-bg: var(--libraries-page-hero-bg);
+	--settings-hero-active-state-tone: var(--libraries-page-hero-active-state-tone);
+	--settings-hero-paused-state-tone: var(--libraries-page-hero-paused-state-tone);
+	--settings-hero-danger-state-tone: var(--libraries-page-hero-danger-state-tone);
+	--settings-eyebrow-text: var(--libraries-page-eyebrow-text);
+	--settings-hero-title-h4-text: var(--libraries-page-hero-title-h4-text);
+	--settings-hero-meta-text: var(--libraries-page-hero-meta-text);
+	--settings-hero-meta-strong-text: var(--libraries-page-hero-meta-strong-text);
+	--settings-pill-border: var(--libraries-page-pill-border);
+	--settings-pill-bg: var(--libraries-page-pill-bg);
+	--settings-pill-text: var(--libraries-page-pill-text);
+	--settings-pill-active-border: var(--libraries-page-pill-active-border);
+	--settings-pill-active-bg: var(--libraries-page-pill-active-bg);
+	--settings-pill-active-text: var(--libraries-page-pill-active-text);
+	--settings-pill-paused-border: var(--libraries-page-pill-paused-border);
+	--settings-pill-paused-bg: var(--libraries-page-pill-paused-bg);
+	--settings-pill-paused-text: var(--libraries-page-pill-paused-text);
+	--settings-switch-text: var(--libraries-page-switch-text);
+	--settings-switch-input-border: var(--libraries-page-switch-input-border);
+	--settings-switch-input-bg: var(--libraries-page-switch-input-bg);
+	--settings-switch-input-after-bg: var(--libraries-page-switch-input-after-bg);
+	--settings-switch-input-after-shadow: var(--libraries-page-switch-input-after-shadow);
+	--settings-switch-input-checked-border: var(--libraries-page-switch-input-checked-border);
+	--settings-switch-input-checked-bg: var(--libraries-page-switch-input-checked-bg);
+	--settings-switch-input-focus-outline: var(--libraries-page-switch-input-focus-outline);
+	--settings-stats-hairline: var(--libraries-page-stats-hairline);
+	--settings-stats-bg: var(--libraries-page-stats-bg);
+	--settings-stats-bg-2: var(--libraries-page-stats-bg-2);
+	--settings-stat-dt-text: var(--libraries-page-stat-dt-text);
+	--settings-stat-dd-text: var(--libraries-page-stat-dd-text);
+	--settings-stat-dd-success-text: var(--libraries-page-stat-dd-success-text);
+	--settings-stat-dd-danger-text: var(--libraries-page-stat-dd-danger-text);
+	--settings-stat-icon-tone: var(--libraries-page-stat-icon-tone);
+	--settings-stat-icon-success-tone: var(--libraries-page-stat-icon-success-tone);
+	--settings-stat-icon-danger-tone: var(--libraries-page-stat-icon-danger-tone);
+	--settings-stat-dd-empty-text: var(--libraries-page-stat-dd-empty-text);
+	--settings-stat-small-text: var(--libraries-page-stat-small-text);
+	--settings-masthead-hairline: var(--libraries-page-masthead-hairline);
+	--settings-masthead-shadow: var(--libraries-page-masthead-shadow);
+	--settings-masthead-shadow-2: var(--libraries-page-masthead-shadow-2);
+	--settings-masthead-shadow-3: var(--libraries-page-masthead-shadow-3);
+	--settings-masthead-shadow-4: var(--libraries-page-masthead-shadow-4);
+	--settings-masthead-bg: var(--libraries-page-masthead-bg);
+	--settings-masthead-bg-2: var(--libraries-page-masthead-bg-2);
+	--settings-hero-media-border: var(--libraries-page-hero-media-border);
+	--settings-hero-media-bg: var(--libraries-page-hero-media-bg);
+	--settings-hero-media-text: var(--libraries-page-hero-media-text);
+	--settings-hero-meta-i-text: var(--libraries-page-hero-meta-i-text);
+	--settings-facts-dt-text: var(--libraries-page-facts-dt-text);
+	--settings-facts-dd-text: var(--libraries-page-facts-dd-text);
+	--settings-facts-dd-empty-text: var(--libraries-page-facts-dd-empty-text);
+	--settings-option-border: var(--libraries-page-option-border);
+	--settings-option-bg: var(--libraries-page-option-bg);
+	--settings-option-hover-border: var(--libraries-page-option-hover-border);
+	--settings-option-hover-shadow: var(--libraries-page-option-hover-shadow);
+	--settings-option-focus-border: var(--libraries-page-option-focus-border);
+	--settings-option-on-border: var(--libraries-page-option-on-border);
+	--settings-option-on-bg: var(--libraries-page-option-on-bg);
+	--settings-option-on-bg-2: var(--libraries-page-option-on-bg-2);
+	--settings-option-icon-text: var(--libraries-page-option-icon-text);
+	--settings-option-icon-on-text: var(--libraries-page-option-icon-on-text);
+	--settings-option-strong-text: var(--libraries-page-option-strong-text);
+	--settings-option-small-text: var(--libraries-page-option-small-text);
+	--settings-option-state-text: var(--libraries-page-option-state-text);
+	--settings-option-state-on-text: var(--libraries-page-option-state-on-text);
+	--settings-block-header-h4-text: var(--libraries-page-block-header-h4-text);
+	--settings-block-header-p-text: var(--libraries-page-block-header-p-text);
+	--settings-hero-state-tone: var(--libraries-page-hero-state-tone);
+	--settings-launch-card-border: var(--libraries-page-launch-card-border);
+	--settings-launch-card-hover-border: var(--libraries-page-launch-card-hover-border);
+	--settings-launch-card-hover-shadow: var(--libraries-page-launch-card-hover-shadow);
+	--settings-launch-card-focus-outline: var(--libraries-page-launch-card-focus-outline);
+	--settings-launch-icon-text: var(--libraries-page-launch-icon-text);
+	--settings-launch-text-strong-text: var(--libraries-page-launch-text-strong-text);
+	--settings-launch-text-small-text: var(--libraries-page-launch-text-small-text);
+	/* Form cards and tables (the Configuration's, used by the sections) */
+	--config-form-card-border: var(--libraries-form-card-border);
+	--config-form-card-bg: var(--libraries-form-card-bg);
+	--config-form-group-label-text: var(--libraries-form-group-label-text);
+	--config-form-group-line: var(--libraries-form-group-line);
+	--config-form-label-text: var(--libraries-form-label-text);
+	--config-form-label-icon: var(--libraries-form-label-icon);
+	--config-form-info-icon: var(--libraries-form-info-icon);
+	--config-form-info-icon-hover: var(--libraries-form-info-icon-hover);
+	--config-form-hint-text: var(--libraries-form-hint-text);
+	--config-form-input-bg: var(--libraries-form-input-bg);
+	--config-form-input-border: var(--libraries-form-input-border);
+	--config-form-input-text: var(--libraries-form-input-text);
+	--config-form-input-placeholder: var(--libraries-form-input-placeholder);
+	--config-form-input-hover-border: var(--libraries-form-input-hover-border);
+	--config-form-input-focus-border: var(--libraries-form-input-focus-border);
+	--config-form-input-focus-ring: var(--libraries-form-input-focus-ring);
+	--config-form-input-disabled-bg: var(--libraries-form-input-disabled-bg);
+	--config-form-input-disabled-text: var(--libraries-form-input-disabled-text);
+	--config-form-switch-row-border: var(--libraries-form-switch-row-border);
+	--config-form-switch-row-text: var(--libraries-form-switch-row-text);
+	--config-form-slider-label-text: var(--libraries-form-slider-label-text);
+	--config-form-slider-tile-border: var(--libraries-form-slider-tile-border);
+	--config-form-slider-tile-bg: var(--libraries-form-slider-tile-bg);
+	--config-form-slider-low: var(--libraries-form-slider-low);
+	--config-form-slider-high: var(--libraries-form-slider-high);
+	--config-form-slider-track: var(--libraries-form-slider-track);
+	--config-form-slider-thumb-bg: var(--libraries-form-slider-thumb-bg);
+	--config-form-slider-value-text: var(--libraries-form-slider-value-text);
+	--config-form-tier-note-text: var(--libraries-form-tier-note-text);
+	--config-form-readonly-border: var(--libraries-form-readonly-border);
+	--config-form-readonly-text: var(--libraries-form-readonly-text);
+	--config-table-border: var(--libraries-table-border);
+	--config-table-bg: var(--libraries-table-bg);
+	--config-table-head-bg: var(--libraries-table-head-bg);
+	--config-table-head-text: var(--libraries-table-head-text);
+	--config-table-row-line: var(--libraries-table-row-line);
+	--config-table-row-hover-bg: var(--libraries-table-row-hover-bg);
+	--config-table-cell-text: var(--libraries-table-cell-text);
+	--config-table-index-text: var(--libraries-table-index-text);
+	--config-table-empty-text: var(--libraries-table-empty-text);
+	--config-table-remove-text: var(--libraries-table-remove-text);
+	--config-table-remove-hover-bg: var(--libraries-table-remove-hover-bg);
+	--config-table-remove-hover-text: var(--libraries-table-remove-hover-text);
+	--config-table-pass-on-text: var(--libraries-table-pass-on-text);
+	--config-table-pass-off-text: var(--libraries-table-pass-off-text);
+	--config-table-status-border: var(--libraries-table-status-border);
+	--config-table-status-text: var(--libraries-table-status-text);
+	--config-table-status-ok-border: var(--libraries-table-status-ok-border);
+	--config-table-status-ok-text: var(--libraries-table-status-ok-text);
+	--config-table-status-bad-border: var(--libraries-table-status-bad-border);
+	--config-table-status-bad-text: var(--libraries-table-status-bad-text);
+	--config-table-range-text: var(--libraries-table-range-text);
+}
+
+/* The rules filter: a search field with its glyph. */
+.libraries_search {
+	position: relative;
+	display: flex;
+	align-items: center;
+	max-width: 280px;
+	color: var(--libraries-form-input-placeholder);
+}
+
+.libraries_search svg {
+	position: absolute;
+	left: 10px;
+	pointer-events: none;
+}
+
+.libraries_search .libraries_rules_filter {
+	width: 100%;
+	min-height: 32px;
+	padding: 0 10px 0 30px;
+	border-color: var(--libraries-form-input-border);
+	border-radius: 3px;
+	background: var(--libraries-form-input-bg);
+	color: var(--libraries-form-input-text);
+	font-size: 12px;
+	transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+
+/* Inside a form card the card's input padding would win and put the text
+   under the glyph: keep the room for it. */
+.config_page .libraries_search .settings_input.libraries_rules_filter {
+	padding-left: 30px;
+}
+
+.libraries_search .libraries_rules_filter:focus {
+	border-color: var(--libraries-form-input-focus-border);
+	box-shadow: 0 0 0 3px var(--libraries-form-input-focus-ring);
+	outline: none;
 }
 
 .libraries_rules_table td strong {
-	color: var(--settings-text);
+	color: var(--libraries-rule-name-text);
 	font-weight: 600;
+}
+
+.libraries_rule_available {
+	color: var(--libraries-rule-available-text);
+	font-size: 11px;
+}
+
+/* Remove (then Confirm remove): a compact button in the row. */
+.config_page .config_window_table_actions .libraries_remove {
+	min-width: 0;
+	height: 26px !important;
+	min-height: 26px !important;
+	padding: 0 10px !important;
+	border-radius: 3px;
+	font-size: 11px;
 }
 
 .libraries_badge {
 	display: inline-flex;
 	align-items: center;
-	padding: 1px 8px;
-	border-radius: 999px;
-	border: 1px solid var(--settings-card-border);
-	color: var(--settings-text-secondary);
-	font-size: 11px;
+	padding: 1px 7px;
+	border: 1px solid var(--libraries-badge-border);
+	border-radius: 3px;
+	color: var(--libraries-badge-text);
+	font-size: 10.5px;
 	font-weight: 600;
 	letter-spacing: 0.02em;
 	white-space: nowrap;
 }
 
 .libraries_badge.is-builtin {
-	color: var(--settings-text-muted);
+	color: var(--libraries-badge-builtin-text);
 }
 
-.libraries_badge.is-custom,
-.libraries_badge.is-active {
-	color: var(--settings-accent-text);
-	border-color: color-mix(in srgb, var(--settings-accent) 45%, transparent);
-	background: color-mix(in srgb, var(--settings-accent) 10%, transparent);
+.libraries_badge.is-custom {
+	border-color: var(--libraries-badge-custom-border);
+	background: var(--libraries-badge-custom-bg);
+	color: var(--libraries-badge-custom-text);
 }
 
 .libraries_badge.is-active {
-	background: color-mix(in srgb, var(--settings-accent) 18%, transparent);
+	border-color: var(--libraries-badge-active-border);
+	background: var(--libraries-badge-active-bg);
+	color: var(--libraries-badge-active-text);
+}
+
+.libraries_link {
+	justify-self: start;
+	color: var(--libraries-link-text);
+	font-size: 12px;
+	text-decoration: underline;
+	text-underline-offset: 2px;
 }
 
 .libraries_templates {
 	display: grid;
-	gap: 12px;
+	gap: 10px;
 	margin: 0;
 	padding: 0;
 	list-style: none;
@@ -533,8 +1775,14 @@
 	gap: 14px;
 	align-items: start;
 	padding: 12px;
-	border: 1px solid var(--settings-card-border);
-	border-radius: 8px;
+	border: 1px solid var(--libraries-template-border);
+	border-radius: 4px;
+	background: var(--libraries-template-bg);
+	transition: border-color 140ms ease;
+}
+
+.libraries_template:hover {
+	border-color: var(--libraries-template-hover-border);
 }
 
 .libraries_template_thumbnail {
@@ -543,7 +1791,7 @@
 	height: auto;
 	aspect-ratio: 1016 / 1444;
 	object-fit: cover;
-	border: 1px solid var(--settings-card-border);
+	border: 1px solid var(--libraries-template-thumb-border);
 	border-radius: 3px;
 	box-shadow: 0 4px 12px rgb(0 0 0 / 0.12);
 }
@@ -559,31 +1807,40 @@
 	flex-wrap: wrap;
 	align-items: center;
 	gap: 6px;
+	color: var(--libraries-template-title-text);
+	font-size: 13px;
 }
 
 .libraries_template_body p {
 	margin: 0;
-	color: var(--settings-text-secondary);
-}
-
-.libraries_template_facts {
-	display: grid;
-	grid-template-columns: max-content minmax(0, 1fr);
-	gap: 2px 10px;
-	margin: 0;
+	color: var(--libraries-template-text);
 	font-size: 12px;
 }
 
+.libraries_template_facts {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px 16px;
+	margin: 2px 0 0;
+	font-size: 11.5px;
+}
+
 .libraries_template_facts dt {
-	color: var(--settings-text-muted);
+	color: var(--libraries-template-fact-label-text);
+	font-size: 10px;
+	font-weight: 700;
+	letter-spacing: 0.05em;
+	text-transform: uppercase;
 }
 
 .libraries_template_facts dd {
-	margin: 0;
+	margin: 0 0 0 -10px;
+	color: var(--libraries-template-fact-value-text);
+	font-weight: 600;
 }
 
 .libraries_template_sections summary {
-	color: var(--settings-accent-text);
+	color: var(--libraries-link-text);
 	font-size: 12px;
 	cursor: pointer;
 }
@@ -591,80 +1848,472 @@
 .libraries_template_sections ol {
 	margin: 6px 0 0;
 	padding-left: 18px;
-	color: var(--settings-text-secondary);
+	color: var(--libraries-template-sections-text);
 	font-size: 12px;
 	line-height: 1.6;
 }
 
-@media (max-width: 560px) {
+@container settings-page (max-width: 560px) {
 	.libraries_template {
 		grid-template-columns: 1fr;
 	}
 }
 
+/* Charts: choices as pills (one of a few, or any of many), the starting
+   charts by group, and a strip previewing the colour schema. */
+.libraries_choices {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.libraries_choice {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 4px 11px;
+	border: 1px solid var(--libraries-choice-border);
+	border-radius: 999px;
+	background: var(--libraries-choice-bg);
+	color: var(--libraries-choice-text);
+	font: inherit;
+	font-size: 12px;
+	font-weight: 500;
+	white-space: nowrap;
+	cursor: pointer;
+	transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.libraries_choice small {
+	color: var(--libraries-choice-tag-text);
+	font-size: 9.5px;
+	font-weight: 700;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+}
+
+.libraries_choice:hover:not(:disabled):not(.is-on) {
+	border-color: var(--libraries-choice-hover-border);
+	color: var(--libraries-choice-hover-text);
+}
+
+.libraries_choice.is-on {
+	border-color: var(--libraries-choice-on-border);
+	background: var(--libraries-choice-on-bg);
+	color: var(--libraries-choice-on-text);
+	font-weight: 600;
+}
+
+.libraries_choice:disabled {
+	cursor: default;
+}
+
+.libraries_choice:focus-visible,
+.libraries_metrics_all:focus-visible {
+	outline: 2px solid var(--libraries-form-input-focus-border);
+	outline-offset: 1px;
+}
+
+/* Manual generation: the starting charts are shown, but dimmed. */
+.libraries_metrics.is-off .libraries_choices {
+	opacity: 0.5;
+}
+
+.libraries_metrics_count {
+	color: var(--libraries-choice-count-text);
+	font-weight: 600;
+	letter-spacing: 0;
+	text-transform: none;
+}
+
+.libraries_metrics .config_card_label::after {
+	order: 1;
+}
+
+.libraries_metrics_all {
+	order: 2;
+	padding: 0;
+	border: 0;
+	background: none;
+	color: var(--libraries-link-text);
+	font: inherit;
+	font-weight: 700;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	cursor: pointer;
+}
+
+.libraries_metrics_all:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+.libraries_schema_strip {
+	display: block;
+	height: 32px;
+	border: 1px solid var(--libraries-schema-strip-border);
+	border-radius: 3px;
+}
+
+/* Icon sets: the sets as cards (a few of their icons, name, switch), the
+   open set's icons as a grid of plates, an editor strip for a chosen
+   custom icon, and the upload popup's drop area and list. */
+.libraries_sets {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+	gap: 8px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.libraries_set {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	min-width: 0;
+	padding: 8px 12px 8px 8px;
+	border: 1px solid var(--libraries-set-border);
+	border-radius: 4px;
+	background: var(--libraries-set-bg);
+	transition: border-color 140ms ease;
+}
+
+.libraries_set:hover {
+	border-color: var(--libraries-set-hover-border);
+}
+
+.libraries_set.is-open {
+	border-color: var(--libraries-set-open-border);
+	background:
+		radial-gradient(120% 70px at 0 0, var(--libraries-set-open-bg), transparent 70%),
+		var(--libraries-set-bg);
+}
+
+.libraries_set_open {
+	display: flex;
+	flex: 1;
+	align-items: center;
+	gap: 10px;
+	min-width: 0;
+	padding: 0;
+	border: 0;
+	background: none;
+	color: inherit;
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+
+.libraries_set_open:focus-visible,
+.libraries_icon:focus-visible,
+.libraries_dropzone:focus-visible {
+	outline: 2px solid var(--libraries-form-input-focus-border);
+	outline-offset: 2px;
+}
+
+.libraries_set_preview {
+	display: flex;
+	flex: none;
+}
+
+.libraries_set_preview .libraries_icon_plate {
+	width: 26px;
+	height: 26px;
+	margin-left: -7px;
+}
+
+.libraries_set_preview .libraries_icon_plate:first-child {
+	margin-left: 0;
+}
+
+.libraries_set_text {
+	display: grid;
+	flex: 1;
+	gap: 1px;
+	min-width: 0;
+}
+
+.libraries_set_text strong {
+	overflow: hidden;
+	color: var(--libraries-set-name-text);
+	font-size: 12.5px;
+	font-weight: 600;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.libraries_set_text small {
+	color: var(--libraries-set-note-text);
+	font-size: 11px;
+}
+
+.libraries_set .settings_switch {
+	gap: 7px;
+	font-size: 11px;
+}
+
+/* An icon on a light plate, so dark line icons read on any theme. */
+.libraries_icon_plate {
+	display: grid;
+	flex: none;
+	place-items: center;
+	width: 34px;
+	height: 34px;
+	padding: 5px;
+	border: 1px solid var(--libraries-icon-plate-border);
+	border-radius: 4px;
+	background: var(--libraries-icon-plate-bg);
+	box-sizing: border-box;
+	color: var(--libraries-upload-bad-text);
+}
+
+.libraries_icon_plate img {
+	width: 100%;
+	height: 100%;
+	object-fit: contain;
+}
+
+.libraries_icon_plate.is-empty {
+	color: var(--libraries-set-note-text);
+	font-size: 11px;
+}
+
+.libraries_icon_plate.is-large {
+	width: 52px;
+	height: 52px;
+	padding: 8px;
+}
+
+.libraries_icon_tools {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+}
+
+.libraries_icon_tools .libraries_search {
+	flex: 1 1 200px;
+}
+
+.libraries_icon_grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(78px, 1fr));
+	gap: 4px;
+	max-height: 340px;
+	margin: 0;
+	padding: 2px;
+	overflow-y: auto;
+	list-style: none;
+	scrollbar-width: thin;
+}
+
+.libraries_icon {
+	display: grid;
+	justify-items: center;
+	gap: 5px;
+	width: 100%;
+	padding: 8px 4px 6px;
+	border: 1px solid transparent;
+	border-radius: 4px;
+	background: none;
+	color: var(--libraries-icon-name-text);
+	font: inherit;
+	box-sizing: border-box;
+	transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+button.libraries_icon {
+	cursor: pointer;
+}
+
+.libraries_icon:hover {
+	background: var(--libraries-icon-hover-bg);
+}
+
+.libraries_icon.is-on {
+	border-color: var(--libraries-icon-on-border);
+	background: var(--libraries-icon-on-bg);
+}
+
+.libraries_icon small {
+	max-width: 100%;
+	overflow: hidden;
+	font-size: 10px;
+	line-height: 1.2;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.libraries_icon_empty {
+	margin: 0;
+	padding: 22px 12px;
+	color: var(--libraries-set-note-text);
+	font-size: 12px;
+	text-align: center;
+}
+
+.libraries_icon_edit {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-end;
+	gap: 10px 12px;
+	padding-top: 12px;
+	border-top: 1px solid var(--libraries-icon-edit-border);
+}
+
+.libraries_icon_edit .config_window_field {
+	flex: 1 1 200px;
+}
+
+.libraries_icon_edit .libraries_metrics_count {
+	margin-bottom: 8px;
+	font-size: 11px;
+}
+
+.libraries_icon_edit .settings_button {
+	min-width: 0;
+	height: 32px !important;
+	min-height: 32px !important;
+	padding: 0 12px !important;
+	border-radius: 3px;
+}
+
+.libraries_upload {
+	display: grid;
+	gap: 12px;
+	padding: 16px 24px 20px;
+}
+
+.libraries_dropzone {
+	display: grid;
+	justify-items: center;
+	gap: 5px;
+	padding: 20px 16px;
+	border: 1px dashed var(--libraries-dropzone-border);
+	border-radius: 4px;
+	background: var(--libraries-dropzone-bg);
+	color: var(--libraries-dropzone-text);
+	font: inherit;
+	text-align: center;
+	cursor: pointer;
+	transition: background-color 140ms ease;
+}
+
+.libraries_dropzone:hover,
+.libraries_dropzone.is-over {
+	background: var(--libraries-dropzone-over-bg);
+}
+
+.libraries_dropzone strong {
+	font-size: 12.5px;
+	font-weight: 600;
+}
+
+.libraries_dropzone small {
+	max-width: 44ch;
+	color: var(--libraries-dropzone-note-text);
+	font-size: 11px;
+	line-height: 1.4;
+}
+
+.libraries_upload_list {
+	display: grid;
+	gap: 5px;
+	max-height: 210px;
+	margin: 0;
+	padding: 0;
+	overflow-y: auto;
+	list-style: none;
+	scrollbar-width: thin;
+}
+
+.libraries_upload_list li {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+}
+
+.libraries_upload_list .graph_customize_input {
+	flex: 1;
+	min-width: 0;
+	height: 30px;
+}
+
+.libraries_upload_reason {
+	flex: 1;
+	min-width: 0;
+	color: var(--libraries-upload-bad-text);
+	font-size: 11.5px;
+}
+
+.libraries_upload_reason strong {
+	font-weight: 600;
+}
+
 .libraries_pending {
 	display: grid;
 	justify-items: start;
-	gap: 6px;
-	padding: 24px;
-	border: 1px dashed var(--settings-card-border);
-	border-radius: 10px;
-	color: var(--settings-text-muted);
+	gap: 4px;
+	padding: 20px;
+	border: 1px dashed var(--libraries-pending-border);
+	border-radius: 4px;
+	color: var(--libraries-pending-text);
+	font-size: 12px;
 }
 
 .libraries_pending h4 {
 	margin: 0;
-	color: var(--settings-text);
+	color: var(--libraries-template-title-text);
+	font-size: 13px;
 }
 
 .libraries_pending p {
 	margin: 0;
 }
 
-.libraries_switch {
-	display: flex;
-	align-items: flex-start;
-	gap: 10px;
-	cursor: pointer;
-}
-
-.libraries_switch input {
-	margin-top: 3px;
-}
-
-.libraries_switch span {
-	display: grid;
-	gap: 2px;
-}
-
-.libraries_switch strong {
-	color: var(--settings-text);
-}
-
-.libraries_switch small,
-.libraries_reasons {
-	color: var(--settings-text-muted);
+.libraries_gpu_option {
+	grid-template-columns: minmax(0, 1fr);
 }
 
 .libraries_current {
-	margin: 10px 0 0;
-	color: var(--settings-text-secondary);
+	margin: 0;
+	color: var(--libraries-current-text);
+	font-size: 12px;
+}
+
+.libraries_current strong {
+	color: var(--libraries-current-strong-text);
 }
 
 .libraries_verdict {
-	margin: 0 0 4px;
+	margin: 0;
+	color: var(--libraries-verdict-text);
+	font-size: 13px;
 	font-weight: 600;
-	color: var(--settings-text);
 }
 
 .libraries_verdict.is-capable {
-	color: var(--settings-accent-text);
+	color: var(--libraries-verdict-capable-text);
+}
+
+.libraries_verdict.is-not_capable,
+.libraries_verdict.is-not-capable {
+	color: var(--libraries-verdict-incapable-text);
 }
 
 .libraries_reasons {
 	margin: 0;
-	padding-left: 18px;
+	padding-left: 16px;
+	color: var(--libraries-reasons-text);
 	font-size: 12px;
+	line-height: 1.6;
+}
+
+.libraries_reasons li::marker {
+	color: var(--libraries-reasons-mark);
 }
 
 /* Profile mapping fields: the switch, its box then its text, on the left. */

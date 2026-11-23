@@ -15,12 +15,17 @@ import nbeLogoSvg from './nbe_logo.svg?raw';
 // input: the report input (graph, view, totals, markers, alerts, …);
 // values: the form's values; domain: the cover's domain text; snapshot: a
 // data URL or null. Resolves once the file is handed to the browser.
-export const downloadGraphReport = async ({ input, values, domain = '', snapshot = null }) => {
+// measures / tables: the Measures section's chart sets and the appendix
+// tables (B, C, …), drawn beforehand (buildGraphReport).
+export const downloadGraphReport = async ({ input, values, domain = '', snapshot = null, measures = null, tables = [] }) => {
   const report = buildGraphReport({
     ...input,
     hasSnapshot: Boolean(snapshot),
     cover: { ...values, domain },
-    analyst: { findings: values.findings, assessment: values.assessment, actions: values.actions, includeLists: values.includeLists },
+    analyst: { findings: values.findings, assessment: values.assessment, actions: values.actions },
+    measures,
+    tables,
+    range: values.range, // Generate report ▸ Range (none: everything)
   });
   // The logo as it is: its own colours on a transparent background.
   const logo = await rasterizeSvg(svgDataUrl(nbeLogoSvg));
@@ -100,7 +105,6 @@ export const evidenceReportContext = ({ graphData, evidence = {}, profileSetting
     assessment: '',
     actions: '',
     marking: DEFAULT_MARKING,
-    includeLists: false,
   });
   return {
     store,

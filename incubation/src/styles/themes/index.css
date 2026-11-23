@@ -3,6 +3,9 @@
  * Register new themes here and in src/shared/theme/themeRegistry.js.
  */
 @import './tokens.css';
+@import './settings-tokens.css';
+@import './configuration-tokens.css';
+@import './libraries-tokens.css';
 @import './nbe-daylight.css';
 @import './dark.css';
 @import './emerald-dark.css';

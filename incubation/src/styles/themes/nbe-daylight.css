@@ -91,6 +91,10 @@
 /* Daylight-only component overrides: brand values for tokens that hold literal
    colors in tokens.css (other themes keep their own values). */
 [data-theme="nbe-daylight"] {
+  /* The veil behind a popup opened inside a window: a light, slightly
+     bluish wash (analyst decision 2026-11-20). Daylight only; the other
+     themes keep each popup's own veil. */
+  --linkx-popup-backdrop: color-mix(in srgb, #f4f7fa 45%, transparent);
   --linkx-window-bg-active: #FFFFFF;
 
   /* Text on navy surfaces */
@@ -146,6 +150,10 @@
   --central-analyze-btn-text: #FFFFFF;
   --central-analyze-btn-hover-text: #FFFFFF;
   --central-analyze-btn-hover-bg: #AE874F;
+  /* Save as evidence (Tasks): the official CTA gradient. */
+  --tasks-evidence-bg: linear-gradient(250deg, #7F5523, #AE874F);
+  --tasks-evidence-text: #FFFFFF;
+  --tasks-evidence-border: #AE874F;
   --central-analyzing-active-gradient-angle: 250deg;
   --central-analyzing-active-gradient-top: #AE874F;
   --central-analyzing-active-gradient-bottom: #7F5523;
@@ -433,7 +441,8 @@
   --settings-text-muted: #666666; /* 5.7:1 on white (was #7a7a7a, 4.3:1) */
 }
 
-/* Theme Studio overrides sealed into NBE Daylight (2026-11-12 export). */
+/* Theme Studio overrides sealed into NBE Daylight (2026-11-12 export,
+   updated with the 2026-11-21 and 2026-11-23 exports). */
 [data-theme="nbe-daylight"] {
   --window-active-close-bg: #7e2020;
   --window-active-close-hover-bg: #8d2525;
@@ -491,9 +500,9 @@
   --connection-grid-btn-active-border: #dfcfb9;
   --connection-grid-btn-active-title-color: #1e2c3c;
   --connection-grid-btn-active-badge-color: #845b28;
-  --storage-table-header-bg: #30435a;
-  --storage-table-header-text: #ffffff;
-  --storage-table-header-border: #e8eff7;
+  --storage-table-header-bg: #f4f7fa;
+  --storage-table-header-text: #131e2a;
+  --storage-table-header-border: #ae874f;
   --storage-browser-border: #dce4ee;
   --storage-browser-columns: #000000;
   --dataframe-actions-card-bg: #ffffff;
@@ -511,4 +520,84 @@
   --dataframe-manage-rules-btn-border: #dce4ee;
   --stream-log-text: #54595f;
   --stream-log-border: #e7dbcb;
+  /* Added by the 2026-11-21 export. */
+  --session-chip-value-color: #7a7a7a;
+  --panel-border: #dce4ee;
+  --dock-tabs-border: #2d3a49;
+  --dock-tab-bg: #1f2c3d;
+  --dock-tab-close-hover-bg: rgba(130, 28, 28, 0.5);
+  --window-body-border-active: #131e2a;
+  --stream-log-bg: #f4f7fa;
+  --timeline-step-active-bar: transparent;
+  --timeline-step-active-bg: transparent;
+  --timeline-step-active-border: transparent;
+  --source-text: #131e2a;
+  --upload-dropzone-title-color: #131e2a;
+  --upload-icon-color: #ffffff;
+  --storage-parent-row-bg: #e4e6ea;
+  --storage-parent-row-border: #ebe4d6;
+  --storage-selection-tools-bg: #d9c7ae;
+  --storage-selection-tools-border: #ae874f;
+  --storage-search-input-bg: #fdfdfe;
+  --storage-selected-count-text: #131e2a;
+  --source-text-secondary: #54595f;
+  --settings-switch-input-border: #e8eff7;
+  /* Added by the 2026-11-23 export. */
+  --settings-frame-session-chip-value-color: #7a7a7a;
+  --settings-theme-studio-cat-btn-active-text: #ffffff;
+  --settings-theme-studio-cat-badge-bg: #ae874f;
+  --settings-theme-studio-header-h4-text: #121d29;
+  --settings-theme-studio-cat-btn-hover-text: #131e2a;
+  --settings-theme-studio-cat-btn-hover-bg: #ddd3c6;
+  --settings-theme-studio-token-row-overridden-shadow: transparent;
+  --settings-theme-studio-token-row-overridden-border: #e8e8e8;
+  --settings-theme-studio-token-row-bg: #f4f7fa;
+  --settings-theme-studio-search-hint-text: #ae874f;
+  --settings-theme-studio-cat-badge-text: #ffffff;
+  --settings-theme-studio-category-tabs-border: #ffffff;
+  --settings-page-state-tone: #ae874f;
+  --settings-theme-studio-token-card-border: #dce4ee;
+  --settings-theme-studio-base-bg: #f5f5f5;
+  --settings-theme-studio-header-icon-text: #ffffff;
+  --settings-theme-studio-nav-bg: #f5f5f5;
+  /* Added by the second 2026-11-23 export. */
+  --settings-vigilance-action-primary-text: #ffffff;
+  --settings-theme-studio-pill-active-text: #ffffff;
+  --settings-frame-session-chip-label-color: #ffffff;
+  --settings-vigilance-action-hover-bg: #f7f3ed;
+  --settings-vigilance-action-bg: #ffffff;
+  --settings-frame-timeline-step-circle-active-text: #ffffff;
+  --settings-frame-timeline-step-active-bg: #f5f5f5;
+  --settings-frame-window-footer-info-icon-color: #131e2a;
+  --settings-frame-timeline-step-circle-inactive-bg: #f7f7f7;
+  --settings-frame-timeline-step-circle-inactive-text: #131e2a;
+}
+
+/* Settings window: this theme's values for the Settings tokens
+   (themes/settings-tokens.css). Golden selected pills and access level
+   cards, navy step marks and template tag. */
+[data-theme="nbe-daylight"] {
+  --settings-users-pill-on-border: transparent;
+  --settings-users-pill-on-bg: linear-gradient(var(--central-analyze-btn-gradient-angle, 250deg), var(--central-analyze-btn-gradient-top, #7F5523), var(--central-analyze-btn-gradient-bottom, #AE874F)) border-box;
+  --settings-users-pill-on-text: var(--central-analyze-btn-text, #fff);
+  --settings-users-level-current-border: transparent;
+  --settings-users-level-current-fill: linear-gradient(var(--central-analyze-btn-gradient-angle, 250deg), var(--central-analyze-btn-gradient-top, #7F5523), var(--central-analyze-btn-gradient-bottom, #AE874F)) border-box;
+  --settings-users-level-current-shadow: color-mix(in srgb, var(--central-analyze-btn-gradient-top, #7F5523) 55%, transparent);
+  --settings-users-level-current-title-text: var(--central-analyze-btn-text, #fff);
+  --settings-users-level-current-note-text: var(--central-analyze-btn-text, #fff);
+  --settings-users-level-icon-current-bg: rgb(255 255 255 / 0.2);
+  --settings-users-level-icon-current-text: var(--central-analyze-btn-text, #fff);
+  --settings-users-level-count-current-bg: rgb(255 255 255 / 0.2);
+  --settings-users-level-count-current-text: var(--central-analyze-btn-text, #fff);
+  --settings-users-level-mark-current-border: var(--central-analyze-btn-text, #fff);
+  --settings-users-level-mark-current-bg: var(--central-analyze-btn-text, #fff);
+  --settings-users-level-mark-current-text: var(--central-analyze-btn-gradient-top, #7F5523);
+  --settings-users-wizard-head-i-current-border: var(--window-chrome-bg);
+  --settings-users-wizard-head-i-current-bg: var(--window-chrome-bg);
+  --settings-users-wizard-head-i-current-text: #fff;
+  --settings-users-wizard-head-i-done-border: var(--window-chrome-bg);
+  --settings-users-wizard-head-i-done-bg: var(--window-chrome-bg);
+  --settings-users-wizard-head-i-done-text: #fff;
+  --settings-service-target-template-tag-bg: var(--window-chrome-bg);
+  --settings-service-target-template-tag-text: #fff;
 }

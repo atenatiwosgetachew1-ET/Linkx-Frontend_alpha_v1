@@ -1,7 +1,7 @@
 import thumbnail from './nbe_chart_snap_thumbnail.png';
 
 // Image templates (analyst decision 2026-11-18): the frame chart snaps are
-// drawn in, managed from Libraries ▸ Charts as report templates are. One
+// drawn in, listed in Libraries ▸ Report templates with the report layouts. One
 // built-in default: a navy header (the NBE logo left; "LINK ANALYSIS ·
 // CHART SNAP" and the snap's source right), a white body with the charts
 // under a CONFIDENTIAL watermark, a navy footer with the distribution

@@ -15,10 +15,14 @@ import {
   pickRuleKeys,
   rememberBuiltinRules,
 } from '../lib/rulesLibrary.js';
+import { Masthead, PageHero, Pill, SettingsPage } from '../../settings/components/SettingsPage.jsx';
 import RulesLibraryPanel from './RulesLibraryPanel.jsx';
 import GraphRenderingPanel from './GraphRenderingPanel.jsx';
 import ReportTemplatesPanel from './ReportTemplatesPanel.jsx';
-import { IMAGE_TEMPLATES } from '../../chart/lib/chartSnapTemplates.js';
+import ChartDefaultsPanel from './ChartDefaultsPanel.jsx';
+import GraphDefaultsPanel from './GraphDefaultsPanel.jsx';
+import TableDefaultsPanel from './TableDefaultsPanel.jsx';
+import IconSetsPanel from './IconSetsPanel.jsx';
 
 // Sections of the Libraries window (docs/libraries-plan.md §3). Only Rules is
 // live; the others arrive with the Graph / Chart windows and are shown so the
@@ -26,10 +30,11 @@ import { IMAGE_TEMPLATES } from '../../chart/lib/chartSnapTemplates.js';
 const SECTIONS = [
   { id: 'rules', label: 'Rules', scope: 'System', description: 'Rule sets available to this session.' },
   { id: 'graph_rendering', label: 'Graph rendering', scope: 'Device', description: 'GPU rendering for large graphs.' },
-  { id: 'graph_defaults', label: 'Graph defaults', scope: 'Personal', description: 'Default layout, limits and labels.', pending: 'Arrives with the Graph window.' },
-  { id: 'charts', label: 'Charts', scope: 'System', description: 'Image templates for chart snaps.' },
-  { id: 'icons', label: 'Icon sets', scope: 'System', description: 'Node icon albums.', pending: 'Arrives with graph editing.' },
-  { id: 'templates', label: 'Report templates', scope: 'System', description: 'Report layouts and their previews.' },
+  { id: 'graph_defaults', label: 'Graph defaults', scope: 'Device', description: 'Default graph settings.' },
+  { id: 'table_defaults', label: 'Table defaults', scope: 'Device', description: 'Default table settings.' },
+  { id: 'charts', label: 'Chart defaults', scope: 'Device', description: 'Default chart settings.' },
+  { id: 'icons', label: 'Icon sets', scope: 'Device', description: 'Node icons for graphs.' },
+  { id: 'templates', label: 'Report templates', scope: 'System', description: 'Report and chart snap layouts.' },
 ];
 
 export default function LibrariesWindowBody({ windowItem }) {
@@ -149,21 +154,46 @@ export default function LibrariesWindowBody({ windowItem }) {
     });
   };
 
+  const scopeNote = activeSection.scope === 'System' ? 'Applies to the whole session; changes need config:write.'
+    : activeSection.scope === 'Device' ? 'Applies to this browser on this device only.'
+      : 'Applies to your account.';
+
   let content;
   if (activeSection.pending) {
     content = (
-      <div className="libraries_pending" role="status">
-        <span className={`libraries_badge is-scope is-${activeSection.scope.toLowerCase()}`}>{activeSection.scope}</span>
-        <h4>{activeSection.label}</h4>
-        <p>{activeSection.description} {activeSection.pending}</p>
-      </div>
+      <SettingsPage className="config_page libraries_page">
+        <Masthead>
+          <PageHero
+            tone="inactive"
+            eyebrow={`${activeSection.scope} library`}
+            title={activeSection.label}
+            pill={<Pill tone="neutral">Coming soon</Pill>}
+            meta={activeSection.description}
+            media={(
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zM12 6v6l4 2" />
+              </svg>
+            )}
+          />
+        </Masthead>
+        <div className="libraries_pending" role="status">
+          <h4>Not here yet</h4>
+          <p>{activeSection.pending}</p>
+        </div>
+      </SettingsPage>
     );
   } else if (activeSection.id === 'graph_rendering') {
     content = <GraphRenderingPanel configuration={configuration} />;
   } else if (activeSection.id === 'templates') {
     content = <ReportTemplatesPanel />;
   } else if (activeSection.id === 'charts') {
-    content = <ReportTemplatesPanel templates={IMAGE_TEMPLATES} title="Image templates" description="The frames chart snaps are drawn in. Built-in templates cannot be changed or removed." />;
+    content = <ChartDefaultsPanel />;
+  } else if (activeSection.id === 'graph_defaults') {
+    content = <GraphDefaultsPanel />;
+  } else if (activeSection.id === 'icons') {
+    content = <IconSetsPanel onNotice={notify} />;
+  } else if (activeSection.id === 'table_defaults') {
+    content = <TableDefaultsPanel />;
   } else {
     content = (
       <RulesLibraryPanel
@@ -180,15 +210,25 @@ export default function LibrariesWindowBody({ windowItem }) {
 
   return (
     <div className="workspace_window_body settings_window_body libraries_window_body">
-      <div className="settings_window_workspace">
+      <div className="settings_window_workspace libraries_theme_scope is-compact-header">
         <header className="settings_window_choose_header">
           <svg className="source_window_mode_icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
             <path d="M8 14v3m4-3v3m4-3v3M3 21h18M3 10h18M3 7l9-4 9 4M4 10h16v11H4V10z" />
           </svg>
           <div>
             <h2>Libraries</h2>
-            <p>{activeSection.description}</p>
+            <p>Rule sets, window defaults, icon sets, rendering and report templates.</p>
           </div>
+          <dl className="settings_window_session_chip config_window_chips">
+            <div>
+              <dt>Session</dt>
+              <dd title={mainSessionId || undefined}>{mainSessionId || 'not initialized'}</dd>
+            </div>
+            <div>
+              <dt>Scope</dt>
+              <dd>{activeSection.scope}</dd>
+            </div>
+          </dl>
         </header>
         <div className="settings_window_workflow_shell">
           <nav className="settings_window_timeline source_window_timeline is-tabs" aria-label="Library sections">
@@ -218,11 +258,12 @@ export default function LibrariesWindowBody({ windowItem }) {
         </div>
         <footer className="settings_window_footer">
           <span>
-            <span className={`libraries_badge is-scope is-${activeSection.scope.toLowerCase()}`}>{activeSection.scope}</span>
-            {' '}
-            {activeSection.scope === 'System' ? 'Applies to the whole session; changes need config:write.'
-              : activeSection.scope === 'Device' ? 'Applies to this browser on this device only.'
-                : 'Applies to your account.'}
+            <svg className="window_footer_info_icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="16" x2="12" y2="12" />
+              <line x1="12" y1="8" x2="12.01" y2="8" />
+            </svg>
+            {activeSection.scope} library. {scopeNote}
           </span>
           <div className="settings_window_footer_actions">
             {activeSection.id === 'rules' ? (

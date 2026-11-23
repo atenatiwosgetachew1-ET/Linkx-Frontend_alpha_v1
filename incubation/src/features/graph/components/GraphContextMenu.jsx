@@ -56,7 +56,7 @@ function MenuItems({ items, openGroup, onOpenGroup, onRun }) {
         role="menuitem"
         className="graph_context_menu_item"
         aria-disabled={!entry.enabled}
-        title={entry.pending || undefined}
+        title={entry.pending || entry.hint || undefined}
         onMouseEnter={() => onOpenGroup(null)}
         onClick={() => onRun(entry)}
       >

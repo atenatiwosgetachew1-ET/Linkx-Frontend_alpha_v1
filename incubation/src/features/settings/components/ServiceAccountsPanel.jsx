@@ -1,8 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import WindowLoadScreen from '../../../shared/components/WindowLoadScreen.jsx';
 
-import PermissionEditor from './PermissionEditor.jsx';
+import { Masthead, PageHero, Pill, SettingsPage, SettingsPopup, Stat, Stats } from './SettingsPage.jsx';
+import { LevelIcon, PrivilegePicker, StepStrip } from './panels/UsersPanel.jsx';
+import { usePermissionCatalog } from '../../../auth/permissions.js';
 import { tn } from '../../../shared/i18n/index.js';
-import { Section } from '../../../shared/components/form/FormFields.jsx';
 import {
   DOMAIN_SCHEMA_TEMPLATES,
   STANDARD_FORENSIC_DOMAINS,
@@ -32,6 +34,28 @@ import {
 } from '../../../utils/inputSecurity.js';
 
 const VALID_PERMISSION = /^[a-z]+:[a-z_]+$/;
+
+// The form's three steps (create, and modify an existing account).
+const FORM_STEPS = [
+  { label: 'Client', hint: 'Who the client is and how it authenticates.' },
+  { label: 'Storage targets', hint: 'Optional: storage endpoints per forensic domain. Open Permissions to set what the client may do.' },
+  { label: 'Permissions', hint: 'What the client may do.' },
+];
+const ICONS = {
+  server: 'M3 4h18v7H3zM3 13h18v7H3zM7 7.5h.01M7 16.5h.01',
+  card: 'M3 5h18v14H3zM7 15h4M15 9h2M15 13h2M9 8.5a1.75 1.75 0 1 0 0 3.5 1.75 1.75 0 0 0 0-3.5z',
+  key: 'M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.78 7.78 5.5 5.5 0 0 1 7.78-7.78zM15.5 7.5l3 3L22 7l-3-3',
+  power: 'M18.36 6.64a9 9 0 1 1-12.73 0M12 2v10',
+  lock: 'M5 11h14a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2zM7 11V7a5 5 0 0 1 10 0v4',
+  refresh: 'M1 4v6h6M3.51 15a9 9 0 1 0 2.13-9.36L1 10',
+  search: 'M21 21l-4.3-4.3M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14z',
+  pencil: 'M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z',
+};
+const STATE_ICONS = {
+  idle: 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z',
+  ok: 'M22 11.08V12a10 10 0 1 1-5.93-9.14M22 4L12 14.01l-3-3',
+  bad: 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zM12 8v4M12 16h.01',
+};
 
 function ServiceSecretNotice({ secret, onClear }) {
   const [copied, setCopied] = useState(false);
@@ -67,7 +91,8 @@ function MappingRow({ sourceKey, target, canonical, onRename, onTarget, onRemove
   return (
     <div className="service_target_mapping_row">
       <input
-        className="settings_input"
+        className="graph_customize_input"
+        aria-label="Source column"
         value={localKey}
         maxLength={80}
         placeholder="e.g. SENDER_ID"
@@ -76,11 +101,13 @@ function MappingRow({ sourceKey, target, canonical, onRename, onTarget, onRemove
         onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); event.currentTarget.blur(); } }}
       />
       <span aria-hidden="true">→</span>
-      <select className="settings_input" value={target} onChange={(event) => onTarget(sourceKey, event.target.value)}>
+      <select className="graph_customize_input" aria-label="Canonical field" value={target} onChange={(event) => onTarget(sourceKey, event.target.value)}>
         {canonical.map((column) => <option key={column.value} value={column.value}>{column.label}</option>)}
         {!canonical.some((column) => column.value === target) ? <option value={target}>{target}</option> : null}
       </select>
-      <button type="button" className="settings_button is-danger" onClick={() => onRemove(sourceKey)}>Remove</button>
+      <button type="button" className="users_person_edit service_target_mapping_remove linkx_tooltip_anchor" data-tooltip="Remove" aria-label={`Remove mapping ${sourceKey}`} onClick={() => onRemove(sourceKey)}>
+        <LevelIcon d="M18 6L6 18M6 6l12 12" size={13} />
+      </button>
     </div>
   );
 }
@@ -162,11 +189,23 @@ function StorageTargetEditor({ config, onChange, catalogDomains, catalogState, o
     while (mapping[candidate] !== undefined) { candidate = `SOURCE_COL_${index}`; index += 1; }
     updateField('column_mapping', { ...mapping, [candidate]: canonical[0].value });
   };
+  const templateSchema = DOMAIN_SCHEMA_TEMPLATES[activeDomain === 'banking' ? 'bank' : activeDomain] || DOMAIN_SCHEMA_TEMPLATES.bank;
   const loadTemplate = () => {
-    const key = activeDomain === 'banking' ? 'bank' : activeDomain;
-    const schema = DOMAIN_SCHEMA_TEMPLATES[key] || DOMAIN_SCHEMA_TEMPLATES.bank;
-    updateFields({ fetch_columns: [...schema.fetch_columns], column_mapping: { ...schema.column_mapping } });
+    updateFields({ fetch_columns: [...templateSchema.fetch_columns], column_mapping: { ...templateSchema.column_mapping } });
   };
+  // True while the columns and mappings are exactly the template's; any
+  // edit after loading it makes this false again (and the button live).
+  const templateLoaded = fetchColumns.length === templateSchema.fetch_columns.length
+    && fetchColumns.every((column, index) => column === templateSchema.fetch_columns[index])
+    && mappingEntries.length === Object.keys(templateSchema.column_mapping).length
+    && mappingEntries.every(([source, target]) => templateSchema.column_mapping[source] === target);
+  // Disabled while the template is what the form already holds.
+  const templateButton = (className) => (
+    <button type="button" className={`${className} service_target_template`} disabled={templateLoaded} title={templateLoaded ? 'The columns and mappings are already the template’s. Change one to load it again.' : 'Fill the columns and mappings from this domain’s template'} onClick={loadTemplate}>
+      <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" aria-hidden="true"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" /></svg>
+      Load template
+    </button>
+  );
 
   const catalogBadge = catalogState.loading
     ? 'Syncing catalog…'
@@ -213,17 +252,20 @@ function StorageTargetEditor({ config, onChange, catalogDomains, catalogState, o
       </div>
 
       {!readOnly ? (
-        <div className="config_window_option_row">
+        <span className="users_input_wrap has-action service_target_custom">
           <input
-            className="settings_input"
+            className="graph_customize_input"
+            aria-label="Custom domain"
             value={customDomain}
             maxLength={40}
-            placeholder="Register a custom domain (e.g. crypto, logistics, customs)…"
+            placeholder="Register a custom domain, e.g. crypto, logistics, customs"
             onChange={(event) => setCustomDomain(event.target.value)}
             onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); addCustomDomain(); } }}
           />
-          <button type="button" className="settings_button" disabled={!customDomain.trim()} onClick={addCustomDomain}>+ Add domain</button>
-        </div>
+          <button type="button" className="users_input_action linkx_tooltip_anchor" data-tooltip="Add domain" aria-label="Add domain" disabled={!customDomain.trim()} onClick={addCustomDomain}>
+            <LevelIcon d="M12 5v14M5 12h14" size={13} />
+          </button>
+        </span>
       ) : null}
 
       {registered.length === 0 ? (
@@ -249,7 +291,7 @@ function StorageTargetEditor({ config, onChange, catalogDomains, catalogState, o
             <>
               <div className="service_target_banner">
                 <span>{getDomainMeta(activeDomain).label} storage target · key <code>{activeDomain}</code> · recommended port <code>{getDomainMeta(activeDomain).defaultPort}</code></span>
-                {!readOnly ? <button type="button" className="settings_link_button" onClick={loadTemplate}>⚡ Load template</button> : null}
+                {!readOnly ? templateButton('settings_link_button') : null}
               </div>
               <div className="config_window_grid">
                 <label className="config_window_field">
@@ -289,16 +331,44 @@ function StorageTargetEditor({ config, onChange, catalogDomains, catalogState, o
                 </div>
               </div>
 
-              <button type="button" className="service_target_advanced_toggle" onClick={() => setAdvancedOpen((open) => !open)} aria-expanded={advancedOpen}>
-                <span>
-                  <strong>Advanced schema &amp; column mapping (optional)</strong>
-                  <small>Custom column names and Elasticsearch schema overrides for {activeDomain}. {fetchColumns.length} columns · {mappingEntries.length} mappings.</small>
-                </span>
-                <span aria-hidden="true">{advancedOpen ? '▲' : '▼'}</span>
-              </button>
+              {/* Opens in a popup of its own, over this one. */}
+              <div className="service_target_advanced_toggle">
+                <button type="button" className="service_target_advanced_open" onClick={() => setAdvancedOpen(true)} aria-haspopup="dialog" aria-expanded={advancedOpen}>
+                  <span>
+                    <strong>Advanced schema &amp; column mapping (optional){templateLoaded ? <em className="service_target_template_tag">Template</em> : null}</strong>
+                    <small>Custom column names and Elasticsearch schema overrides for {activeDomain}. {fetchColumns.length} columns · {mappingEntries.length} mappings.</small>
+                  </span>
+                </button>
+                {/* Drops every column and mapping of this domain at once. */}
+                {!readOnly ? (
+                  <button
+                    type="button"
+                    className="users_person_edit service_target_mapping_remove linkx_tooltip_anchor"
+                    data-tooltip="Drop all columns and mappings"
+                    aria-label={`Drop all columns and mappings of ${activeDomain}`}
+                    disabled={!fetchColumns.length && !mappingEntries.length}
+                    onClick={() => updateFields({ fetch_columns: [], column_mapping: {} })}
+                  >
+                    <LevelIcon d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6" size={14} />
+                  </button>
+                ) : null}
+              </div>
 
               {advancedOpen ? (
-                <div className="service_target_advanced">
+                <SettingsPopup
+                  title="Advanced schema & column mapping"
+                  subtitle={getDomainMeta(activeDomain).label}
+                  hint={`${fetchColumns.length} columns · ${mappingEntries.length} mappings. Changes are kept with the account's form.`}
+                  onClose={() => setAdvancedOpen(false)}
+                  footer={(
+                    <>
+                      {/* The template fills exactly what this popup edits. */}
+                      {!readOnly ? templateButton('graph_customize_button') : null}
+                      <button type="button" className="graph_customize_button is-primary" onClick={() => setAdvancedOpen(false)}>Done</button>
+                    </>
+                  )}
+                >
+                <div className="service_target_editor service_target_advanced">
                   <div className="settings_permission_editor_header">
                     <span>Fetch columns ({fetchColumns.length})</span>
                     {fetchColumns.length && !readOnly ? <button type="button" className="settings_link_button" onClick={() => updateField('fetch_columns', [])}>Clear all</button> : null}
@@ -315,17 +385,20 @@ function StorageTargetEditor({ config, onChange, catalogDomains, catalogState, o
                     </div>
                   ) : null}
                   {!readOnly ? (
-                    <div className="config_window_option_row">
+                    <span className="users_input_wrap has-action service_target_custom">
                       <input
-                        className="settings_input"
+                        className="graph_customize_input"
+                        aria-label="Add columns"
                         value={columnInput}
                         maxLength={160}
-                        placeholder="e.g. RECORD_ID, SENDER_ID, RECEIVER_ID, CREATED_AT, AMOUNT"
+                        placeholder="Add columns, e.g. RECORD_ID, SENDER_ID, AMOUNT"
                         onChange={(event) => setColumnInput(event.target.value)}
                         onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ',') { event.preventDefault(); addColumns(); } }}
                       />
-                      <button type="button" className="settings_button" disabled={!columnInput.trim()} onClick={addColumns}>+ Add column</button>
-                    </div>
+                      <button type="button" className="users_input_action linkx_tooltip_anchor" data-tooltip="Add column" aria-label="Add column" disabled={!columnInput.trim()} onClick={addColumns}>
+                        <LevelIcon d="M12 5v14M5 12h14" size={13} />
+                      </button>
+                    </span>
                   ) : null}
 
                   <div className="settings_permission_editor_header">
@@ -344,8 +417,9 @@ function StorageTargetEditor({ config, onChange, catalogDomains, catalogState, o
                       onRemove={(key) => { const next = { ...mapping }; delete next[key]; updateField('column_mapping', next); }}
                     />
                   ))}
-                  {!readOnly ? <button type="button" className="settings_button config_window_add_row" onClick={addMapping}>+ Add mapping pair</button> : null}
+                  {!readOnly ? <button type="button" className="users_pill service_target_add_pair" onClick={addMapping}><LevelIcon d="M12 5v14M5 12h14" size={11} />Add mapping pair</button> : null}
                 </div>
+                </SettingsPopup>
               ) : null}
             </>
           ) : null}
@@ -401,6 +475,18 @@ export default function ServiceAccountsPanel({ apiFetch, canManageUsers, onNotic
   const [error, setError] = useState('');
   const [catalogDomains, setCatalogDomains] = useState([]);
   const [catalogState, setCatalogState] = useState({ loading: false, error: '' });
+  // The page, after the Users page: two cards, each opening a popup. The
+  // form popup (create, or modify an existing account) runs in three steps.
+  const [isExistingOpen, setIsExistingOpen] = useState(false);
+  const [modifying, setModifying] = useState(null);
+  const [step, setStep] = useState(0);
+  const [checked, setChecked] = useState(false);
+  const [query, setQuery] = useState('');
+  // The permissions open in a popup of their own, over the form.
+  const [permissionsOpen, setPermissionsOpen] = useState(false);
+  // The list card showing its brief (one at a time).
+  const [briefId, setBriefId] = useState('');
+  const { groups: permissionGroups, all: allPermissions } = usePermissionCatalog();
 
   const loadCatalog = useCallback(async () => {
     if (!canManageUsers) return;
@@ -467,13 +553,21 @@ export default function ServiceAccountsPanel({ apiFetch, canManageUsers, onNotic
       validateClientSecret(payload.client_secret),
       validateDisplayName(payload.display_name),
     );
-    if (validationError) { setError(validationError); return; }
+    if (validationError) {
+      // What is wrong shows on the fields of the first step.
+      setChecked(true);
+      setStep(0);
+      setError('');
+      return;
+    }
     setSaving(true);
     setError('');
     const finish = async (data, warning) => {
       setNewSecret(extractServiceSecret(data) || clientSecret);
       setDraft(emptyDraft());
       setIsCreateOpen(false);
+      setStep(0);
+      setChecked(false);
       onNotice?.({
         title: 'Service account created',
         message: warning || 'Copy the generated secret before closing this panel.',
@@ -507,7 +601,7 @@ export default function ServiceAccountsPanel({ apiFetch, canManageUsers, onNotic
     }
     patch.config = buildServiceConfigPayload(edit.config, account.config?.domains || {});
     const validationError = validateDisplayName(patch.display_name);
-    if (validationError) { setError(validationError); return; }
+    if (validationError) { setError(validationError); return false; }
     setSaving(true);
     setError('');
     try {
@@ -515,6 +609,7 @@ export default function ServiceAccountsPanel({ apiFetch, canManageUsers, onNotic
       onNotice?.({ title: 'Service account updated', message: `${account.client_id} was updated.`, source: 'Admin', level: 'success' });
       setExpandedId('');
       await loadAccounts();
+      return true;
     } catch (err) {
       if (isConfigSchemaError(err)) {
         try {
@@ -523,10 +618,11 @@ export default function ServiceAccountsPanel({ apiFetch, canManageUsers, onNotic
           onNotice?.({ title: 'Service account updated', message: `${account.client_id} was updated, but the Service does not accept 'config' yet.`, source: 'Admin', level: 'warning' });
           setExpandedId('');
           await loadAccounts();
-          return;
+          return true;
         } catch { /* fall through */ }
       }
       restricted(formatServiceAccountError(err, 'Failed to update service account.'));
+      return false;
     } finally {
       setSaving(false);
     }
@@ -559,8 +655,8 @@ export default function ServiceAccountsPanel({ apiFetch, canManageUsers, onNotic
   };
 
   const deleteAccount = async (account) => {
-    if (account.is_system) { restricted('Protected system accounts cannot be deleted.'); return; }
-    if (!(await confirmAction({ title: 'Delete service account', message: `Delete service account "${account.client_id}"? This action cannot be undone.`, confirmText: 'Delete' }))) return;
+    if (account.is_system) { restricted('Protected system accounts cannot be deleted.'); return false; }
+    if (!(await confirmAction({ title: 'Delete service account', message: `Delete service account "${account.client_id}"? This action cannot be undone.`, confirmText: 'Delete' }))) return false;
     setSaving(true);
     setError('');
     try {
@@ -568,8 +664,10 @@ export default function ServiceAccountsPanel({ apiFetch, canManageUsers, onNotic
       onNotice?.({ title: 'Service account deleted', message: `${account.client_id} was removed.`, source: 'Admin', level: 'warning' });
       if (expandedId === String(account.id)) setExpandedId('');
       await loadAccounts();
+      return true;
     } catch (err) {
       restricted(formatServiceAccountError(err, 'Failed to delete service account.'));
+      return false;
     } finally {
       setSaving(false);
     }
@@ -577,140 +675,401 @@ export default function ServiceAccountsPanel({ apiFetch, canManageUsers, onNotic
 
   if (!canManageUsers) {
     return (
-      <section className="settings_section">
-        <div className="settings_section_header"><div><h3>Service accounts</h3><p>You need users:manage to manage service accounts.</p></div></div>
-      </section>
+      <SettingsPage>
+        <Masthead>
+          <PageHero tone="locked" eyebrow="Service accounts" title="Access restricted" meta="You need users:manage to manage service accounts." media={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M5 2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zM5 14h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2zM6 6h.01M6 18h.01" /></svg>}>
+            <Pill>Locked</Pill>
+          </PageHero>
+        </Masthead>
+      </SettingsPage>
     );
   }
 
+  const activeAccounts = accounts.filter((account) => account.is_active).length;
+  const systemAccounts = accounts.filter((account) => account.is_system).length;
+  const registeredDomains = new Set(accounts.flatMap((account) => account.config?.registered_domains || [])).size;
+
+  const openCreate = () => {
+    setError('');
+    setModifying(null);
+    setStep(0);
+    setChecked(false);
+    setIsExistingOpen(false);
+    setIsCreateOpen(true);
+  };
+  const openExisting = () => {
+    setError('');
+    setIsCreateOpen(false);
+    setModifying(null);
+    setIsExistingOpen(true);
+  };
+  // Edit on an account's card: the same form, filled with the account.
+  const openModify = (account) => {
+    setError('');
+    setStep(0);
+    setChecked(false);
+    setModifying(account);
+    setIsExistingOpen(false);
+  };
+  // Leaving the form: a modified account goes back to the list as it was left.
+  const closeForm = () => {
+    setPermissionsOpen(false);
+    setError('');
+    setStep(0);
+    if (modifying) {
+      setModifying(null);
+      setIsExistingOpen(true);
+    } else {
+      setIsCreateOpen(false);
+    }
+  };
+  // The card's switch: active / inactive, saved at once.
+  const toggleActive = async (account) => {
+    if (account.is_system) { restricted('Protected system accounts cannot be deactivated.'); return; }
+    const next = !account.is_active;
+    setSaving(true);
+    setError('');
+    try {
+      await patchAccount(apiFetch, account.id, { is_active: next });
+      onNotice?.({ title: next ? 'Service account activated' : 'Service account deactivated', message: `${account.client_id} ${next ? 'can authenticate again.' : 'can no longer authenticate.'}`, source: 'Admin', level: next ? 'success' : 'warning' });
+      await loadAccounts();
+    } catch (err) {
+      restricted(formatServiceAccountError(err, 'Failed to update service account.'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const isFormOpen = isCreateOpen || Boolean(modifying);
+  const modifyId = modifying ? String(modifying.id) : '';
+  const edit = modifying ? (editDrafts[modifyId] || { display_name: modifying.display_name, is_active: modifying.is_active, permissions: modifying.permissions, config: cloneServiceConfig(modifying.config) }) : null;
+  const system = Boolean(modifying?.is_system);
+  // The form's values and their setter: the new account's draft, or the
+  // modified account's.
+  const form = modifying ? edit : draft;
+  const setForm = (patch) => (modifying ? updateEditDraft(modifyId, patch) : setDraft((current) => ({ ...current, ...patch })));
+  const fieldProblems = modifying
+    ? { display_name: validateDisplayName(String(form?.display_name || '').trim()) }
+    : {
+      client_id: validateRequiredIdentifier(String(draft.client_id || '').trim(), 'Client ID', { minLength: 3, maxLength: 80 }),
+      display_name: validateDisplayName(String(draft.display_name || '').trim()),
+      client_secret: validateClientSecret(draft.client_secret || ''),
+    };
+  const goToStep = (next) => {
+    if (next > 0 && Object.values(fieldProblems).some(Boolean)) {
+      setChecked(true);
+      setStep(0);
+      return;
+    }
+    setError('');
+    setStep(next);
+  };
+  const filteredAccounts = accounts.filter((account) => {
+    const needle = query.trim().toLowerCase();
+    return !needle || [account.client_id, account.display_name, ...(account.permissions || []), ...(account.config?.registered_domains || [])].some((value) => String(value || '').toLowerCase().includes(needle));
+  });
+
+  // A labelled field of the form: its name and icon above, the input with a
+  // mark of its condition, a line of help underneath.
+  const field = ({ key, label, icon, value, problem = '', optional = false, locked = false, hint, input, after = null }) => {
+    const state = locked ? 'idle' : problem && (value || checked) ? 'bad' : !value ? 'idle' : 'ok';
+    const note = locked ? 'Cannot be changed.' : state === 'bad' ? problem : state === 'ok' ? 'Looks good.' : optional ? 'Optional.' : 'Required.';
+    return (
+      <label className={`users_input_field is-${state}${locked ? ' is-locked' : ''}`} key={key}>
+        <span className="users_input_label">
+          <span className="users_input_name"><LevelIcon d={icon} size={13} />{label}</span>
+          {state === 'bad' ? <em className="users_input_error" role="alert">{problem}</em> : null}
+        </span>
+        <span className={'users_input_wrap' + (after ? ' has-action' : '')}>
+          <input className="graph_customize_input" value={value} aria-invalid={state === 'bad' || undefined} disabled={locked} {...input} />
+          <i className="users_input_state" title={note} aria-hidden="true"><LevelIcon d={locked ? ICONS.lock : STATE_ICONS[state]} size={15} /></i>
+          {after}
+        </span>
+        <small className="graph_customize_hint">{hint}</small>
+      </label>
+    );
+  };
+
+  const stepBodies = isFormOpen ? [
+    <div className="users_wizard_fields" key="client">
+      {field({
+        key: 'client_id',
+        label: 'Client ID',
+        icon: ICONS.server,
+        value: modifying ? modifying.client_id : draft.client_id,
+        problem: fieldProblems.client_id,
+        locked: Boolean(modifying),
+        hint: modifying ? 'Client IDs cannot be changed.' : 'At least 3 characters. Sibling services authenticate with it.',
+        input: { autoComplete: 'off', maxLength: 80, placeholder: 'e.g. data_pipeline_service', onChange: (event) => setForm({ client_id: sanitizeIdentifier(event.target.value, { maxLength: 80 }) }) },
+      })}
+      {field({
+        key: 'display_name',
+        label: 'Display name',
+        icon: ICONS.card,
+        value: form.display_name || '',
+        problem: fieldProblems.display_name,
+        optional: true,
+        hint: 'Optional. A readable name for this client.',
+        input: { maxLength: 120, placeholder: 'e.g. Data Pipeline Service', onChange: (event) => setForm({ display_name: sanitizeText(event.target.value, { maxLength: 120 }) }) },
+      })}
+      {modifying ? (
+        <label className={'users_input_field settings_switch users_wizard_switch' + (system ? ' is-restricted' : '')} title={system ? 'Protected system accounts cannot be deactivated.' : undefined}>
+          <span className="users_input_label"><span className="users_input_name"><LevelIcon d={ICONS.power} size={13} />Active</span></span>
+          <span className="users_wizard_switch_row">
+            <input type="checkbox" role="switch" aria-label="Active" aria-disabled={system || undefined} checked={system ? true : form.is_active !== false} onChange={(event) => (system ? restricted('Protected system accounts cannot be deactivated.') : setForm({ is_active: event.target.checked }))} />
+            <span className="graph_customize_hint">{system ? 'Always active (system account).' : form.is_active !== false ? 'Can authenticate.' : 'Cannot authenticate.'}</span>
+          </span>
+        </label>
+      ) : field({
+        key: 'client_secret',
+        label: 'Client secret',
+        icon: ICONS.key,
+        value: draft.client_secret,
+        problem: fieldProblems.client_secret,
+        hint: 'Shown once after the account is created. Copy it then.',
+        input: { autoComplete: 'off', spellCheck: false, maxLength: 128, onChange: (event) => setForm({ client_secret: sanitizeSecret(event.target.value, { maxLength: 128 }) }) },
+        after: (
+          <button
+            type="button"
+            className="users_input_action linkx_tooltip_anchor"
+            data-tooltip="Generate a new secret"
+            aria-label="Generate a new secret"
+            onClick={() => {
+              const secret = tryGenerateClientSecret();
+              if (!secret) { setError('Secure random generation is unavailable in this browser; a client secret cannot be generated.'); return; }
+              setForm({ client_secret: secret });
+            }}
+          >
+            <LevelIcon d={ICONS.refresh} size={13} />
+          </button>
+        ),
+      })}
+    </div>,
+    <div className="service_storage_step" key="storage">
+      <StorageTargetEditor
+        config={form.config}
+        onChange={(config) => setForm({ config })}
+        catalogDomains={catalogDomains}
+        catalogState={catalogState}
+        onRefreshCatalog={loadCatalog}
+        isCdr={isCdr}
+      />
+    </div>,
+    null,
+  ] : [];
+  const summaries = isFormOpen ? [
+    '',
+    `${(form.config?.registered_domains || []).length} domains`,
+    `${(form.permissions || []).length} of ${allPermissions.length}`,
+  ] : [];
+
   return (
-    <section className="settings_section">
+    <SettingsPage className="settings_section">
+      <Masthead>
+        <PageHero eyebrow="Service accounts" title="Service clients" meta="Service clients, their permissions and per-domain storage targets." media={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={ICONS.server} /></svg>} />
+        <Stats label="Service account figures" columns={4}>
+          <Stat lead icon="server" label="Accounts" value={accounts.length.toLocaleString()} note="service clients" />
+          <Stat icon="check" tone="success" label="Active" value={activeAccounts.toLocaleString()} note={`${(accounts.length - activeAccounts).toLocaleString()} inactive`} />
+          <Stat icon="shield" label="System" value={systemAccounts.toLocaleString()} note="protected by the platform" />
+          <Stat icon="database" label="Domains" value={registeredDomains.toLocaleString()} note="with storage targets" />
+        </Stats>
+      </Masthead>
       <ServiceSecretNotice secret={newSecret} onClear={() => setNewSecret('')} />
-      {error ? <div className="settings_error">{error}</div> : null}
-      <div className="settings_section_header">
-        <div>
-          <h3>Service accounts</h3>
-          <p>Service clients, their permissions and per-domain storage targets.</p>
-        </div>
+      {error && !isFormOpen && !isExistingOpen ? <div className="settings_error">{error}</div> : null}
+
+      {/* Two actions, side by side; each opens its popup. */}
+      <div className="settings_launch_cards">
+        <button type="button" className="settings_launch_card" aria-haspopup="dialog" aria-expanded={isCreateOpen} onClick={openCreate}>
+          <span className="settings_launch_icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" focusable="false" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3 4h18v7H3zM3 13h10v7H3zM7 7.5h.01M7 16.5h.01M19 14v6M22 17h-6" /></svg>
+          </span>
+          <span className="settings_launch_text">
+            <strong>Create service account</strong>
+            <small>Register a sibling service with a secret, permissions and storage targets.</small>
+          </span>
+        </button>
+        <button type="button" className="settings_launch_card" aria-haspopup="dialog" aria-expanded={isExistingOpen} onClick={openExisting}>
+          <span className="settings_launch_icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" focusable="false" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={ICONS.server} /></svg>
+          </span>
+          <span className="settings_launch_text">
+            <strong>Existing service accounts</strong>
+            <small>Review, update, rotate the secret of, or remove current clients.</small>
+          </span>
+        </button>
       </div>
 
-      <Section
-        title="Create service account"
-        description="Register a sibling service with a client secret, permissions and storage targets."
-        actions={<button type="button" className="settings_button" onClick={() => setIsCreateOpen((open) => !open)}>{isCreateOpen ? 'Collapse' : 'Expand form'}</button>}
-      >
-        {isCreateOpen ? (
-          <>
-            <div className="config_window_grid">
-              <label className="config_window_field">
-                <span className="config_window_field_label">Client ID *</span>
-                <input className="settings_input" value={draft.client_id} maxLength={80} placeholder="e.g. data_pipeline_service" onChange={(event) => setDraft((current) => ({ ...current, client_id: sanitizeIdentifier(event.target.value, { maxLength: 80 }) }))} />
-              </label>
-              <label className="config_window_field">
-                <span className="config_window_field_label">Display name</span>
-                <input className="settings_input" value={draft.display_name} maxLength={120} placeholder="e.g. Data Pipeline Service" onChange={(event) => setDraft((current) => ({ ...current, display_name: sanitizeText(event.target.value, { maxLength: 120 }) }))} />
-              </label>
-              <div className="config_window_field">
-                <span className="config_window_field_label">Client secret</span>
-                <div className="config_window_option_row">
-                  <input className="settings_input" value={draft.client_secret} maxLength={128} onChange={(event) => setDraft((current) => ({ ...current, client_secret: sanitizeSecret(event.target.value, { maxLength: 128 }) }))} />
-                  <button type="button" className="settings_button" onClick={() => {
-                    const secret = tryGenerateClientSecret();
-                    if (!secret) { setError('Secure random generation is unavailable in this browser; a client secret cannot be generated.'); return; }
-                    setDraft((current) => ({ ...current, client_secret: secret }));
-                  }}>Generate</button>
-                </div>
-              </div>
-            </div>
-            <StorageTargetEditor
-              config={draft.config}
-              onChange={(config) => setDraft((current) => ({ ...current, config }))}
-              catalogDomains={catalogDomains}
-              catalogState={catalogState}
-              onRefreshCatalog={loadCatalog}
-              isCdr={isCdr}
-            />
-            <PermissionEditor value={draft.permissions} onChange={(permissions) => setDraft((current) => ({ ...current, permissions }))} idPrefix="new_service_permissions" />
-            <div className="config_window_inline_actions is-end">
-              <button type="button" className="settings_button" onClick={() => setIsCreateOpen(false)}>Cancel</button>
-              <button type="button" className="settings_button" disabled={saving} onClick={createAccount}>{saving ? 'Creating…' : 'Create service account'}</button>
-            </div>
-          </>
-        ) : null}
-      </Section>
-
-      <Section
-        title="Configured service accounts"
-        description={tn('settings.serviceAccounts.count', accounts.length)}
-        actions={<button type="button" className="settings_button" disabled={loading} onClick={loadAccounts}>{loading ? 'Refreshing…' : 'Refresh'}</button>}
-      >
-        {accounts.length === 0 ? <p className="settings_hint">{loading ? 'Loading service accounts…' : 'No service accounts found.'}</p> : accounts.map((account) => {
-          const id = String(account.id);
-          const isExpanded = expandedId === id;
-          const edit = editDrafts[id] || { display_name: account.display_name, is_active: account.is_active, permissions: account.permissions, config: cloneServiceConfig(account.config) };
-          const registered = account.config?.registered_domains || [];
-          return (
-            <div className={`service_account_card${isExpanded ? ' is-expanded' : ''}`} key={id}>
-              <div className="service_account_card_row">
-                <div className="service_account_card_info">
-                  <div>
-                    <small>ID #{account.id}</small>
-                    <strong>{account.client_id}</strong>
-                    {account.is_system ? <span className="service_account_badge is-system" title="Protected system service account">🔒 System</span> : null}
-                    <span className={`service_account_badge ${account.is_active ? 'is-active' : 'is-inactive'}`}>{account.is_active ? 'Active' : 'Inactive'}</span>
-                  </div>
-                  <p>
-                    {account.display_name || <em>No display name</em>}
-                    {' · '}{tn('settings.serviceAccounts.permissions', account.permissions.length)}
-                    {registered.length ? ` · ${registered.map((key) => getDomainMeta(key).label).join(', ')}` : ''}
-                  </p>
-                </div>
-                <div className="service_account_card_actions">
-                  <button type="button" className="settings_button" onClick={() => setExpandedId(isExpanded ? '' : id)} title={account.is_system ? 'Inspect daemon configuration and storage coordinates' : 'Edit display name, permissions and storage'}>
-                    {isExpanded ? 'Close' : account.is_system ? 'Inspect' : 'Edit'}
-                  </button>
-                  <button type="button" className="settings_button" disabled={saving || account.is_system} onClick={() => rotateSecret(account)} title={account.is_system ? 'Protected system account secret cannot be modified.' : 'Rotate client secret'}>Rotate secret</button>
-                  <button type="button" className="settings_button is-danger" disabled={saving || account.is_system} onClick={() => deleteAccount(account)} title={account.is_system ? 'Protected system accounts cannot be deleted.' : 'Delete service account'}>Delete</button>
-                </div>
-              </div>
-              {isExpanded ? (
-                <div className="service_account_card_drawer">
-                  {account.is_system ? <p className="settings_hint">🔒 Protected system service account ({account.client_id}): permissions, status and secret are managed by the platform. Display name and storage targets can still be edited.</p> : null}
-                  <div className="config_window_grid">
-                    <label className="config_window_field">
-                      <span className="config_window_field_label">Display name</span>
-                      <input className="settings_input" value={edit.display_name || ''} maxLength={120} onChange={(event) => updateEditDraft(id, { display_name: sanitizeText(event.target.value, { maxLength: 120 }) })} />
-                    </label>
-                    <label className="settings_toggle_row config_window_toggle" title={account.is_system ? 'Protected system accounts cannot be deactivated.' : undefined}>
-                      <input type="checkbox" checked={account.is_system ? true : edit.is_active !== false} disabled={account.is_system} onChange={(event) => updateEditDraft(id, { is_active: event.target.checked })} />
-                      <span>{account.is_system ? '🔒 Active (locked)' : edit.is_active !== false ? 'Active' : 'Inactive'}</span>
-                    </label>
-                  </div>
-                  <StorageTargetEditor
-                    config={edit.config}
-                    onChange={(config) => updateEditDraft(id, { config })}
-                    catalogDomains={catalogDomains}
-                    catalogState={catalogState}
-                    onRefreshCatalog={loadCatalog}
-                    isCdr={isCdr}
-                  />
-                  <PermissionEditor
-                    value={edit.permissions || []}
-                    onChange={(permissions) => updateEditDraft(id, { permissions })}
-                    idPrefix={`service_${id}_permissions`}
-                    disabled={account.is_system}
-                    disabledHint="System daemon permissions are immutable and managed by the platform."
-                  />
-                  <div className="config_window_inline_actions is-end">
-                    <button type="button" className="settings_button" onClick={() => setExpandedId('')}>Cancel</button>
-                    <button type="button" className="settings_button" disabled={saving} onClick={() => saveAccount(account)}>{saving ? 'Saving…' : 'Save changes'}</button>
-                  </div>
-                </div>
-              ) : null}
-            </div>
-          );
-        })}
-      </Section>
+      {isFormOpen ? (
+        <SettingsPopup
+          narrow
+          title={modifying ? 'Modify Service Account' : 'Create service account'}
+          subtitle={modifying ? `${modifying.client_id} · step ${step + 1} of 2` : `Step ${step + 1} of 2`}
+          hint={saving ? (modifying ? 'Updating the account…' : 'Creating the account…') : FORM_STEPS[step].hint}
+          busy={saving}
+          onClose={closeForm}
+          footer={(
+            <>
+              {modifying && !system ? <button type="button" className="graph_customize_button users_danger" disabled={saving} onClick={async () => { if (await deleteAccount(modifying)) closeForm(); }}>Delete</button> : null}
+              {step > 0 ? <button type="button" className="graph_customize_button" disabled={saving} onClick={() => goToStep(step - 1)}>Back</button> : null}
+              {/* A new account is created from the second page; a modified
+                  one can be saved from either. */}
+              {step === 0 ? <button type="button" className={'graph_customize_button' + (modifying ? '' : ' is-primary')} disabled={saving} onClick={() => goToStep(step + 1)}>Next</button> : null}
+              {modifying ? (
+                <button type="button" className="graph_customize_button is-primary" disabled={saving} onClick={async () => { if (await saveAccount(modifying)) closeForm(); }}>{saving ? 'Updating…' : 'Update'}</button>
+              ) : step === 0 ? null : (
+                <button type="button" className="graph_customize_button is-primary" disabled={saving} onClick={createAccount}>{saving ? 'Creating…' : 'Create service account'}</button>
+              )}
+            </>
+          )}
+        >
+          <div className="users_make">
+            {error ? <div className="settings_error users_popup_error">{error}</div> : null}
+            <StepStrip step={step}>
+              {FORM_STEPS.map((item, index) => {
+                const state = index === step ? 'current' : index < step ? 'done' : 'todo';
+                // The permissions are not a page: their header, under the
+                // storage targets, opens them in a popup of their own.
+                const opensPopup = index === 2;
+                const inView = state === 'current' || (opensPopup && step === 1);
+                return (
+                  <li key={item.label} className={`users_wizard_step is-${state}${opensPopup ? ' is-popup' : ''}`} data-step={index + 1} inert={!inView}>
+                    <div className="users_wizard_headrow">
+                      <button
+                        type="button"
+                        className="users_wizard_head"
+                        aria-current={state === 'current' ? 'step' : undefined}
+                        aria-expanded={opensPopup ? permissionsOpen : state === 'current'}
+                        aria-haspopup={opensPopup ? 'dialog' : undefined}
+                        disabled={saving}
+                        onClick={() => (opensPopup ? setPermissionsOpen(true) : goToStep(index))}
+                      >
+                        <i aria-hidden="true">{state === 'done' ? '✓' : index + 1}</i>
+                        <strong className="graph_customize_section_head">{item.label}</strong>
+                        {state !== 'current' && summaries[index] ? <small>{summaries[index]}</small> : null}
+                        {opensPopup ? <span className="users_wizard_open" aria-hidden="true"><LevelIcon d="M9 6l6 6-6 6" size={13} /></span> : null}
+                      </button>
+                    </div>
+                    {opensPopup ? null : <div className="users_wizard_body" inert={state !== 'current'}>{stepBodies[index]}</div>}
+                  </li>
+                );
+              })}
+            </StepStrip>
+          </div>
+        </SettingsPopup>
+      ) : null}
+      {isFormOpen && permissionsOpen ? (
+        <SettingsPopup
+          title="Permissions"
+          subtitle={modifying ? modifying.client_id : String(draft.client_id || '').trim()}
+          hint={system ? 'System daemon permissions are managed by the platform.' : `${(form.permissions || []).length} of ${allPermissions.length} granted. Kept with the account's form.`}
+          onClose={() => setPermissionsOpen(false)}
+          footer={(
+            <>
+              {system ? null : <button type="button" className="graph_customize_button" onClick={() => setForm({ permissions: [] })}>Clear</button>}
+              <button type="button" className="graph_customize_button is-primary" onClick={() => setPermissionsOpen(false)}>Done</button>
+            </>
+          )}
+        >
+    <section className="users_wizard_privileges" aria-label="Permissions" inert={system || undefined} title={system ? 'System daemon permissions are immutable and managed by the platform.' : undefined}>
+      <PrivilegePicker groups={permissionGroups} all={allPermissions} value={form.permissions || []} onChange={(permissions) => setForm({ permissions })} />
     </section>
+        </SettingsPopup>
+      ) : null}
+
+      {isExistingOpen && !isFormOpen ? (
+        <SettingsPopup
+          narrow
+          title="Existing service accounts"
+          subtitle={`${accounts.length} ${accounts.length === 1 ? 'account' : 'accounts'}`}
+          hint={loading ? 'Loading service accounts…' : filteredAccounts.length === accounts.length ? 'Every service client of this workspace.' : `Showing ${filteredAccounts.length} of ${accounts.length}.`}
+          busy={saving}
+          onClose={() => setIsExistingOpen(false)}
+        >
+          <div className="users_existing">
+            {error ? <div className="settings_error users_popup_error">{error}</div> : null}
+            <ServiceSecretNotice secret={newSecret} onClear={() => setNewSecret('')} />
+            <label className="users_input_field">
+              <span className="users_input_label"><span className="users_input_name"><LevelIcon d={ICONS.search} size={13} />Search</span></span>
+              <span className="users_input_wrap">
+                <input type="search" className="graph_customize_input" aria-label="Search service accounts" value={query} placeholder="Client, permission or domain" onChange={(event) => setQuery(sanitizeText(event.target.value, { maxLength: 160 }))} />
+                <i className="users_input_state" aria-hidden="true"><LevelIcon d={ICONS.search} size={15} /></i>
+              </span>
+            </label>
+            {filteredAccounts.length > 0 ? (
+              <ul className="users_people" aria-label="Service accounts">
+                {filteredAccounts.map((account) => {
+                  const registered = account.config?.registered_domains || [];
+                  const id = String(account.id);
+                  const isBriefOpen = briefId === id;
+                  // The brief: what the client may do, by area, and where
+                  // each of its domains is stored. Not the whole account.
+                  const areas = Object.entries((account.permissions || []).reduce((counts, permission) => {
+                    const area = String(permission).split(':')[0] || 'other';
+                    return { ...counts, [area]: (counts[area] || 0) + 1 };
+                  }, {}));
+                  return (
+                    <li key={account.id} className={'users_person has-brief' + (account.is_active ? '' : ' is-off') + (isBriefOpen ? ' is-open' : '')}>
+                     <div className="users_person_row">
+                      <button type="button" className="users_person_open" aria-expanded={isBriefOpen} title={isBriefOpen ? 'Hide the brief' : 'Show a brief of this account'} onClick={() => setBriefId(isBriefOpen ? '' : id)}>
+                      <span className="users_level_icon" aria-hidden="true"><LevelIcon d={account.is_system ? ICONS.lock : ICONS.server} size={15} /></span>
+                      <span className="users_level_text">
+                        <strong>{account.client_id}</strong>
+                        <small>
+                          {[account.display_name, tn('settings.serviceAccounts.permissions', (account.permissions || []).length), registered.map((key) => getDomainMeta(key).label).join(', ')].filter(Boolean).join(' · ')}
+                        </small>
+                      </span>
+                      </button>
+                      {account.is_system ? <span className="users_level_count" title="Protected system service account">System</span> : null}
+                      {/* The card's actions: edit, rotate the secret, active / inactive. */}
+                      <button type="button" className="users_person_edit linkx_tooltip_anchor" data-tooltip={account.is_system ? 'Inspect' : 'Edit'} aria-label={(account.is_system ? 'Inspect ' : 'Edit ') + account.client_id} disabled={saving} onClick={() => openModify(account)}>
+                        <LevelIcon d={ICONS.pencil} size={14} />
+                      </button>
+                      <button type="button" className="users_person_edit linkx_tooltip_anchor" data-tooltip={account.is_system ? 'System secret is protected' : 'Rotate secret'} aria-label={'Rotate secret of ' + account.client_id} disabled={saving || account.is_system} onClick={() => rotateSecret(account)}>
+                        <LevelIcon d={ICONS.key} size={14} />
+                      </button>
+                      <label className={'settings_switch users_person_toggle' + (account.is_system ? ' is-restricted' : '')} title={account.is_system ? 'Protected system accounts cannot be deactivated.' : account.is_active ? 'Active: switch off to deactivate' : 'Inactive: switch on to activate'}>
+                        <input type="checkbox" role="switch" aria-label={(account.is_active ? 'Deactivate ' : 'Activate ') + account.client_id} aria-disabled={account.is_system || undefined} checked={Boolean(account.is_active)} disabled={saving} onChange={() => toggleActive(account)} />
+                        <span aria-hidden="true">{account.is_active ? 'Active' : 'Inactive'}</span>
+                      </label>
+                     </div>
+                     {isBriefOpen ? (
+                       <dl className="users_person_brief" aria-label={'Brief of ' + account.client_id}>
+                         <div>
+                           <dt><LevelIcon d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" size={12} />Permissions</dt>
+                           <dd>
+                             {areas.length ? areas.map(([area, count]) => <span className="users_person_fact" key={area}>{area}<b>{count}</b></span>) : <em>None granted</em>}
+                           </dd>
+                         </div>
+                         <div>
+                           <dt><LevelIcon d="M4 6c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3zM4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3" size={12} />Storage</dt>
+                           <dd>
+                             {registered.length ? registered.map((key) => {
+                               const cfg = account.config?.domains?.[key] || {};
+                               return <span className={'users_person_fact' + (cfg.storage_host ? ' is-code' : ' is-unset')} key={key}>{getDomainMeta(key).label}<b>{cfg.storage_host ? `${cfg.storage_host}:${cfg.storage_port || getDomainMeta(key).defaultPort}` : 'not set'}</b></span>;
+                             }) : <em>No domain registered</em>}
+                           </dd>
+                         </div>
+                         <div>
+                           <dt><LevelIcon d={ICONS.card} size={12} />Account</dt>
+                           <dd>
+                             <span className="users_person_fact">ID<b>#{account.id}</b></span>
+                             <span className="users_person_fact">Type<b>{account.is_system ? 'System (protected)' : 'Client'}</b></span>
+                           </dd>
+                         </div>
+                       </dl>
+                     ) : null}
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : loading ? (
+              <WindowLoadScreen className="is-block" label="Loading service accounts…" />
+            ) : (
+              <p className="users_empty" role="status" aria-live="polite">{accounts.length === 0 ? 'No service accounts found.' : 'No matching service accounts.'}</p>
+            )}
+          </div>
+        </SettingsPopup>
+      ) : null}
+    </SettingsPage>
   );
 }

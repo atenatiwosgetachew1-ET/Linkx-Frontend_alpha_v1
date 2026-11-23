@@ -1,14 +1,13 @@
-import { useCallback } from 'react';
+import { useCallback, useContext } from 'react';
 
-import { useAuth } from './useAuth.js';
-
-// Permissions that the admin role does NOT implicitly grant (production
-// canAccess bypassed everything for admins, letting any admin manage
-// superusers).
-const NO_ADMIN_BYPASS = new Set(['superuser:manage']);
+import { AuthContext } from './authContext.js';
 
 // Single permission check for the UI: `can('config:write')`.
-// UI gating only; the backend must enforce the same rules (request B-1).
+// From the signed-in actor's permission list only (`/auth/me` →
+// actor.permissions): the Service gives every role its permissions under
+// the same key and enforces them, and asks the UI not to infer them from
+// the role name (frontend alignment 2026-11-20, H-9 / H-16). Production's
+// admin bypass is dropped for that reason.
 //
 // Permission per action:
 //   config:read    view Configuration, export encrypted configuration
@@ -17,9 +16,10 @@ const NO_ADMIN_BYPASS = new Set(['superuser:manage']);
 //   users:manage   Users, Service accounts, Activity log, detection
 //                  sensitivity edits, vigilance pause/rewind
 //   superuser:manage  assign or remove the superuser/admin roles
+//   tasks:read_all    "All tasks"; alerts:read_all "All alerts" (and analyse any)
+//   alerts:feedback   report STR findings back; evidence:create  save a run
+// Outside an AuthProvider (isolated component tests) nothing is permitted.
 export function useCan() {
-  const { hasRole, hasPermission } = useAuth();
-  return useCallback((permission) => (
-    hasPermission(permission) || (!NO_ADMIN_BYPASS.has(permission) && hasRole('admin'))
-  ), [hasPermission, hasRole]);
+  const hasPermission = useContext(AuthContext)?.hasPermission;
+  return useCallback((permission) => Boolean(hasPermission?.(permission)), [hasPermission]);
 }

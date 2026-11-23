@@ -12,8 +12,12 @@
 // background stream (its window closed, its backend session kept until the
 // stream ends) and every running quick-panel analysis. See getSessionUsage.
 //
-// Tasks are in-memory: they are lost on reload until the backend offers a
-// task list (docs/backend-requests.md B-20).
+// The Service records every run as a task (frontend alignment 2026-11-20,
+// H-2): applyServerTask() merges its records (the list on load and each
+// task_updated event) into this registry. A run started in this browser is
+// tied to its Service task by linkServerTask() (the stream answer's
+// task_id); a Service task with no local run (an earlier page load, a
+// supervisor's view of all tasks) is shown read-only.
 
 export const MAX_ANALYSIS_SESSIONS = 3;
 const MAX_TASKS = 50; // finished tasks beyond this are dropped, oldest first
@@ -26,13 +30,20 @@ export const TASK_STATUSES = Object.freeze({
   FAILED: 'failed',
 });
 
+// The Service's lifecycle of a task (H-2).
+export const TASK_LIFECYCLES = Object.freeze({ ACTIVE: 'active', EXPIRING: 'expiring', EXPIRED: 'expired', ARCHIVED: 'archived' });
+
 export const TASK_ORIGINS = Object.freeze({
   SOURCE: 'source',
   QUICK: 'quick',
+  // A parent STR alert's link analysis (analysis-results-plan Phase 4).
+  PARENT: 'parent',
 });
 
 const ACTIVE_STATUSES = new Set([TASK_STATUSES.STARTING, TASK_STATUSES.RUNNING]);
 export const isTaskActive = (task) => Boolean(task) && ACTIVE_STATUSES.has(task.status);
+// Another analyst's task (a supervisor's "All tasks"): shown, never counted.
+const isOwnTask = (task) => !task.foreign;
 
 let tasks = []; // newest first
 let focus = { taskId: null, seq: 0 };
@@ -201,15 +212,17 @@ export const getActiveTaskForWindow = (windowId) => tasks.find(
 export const getLatestTaskForWindow = (windowId) => tasks.find((task) => String(task.windowId) === String(windowId)) || null;
 
 // Running tasks that hold an analysis session without an open Source window.
-export const countDetachedSessions = (list = tasks) => list.filter((task) => isTaskActive(task)
+export const countDetachedSessions = (list = tasks) => list.filter((task) => isTaskActive(task) && isOwnTask(task)
   && (task.origin === TASK_ORIGINS.QUICK || task.background)).length;
 
-export const countActiveTasks = (list = tasks) => list.filter(isTaskActive).length;
+export const countActiveTasks = (list = tasks) => list.filter((task) => isTaskActive(task) && isOwnTask(task)).length;
 
 // { used, limit, available, openWindows, background, quick }.
 export const getSessionUsage = (openSourceWindows = 0, list = tasks) => {
-  const background = list.filter((task) => isTaskActive(task) && task.origin === TASK_ORIGINS.SOURCE && task.background).length;
-  const quick = list.filter((task) => isTaskActive(task) && task.origin === TASK_ORIGINS.QUICK).length;
+  const own = list.filter(isOwnTask);
+  const background = own.filter((task) => isTaskActive(task) && task.origin === TASK_ORIGINS.SOURCE && task.background).length;
+  // Quick-panel runs and parent-alert runs each hold a session (H-8).
+  const quick = own.filter((task) => isTaskActive(task) && (task.origin === TASK_ORIGINS.QUICK || task.origin === TASK_ORIGINS.PARENT)).length;
   const used = openSourceWindows + background + quick;
   return {
     used,
@@ -244,8 +257,163 @@ export const removeFinishedTasks = () => {
   emit();
 };
 
+/* ── The Service's tasks (H-2, H-7) ─────────────────────────────────── */
+
+const SERVER_STATUS = {
+  queued: TASK_STATUSES.STARTING,
+  running: TASK_STATUSES.RUNNING,
+  completed: TASK_STATUSES.COMPLETED,
+  failed: TASK_STATUSES.FAILED,
+  terminated: TASK_STATUSES.TERMINATED,
+};
+const VERDICTS = new Set(['suspicious', 'clean', 'undetermined']);
+const time = (value) => {
+  const ts = value ? new Date(value).getTime() : NaN;
+  return Number.isFinite(ts) ? ts : null;
+};
+// { RULE: count | null } (older records name the rule without a count).
+const flagsOf = (value) => (value && typeof value === 'object' && !Array.isArray(value)
+  ? Object.fromEntries(Object.entries(value).map(([rule, count]) => [String(rule).slice(0, 80), count === null || count === undefined || !Number.isFinite(Number(count)) ? null : Number(count)]))
+  : null);
+
+let serverOwner = { userId: '', username: '' };
+const pendingServer = new Map(); // serverId -> raw task that arrived before its local run was linked
+// Who is signed in, to tell their tasks from others' in "All tasks".
+export const setServerTaskOwner = ({ userId = '', username = '' } = {}) => {
+  serverOwner = { userId: String(userId || ''), username: String(username || '') };
+};
+
+// The Service fields every task carries once it is known there.
+const serverFields = (raw) => {
+  const lifecycle = Object.values(TASK_LIFECYCLES).includes(raw.lifecycle) ? raw.lifecycle : TASK_LIFECYCLES.ACTIVE;
+  const owner = String(raw.user_id ?? '');
+  const ownerName = String(raw.username ?? '');
+  const foreign = Boolean((owner || ownerName) && (serverOwner.userId || serverOwner.username))
+    && !(owner && owner === serverOwner.userId) && !(ownerName && ownerName === serverOwner.username);
+  return {
+    serverId: String(raw.task_id),
+    lifecycle,
+    expiresAt: time(raw.expires_at),
+    archivedAt: time(raw.archived_at),
+    reconfirmedAt: time(raw.reconfirmed_at),
+    evidenceId: raw.evidence_id ? String(raw.evidence_id) : '',
+    ...(VERDICTS.has(raw.verdict) ? { verdict: raw.verdict } : {}),
+    ...(flagsOf(raw.flags) ? { flags: flagsOf(raw.flags) } : {}),
+    ...(raw.filter_result && typeof raw.filter_result === 'object' ? { filterResult: raw.filter_result } : {}),
+    ownerName,
+    foreign,
+  };
+};
+
+// A Service task with no local run, in the registry's shape.
+const fromServer = (raw) => {
+  seq += 1;
+  const status = SERVER_STATUS[raw.status] || TASK_STATUSES.COMPLETED;
+  const origin = raw.origin === 'parent' ? TASK_ORIGINS.PARENT : raw.origin === 'quick' ? TASK_ORIGINS.QUICK : TASK_ORIGINS.SOURCE;
+  const frame = raw.dataframe && typeof raw.dataframe === 'object' ? raw.dataframe : null;
+  return {
+    id: `server-${raw.task_id}`,
+    number: seq,
+    origin,
+    title: String(raw.action || (origin === TASK_ORIGINS.PARENT ? 'STR link analysis' : 'Analysis')),
+    action: String(raw.action || ''),
+    input: String(raw.input || raw.external_reference_id || ''),
+    mode: String(raw.mode || ''),
+    windowId: '',
+    windowTitle: String(raw.external_reference_id || raw.source_session_id || ''),
+    sourceSessionId: String(raw.source_session_id || ''),
+    logFile: String(raw.log_file || ''),
+    rule: String(raw.rule || ''),
+    sourceColumn: String(raw.source || ''),
+    targetColumn: String(raw.target || ''),
+    relationship: String(raw.relationship || ''),
+    dataframe: frame ? {
+      totalRows: frame.total_rows ?? frame.totalRows ?? null,
+      totalColumns: frame.total_columns ?? frame.totalColumns ?? null,
+      columns: Array.isArray(frame.columns) ? frame.columns.map(String) : [],
+      name: String(frame.name || ''),
+      tool: String(frame.tool || ''),
+    } : null,
+    alertId: origin === TASK_ORIGINS.PARENT ? String(raw.external_reference_id || '') : '',
+    externalReferenceId: String(raw.external_reference_id || ''),
+    status,
+    background: false,
+    hasResults: status !== TASK_STATUSES.STARTING,
+    progress: status === TASK_STATUSES.COMPLETED ? 100 : null,
+    statusText: '',
+    message: String(raw.message || ''),
+    log: [],
+    frozenLog: null,
+    startedAt: time(raw.started_at) || Date.now(),
+    endedAt: time(raw.ended_at),
+    remote: true, // no run in this browser: read-only
+    ...serverFields(raw),
+  };
+};
+
+// Merges a Service task (GET /api/v1/tasks, task_updated) into the registry.
+export const applyServerTask = (raw) => {
+  if (!raw || typeof raw !== 'object' || !raw.task_id) return null;
+  const serverId = String(raw.task_id);
+  const local = tasks.find((task) => task.serverId === serverId);
+  if (!local) {
+    // Its local run may link it in a moment (the stream answer).
+    pendingServer.set(serverId, raw);
+    if (pendingServer.size > 200) pendingServer.delete(pendingServer.keys().next().value);
+    // Archived tasks are only shown when asked for (the list with archived=true).
+    const task = fromServer(raw);
+    tasks = trim([task, ...tasks.filter((item) => item.id !== task.id)]);
+    emit();
+    return task.id;
+  }
+  const patch = serverFields(raw);
+  const status = SERVER_STATUS[raw.status];
+  if (local.remote) {
+    patch.status = status || local.status;
+    patch.message = String(raw.message || local.message || '');
+    patch.endedAt = time(raw.ended_at) || local.endedAt;
+    patch.hasResults = local.hasResults || (status && status !== TASK_STATUSES.STARTING);
+  }
+  updateTask(local.id, patch);
+  // A run in this browser that the Service ended (failed, terminated).
+  if (!local.remote && isTaskActive(local) && status && !ACTIVE_STATUSES.has(status)) {
+    finishTask(local.id, status, { message: String(raw.message || '') });
+  }
+  return local.id;
+};
+
+// Ties a run started here to its Service task (stream answer task_id, or
+// an alert run's task); a record that already arrived is merged.
+export const linkServerTask = (localId, serverId) => {
+  const id = String(serverId || '');
+  if (!id || !getTask(localId)) return;
+  // A read-only copy that arrived first gives way to the local run.
+  const remoteCopy = tasks.find((task) => task.remote && task.serverId === id);
+  if (remoteCopy) {
+    tasks = tasks.filter((task) => task !== remoteCopy);
+    emit();
+  }
+  updateTask(localId, { serverId: id });
+  const raw = pendingServer.get(id);
+  pendingServer.delete(id);
+  if (raw) applyServerTask(raw);
+};
+
+export const getTaskByServerId = (serverId) => tasks.find((task) => task.serverId === String(serverId)) || null;
+
+// Read-only Service tasks not in a list just loaded (another scope).
+export const dropRemoteTasks = (keepServerIds = []) => {
+  const keep = new Set(keepServerIds.map(String));
+  const next = tasks.filter((task) => !task.remote || keep.has(task.serverId));
+  if (next.length === tasks.length) return;
+  tasks = next;
+  emit();
+};
+
 // Signed out: forget everything.
 export const resetTasks = () => {
+  pendingServer.clear();
+  serverOwner = { userId: '', username: '' };
   tasks = [];
   focus = { taskId: null, seq: 0 };
   handlers.clear();

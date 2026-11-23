@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { createGraphStore } from '../lib/graphStore.js';
-import { buildGraphReport, describeReportDomain, reportScore, draftFindings, entityName, plainText, reportDateTime, reportFacts, reportTimeline } from './graphReportModel.js';
+import { buildGraphReport, normalizeReportRange, reportRangeCounts, reportRangeOf, describeReportDomain, reportScore, draftFindings, entityName, plainText, reportDateTime, reportFacts, reportTimeline } from './graphReportModel.js';
 import { pdfText, renderGraphReportPdf } from './graphReportPdf.js';
 
 // A hub (a) paying b three times and c once; c - d - e a chain (c and d
@@ -75,7 +75,12 @@ describe('graph report model (G4.2)', () => {
     // No alerts, pinned items or rules: no indicators section.
     const withAlerts = buildGraphReport(baseInput(graphOf(), { alerts: [{ name: 'Abebe', category: 'Highly connected', severity: 'high', short: 'Hub.' }] }));
     expect(withAlerts.sections.map((section) => section.id)).toContain('indicators');
-    expect(buildGraphReport(baseInput(graphOf(), { analyst: { includeLists: true } })).sections.at(-1)).toMatchObject({ id: 'lists', number: 'B' });
+    // Tables: B, C, … in order.
+    const table = (title) => ({ title, source: title, columns: [{ label: 'Label', numeric: false }], rows: [['x']], total: 1, note: '' });
+    expect(buildGraphReport(baseInput(graphOf(), { tables: [table('Entities'), table('Relationships')] })).sections.slice(-2)).toMatchObject([
+      { id: 'table-b', number: 'B', title: 'Table: Entities' },
+      { id: 'table-c', number: 'C', title: 'Table: Relationships' },
+    ]);
   });
 
   it('subjects: pinned first, then the most connected; profiles from the mapping', () => {
@@ -94,11 +99,97 @@ describe('graph report model (G4.2)', () => {
     expect(items).toHaveLength(1); // the others know nothing (and a script link is no portrait)
   });
 
+  it('subjects: every contributor, no cap (pinned, alerted, bridging); a profile for each; else the most connected stand in', () => {
+    // A star of 30 entities, all pinned: all 30 listed, each with its profile.
+    const star = createGraphStore();
+    star.replace({
+      nodes: [{ id: 'hub', label: 'Hub' }, ...Array.from({ length: 30 }, (_, i) => ({ id: `n${i}`, label: `N${i}` }))],
+      edges: Array.from({ length: 30 }, (_, i) => ({ from: 'hub', to: `n${i}`, relationship: 'PAYMENT' })),
+    });
+    const pinned = { pinned: { nodes: new Set(Array.from({ length: 30 }, (_, i) => `n${i}`)), edges: new Set() } };
+    const report = buildGraphReport(baseInput(star, { markers: pinned, profileOf: (id) => [['Tel', `09-${id}`]] }));
+    const subjects = report.sections.find((section) => section.id === 'subjects');
+    const rows = subjects.blocks.find((block) => block.type === 'table').rows;
+    expect(rows).toHaveLength(31); // the 30 pinned and the hub (a bridge)
+    expect(rows.at(-1)[1]).toBe('Hub'); // pinned first
+    expect(subjects.blocks.find((block) => block.type === 'profiles').items).toHaveLength(31);
+    // Strongest relationships: every pair touching a subject.
+    const patterns = report.sections.find((section) => section.id === 'patterns').blocks;
+    expect(patterns.find((block, index) => block.type === 'table' && patterns[index - 2]?.text === 'Strongest relationships').rows).toHaveLength(30);
+    // Bridging entities: all of them.
+    expect(buildGraphReport(baseInput(graphOf())).sections.find((section) => section.id === 'patterns').blocks
+      .find((block, index, blocks) => blocks[index - 2]?.text === 'Bridging entities').rows.map((row) => row[0])).toEqual(['Abebe', 'Chala', 'Dawit']);
+    // A ring has no bridge: with nothing flagged, the most connected stand in, and say so.
+    const ring = createGraphStore();
+    ring.replace({
+      nodes: Array.from({ length: 20 }, (_, i) => ({ id: `r${i}`, label: `R${i}` })),
+      edges: Array.from({ length: 20 }, (_, i) => ({ from: `r${i}`, to: `r${(i + 1) % 20}`, relationship: 'CALL' })),
+    });
+    const standIn = buildGraphReport(baseInput(ring)).sections.find((section) => section.id === 'subjects');
+    expect(standIn.blocks[0].text).toBe('No entity is pinned, alerted or bridging; the 15 most connected entities shown stand in.');
+    expect(standIn.blocks.find((block) => block.type === 'table').rows).toHaveLength(15);
+    // Entities without a link never stand in as "most connected"; with no link at all, none stands out.
+    const loose = createGraphStore();
+    loose.replace({ nodes: Array.from({ length: 25 }, (_, i) => ({ id: `u${i}`, label: `U${i}` })), edges: [{ from: 'u0', to: 'u1', relationship: 'CALL' }] });
+    const looseRows = buildGraphReport(baseInput(loose)).sections.find((section) => section.id === 'subjects').blocks.find((block) => block.type === 'table').rows;
+    expect(looseRows.map((row) => row[3])).toEqual(['1', '1']);
+    // Type shares add up: past the limit, the rest in one Other row.
+    const typed = createGraphStore();
+    typed.replace({ nodes: Array.from({ length: 14 }, (_, i) => ({ id: `t${i}`, label: `T${i}`, node_identity: `Kind ${i}` })), edges: [] });
+    const typeRowsOut = buildGraphReport(baseInput(typed)).sections.find((section) => section.id === 'graph').blocks.find((block) => block.type === 'table').rows;
+    expect(typeRowsOut).toHaveLength(12);
+    expect(typeRowsOut.at(-1)).toEqual(['Other (3 types)', '3', expect.any(String)]);
+    const none = createGraphStore();
+    none.replace({ nodes: Array.from({ length: 25 }, (_, i) => ({ id: `z${i}`, label: `Z${i}` })), edges: [] });
+    const noneReport = buildGraphReport(baseInput(none));
+    const noneSubjects = noneReport.sections.find((section) => section.id === 'subjects');
+    expect(noneSubjects.blocks).toEqual([{ type: 'paragraph', text: 'No entity is pinned, alerted or bridging, and none of the 25 entities shown has a link, so none stands out.' }]);
+  });
+
+  it('range: each part within its limit, the cut always said; none given: everything', () => {
+    const star = createGraphStore();
+    star.replace({
+      nodes: [{ id: 'hub', label: 'Hub' }, ...Array.from({ length: 30 }, (_, i) => ({ id: `n${i}`, label: `N${i}` }))],
+      edges: Array.from({ length: 30 }, (_, i) => ({ from: 'hub', to: `n${i}`, relationship: 'PAYMENT' })),
+    });
+    const pinned = { pinned: { nodes: new Set(Array.from({ length: 30 }, (_, i) => `n${i}`)), edges: new Set() } };
+    const table = { title: 'Entities', source: 'Every entity drawn', columns: [{ label: 'Label', numeric: false }], rows: Array.from({ length: 40 }, (_, i) => [`R${i}`]), total: 40, note: '' };
+    const input = baseInput(star, { markers: pinned, profileOf: (id) => [['Tel', `09-${id}`]], tables: [table] });
+    expect(reportRangeCounts(input)).toEqual({ subjects: 31, profiles: 31, strongest: 30 });
+    const brief = buildGraphReport({ ...input, range: reportRangeOf('brief') });
+    const subjects = brief.sections.find((section) => section.id === 'subjects').blocks;
+    expect(subjects.find((block) => block.type === 'table').rows).toHaveLength(10);
+    expect(subjects[0].text).toMatch(/The first 10 of 31 entities are listed \(pinned first, then alerted, then the most connected\)\.$/);
+    expect(subjects.find((block) => block.type === 'profiles').items).toHaveLength(4);
+    expect(subjects.find((block) => block.text?.startsWith('The first 4 of 31 profiles'))).toBeTruthy();
+    const patterns = brief.sections.find((section) => section.id === 'patterns').blocks;
+    const strongestAt = patterns.findIndex((block) => block.text === 'Strongest relationships');
+    expect(patterns[strongestAt + 1].text).toMatch(/\(30\), the most links first\. The first 10 of 30 pairs are listed/);
+    expect(patterns[strongestAt + 2].rows).toHaveLength(10);
+    const appendix = brief.sections.find((section) => section.id === 'table-b').blocks.find((block) => block.type === 'wideTable');
+    expect(appendix.rows).toHaveLength(25); // 25 rows a table in Brief
+    expect(appendix.note).toBe("The first 25 of 40 rows are listed (in the table's order).");
+    const custom = buildGraphReport({ ...input, range: { preset: 'custom', subjects: null, profiles: null, strongest: null, rows: 15 } });
+    const cut = custom.sections.find((section) => section.id === 'table-b').blocks.find((block) => block.type === 'wideTable');
+    expect(cut.rows).toHaveLength(15);
+    expect(cut.note).toBe("The first 15 of 40 rows are listed (in the table's order).");
+    // None given: everything, nothing said.
+    const full = buildGraphReport(input);
+    expect(full.sections.find((section) => section.id === 'subjects').blocks.find((block) => block.type === 'profiles').items).toHaveLength(31);
+    expect(full.sections.find((section) => section.id === 'subjects').blocks[0].text).not.toMatch(/The first/);
+    expect(normalizeReportRange({ subjects: '0', profiles: 'x', strongest: 7.6, rows: '' })).toEqual({ preset: 'full', subjects: null, profiles: null, strongest: 7, rows: null });
+  });
+
   it('findings: the analyst\'s lines win; else a factual draft, marked as such', () => {
     const store = graphOf();
     const facts = reportFacts(store.graph(), viewOf(store), { weightKey: 'AMOUNT' });
     const draft = draftFindings({ graph: store.graph(), facts, timeline: reportTimeline(store.graph(), viewOf(store)) });
-    expect(draft[0]).toMatch(/is the most connected entity/);
+    expect(draft[0]).toBe('3 entities share the most connections, 2 others each: Abebe, Chala, Dawit.'); // a tie: none picked out
+    // A single leader is named alone.
+    const solo = graphOf();
+    solo.addEdge('a', 'e', { relationship: 'CALL' });
+    const soloFacts = reportFacts(solo.graph(), viewOf(solo), {});
+    expect(draftFindings({ graph: solo.graph(), facts: soloFacts })[0]).toBe('Abebe is the most connected entity, linked to 3 others.');
     expect(draft[1]).toBe('The strongest relationship is between Abebe and Bekele: 3 links, totalling 4,000.');
     expect(draft.some((line) => line.startsWith('Dated activity runs from'))).toBe(true);
     const summary = (report) => report.sections[0].blocks;
@@ -140,18 +231,43 @@ describe('graph report PDF (G4.2)', () => {
     const store = graphOf();
     const report = buildGraphReport(baseInput(store, {
       alerts: [{ name: 'Abebe', category: 'Highly connected', severity: 'high', short: 'Hub.' }],
-      analyst: { includeLists: true, actions: 'Freeze | Ops | Open' },
+      analyst: { actions: 'Freeze | Ops | Open' },
     }));
     const doc = await renderGraphReportPdf(report, {});
     expect(doc.getNumberOfPages()).toBeGreaterThanOrEqual(report.sections.length + 1);
     expect(doc.output('blob').size).toBeGreaterThan(5000);
   });
 
-  it('carries CONFIDENTIAL across every page, at 45 degrees and faint', async () => {
+  it('Measures and the table appendix: the chart cells two across; a wide table continues its columns on the next pages, Label repeated', async () => {
+    const pixel = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+    const labels = ['Label', ...Array.from({ length: 11 }, (_, index) => `Field ${index}`)];
+    const report = buildGraphReport(baseInput(graphOf(), {
+      measures: [{ title: 'Automatic set', source: 'An automatic set.', cells: [1, 2, 3].map((n) => ({ title: `Chart ${n}`, level: 'Node', image: pixel })), skipped: ['Heat Matrix: no dates.'] }],
+      tables: [{ title: 'Nodes', source: 'Table 1 · Nodes · All scope', columns: labels.map((label) => ({ label, numeric: false })), rows: Array.from({ length: 4 }, (_, row) => labels.map((label) => `${label} value ${row}`)), total: 4, note: '' }],
+    }));
+    const measures = report.sections.find((section) => section.id === 'measures');
+    expect(measures.number).toBeTruthy();
+    expect(report.sections.find((section) => section.id === 'table-b').appendix).toBe('B');
+    const doc = await renderGraphReportPdf(report, {});
+    const pages = Array.from({ length: doc.getNumberOfPages() }, (_, index) => doc.internal.pages[index + 1].join('\n'));
+    // The three chart pictures drawn (images on the Measures page).
+    expect(pages.join('\n').match(/\/I\d+ Do/g).length).toBeGreaterThanOrEqual(3);
+    expect(pages.join('\n')).toContain('(Not charted: Heat Matrix: no dates.) Tj');
+    // The wide table: its last column on a later page than its first, Label on both.
+    const first = pages.findIndex((page) => page.includes('(Field 0) Tj'));
+    const last = pages.findIndex((page) => page.includes('(Field 10) Tj'));
+    expect(last).toBeGreaterThan(first);
+    expect(pages[first]).toContain('(Label) Tj');
+    expect(pages[last]).toContain('(Label) Tj');
+  });
+
+  it('carries CONFIDENTIAL across every page but the cover, at 45 degrees and faint', async () => {
     const report = buildGraphReport(baseInput(graphOf(), {}));
     const doc = await renderGraphReportPdf(report, {});
     const pages = doc.getNumberOfPages();
-    for (let page = 1; page <= pages; page += 1) {
+    // The cover: no watermark.
+    expect(doc.internal.pages[1].join('\n')).not.toMatch(/0\.7071\d* 0\.7071\d* -0\.7071\d* 0\.7071\d* [\d.]+ [\d.]+ Tm\n\(CONFIDENTIAL\) Tj/);
+    for (let page = 2; page <= pages; page += 1) {
       const content = doc.internal.pages[page].join('\n');
       // The text, rotated 45 degrees (cos = sin = 0.7071), in a faint state.
       expect(content).toMatch(/\(CONFIDENTIAL\) Tj/);
@@ -168,7 +284,7 @@ describe('graph report naming (G4.2)', () => {
     expect(entityName(store.graph(), 'b', 'account_no')).toBe('1000-22');
     expect(entityName(store.graph(), 'a', 'ACCOUNT_NO')).toBe('Abebe');
     expect(entityName(store.graph(), 'gone')).toBe('gone');
-    const report = buildGraphReport(baseInput(store, { nameKey: 'ACCOUNT_NO' }));
+    const report = buildGraphReport(baseInput(store, { nameKey: 'ACCOUNT_NO', markers: { pinned: { nodes: new Set(['b']), edges: new Set() } } }));
     const findings = report.sections[0].blocks.find((block) => block.type === 'bullets').items;
     expect(findings[1]).toBe('The strongest relationship is between Abebe and 1000-22: 3 links, totalling 4,000.');
     const subjects = report.sections.find((section) => section.id === 'subjects').blocks.find((block) => block.type === 'table');

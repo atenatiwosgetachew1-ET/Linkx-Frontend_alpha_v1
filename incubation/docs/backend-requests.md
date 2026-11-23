@@ -6,6 +6,8 @@
 - Problems the frontend cannot fix, or can only work around unsafely, because the server owns the rule, the data or the state.
 - Each item gives the current behaviour, the problem, the request, and how to verify the change.
 
+**Status 2026-11-20 (the Service's alignment note):** B-20, B-21 and B-22 are covered by H-2, H-7 and the handoff; B-27 and B-28 are done (the optional `columns` part of B-28 is not). The remaining items are ranked in `frontend-reply-2026-11-20.md` §10. B-29 is new.
+
 **What is out of scope:** the frontend has its own phased plan in `frontend-hardening-plan.md`. Items there that depend on this list are marked **[needs B-n]**.
 
 **Endpoints in use today** (the current contract, matching the production monolith `src/App.jsx`):
@@ -26,7 +28,7 @@
   - `POST /connect_to_tool`
   - `POST /disconnect_tool`
   - `POST /upload_batch_files`
-  - `POST /live_batch_files` with `{id: search | create_DF | stream | end_session}`
+  - `POST /live_batch_files` with `{id: search | create_DF | stream | end_session}` (`stream` may carry `dataframe_filter`, B-27; `preview_DF_filter` proposed, B-28)
   - `GET /jobs/:id`
 - **Admin:**
   - `/auth/admin/users[/:id]`
@@ -378,3 +380,213 @@ Evidence graphs are sensitive. A plain JSON file left in Downloads, on a share o
 2. A portrait the user may not see returns 403, and its card shows the placeholder.
 
 **Frontend once done:** nothing further. `loadPortrait` already loads with `crossOrigin="anonymous"` and no referrer, and falls back to the placeholder after 5 s or on any error.
+
+### B-27. Apply the analyst's dataframe filter before ingestion (`dataframe_filter` on `stream`)
+> **Done** (2026-11-20).
+
+**New frontend feature (2026-11-19, not in production):** the Source window's Dataframe page has **Filter dataframe…** in its "Actions and Dataframe information" card. Before starting the stream, the analyst can:
+- strip columns (they are not ingested or analysed);
+- keep or remove rows by conditions;
+- clean up (trim spaces, drop rows with empty values in chosen columns, drop duplicate rows).
+
+The browser only knows the dataframe's column names (`create_DF` returns no values), so it cannot filter the data itself. It sends the filter as a specification with the stream request, and the Service must apply it.
+
+**What the frontend sends:** the existing `POST /live_batch_files { id: 'stream', session_id, value: { …, dataframe_filter } }`. `dataframe_filter` is present only when the analyst set a filter:
+
+```jsonc
+{
+  "version": 1,
+  "drop_columns": ["NOTE"],                       // columns not ingested
+  "row_filter": {                                  // or null
+    "match": "all" | "any",                        // AND / OR across conditions
+    "action": "remove" | "keep",                   // remove matching rows, or keep only them
+    "conditions": [
+      { "column": "CHANNEL", "operator": "in", "values": ["ATM", "test"] },
+      { "column": "AMOUNT", "operator": "between", "values": ["100", "5,000"] },
+      { "column": "DATE", "operator": "is_empty" },
+      { "column": "NAME", "operator": "contains", "value": "ltd" }
+    ]
+  },
+  "trim_whitespace": true,
+  "drop_empty": ["ACCOUNT"],                       // rows with an empty value here are removed
+  "drop_duplicates": true                          // across the kept columns
+}
+```
+
+- **Operators:**
+  - `equals`, `not_equals`, `contains`, `not_contains`, `starts_with`, `ends_with` take `value`;
+  - `in` and `not_in` take `values` (at most 50);
+  - `gt`, `gte`, `lt` and `lte` take `value`;
+  - `between` takes `values: [low, high]`, inclusive;
+  - `is_empty` and `not_empty` take nothing.
+- **Comparisons:**
+  - text compares case-insensitively, after trimming when `trim_whitespace` is on;
+  - ordered operators take a number (thousands commas allowed) or an ISO date `YYYY-MM-DD[THH:MM[:SS]]`;
+  - "empty" means null, NaN or a blank string.
+- **Order of application:** trim, then strip columns, then drop rows with empty values, then the row conditions, then drop duplicates.
+- **Validation the frontend already does** (please enforce it too):
+  - every column named exists;
+  - at least one column is kept;
+  - the action's own columns (mapping source and target) are not stripped;
+  - at most 20 conditions;
+  - values are at most 200 characters.
+- **Realtime:** apply the same filter to every incoming batch.
+- **The source data is never changed:** the filter applies to what this stream ingests.
+
+**Request:**
+1. Read and apply `value.dataframe_filter` in the `stream` handler, before ingestion, the mapping and the rules.
+2. Reject a bad filter with a clear message before ingesting anything: `400 { message: "invalid_dataframe_filter", detail: "<what is wrong>" }`. The frontend shows it in the Dataframe page.
+3. Report the effect in the stream log and in the job result: `[Info] Dataframe filter: kept <rows> of <total> rows, <columns> of <total> columns`. Also include `filter: { total_rows, kept_rows, kept_columns }` in `/jobs/:id`.
+4. Record the filter with the run (H-2 task record, `dataframe_filter`), so an audit shows what was excluded from the analysis.
+
+**Verify:**
+1. Strip a column and remove rows where `CHANNEL is one of ATM`. The ingested data has neither the column nor those rows, and the log line gives the counts.
+2. A filter naming a column that does not exist is refused with `invalid_dataframe_filter`, and nothing is ingested.
+3. A stream without `dataframe_filter` behaves exactly as today.
+
+**Frontend once done:** nothing further. The filter and its validation are already built (`src/features/source/lib/dataframeFilter.js`, `DataframeFilterDialog.jsx`).
+
+### B-28. Preview a dataframe filter's effect (`preview_DF_filter`, P2)
+> **Done** (2026-11-20). The optional `columns` part is not built yet.
+
+**Same feature as B-27.** The filter popup has a **Count rows** button, so the analyst can see how many rows a filter keeps before starting the stream. Until the Service answers it, the popup says "The Service cannot preview a filter yet; it is applied when the stream starts".
+
+**Request:** `POST /live_batch_files { id: 'preview_DF_filter', session_id, value: { session_id, dataframe_filter } }`. It is the same filter as B-27, counted on the session's dataframe without ingesting anything. It returns:
+
+```jsonc
+{ "message": "success", "results": { "total_rows": 12500, "kept_rows": 9800, "kept_columns": 11 } }
+```
+
+- Same validation and error as B-27 (`invalid_dataframe_filter`).
+- **Realtime (broker) dataframes:** answer `{ message: "preview_not_available", detail: "live source" }`. The popup then shows the message.
+- **Optional, for later:** `columns: [{ name, type, empty, distinct_sample: [...] }]`. This would let the popup offer value pickers instead of free text.
+
+**Verify:** the counts match what B-27 then ingests for the same filter.
+
+**Frontend once done:** nothing further. `previewDataframeFilter` in `src/services/sourceApi.js` already reads `kept_rows` / `total_rows` / `kept_columns`, and treats 404 / 405 / 501, or an answer without counts, as "not available yet".
+
+### B-29. Use a manual run as an alert's analysis ("Use as feedback for alert…", P2)
+**Background:** analysis-results-plan Phase 5 has two actions on a finished manual run in Tasks. **Save as evidence** is H-6 and is built. The second, **Use as feedback for alert…**, lets the analyst attach a run they already made to one of their assigned STR alerts, so the alert can go straight to Extract results and Report back without running again. The Service has no way to do this: H-5 refuses a `task_id` that is not the alert's latest run (`stale_task`), and only H-4 runs create an alert's run.
+
+**Request:** `POST /api/v1/reports/parent/<alert_id>/analysis { task_id }`. It adopts the caller's completed task as the alert's run:
+- the alert becomes `analysed`, with the task's `flags`, `verdict` and session;
+- `parent_alert_updated { alert }` follows;
+- the same refusals as H-4, plus `409 task_not_completed` and `409 task_expired`.
+
+Or say this should not be offered.
+
+**Frontend until then:** the action is not shown.
+
+### B-30. Count analysis sessions as the frontend does (H-8, P1)
+**Analyst decision 2026-11-20:** the Service's limit must be at least as strict as the frontend's, since the Service is what enforces it.
+- **The frontend counts** toward the 3 sessions per analyst:
+  - every open Source window, idle or not (each holds a source session on the Service);
+  - every background stream;
+  - every running quick analysis (STR, rule engine, ML);
+  - every alert run.
+- **The Service counts today:** running streams and alert runs only.
+
+**Request:** count the same four things: open source sessions (`/init_source` until `/close_source_window` or cleanup), running streams, running quick analyses and alert runs.
+- Refuse with `429 { code: "session_limit", limit, in_use, detail }`.
+- Return it from `/init_source` too, so opening a fourth Source window is refused.
+
+**Verify:** with 3 Source windows open and idle, a 4th `/init_source`, a quick analysis and an alert run are each refused with `session_limit`.
+
+**Frontend:** already counts this way (`getSessionUsage`, `src/features/tasks/lib/taskRegistry.js`). `429 session_limit` is shown with its `detail`.
+
+### B-31. Say when a graph is archived (`graph_archived`, H-1, P2)
+**Analyst decision 2026-11-20:** a graph moved to cold storage after 180 days is shown as **archived**, not as "no graph".
+
+**Request:** every report record carries `graph_archived: true` when its graph was archived (`has_graph` is then `false`); `false` otherwise.
+
+**Frontend:** reads `graph_archived` already. The evidence detail shows a disabled **Graph archived** button that explains it.
+
+
+### B-32. Row progress on a running task (`rows_done` / `rows_total`, H-2, P2)
+**Background:** a running task in Tasks now shows **In progress (400/10,000)**: rows analysed out of rows to analyse. The Service has no progress field, so the frontend reads two stream log lines:
+- `Dataframe filter: kept <rows> of <total> rows, …` gives the total;
+- `Inserted Neo4j batch <n> (<rows> rows)` adds to the done count.
+
+This is fragile:
+- a change in wording silently removes the count;
+- it only works where the log is streamed into this browser: not for a task loaded from `GET /api/v1/tasks`, another device, or an alert run;
+- live (continuous) streams write no such line.
+
+**Request:**
+1. Put `rows_done` and `rows_total` on the task, `null` when unknown. `rows_total` is the row count after the dataframe filter.
+2. Send them in `task_updated`, at most about once per batch.
+
+**Until then:** please keep those two log lines' wording stable.
+
+**Frontend once done:** read the task fields first; keep the log reading only as a fallback (`src/features/source/lib/rowProgress.js`).
+
+### B-33. Say why a user create or update is refused (`/auth/admin/users`, P1)
+**Reported 2026-11-21:** creating a user from Settings ▸ Users fails with a bare `validation_error`. The frontend sends the same body as production `src/App.jsx`:
+- `username`: 3–120 characters;
+- `password`: at least 8 characters, no whitespace or control characters;
+- `display_name`;
+- `roles`: one of `superuser`, `admin`, `analyst`, `viewer`;
+- `permissions`: keys from `GET /auth/admin/permissions`;
+- `is_active`.
+
+The answer carries no reason, so neither the analyst nor we can tell which field is wrong.
+
+**Request:**
+1. Put the reason in the refusal: `400 { message: "validation_error", code, detail, invalid_fields: [...] }`. Example codes: `username_taken` (or `409`), `invalid_username`, `password_policy` (with the rule in `detail`), `unknown_permissions` (list them), `invalid_roles`, `cannot_grant_permissions`.
+2. Publish the rules the frontend must check before sending:
+   - the password policy;
+   - the username pattern;
+   - the roles each caller may create;
+   - whether an admin may grant permissions they don't hold;
+   - whether service-only keys (`alerts:ingest`, `auth:verify`) may be assigned.
+3. Say which field this particular refusal was about.
+
+4. Confirm the escalation rule: an actor may grant (and remove) only permissions it holds, on create and on update. Say whether `superuser:manage` holders are exempt. Confirm that an account without `superuser:manage` may not change an `admin` or `superuser` account.
+5. Is there an admin endpoint to unlock an account (`is_locked`)?
+
+**Frontend:**
+- Shows whatever `detail`, `code` or `invalid_fields` the Service sends, worded (`getUserAdminErrorMessage`, `src/services/apiErrors.js`).
+- Since 2026-11-21:
+  - grants only permissions the signed-in account holds (others are locked in the picker);
+  - locks Edit and the on/off switch for `admin`/`superuser` accounts without `superuser:manage`;
+  - no longer sends the username as the display name of an account that has none.
+- Will tighten its checks once the rules are published.
+
+### B-34. Keep icon sets on the Service, shared by everyone (`/libraries/icon_sets`, P2)
+**Reported 2026-11-23 (analyst request).** Libraries ▸ Icon sets lets an analyst make sets of node icons by uploading images, and offers them in the Graph window's icon album beside the built-in set.
+
+**Today (frontend only, no backend involved):**
+- The built-in set is static files (`public/graph_icons`, 103 icons), organised by category in the frontend.
+- Custom sets are kept in the browser (`localStorage`, key `linkx.graph.icon_sets.v1`): up to 20 sets, 200 icons a set, 100 KB an image, 3 MB in all.
+- A custom icon is put on a node as a `data:image/…` value in the node's `image`, exactly as the existing "Upload an image" does. So a graph that uses one is self-contained: saving, exporting or opening it elsewhere needs nothing from the library.
+- A set moves between browsers as a file (`*.lxicons.json`: `{ kind: "linkx-icon-set", version: 1, name, description, icons: [{ name, src }] }`).
+
+**The gap:** a set exists only in the browser it was made in. Two analysts do not see each other's sets, a cleared browser loses them, and there is no one to decide which sets an organisation uses. The tab is therefore labelled **Device**; the plan (`libraries-plan.md` §3) has it as **System**.
+
+**Request:**
+1. Store icon sets on the Service, per deployment (not per session):
+   - `GET /libraries/icon_sets` → `{ sets: [{ id, name, description, enabled, updated_at, updated_by, icons: [{ id, name, url, bytes }] }] }`. Needs `config:read`.
+   - `POST /libraries/icon_sets` `{ name, description }` → the new set. Needs `config:write`.
+   - `PATCH /libraries/icon_sets/{id}` `{ name?, description?, enabled? }`.
+   - `DELETE /libraries/icon_sets/{id}`.
+   - `POST /libraries/icon_sets/{id}/icons` (multipart, one or more files) → the icons added, and for each file refused, why.
+   - `PATCH` and `DELETE /libraries/icon_sets/{id}/icons/{icon_id}` (rename, remove).
+2. Serve each icon from the Service's own origin (`url` above), with a cache lifetime and a content type of the image. The frontend never loads icons from another host.
+3. Check uploads on the server, with the same rules the frontend applies, so they cannot be bypassed:
+   - types: SVG, PNG, JPEG, WebP, by content and not by extension;
+   - size: 100 KB an image (say if you prefer another limit, and publish it);
+   - SVG cleaned: no `<script>`, `<foreignObject>`, event attributes, external references or embedded documents.
+4. Publish the limits (sets, icons per set, bytes) in the list answer, so the frontend shows the Service's numbers instead of its own.
+5. Say who may manage sets. We suggest `config:write`; a dedicated `libraries:manage` permission is welcome if you prefer.
+
+**Decision we need from you:** how a graph refers to a shared icon.
+- **(a) Keep embedding** the image in the node (`data:image/…`), as today. Graphs stay self-contained and nothing else changes; the cost is a larger graph when one icon is on many nodes.
+- **(b) Refer to it** (`icon_set_id` + `icon_id`, or the `url`). Graphs are smaller and an icon can be updated in one place; but a graph then depends on the library, so deleting a set, exporting a graph (`.lxg`, B-25) and the report's images (B-26) all need a rule.
+We recommend (a) for now, and (b) only if graph size becomes a problem.
+
+**Until then:** the feature works as described under "Today".
+
+**Frontend once done:**
+- Read and write sets through these endpoints instead of `localStorage` (`src/features/graph/lib/iconSets.js` is the only place that stores them).
+- Label the tab **System**, show who last changed a set, and lock the management actions without the permission.
+- Offer a one-time "Send this browser's sets to the Service" for sets made before.

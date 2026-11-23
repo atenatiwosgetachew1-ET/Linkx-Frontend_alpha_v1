@@ -39,7 +39,8 @@ describe('toReportRecord', () => {
 
   it('falls back like production: trace id, anomaly, reason, centrality score', () => {
     const record = toReportRecord(raw({ trace_id: 'x' }, { flagged_rules: 'A, B', is_flagged: true, network_centrality_score: 0.42 }), 'xvigilance');
-    expect(record.traceId).toBe('REF-1'); // payload.trace_id, then the reference id
+    expect(record.traceId).toBe('x'); // the record's trace_id (H-1) first
+    expect(toReportRecord(raw()).traceId).toBe('REF-1'); // then payload.trace_id, the reference id
     expect(record.anomaly).toBe('A, B');
     expect(record.reason).toBe('Flagged Network Activity');
     expect(record.scoreLabel).toBe('42%');
@@ -53,11 +54,18 @@ describe('toReportRecord', () => {
     expect(toReportRecord(raw({}, graph)).leadingEntity).toBe('1000');
   });
 
-  it('reads what the record claims about its graph', () => {
-    expect(toReportRecord(raw({ has_graph: 'true' })).graphClaim).toBe(true);
-    expect(toReportRecord(raw({}, { include_graph: false })).graphClaim).toBe(false);
-    expect(toReportRecord(raw({}, { nodes: [] })).graphClaim).toBe(false);
+  it('reads has_graph only (H-1); the old guesses are ignored', () => {
+    expect(toReportRecord(raw({ has_graph: true })).graphClaim).toBe(true);
+    expect(toReportRecord(raw({ has_graph: false })).graphClaim).toBe(false);
+    expect(toReportRecord(raw({ graph_available: true }, { include_graph: true })).graphClaim).toBeNull();
+    expect(toReportRecord(raw({}, { nodes: [] })).graphClaim).toBeNull();
     expect(toReportRecord(raw()).graphClaim).toBeNull();
+  });
+
+  it('asks for the requester on Service evidence only (H-1, H-6)', () => {
+    expect(buildReportsQuery({ tabId: 'evidence', filters: { ...DEFAULT_FILTERS, requester: 'analyst' } })).toContain('requester_type=analyst');
+    expect(buildReportsQuery({ tabId: 'parent', filters: { ...DEFAULT_FILTERS, requester: 'analyst' } })).not.toContain('requester_type');
+    expect(buildReportsQuery({ tabId: 'evidence', filters: DEFAULT_FILTERS })).not.toContain('requester_type');
   });
 
   it('marks reports older than 180 days as archived', () => {

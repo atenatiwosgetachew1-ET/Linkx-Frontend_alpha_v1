@@ -1263,3 +1263,226 @@
 		transition: none;
 	}
 }
+
+/* ── STR alerts (analysis-results-plan Phase 4; analyst decision 2026-11-19) ── */
+.reports_mock_controls {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.reports_mock_switch {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	font-size: 12px;
+	color: var(--reports-muted-text);
+	white-space: nowrap;
+}
+
+.reports_alert {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	margin-bottom: 12px;
+}
+
+.reports_alert_status {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.reports_alert_chip {
+	padding: 2px 8px;
+	border: 1px solid var(--reports-border);
+	border-radius: 10px;
+	font-size: 11px;
+	font-weight: 600;
+	color: var(--reports-text);
+	background: var(--reports-surface-bg);
+}
+
+.reports_alert_chip.is-pending { border-color: var(--reports-status-pending); color: var(--reports-status-pending); }
+.reports_alert_chip.is-progress { border-color: var(--reports-accent); color: var(--reports-accent); }
+.reports_alert_chip.is-resolved { border-color: var(--reports-status-resolved); color: var(--reports-status-resolved); }
+.reports_alert_chip.is-error { border-color: var(--reports-status-error); color: var(--reports-status-error); }
+.reports_alert_chip.is-mock { border-style: dashed; color: var(--reports-muted-text); }
+
+.reports_alert_reason {
+	margin: 0;
+	font-size: 12px;
+	color: var(--reports-muted-text);
+}
+
+.reports_alert_step {
+	border: 1px solid var(--reports-border);
+	border-radius: 6px;
+	background: var(--reports-surface-bg);
+	color: var(--reports-text);
+}
+
+.reports_alert_step.is-current,
+.reports_alert_step.is-active {
+	border-color: var(--reports-accent);
+}
+
+.reports_alert_step.is-locked {
+	opacity: 0.72;
+}
+
+.reports_alert_step_head {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 8px 10px 0;
+}
+
+.reports_alert_step_head small {
+	margin-left: auto;
+	font-size: 11px;
+	color: var(--reports-muted-text);
+}
+
+.reports_alert_step_number {
+	display: inline-grid;
+	place-items: center;
+	width: 20px;
+	height: 20px;
+	border-radius: 50%;
+	border: 1px solid var(--reports-border);
+	font-size: 11px;
+	font-weight: 700;
+	color: var(--reports-text);
+}
+
+.reports_alert_step.is-done .reports_alert_step_number {
+	border-color: var(--reports-status-resolved);
+	background: var(--reports-status-resolved);
+	color: var(--reports-surface-bg);
+}
+
+.reports_alert_step.is-current .reports_alert_step_number,
+.reports_alert_step.is-active .reports_alert_step_number {
+	border-color: var(--reports-accent);
+	color: var(--reports-accent);
+}
+
+.reports_alert_step_body {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding: 6px 10px 10px 38px;
+	font-size: 12px;
+}
+
+.reports_alert_step_body p {
+	margin: 0;
+	color: var(--reports-muted-text);
+}
+
+.reports_alert_actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.reports_alert_actions.is-dev {
+	opacity: 0.8;
+}
+
+.reports_alert_fields {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.reports_alert_field {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr);
+	align-items: center;
+	gap: 4px 8px;
+	color: var(--reports-text);
+}
+
+.reports_alert_field small,
+.reports_alert_thumb {
+	grid-column: 2;
+}
+
+.reports_alert_field small {
+	color: var(--reports-muted-text);
+}
+
+.reports_alert_thumb {
+	max-width: 100%;
+	max-height: 120px;
+	object-fit: contain;
+	border: 1px solid var(--reports-border);
+	border-radius: 4px;
+	background: var(--reports-bg);
+}
+
+.reports_alert_summary {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding-top: 6px;
+	border-top: 1px solid var(--reports-border);
+	color: var(--reports-text);
+}
+
+.reports_alert_line {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.reports_alert_text {
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+	color: var(--reports-muted-text);
+}
+
+.reports_alert_text textarea {
+	width: 100%;
+	box-sizing: border-box;
+	padding: 6px 8px;
+	border: 1px solid var(--reports-border);
+	border-radius: 4px;
+	background: var(--reports-bg);
+	color: var(--reports-text);
+	font: inherit;
+	resize: vertical;
+}
+
+.reports_alert_message {
+	margin: 0;
+	font-size: 12px;
+	color: var(--reports-status-error);
+}
+
+.reports_alert_history summary {
+	cursor: pointer;
+	font-size: 12px;
+	color: var(--reports-muted-text);
+}
+
+.reports_alert_history ol {
+	margin: 6px 0 0;
+	padding-left: 18px;
+	font-size: 12px;
+	color: var(--reports-text);
+}
+
+.reports_alert_history time {
+	color: var(--reports-muted-text);
+}
+
+/* A refused "All alerts" list (alerts:read_all; H-3). */
+.reports_inline_error {
+	align-self: center;
+	font-size: 12px;
+	color: var(--reports-status-error);
+}

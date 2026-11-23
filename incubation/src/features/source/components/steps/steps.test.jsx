@@ -316,6 +316,26 @@ describe('DataframeStep', () => {
     expect(state().relationship).toBe('SENDS_TOX_Y');
   });
 
+  it('Filter (top-right of the information card) opens the filter and counts those applied (analyst decision 2026-11-19)', async () => {
+    const onOpenFilter = vi.fn();
+    const { user } = renderStep(DataframeStep, { state: ready(), ...props, onOpenFilter });
+    const button = screen.getByRole('button', { name: 'Filter dataframe' });
+    expect(button.closest('header')).toHaveClass('source_window_dataframe_card_header');
+    expect(screen.queryByText(/No filter/)).not.toBeInTheDocument();
+    await user.click(button);
+    expect(onOpenFilter).toHaveBeenCalled();
+    cleanup();
+    // One stripped column, one condition and duplicates removed: 3 applied.
+    renderStep(DataframeStep, { state: { ...ready(), dataframeFilter: { dropColumns: ['amount'], rows: { conditions: [{ column: 'from_acc', operator: 'is_empty' }] }, dropDuplicates: true } }, ...props, onOpenFilter });
+    const counted = screen.getByRole('button', { name: 'Filter dataframe (3 applied)' });
+    expect(counted).toHaveTextContent('Filter3');
+    expect(counted).toHaveAttribute('title', 'Filtered: 1 column stripped · 1 row condition (remove matching) · clean-up');
+    cleanup();
+    // Not before the dataframe exists.
+    renderStep(DataframeStep, { state: {}, ...props, onOpenFilter });
+    expect(screen.getByRole('button', { name: 'Filter dataframe' })).toBeDisabled();
+  });
+
   it('clears a rule or column this dataframe no longer offers', () => {
     const { state } = renderStep(DataframeStep, { state: { ...ready(), rule: 'old_rule', sourceColumn: 'gone', targetColumn: 'to_acc' }, ...props });
     expect(state()).toMatchObject({ rule: '', sourceColumn: '', targetColumn: 'to_acc' });

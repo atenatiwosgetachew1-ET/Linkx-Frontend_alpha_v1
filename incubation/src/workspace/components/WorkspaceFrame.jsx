@@ -4,6 +4,7 @@ import WorkspaceHome from './WorkspaceHome.jsx';
 import NetworkBackground from './NetworkBackground.jsx';
 import RightWorkspace from './RightWorkspace.jsx';
 import WindowManager from './WindowManager.jsx';
+import WindowSwitcher from './WindowSwitcher.jsx';
 import { useWorkspace } from '../hooks/useWorkspace.js';
 import { useCan } from '../../auth/useCan.js';
 import { getVisibleLauncherItems, launcherItems } from './launcherItems.js';
@@ -41,6 +42,10 @@ import { useNotifications } from '../../shared/notifications/useNotifications.js
 import CloseAnalysisDialog from './CloseAnalysisDialog.jsx';
 import { WORKSPACE_CONTEXT_TABS, WORKSPACE_ORIENTATIONS, WORKSPACE_WINDOW_TYPES, getWindowLimitBlock } from '../state/workspaceTypes.js';
 import { createLogger } from '../../shared/logger.js';
+import { useParentAlerts } from '../../features/alerts/hooks/useParentAlerts.js';
+import { useServerTasks } from '../../features/tasks/hooks/useServerTasks.js';
+import { resetPermissionCatalog } from '../../auth/permissions.js';
+import { resetAlerts } from '../../features/alerts/lib/alertStore.js';
 
 // Signed out / workspace gone: the next workspace reuses window ids
 // (source-1, reports-4…), so nothing kept per window may survive into it:
@@ -48,10 +53,12 @@ import { createLogger } from '../../shared/logger.js';
 // window stores and unsaved Configuration drafts.
 const clearWorkspaceSessionData = () => {
   resetTasks();
+  resetPermissionCatalog();
   disposeAllSourceRuntimes();
   disposeAllStreamLogs();
   clearReportsPages();
   clearEvidenceGraphs();
+  resetAlerts();
   clearConfigurationDrafts();
   clearKnownBuiltinRules();
   clearGraphStores();
@@ -97,7 +104,6 @@ export default function WorkspaceFrame({ user, token, mainSessionId, sessionErro
   const [isRightCollapsed, setIsRightCollapsed] = useState(false);
   const [sourceOpenError, setSourceOpenError] = useState('');
   const [isOpeningSource, setIsOpeningSource] = useState(false);
-  const [isSidebarOverviewOpen, setIsSidebarOverviewOpen] = useState(false);
   const workspace = useWorkspace();
   const can = useCan();
   // Production hides launcher items the user has no permission for.
@@ -181,6 +187,11 @@ export default function WorkspaceFrame({ user, token, mainSessionId, sessionErro
       reports: activeWindowTypeRef.current === WORKSPACE_WINDOW_TYPES.REPORTS ? current.reports : current.reports + 1,
     }));
   }, []);
+  // STR alerts from the parent service (analysis-results-plan Phase 4): a
+  // new or newly assigned alert counts on the Reports badge.
+  useParentAlerts({ workspace, notify, user, onArrival: handleReportReady });
+  // The Service's record of every run (H-2), live with task_updated.
+  useServerTasks({ user });
   // The Tasks badge counts running analyses (it stays while they run).
   const launcherBadges = useMemo(() => ({ ...unseenBadges, tasks: activeTaskCount }), [unseenBadges, activeTaskCount]);
   const { openWindow } = workspace;
@@ -213,7 +224,6 @@ export default function WorkspaceFrame({ user, token, mainSessionId, sessionErro
     const handleOutsidePointerDown = (event) => {
       if (launcherRef.current?.contains(event.target)) return;
       setIsLauncherExpanded(false);
-      setIsSidebarOverviewOpen(false);
     };
 
     document.addEventListener('pointerdown', handleOutsidePointerDown, true);
@@ -222,7 +232,6 @@ export default function WorkspaceFrame({ user, token, mainSessionId, sessionErro
 
   const collapseLauncher = () => {
     setIsLauncherExpanded(false);
-    setIsSidebarOverviewOpen(false);
   };
 
   const windowsRef = React.useRef(workspace.windows);
@@ -455,46 +464,15 @@ export default function WorkspaceFrame({ user, token, mainSessionId, sessionErro
               ))}
             </div>
             <div className="workspace_launcher_bottom">
-              {workspace.orientation === WORKSPACE_ORIENTATIONS.FLOATING && workspace.windows.length > 0 && (
-                <div className="workspace_sidebar_overview_wrap">
-                <button
-                  className="workspace_launcher_button workspace_launcher_overview linkx_tooltip_anchor"
-                  type="button"
-                  data-tooltip="Show all windows"
-                  aria-label="Show all open windows"
-                  aria-expanded={isSidebarOverviewOpen}
-                  onClick={() => setIsSidebarOverviewOpen((current) => !current)}
-                >
-                  <LauncherIcon path={overviewItem.path} />
-                  <span className="workspace_launcher_label">Windows</span>
-                </button>
-                {isSidebarOverviewOpen && (
-                  <div className="workspace_sidebar_overview_menu" role="menu" aria-label="Open windows overview">
-                    {workspace.windows.map((windowItem) => (
-                      <button
-                        key={windowItem.id}
-                        className={'workspace_sidebar_overview_item' + (workspace.activeWindowId === windowItem.id ? ' is-active' : '')}
-                        type="button"
-                        role="menuitem"
-                        onClick={() => {
-                          workspace.focusWindow(windowItem.id);
-                          collapseLauncher();
-                        }}
-                      >
-                        <LauncherIcon
-                          className="workspace_sidebar_overview_icon"
-                          path={windowIconPaths[windowItem.type] || overviewItem.path}
-                        />
-                        <span>
-                          <strong>{windowItem.title}</strong>
-                          <small>{windowItem.customTitle || 'Placeholder'}</small>
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-                </div>
-              )}
+              {workspace.orientation === WORKSPACE_ORIENTATIONS.FLOATING ? (
+                <WindowSwitcher
+                  workspace={windowWorkspace}
+                  iconPaths={windowIconPaths}
+                  fallbackIcon={overviewItem.path}
+                  renderIcon={(path, className) => <LauncherIcon path={path} className={className} />}
+                  onSwitched={collapseLauncher}
+                />
+              ) : null}
               <button
                 className="workspace_launcher_button workspace_launcher_orientation linkx_tooltip_anchor"
               type="button"

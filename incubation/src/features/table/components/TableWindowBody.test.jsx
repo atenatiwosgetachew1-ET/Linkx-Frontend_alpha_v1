@@ -111,6 +111,8 @@ describe('TableWindowBody', () => {
     await userEvent.type(screen.getByRole('searchbox', { name: 'Filter rows' }), 'chal');
     expect(firstCells()).toEqual(['Chala']);
     expect(screen.getByText('1 row (of 3)')).toBeInTheDocument();
+    // Kept with the window once typing pauses (the graph report takes it).
+    await waitFor(() => expect(workspaceRef.windows.find((item) => item.id === 'table-1').metadata.tableState.filter).toBe('chal'));
     await userEvent.clear(screen.getByRole('searchbox', { name: 'Filter rows' }));
     await userEvent.click(screen.getByRole('button', { name: /Columns/ }));
     const menu = screen.getByRole('dialog', { name: 'Columns' });

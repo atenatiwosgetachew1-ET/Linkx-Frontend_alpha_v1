@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTheme } from './ThemeContext.jsx';
-import { SCROLLBAR_PSEUDO_RE, stateFreeSelector } from './pickerSelectors.js';
+import { SCROLLBAR_PSEUDO_RE, expandScopedVariable, stateFreeSelector } from './pickerSelectors.js';
+import { resolveCssColor } from './resolveColor.js';
 
 /**
  * VisualElementPicker — Inspector overlay.
@@ -17,7 +18,55 @@ const PICKER_LANDMARK_SELECTOR = [
   '.workspace_window_header',
   '.workspace_window_body',
   '[class*="workspace_zone_"]',
+  // The Settings window and its popups set their own variables on these.
+  '.settings_theme_scope',
+  '.configuration_theme_scope',
+  '.libraries_theme_scope',
+  '.settings_popup_backdrop',
 ].join(', ');
+
+// Custom properties a rule sets ("--x: ..."), as [name, value] pairs.
+const customDeclarations = (rule) => {
+  const style = rule.style;
+  const out = [];
+  if (!style) return out;
+  for (let i = 0; i < style.length; i++) {
+    if (style[i].startsWith('--')) out.push([style[i], style.getPropertyValue(style[i]).trim()]);
+  }
+  return out;
+};
+
+// Variables set somewhere between the element and the root (a window's or a
+// popup's own scope), nearest first. Overrides are written on the root, so a
+// variable set closer than that cannot be changed from there: it has to be
+// followed to the root-level variables it is made of.
+const collectScopedVariables = (el, allRules) => {
+  const scoped = new Map();
+  const root = document.documentElement;
+  const declaring = [];
+  for (const rule of allRules) {
+    const declarations = customDeclarations(rule);
+    if (declarations.length) declaring.push([rule, declarations]);
+  }
+  for (let current = el; current && current !== root; current = current.parentElement) {
+    const here = new Map();
+    for (const [rule, declarations] of declaring) {
+      let matches = false;
+      for (const part of splitSelectorList(rule.selectorText)) {
+        try {
+          if (current.matches(stateFreeSelector(part))) { matches = true; break; }
+        } catch { /* unsupported selector */ }
+      }
+      if (matches) declarations.forEach(([name, value]) => here.set(name, value));
+    }
+    const inline = current.style;
+    for (let i = 0; inline && i < inline.length; i++) {
+      if (inline[i].startsWith('--')) here.set(inline[i], inline.getPropertyValue(inline[i]).trim());
+    }
+    here.forEach((value, name) => { if (!scoped.has(name)) scoped.set(name, value); });
+  }
+  return scoped;
+};
 
 // Comma split that ignores commas inside (...) / [...].
 const splitSelectorList = (selectorText) => {
@@ -91,6 +140,13 @@ const matchRule = (el, rule, scrollable) => {
   return null;
 };
 
+// Held keys that let a click through to the app. Ctrl is the one offered;
+// Alt (the earlier one) and ⌘ on a Mac work the same.
+const isPassThrough = (event) => Boolean(event.ctrlKey || event.altKey || event.metaKey);
+
+// An element as the picker names it: its tag and its first two classes.
+const elementLabel = (el) => `${el.tagName.toLowerCase()}${el.className && typeof el.className === 'string' ? '.' + el.className.split(' ').filter(Boolean).slice(0, 2).join('.') : ''}`;
+
 export default function VisualElementPicker() {
   const { inspectorActive, toggleInspector, setCustomVariable, customOverrides } = useTheme();
   const [hoveredEl, setHoveredEl] = useState(null);
@@ -98,6 +154,11 @@ export default function VisualElementPicker() {
   const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
   const [pinnedVars, setPinnedVars] = useState([]);
   const [panelPos, setPanelPos] = useState({ x: 0, y: 0 });
+  // While Ctrl (or Alt) is held the picker steps aside: clicks do what they
+  // normally do, and the highlight and the crosshair are put away.
+  const [passThrough, setPassThrough] = useState(false);
+  // Whether the variables of what surrounds the picked element are listed.
+  const [showAround, setShowAround] = useState(false);
 
   // Extract CSS variables that affect a given DOM element (+ parents up to 6 levels)
   const extractCssVars = useCallback((el) => {
@@ -153,6 +214,8 @@ export default function VisualElementPicker() {
                       context: propContext,
                       selector: match.selector,
                       source: depth === 0 ? 'direct' : `inherited ${tag}`,
+                      depth,
+                      owner: elementLabel(targetEl),
                     });
                   }
                 }
@@ -181,18 +244,40 @@ export default function VisualElementPicker() {
         if (!seen.has(varName)) {
           seen.add(varName);
           const val = getComputedStyle(el).getPropertyValue(varName).trim();
-          vars.push({ name: varName, value: val, context: 'inline', selector: 'inline', source: 'direct' });
+          vars.push({ name: varName, value: val, context: 'inline', selector: 'inline', source: 'direct', depth: 0, owner: elementLabel(el) });
         }
       }
     }
 
-    return vars.sort((a, b) => a.name.localeCompare(b.name));
+    // A variable set by the element's own window or popup is swapped for
+    // the root-level variables behind it (the ones an override can reach).
+    const scoped = collectScopedVariables(el, allRules);
+    const reachable = [];
+    const listed = new Set();
+    vars.forEach((entry) => {
+      expandScopedVariable(entry.name, scoped).forEach((name) => {
+        if (listed.has(name)) return;
+        listed.add(name);
+        reachable.push(name === entry.name ? entry : {
+          ...entry,
+          name,
+          value: rootStyle.getPropertyValue(name).trim(),
+          source: `${entry.source} · via ${entry.name}`,
+        });
+      });
+    });
+
+    // The picked element's own first, then outwards; by name within each.
+    return reachable.sort((a, b) => a.depth - b.depth || a.name.localeCompare(b.name));
 
   }, []);
 
   // Hover handler
   const handleMouseMove = useCallback((e) => {
-    if (!inspectorActive || pinnedEl) return;
+    if (!inspectorActive) return;
+    // Also read here, in case the key went down or up outside the window.
+    setPassThrough(isPassThrough(e));
+    if (pinnedEl) return;
     const el = document.elementFromPoint(e.clientX, e.clientY);
     // Ignore the inspector overlay and its children
     if (!el || el.closest('.element_picker_overlay') || el.closest('.element_picker_panel')) return;
@@ -203,9 +288,9 @@ export default function VisualElementPicker() {
   // Click handler — pin element
   const handleClick = useCallback((e) => {
     if (!inspectorActive) return;
-    // Alt+click passes through to the app (open menus/lists like the dock's
-    // "show all windows" shell, then pick inside them).
-    if (e.altKey) return;
+    // Ctrl+click (or Alt+click) passes through to the app: open a tab, a
+    // page or a menu as usual, then pick inside it.
+    if (isPassThrough(e)) return;
     // If clicking inside the panel, let it through
     if (e.target.closest('.element_picker_panel')) return;
     e.preventDefault();
@@ -217,6 +302,8 @@ export default function VisualElementPicker() {
     const vars = extractCssVars(el);
     setPinnedEl(el);
     setPinnedVars(vars);
+    // Only the element's own, unless it has none.
+    setShowAround(!vars.some((entry) => entry.depth === 0));
     setPanelPos({ x: Math.min(e.clientX + 12, window.innerWidth - 380), y: Math.min(e.clientY + 12, window.innerHeight - 400) });
   }, [inspectorActive, extractCssVars]);
 
@@ -244,20 +331,34 @@ export default function VisualElementPicker() {
       setPinnedVars([]);
       return;
     }
-    document.documentElement.classList.add('is-element-picking');
+    const onModifier = (e) => setPassThrough(isPassThrough(e));
+    const onBlur = () => setPassThrough(false);
+    window.addEventListener('keydown', onModifier, true);
+    window.addEventListener('keyup', onModifier, true);
+    window.addEventListener('blur', onBlur);
     window.addEventListener('mousemove', handleMouseMove, true);
     window.addEventListener('click', handleClick, true);
     return () => {
-      document.documentElement.classList.remove('is-element-picking');
+      window.removeEventListener('keydown', onModifier, true);
+      window.removeEventListener('keyup', onModifier, true);
+      window.removeEventListener('blur', onBlur);
+      setPassThrough(false);
       window.removeEventListener('mousemove', handleMouseMove, true);
       window.removeEventListener('click', handleClick, true);
     };
   }, [inspectorActive, handleMouseMove, handleClick]);
 
+  // The crosshair, except while the picker is stepping aside.
+  useEffect(() => {
+    if (!inspectorActive || passThrough) return undefined;
+    document.documentElement.classList.add('is-element-picking');
+    return () => document.documentElement.classList.remove('is-element-picking');
+  }, [inspectorActive, passThrough]);
+
   if (!inspectorActive) return null;
 
   // Hover outline box
-  const hoverBox = hoveredEl && !pinnedEl ? (() => {
+  const hoverBox = hoveredEl && !pinnedEl && !passThrough ? (() => {
     const rect = hoveredEl.getBoundingClientRect();
     return {
       top: rect.top,
@@ -290,13 +391,69 @@ export default function VisualElementPicker() {
       const hex = '#' + [m[1], m[2], m[3]].map((c) => parseInt(c).toString(16).padStart(2, '0')).join('');
       return hex;
     }
+    // A variable or a mix of colours: the colour it gives right now.
+    const resolved = resolveCssColor(val);
+    if (resolved.startsWith('#')) return resolved.substring(0, 7);
+    const mixed = resolved.match(/rgba?\(\s*(\d+),\s*(\d+),\s*(\d+)/);
+    if (mixed) return '#' + [mixed[1], mixed[2], mixed[3]].map((c) => parseInt(c).toString(16).padStart(2, '0')).join('');
     return '#000000';
   };
+
+  // One variable of the pinned element: its name, where it applies, its
+  // control and (once changed) its reset.
+  const renderVar = (v) => {
+    const isOverridden = Boolean(customOverrides[v.name]);
+    return (
+      <div key={v.name} className={`element_picker_var_row ${isOverridden ? 'is-overridden' : ''}`}>
+        <div className="element_picker_var_info">
+          <code className="element_picker_var_name">{v.name}</code>
+          <span className="element_picker_var_context">{v.context}</span>
+        </div>
+        <div className="element_picker_var_controls">
+          <input
+            type="color"
+            className="element_picker_color_input"
+            value={toHex(customOverrides[v.name] || v.value)}
+            onChange={(e) => setCustomVariable(v.name, e.target.value)}
+          />
+          <input
+            type="text"
+            className="element_picker_text_input"
+            value={customOverrides[v.name] || v.value}
+            onChange={(e) => setCustomVariable(v.name, e.target.value)}
+            placeholder={v.value}
+          />
+          {isOverridden && (
+            <button
+              className="element_picker_reset_btn"
+              title="Reset to theme default"
+              onClick={() => setCustomVariable(v.name, undefined)}
+            >↺</button>
+          )}
+        </div>
+        <div className="element_picker_var_selector" title={v.selector}>
+          {v.selector.length > 50 ? v.selector.slice(0, 50) + '…' : v.selector}
+        </div>
+      </div>
+    );
+  };
+
+  // What the popup lists: the picked element's own variables first; those
+  // of what it sits in (its parents, its window) are kept apart and closed
+  // until asked for, by the element they belong to.
+  const ownVars = pinnedVars.filter((v) => v.depth === 0);
+  const aroundVars = pinnedVars.filter((v) => v.depth !== 0);
+  const aroundGroups = [];
+  aroundVars.forEach((v) => {
+    const last = aroundGroups[aroundGroups.length - 1];
+    if (last && last.depth === v.depth) last.vars.push(v);
+    else aroundGroups.push({ depth: v.depth, owner: v.owner, vars: [v] });
+  });
 
   return (
     <>
       {/* Full screen cursor override */}
-      <div className="element_picker_overlay" style={{ position: 'fixed', inset: 0, zIndex: 99998, cursor: 'crosshair', pointerEvents: 'none' }} />
+      <div className="element_picker_overlay" style={{ position: 'fixed', inset: 0, zIndex: 99998, cursor: passThrough ? 'auto' : 'crosshair', pointerEvents: 'none' }} />
 
       {/* Hover highlight box */}
       {hoverBox && (
@@ -339,7 +496,7 @@ export default function VisualElementPicker() {
       )}
 
       {/* Hover tooltip label */}
-      {hoveredEl && !pinnedEl && (
+      {hoveredEl && !pinnedEl && !passThrough && (
         <div
           className="element_picker_tooltip"
           style={{
@@ -358,7 +515,7 @@ export default function VisualElementPicker() {
       {/* Floating badge: inspector mode active */}
       <div className="element_picker_badge" style={{ position: 'fixed', top: 10, left: '50%', transform: 'translateX(-50%)', zIndex: 100001, pointerEvents: 'auto' }}>
         <span>🔍 Element Picker Active</span>
-        <span className="element_picker_badge_hint">Hover & click any element • Alt+click to use the app (open menus) • ESC to exit</span>
+        <span className="element_picker_badge_hint">{passThrough ? 'Ctrl held: clicks work as usual — release to pick again' : 'Hover & click any element • Hold Ctrl to click normally (open tabs, pages, menus) • ESC to exit'}</span>
         <button className="element_picker_badge_close" onClick={toggleInspector}>✕</button>
       </div>
 
@@ -376,7 +533,7 @@ export default function VisualElementPicker() {
         >
           <div className="element_picker_panel_header">
             <div>
-              <strong>CSS Variables</strong>
+              <strong>Picked element</strong>
               <code>{pinnedEl.tagName.toLowerCase()}{pinnedEl.className && typeof pinnedEl.className === 'string' ? '.' + pinnedEl.className.split(' ').filter(Boolean).slice(0, 2).join('.') : ''}</code>
             </div>
             <button className="element_picker_panel_close" onClick={() => { setPinnedEl(null); setPinnedVars([]); }}>✕</button>
@@ -389,42 +546,29 @@ export default function VisualElementPicker() {
                 <p>This element might use inherited styles. Try clicking a parent or child element instead.</p>
               </div>
             ) : (
-              pinnedVars.map((v) => {
-                const isOverridden = Boolean(customOverrides[v.name]);
-                return (
-                  <div key={v.name} className={`element_picker_var_row ${isOverridden ? 'is-overridden' : ''}`}>
-                    <div className="element_picker_var_info">
-                      <code className="element_picker_var_name">{v.name}</code>
-                      <span className="element_picker_var_context">{v.context}</span>
-                    </div>
-                    <div className="element_picker_var_controls">
-                      <input
-                        type="color"
-                        className="element_picker_color_input"
-                        value={toHex(customOverrides[v.name] || v.value)}
-                        onChange={(e) => setCustomVariable(v.name, e.target.value)}
-                      />
-                      <input
-                        type="text"
-                        className="element_picker_text_input"
-                        value={customOverrides[v.name] || v.value}
-                        onChange={(e) => setCustomVariable(v.name, e.target.value)}
-                        placeholder={v.value}
-                      />
-                      {isOverridden && (
-                        <button
-                          className="element_picker_reset_btn"
-                          title="Reset to theme default"
-                          onClick={() => setCustomVariable(v.name, undefined)}
-                        >↺</button>
-                      )}
-                    </div>
-                    <div className="element_picker_var_selector" title={v.selector}>
-                      {v.source !== 'direct' ? `⬆ ${v.source} · ` : ''}{v.selector.length > 50 ? v.selector.slice(0, 50) + '…' : v.selector}
-                    </div>
-                  </div>
-                );
-              })
+              <>
+                <div className="element_picker_section is-picked">
+                  <span className="element_picker_section_mark" aria-hidden="true" />
+                  <strong>Picked element</strong>
+                  <span>{ownVars.length}</span>
+                </div>
+                {ownVars.length === 0 ? (
+                  <p className="element_picker_section_note">It has no colours of its own: it shows what is around it.</p>
+                ) : ownVars.map(renderVar)}
+                {aroundVars.length > 0 ? (
+                  <button type="button" className={`element_picker_section is-toggle${showAround ? ' is-open' : ''}`} aria-expanded={showAround} onClick={() => setShowAround((current) => !current)}>
+                    <span className="element_picker_section_chevron" aria-hidden="true">›</span>
+                    <strong>Around it</strong>
+                    <span>{aroundVars.length}</span>
+                  </button>
+                ) : null}
+                {showAround ? aroundGroups.map((group) => (
+                  <React.Fragment key={group.depth}>
+                    <div className="element_picker_owner" title={group.owner}>⬆ {group.owner}</div>
+                    {group.vars.map(renderVar)}
+                  </React.Fragment>
+                )) : null}
+              </>
             )}
           </div>
         </div>

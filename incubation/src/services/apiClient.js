@@ -99,18 +99,22 @@ export const createApiClient = ({
     status: response.status,
   };
 
+  // A refusal with a `code` (session_limit, not_assignee, task_expired…) is
+  // the caller's to explain; the generic "Not allowed" / "Slow down" notices
+  // are for the rest.
+  const coded = Boolean(data && typeof data === 'object' && (data.code || data.message === 'session_limit'));
   if (response.status === 401 && !suppressUnauthorizedHandler) onUnauthorized?.(data, requestMeta);
-  if (response.status === 403 && !suppressForbiddenHandler) onForbidden?.(data, requestMeta);
+  if (response.status === 403 && !suppressForbiddenHandler && !coded) onForbidden?.(data, requestMeta);
   if (response.status === 400 && data?.message === 'Connection rejected by security policy.' && !suppressSecurityPolicyHandler) {
     onSecurityPolicyBlocked?.(data, requestMeta);
   }
   if (response.status === 423 && !suppressLockedHandler) onLocked?.(data, requestMeta);
-  if (response.status === 429 && !suppressRateLimitedHandler) {
+  if (response.status === 429 && !suppressRateLimitedHandler && !coded) {
     onRateLimited?.({ ...(data && typeof data === 'object' ? data : {}), retry_after: retryAfter }, requestMeta);
   }
   if (response.status === 413 && !suppressPayloadTooLargeHandler) onPayloadTooLarge?.(data, requestMeta);
 
-  const message = response.status === 429
+  const message = response.status === 429 && !coded
     ? `Too many requests. Retry after ${retryAfter || 'a few'} seconds.`
     // Non-JSON bodies (proxy/HTML error pages, stack traces) are never shown.
     : (data && typeof data === 'object' ? data.message || data.error : '') || `Request failed with status ${response.status}.`;

@@ -1,12 +1,14 @@
 import React from 'react';
 
 import { sanitizePermissionList } from '../../../utils/inputSecurity.js';
-import { ALL_PERMISSIONS, PERMISSION_GROUPS } from '../../../auth/permissions.js';
+import { usePermissionCatalog } from '../../../auth/permissions.js';
 
 
 // Grouped permission checkboxes with "Select all · Clear" (production
 // PermissionEditor + quick actions). Clicking a group title toggles the group.
 export default function PermissionEditor({ value = [], onChange, idPrefix = 'permissions', disabled = false, disabledHint = '' }) {
+  // The Service's list once loaded (every permission it knows), else the built-in one.
+  const { groups: PERMISSION_GROUPS, all: ALL_PERMISSIONS, descriptions } = usePermissionCatalog();
   const selected = new Set(Array.isArray(value) ? value : []);
   const emit = (next) => onChange(sanitizePermissionList(Array.from(next).sort()));
   const toggle = (permission) => {
@@ -52,7 +54,7 @@ export default function PermissionEditor({ value = [], onChange, idPrefix = 'per
                 {group.items.map((permission) => {
                   const inputId = `${idPrefix}_${permission.replace(/[^a-z0-9]/gi, '_')}`;
                   return (
-                    <label className="settings_permission_option" htmlFor={inputId} key={permission}>
+                    <label className="settings_permission_option" htmlFor={inputId} key={permission} title={descriptions[permission] || undefined}>
                       <input id={inputId} type="checkbox" checked={selected.has(permission)} onChange={() => toggle(permission)} />
                       <span>{permission}</span>
                     </label>

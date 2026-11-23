@@ -57,6 +57,10 @@
   --tasks-primary-bg: var(--primary-action-bg);
   --tasks-primary-text: var(--primary-action-text);
   --tasks-primary-border: var(--primary-action-border);
+  /* Save as evidence (H-6): the primary action unless a theme gives it its own. */
+  --tasks-evidence-bg: var(--tasks-primary-bg);
+  --tasks-evidence-text: var(--tasks-primary-text);
+  --tasks-evidence-border: var(--tasks-primary-border);
   --tasks-danger-text: var(--status-error-text);
   --tasks-log-bg: color-mix(in srgb, var(--app-bg) 70%, var(--input-bg));
   --tasks-log-text: var(--app-text);

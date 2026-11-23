@@ -166,8 +166,8 @@ try {
   payloadOpenPreference = window.localStorage.getItem('linkx.reports.payloadOpen') === '1';
 } catch { /* storage unavailable */ }
 
-// graph: { state: 'unsupported' | 'checking' | 'loading' | 'available' | 'unavailable', onOpen }
-export default function ReportDetail({ record, isCdr, graph, onClose, onCopyPayload, download }) {
+// graph: { state: 'unsupported' | 'checking' | 'loading' | 'available' | 'unavailable' | 'archived', onOpen }
+export default function ReportDetail({ record, isCdr, graph, onClose, onCopyPayload, download, workflow = null }) {
   const { payload } = record;
   const [payloadOpen, setPayloadOpen] = useState(payloadOpenPreference);
   const jsonText = useMemo(() => prettyJson(record.raw.payload), [record.raw.payload]);
@@ -191,13 +191,15 @@ export default function ReportDetail({ record, isCdr, graph, onClose, onCopyPayl
     loading: 'Loading graph…',
     available: 'Open graph',
     unavailable: 'No graph available',
+    archived: 'Graph archived',
   }[graph.state];
   const graphHint = {
     unsupported: 'Graph visualization is only available for service evidence reports',
     checking: 'Checking graph data availability…',
     loading: 'Fetching and opening the evidence graph…',
     available: 'View the graph in a new Graph window',
-    unavailable: 'No graph data was included or archived for this service evidence report',
+    unavailable: 'No graph data was included for this service evidence report',
+    archived: 'The graph is older than 180 days and was moved to cold storage by the Service',
   }[graph.state];
   const graphBusy = graph.state === 'checking' || graph.state === 'loading';
   // The action bar only shows when one of its actions can be used (or the
@@ -226,6 +228,8 @@ export default function ReportDetail({ record, isCdr, graph, onClose, onCopyPayl
       </header>
 
       <div className="reports_detail_body">
+        {/* An STR alert's procedure (analysis-results-plan Phase 4). */}
+        {workflow}
 
         {entity || domain || blacklisted !== undefined ? (
           <section className="reports_entity" aria-label="Subject">

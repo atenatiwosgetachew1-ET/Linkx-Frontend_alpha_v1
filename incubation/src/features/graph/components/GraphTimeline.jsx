@@ -31,6 +31,9 @@ const ClockIcon = () => (
   <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="8.5" /><path d="M12 7.5V12l3 2" /></svg>
 );
 
+// Bars a Rewind / Fast forward jumps (Previous / Next step one).
+const JUMP_STEPS = 5;
+
 export default function GraphTimeline({ graph, view, version, filter, onChange, onPlayStep, onPeriod }) {
   // `version` changes with the data.
   const keys = useMemo(() => timelineKeys(graph, view), [graph, view, version]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -188,6 +191,22 @@ export default function GraphTimeline({ graph, view, version, filter, onChange, 
   // Previous / Next: one step by hand, playing or paused.
   const previousPeriod = neighbourPeriod(-1, filter);
   const nextPeriod = neighbourPeriod(1, filter);
+  // Rewind / Fast forward (analyst decision 2026-11-19): a jump of
+  // JUMP_STEPS steps back or forward (as far as it goes, at least one), the
+  // same width, skipping empty bars as Previous / Next do.
+  const jumpPeriod = (direction) => {
+    let reached = null;
+    let current = filter;
+    for (let step = 0; step < JUMP_STEPS; step += 1) {
+      const next = neighbourPeriod(direction, current);
+      if (!next) break;
+      reached = next;
+      current = { ...current, ...next };
+    }
+    return reached;
+  };
+  const rewindPeriod = jumpPeriod(-1);
+  const forwardPeriod = jumpPeriod(1);
 
   const highlight = (index) => {
     if (preview) {
@@ -210,32 +229,41 @@ export default function GraphTimeline({ graph, view, version, filter, onChange, 
 
   return (
     <section className="graph_timeline" aria-label="Timeline">
+      {/* Three parts: the title and the date choices at the start, the
+          player in the middle of the bar, the speed, Reset and the fold
+          button at the end (analyst decision 2026-11-19). Narrow strips put
+          the player on a line of its own, still centred. */}
       <header className="graph_timeline_header">
-        <strong><ClockIcon /> <span className="graph_timeline_title_text">Timeline</span></strong>
-        {/* The controls wrap among themselves; the title and the fold button
-            keep their places on the first line at any width. */}
-        <div className="graph_timeline_controls">
+        <div className="graph_timeline_side is-start">
+          <strong><ClockIcon /> <span className="graph_timeline_title_text">Timeline</span></strong>
+          {keys.length ? (
+            <>
+              <select
+                aria-label="Date field"
+                title={'Which date the timeline uses. Read as dates: year-first dates and date-times (2026-03-05, 2026-03-05 14:30); plain numbers only in fields named like dates (epoch seconds or milliseconds). A field is listed when at least 60 % of its values are dates; TRANSACTIONDATE comes first.'}
+                value={key}
+                onChange={(event) => onChange({ key: event.target.value, from: null, to: null })}>
+                {keys.map((entry) => <option key={entry.key} value={entry.key}>{entry.key} ({entry.count})</option>)}
+              </select>
+              <select
+                aria-label="Slice by"
+                title="How the dates are sliced into bars (Auto picks from the span)"
+                value={slice}
+                onChange={(event) => onChange({ key, slice: event.target.value, from: null, to: null, playing: false })}
+              >
+                {SLICE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value} disabled={option.value !== 'auto' && !fits(option.value)}>
+                    {option.label}{option.value === 'auto' && slice === 'auto' && buckets.length ? ` (${unit})` : ''}
+                  </option>
+                ))}
+              </select>
+            </>
+          ) : (
+            <span className="graph_timeline_summary" role="status">No dates found on the shown nodes or links.</span>
+          )}
+        </div>
         {keys.length ? (
           <>
-            <select
-              aria-label="Date field"
-              title={'Which date the timeline uses. Read as dates: year-first dates and date-times (2026-03-05, 2026-03-05 14:30); plain numbers only in fields named like dates (epoch seconds or milliseconds). A field is listed when at least 60 % of its values are dates; TRANSACTIONDATE comes first.'}
-              value={key}
-              onChange={(event) => onChange({ key: event.target.value, from: null, to: null })}>
-              {keys.map((entry) => <option key={entry.key} value={entry.key}>{entry.key} ({entry.count})</option>)}
-            </select>
-            <select
-              aria-label="Slice by"
-              title="How the dates are sliced into bars (Auto picks from the span)"
-              value={slice}
-              onChange={(event) => onChange({ key, slice: event.target.value, from: null, to: null, playing: false })}
-            >
-              {SLICE_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value} disabled={option.value !== 'auto' && !fits(option.value)}>
-                  {option.label}{option.value === 'auto' && slice === 'auto' && buckets.length ? ` (${unit})` : ''}
-                </option>
-              ))}
-            </select>
             <span className="graph_timeline_media" role="group" aria-label="Timeline player">
               <button
                 type="button"
@@ -249,6 +277,16 @@ export default function GraphTimeline({ graph, view, version, filter, onChange, 
               </button>
               <button
                 type="button"
+                className="graph_timeline_media_button"
+                aria-label="Rewind"
+                title={`Rewind: ${JUMP_STEPS} periods back`}
+                disabled={!rewindPeriod}
+                onClick={() => rewindPeriod && showPeriod(rewindPeriod, 300)}
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 6 4 12l8 6Z" /><path d="M20 6l-8 6 8 6Z" /></svg>
+              </button>
+              <button
+                type="button"
                 className="graph_timeline_media_button is-play"
                 aria-label={playing ? 'Pause' : 'Play'}
                 title={playing ? 'Pause' : 'Play'}
@@ -259,8 +297,18 @@ export default function GraphTimeline({ graph, view, version, filter, onChange, 
                 {playing ? (
                   <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z" /></svg>
                 ) : (
-                  <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M8 5v14l11-7Z" /></svg>
+                  <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M8.5 5v14l11-7Z" /></svg>
                 )}
+              </button>
+              <button
+                type="button"
+                className="graph_timeline_media_button"
+                aria-label="Fast forward"
+                title={`Fast forward: ${JUMP_STEPS} periods on`}
+                disabled={!forwardPeriod}
+                onClick={() => forwardPeriod && showPeriod(forwardPeriod, 300)}
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 6l8 6-8 6Z" /><path d="M12 6l8 6-8 6Z" /></svg>
               </button>
               <button
                 type="button"
@@ -273,30 +321,33 @@ export default function GraphTimeline({ graph, view, version, filter, onChange, 
                 <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 5v14" className="is-stroke" /><path d="M6 5l9 7-9 7Z" /></svg>
               </button>
             </span>
-            <select aria-label="Play speed" title="Play speed" value={speed} onChange={(event) => onChange({ key, speed: Number(event.target.value) })}>
-              {SPEEDS.map((value) => <option key={value} value={value}>{value}×</option>)}
-            </select>
           </>
-        ) : (
-          <span className="graph_timeline_summary" role="status">No dates found on the shown nodes or links.</span>
-        )}
-        </div>
-        {/* Reset and the fold button stay at the end of the first line. */}
-        {keys.length ? (
-          <button type="button" className="graph_window_button is-compact graph_timeline_reset" disabled={!ranged && !filter.hideUndated} onClick={() => onChange({ key, from: null, to: null, hideUndated: false, playing: false })}>
-            Reset
-          </button>
         ) : null}
-        <button
-          type="button"
-          className="graph_timeline_fold"
-          aria-label={filter.collapsed ? 'Expand timeline' : 'Collapse timeline'}
-          aria-expanded={!filter.collapsed}
-          title={filter.collapsed ? 'Expand' : 'Collapse'}
-          onClick={() => onChange({ collapsed: !filter.collapsed })}
-        >
-          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d={filter.collapsed ? 'm6 15 6-6 6 6' : 'm6 9 6 6 6-6'} /></svg>
-        </button>
+        <div className="graph_timeline_side is-end">
+          {keys.length ? (
+              <label className="graph_timeline_speed" title="Play speed">
+                <span>Speed</span>
+                <select aria-label="Play speed" title="Play speed" value={speed} onChange={(event) => onChange({ key, speed: Number(event.target.value) })}>
+                  {SPEEDS.map((value) => <option key={value} value={value}>{value}×</option>)}
+                </select>
+              </label>
+          ) : null}
+          {keys.length ? (
+            <button type="button" className="graph_window_button is-compact graph_timeline_reset" disabled={!ranged && !filter.hideUndated} onClick={() => onChange({ key, from: null, to: null, hideUndated: false, playing: false })}>
+              Reset
+            </button>
+          ) : null}
+          <button
+            type="button"
+            className="graph_timeline_fold"
+            aria-label={filter.collapsed ? 'Expand timeline' : 'Collapse timeline'}
+            aria-expanded={!filter.collapsed}
+            title={filter.collapsed ? 'Expand' : 'Collapse'}
+            onClick={() => onChange({ collapsed: !filter.collapsed })}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d={filter.collapsed ? 'm6 15 6-6 6 6' : 'm6 9 6 6 6-6'} /></svg>
+          </button>
+        </div>
       </header>
       {/* The Play options, on their own line (shown expanded). */}
       {keys.length && !filter.collapsed ? (

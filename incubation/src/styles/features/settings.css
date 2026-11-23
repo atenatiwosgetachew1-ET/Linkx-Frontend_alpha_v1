@@ -11,7 +11,7 @@
 	padding: 0;
 	border: 0;
 	background: transparent;
-	color: var(--settings-accent-text);
+	color: var(--settings-link-button-text);
 	font-size: 12px;
 	cursor: pointer;
 }
@@ -21,7 +21,7 @@
 }
 
 .settings_link_button small {
-	color: var(--settings-text-muted);
+	color: var(--settings-link-button-small-text);
 	font-size: 11px;
 }
 
@@ -156,7 +156,7 @@
 	display: grid;
 	gap: 12px;
 	padding: 12px;
-	border: 1px dashed var(--settings-card-border);
+	border: 1px dashed var(--settings-service-target-editor-border);
 	border-radius: 4px;
 }
 
@@ -174,12 +174,12 @@
 }
 
 .service_target_header strong {
-	color: var(--settings-text);
+	color: var(--settings-service-target-header-strong-text);
 	font-size: 13px;
 }
 
 .service_target_header small {
-	color: var(--settings-text-muted);
+	color: var(--settings-service-target-header-small-text);
 	font-size: 11px;
 }
 
@@ -188,15 +188,15 @@
 	align-items: center;
 	gap: 6px;
 	padding: 2px 10px;
-	border: 1px solid var(--linkx-success-border);
+	border: 1px solid var(--settings-service-target-catalog-badge-border);
 	border-radius: 999px;
-	color: var(--linkx-success-text);
+	color: var(--settings-service-target-catalog-badge-text);
 	font-size: 11px;
 }
 
 .service_target_catalog_badge.is-error {
-	border-color: var(--linkx-danger-border);
-	color: var(--settings-danger-text, #c62828);
+	border-color: var(--settings-service-target-catalog-badge-error-border);
+	color: var(--settings-service-target-catalog-badge-error-text);
 }
 
 .service_target_domain_grid {
@@ -209,10 +209,10 @@
 	display: grid;
 	gap: 2px;
 	padding: 8px 10px;
-	border: 1px solid var(--settings-card-border);
+	border: 1px solid var(--settings-service-target-domain-card-border);
 	border-radius: 4px;
-	background: var(--settings-card-bg);
-	color: var(--settings-text);
+	background: var(--settings-service-target-domain-card-bg);
+	color: var(--settings-service-target-domain-card-text);
 	text-align: left;
 	cursor: pointer;
 }
@@ -222,27 +222,27 @@
 }
 
 .service_target_domain_card small {
-	color: var(--settings-text-muted);
+	color: var(--settings-service-target-domain-card-small-text);
 	font-size: 10px;
 }
 
 .service_target_domain_card span {
 	margin-top: 4px;
-	color: var(--settings-text-secondary);
+	color: var(--settings-service-target-domain-card-span-text);
 	font-size: 11px;
 }
 
 .service_target_domain_card.is-registered {
-	border-color: var(--settings-accent);
+	border-color: var(--settings-service-target-domain-card-registered-border);
 }
 
 .service_target_domain_card.is-registered span {
-	color: var(--settings-accent-text);
+	color: var(--settings-service-target-domain-card-span-registered-text);
 	font-weight: 600;
 }
 
 .service_target_domain_card.is-current {
-	box-shadow: inset 0 0 0 1px var(--settings-accent);
+	box-shadow: inset 0 0 0 1px var(--settings-service-target-domain-card-current-shadow);
 }
 
 .service_target_domain_body {
@@ -254,7 +254,7 @@
 	display: flex;
 	flex-wrap: wrap;
 	gap: 6px;
-	border-bottom: 1px solid var(--settings-card-border);
+	border-bottom: 1px solid var(--settings-service-target-tabs-border);
 }
 
 .service_target_tab {
@@ -264,7 +264,7 @@
 }
 
 .service_target_tab.is-active {
-	border-bottom-color: var(--settings-accent);
+	border-bottom-color: var(--settings-service-target-tab-active-border);
 }
 
 .service_target_tab button {
@@ -274,7 +274,7 @@
 	padding: 6px 6px;
 	border: 0;
 	background: transparent;
-	color: var(--settings-text);
+	color: var(--settings-service-target-tab-button-text);
 	font-size: 12px;
 	cursor: pointer;
 }
@@ -283,15 +283,15 @@
 	width: 6px;
 	height: 6px;
 	border-radius: 50%;
-	background: var(--settings-text-muted);
+	background: var(--settings-service-target-tab-i-bg);
 }
 
 .service_target_tab i.is-configured {
-	background: var(--linkx-success-text);
+	background: var(--settings-service-target-tab-i-configured-bg);
 }
 
 .service_target_tab_remove {
-	color: var(--settings-text-muted) !important;
+	color: var(--settings-service-target-tab-remove-text) !important;
 	font-size: 10px !important;
 }
 
@@ -301,12 +301,12 @@
 	align-items: center;
 	justify-content: space-between;
 	gap: 8px;
-	color: var(--settings-text-secondary);
+	color: var(--settings-service-target-banner-text);
 	font-size: 12px;
 }
 
 .service_target_banner code {
-	color: var(--settings-text);
+	color: var(--settings-service-target-banner-code-text);
 }
 
 .service_target_advanced_toggle {
@@ -316,10 +316,10 @@
 	gap: 12px;
 	width: 100%;
 	padding: 8px 10px;
-	border: 1px solid var(--settings-card-border);
+	border: 1px solid var(--settings-service-target-advanced-toggle-border);
 	border-radius: 4px;
 	background: transparent;
-	color: var(--settings-text);
+	color: var(--settings-service-target-advanced-toggle-text);
 	text-align: left;
 	cursor: pointer;
 }
@@ -334,7 +334,7 @@
 }
 
 .service_target_advanced_toggle small {
-	color: var(--settings-text-muted);
+	color: var(--settings-service-target-advanced-toggle-small-text);
 	font-size: 11px;
 }
 
@@ -354,16 +354,16 @@
 	align-items: center;
 	gap: 4px;
 	padding: 2px 8px;
-	border: 1px solid var(--settings-card-border);
+	border: 1px solid var(--settings-service-target-chips-span-border);
 	border-radius: 999px;
-	color: var(--settings-text);
+	color: var(--settings-service-target-chips-span-text);
 	font-size: 11px;
 }
 
 .service_target_chips button {
 	border: 0;
 	background: transparent;
-	color: var(--settings-text-muted);
+	color: var(--settings-service-target-chips-button-text);
 	font-size: 10px;
 	cursor: pointer;
 }
@@ -381,73 +381,989 @@
 	box-sizing: border-box;
 }
 
-/* Vigilance */
-.vigilance_status_pill {
-	padding: 2px 10px;
-	border: 1px solid var(--linkx-danger-border);
-	border-radius: var(--radius-pill, 999px);
-	background: var(--linkx-danger-bg);
-	color: var(--linkx-danger-text);
-	font-size: var(--fs-xs, 11px);
-	font-weight: 700;
-	text-transform: uppercase;
+/* Profile: the family's header and facts, then roles and permissions. */
+.profile {
+	--profile-surface: color-mix(in srgb, var(--settings-text) 4%, transparent);
+	--profile-chip: color-mix(in srgb, var(--settings-text) 6%, transparent);
+	--profile-hairline: var(--settings-hairline);
 }
 
-.vigilance_status_pill.is-active {
-	border-color: var(--linkx-success-border);
-	background: var(--linkx-success-bg);
-	color: var(--linkx-success-text);
-}
-
-.vigilance_status_pill.is-paused {
-	border-color: var(--settings-card-border);
-	background: color-mix(in srgb, var(--settings-text) 8%, transparent);
-	color: var(--settings-text);
-}
-
-.vigilance_feed {
-	margin: 0;
-	color: var(--settings-text);
-	font-size: 13px;
-}
-
-.vigilance_feed span {
-	margin-right: 6px;
-	color: var(--settings-text-muted);
+.settings_block_header h4 small,
+.profile_permissions h5 small {
+	color: var(--settings-block-header-small-text);
 	font-size: 12px;
+	font-weight: 500;
+	font-variant-numeric: tabular-nums;
 }
 
-.vigilance_counter {
+.profile_permissions h5 {
 	display: flex;
 	align-items: baseline;
 	gap: 8px;
 	margin: 0;
+	color: var(--settings-profile-permissions-h5-text);
+	font-size: 15px;
+	font-weight: 600;
 }
 
-.vigilance_counter strong {
-	color: var(--settings-text);
-	font-size: 24px;
+/* Permissions: how much of the catalog is held, then area by area. */
+.profile_access_head {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 6px 16px;
 }
 
-.vigilance_counter span {
-	color: var(--settings-text-secondary);
+.profile_permissions_title {
+	display: flex;
+	align-items: center;
+	gap: 9px;
+	min-width: 0;
+}
+
+/* Collapse / expand: a square button of its own; the heading is not part
+   of it. */
+.profile_permissions_toggle {
+	display: grid;
+	flex: none;
+	place-items: center;
+	width: 24px;
+	height: 24px;
+	padding: 0;
+	border: 1px solid var(--profile-hairline);
+	border-radius: 3px;
+	background: none;
+	color: var(--settings-profile-permissions-toggle-text);
+	cursor: pointer;
+	transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.profile_permissions_toggle svg {
+	transition: transform 140ms ease;
+}
+
+.profile_permissions.is-open .profile_permissions_toggle svg {
+	transform: rotate(90deg);
+}
+
+.profile_permissions_toggle:hover {
+	border-color: var(--settings-profile-permissions-toggle-hover-border);
+	background: var(--settings-profile-permissions-toggle-hover-bg);
+	color: var(--settings-profile-permissions-toggle-hover-text);
+}
+
+.profile_permissions_toggle:focus-visible {
+	outline: 2px solid var(--settings-profile-permissions-toggle-focus-outline);
+	outline-offset: 2px;
+}
+
+/* Collapsed: the heading and the summary. */
+.profile_permissions:not(.is-open) {
+	padding-bottom: 14px;
+}
+
+.profile_legend {
+	display: inline-flex;
+	gap: 14px;
+	color: var(--settings-text-muted);
+	font-size: var(--fs-xs, 11px);
+}
+
+.profile_legend span {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.profile_legend i {
+	flex: none;
+	box-sizing: border-box;
+	width: 7px;
+	height: 7px;
+	border: 1.5px solid color-mix(in srgb, var(--settings-text) 30%, transparent);
+	border-radius: 50%;
+}
+
+.profile_legend .is-has i {
+	border-color: var(--linkx-success-text);
+	background: var(--linkx-success-text);
+}
+
+/* Collapsed: a sentence and each area's standing at a glance. */
+.profile_summary {
+	display: grid;
+	gap: 8px;
+	min-width: 0;
+}
+
+.profile_summary p {
+	margin: 0;
+	color: var(--settings-profile-summary-p-text);
+	font-size: 12px;
+}
+
+.profile_summary ul {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 5px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.profile_summary li {
+	--area-tone: var(--settings-profile-summary-li-tone);
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 2px 9px 2px 8px;
+	border-radius: 3px;
+	background: var(--profile-chip);
+	color: var(--settings-profile-summary-li-text);
+	font-size: var(--fs-xs, 11px);
+	font-weight: 500;
+	text-transform: capitalize;
+	white-space: nowrap;
+}
+
+.profile_summary li.is-full { --area-tone: var(--settings-profile-summary-li-full-tone); }
+
+.profile_summary li.is-none {
+	--area-tone: var(--settings-profile-summary-li-none-tone);
+	background: transparent;
+	box-shadow: inset 0 0 0 1px var(--profile-hairline);
+	color: var(--settings-profile-summary-li-none-text);
+}
+
+.profile_summary li i {
+	flex: none;
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: var(--area-tone);
+}
+
+.profile_summary li span {
+	color: var(--settings-profile-summary-span-text);
+	font-variant-numeric: tabular-nums;
+}
+
+.profile_areas {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 0 24px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.profile_areas[hidden] {
+	display: none;
+}
+
+/* An area, minimal and on one line: a bare glyph, its name, its permissions
+   as plain words, the count. Two to a row, told apart by a hairline.
+   --area-tone carries the standing. */
+.profile_area {
+	--area-tone: var(--settings-profile-area-tone);
+	display: grid;
+	grid-template-columns: 15px 92px minmax(0, 1fr) auto;
+	align-items: baseline;
+	gap: 0 8px;
+	min-width: 0;
+	padding: 5px 2px;
+	border-top: 1px solid var(--profile-hairline);
+}
+
+.profile_area:nth-child(-n + 2) {
+	border-top: 0;
+}
+
+.profile_area.is-full { --area-tone: var(--settings-profile-area-full-tone); }
+.profile_area.is-none { --area-tone: var(--settings-profile-area-none-tone); }
+
+.profile_area_icon {
+	display: grid;
+	align-self: center;
+	place-items: center;
+	color: var(--area-tone);
+}
+
+.profile_area_icon svg {
+	width: 14px;
+	height: 14px;
+}
+
+.profile_area_title {
+	overflow: hidden;
+	color: var(--settings-profile-area-title-text);
+	font-size: 12px;
+	font-weight: 600;
+	text-overflow: ellipsis;
+	text-transform: capitalize;
+	white-space: nowrap;
+}
+
+.profile_area_count {
+	color: var(--settings-profile-area-count-text);
+	font-size: var(--fs-xs, 11px);
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
+}
+
+.profile_area_count i {
+	color: var(--settings-profile-area-count-i-text);
+	font-style: normal;
+	font-weight: 500;
+}
+
+.profile_area ul {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0 10px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+/* Not granted: muted and struck through. */
+.profile_area li {
+	color: var(--settings-profile-area-li-text);
+	font-size: var(--fs-xs, 11px);
+	line-height: 1.5;
+	text-decoration: line-through;
+	text-decoration-color: var(--settings-profile-area-li-line);
+	text-transform: capitalize;
+	white-space: nowrap;
+}
+
+.profile_area li.is-has {
+	color: var(--settings-profile-area-li-has-text);
+	text-decoration: none;
+}
+
+.profile_area li.is-has::before {
+	content: "✓";
+	margin-right: 3px;
+	color: var(--area-tone);
+	font-weight: 700;
+}
+
+.profile_area.is-none .profile_area_title,
+.profile_area.is-none .profile_area_count {
+	color: var(--settings-profile-area-title-none-text);
+}
+
+/* Narrow: one area to a row. */
+@container settings-page (max-width: 620px) {
+	.profile_areas {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.profile_area:nth-child(2) {
+		border-top: 1px solid var(--profile-hairline);
+	}
+}
+
+/* The settings page family (set by Linkx Vigilance): a state-railed header,
+   a row of figures, then titled blocks. Flat surfaces and hairlines; colour
+   only carries state. */
+.settings_page {
+	--settings-hairline: var(--settings-page-hairline);
+	--settings-state: var(--settings-page-state-tone);
+	display: grid;
+	gap: 14px;
+	min-width: 0;
+	/* Room for the masthead's shadow: the tab surface scrolls and would clip
+	   it (it has no padding on its leading side). */
+	padding: 2px 2px 6px 10px;
+	container: settings-page / inline-size;
+}
+
+.settings_hero {
+	position: relative;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 16px;
+	padding: 14px 16px 14px 19px;
+	border: 1px solid var(--settings-hero-border);
+	border-radius: 4px;
+	background: var(--settings-hero-bg);
+	overflow: hidden;
+}
+
+/* State rail on the leading edge. */
+.settings_hero::before {
+	content: "";
+	position: absolute;
+	inset: 0 auto 0 0;
+	width: 3px;
+	background: var(--settings-state);
+}
+
+.settings_hero.is-active { --settings-state: var(--settings-hero-active-state-tone); }
+.settings_hero.is-paused,
+.settings_hero.is-inactive { --settings-state: var(--settings-hero-paused-state-tone); }
+.settings_hero.is-danger,
+.settings_hero.is-locked { --settings-state: var(--settings-hero-danger-state-tone); }
+
+.settings_hero_main {
+	display: grid;
+	gap: 4px;
+	min-width: 0;
+}
+
+.settings_eyebrow {
+	margin: 0;
+	color: var(--settings-eyebrow-text);
+	font-size: var(--fs-xs, 11px);
+	font-weight: 600;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+}
+
+.settings_hero_title {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 10px;
+	min-width: 0;
+}
+
+.settings_hero_title h4 {
+	margin: 0;
+	min-width: 0;
+	overflow: hidden;
+	color: var(--settings-hero-title-h4-text);
+	font-size: 17px;
+	font-weight: 600;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.settings_hero_meta {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: 6px;
+	margin: 0;
+	color: var(--settings-hero-meta-text);
+	font-size: 12px;
+}
+
+.settings_hero_meta strong {
+	color: var(--settings-hero-meta-strong-text);
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
+}
+
+.settings_pill {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 2px 9px 2px 8px;
+	border: 1px solid var(--settings-pill-border);
+	border-radius: 3px;
+	background: var(--settings-pill-bg);
+	color: var(--settings-pill-text);
+	font-size: var(--fs-xs, 11px);
+	font-weight: 700;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	white-space: nowrap;
+}
+
+.settings_pill i,
+.vigilance_run_status i {
+	flex: none;
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: currentColor;
+}
+
+.settings_pill.is-active {
+	border-color: var(--settings-pill-active-border);
+	background: var(--settings-pill-active-bg);
+	color: var(--settings-pill-active-text);
+}
+
+.settings_pill.is-live i,
+.vigilance_run_status.is-running i {
+	animation: vigilance_pulse 1.8s ease-in-out infinite;
+}
+
+.settings_pill.is-paused,
+.settings_pill.is-neutral {
+	border-color: var(--settings-pill-paused-border);
+	background: var(--settings-pill-paused-bg);
+	color: var(--settings-pill-paused-text);
+}
+
+@keyframes vigilance_pulse {
+	0%, 100% { opacity: 1; }
+	50% { opacity: 0.35; }
+}
+
+/* Engine on/off: a switch, labelled by its state. */
+.settings_switch {
+	display: inline-flex;
+	flex: none;
+	align-items: center;
+	gap: 10px;
+	color: var(--settings-switch-text);
+	font-size: 12px;
+	font-weight: 600;
+	white-space: nowrap;
+	cursor: pointer;
+}
+
+.settings_switch input {
+	appearance: none;
+	position: relative;
+	flex: none;
+	width: 36px;
+	height: 20px;
+	margin: 0;
+	border: 1px solid var(--settings-switch-input-border);
+	border-radius: 999px;
+	background: var(--settings-switch-input-bg);
+	cursor: pointer;
+	transition: background-color 140ms ease, border-color 140ms ease;
+}
+
+.settings_switch input::after {
+	content: "";
+	position: absolute;
+	top: 2px;
+	left: 2px;
+	width: 14px;
+	height: 14px;
+	border-radius: 50%;
+	background: var(--settings-switch-input-after-bg);
+	box-shadow: 0 1px 2px var(--settings-switch-input-after-shadow);
+	transition: transform 140ms ease;
+}
+
+.settings_switch input:checked {
+	border-color: var(--settings-switch-input-checked-border);
+	background: var(--settings-switch-input-checked-bg);
+}
+
+.settings_switch input:checked::after {
+	transform: translateX(16px);
+}
+
+.settings_switch input:focus-visible {
+	outline: 2px solid var(--settings-switch-input-focus-outline);
+	outline-offset: 2px;
+}
+
+.settings_switch input:disabled {
+	opacity: 0.55;
+	cursor: wait;
+}
+
+/* Figures: one card split by hairlines; the total leads. */
+.settings_stats {
+	display: grid;
+	grid-template-columns: var(--settings-stats-columns, repeat(4, minmax(0, 1fr)));
+	--settings-hairline: var(--settings-stats-hairline);
+	margin: 0;
+	border: 0;
+	border-radius: 4px;
+	/* As the popup windows' header: the accent washing in from the top-left
+	   corner and fading out. */
+	background:
+		radial-gradient(140% 90px at 0 0, var(--settings-stats-bg), transparent 70%),
+		var(--settings-stats-bg-2);
+	overflow: hidden;
+}
+
+/* Tiles are told apart by a short, faint rule on their leading edge; it
+   sits just outside the tile, so the first of each row has it clipped by
+   the card. Rows (when the tiles wrap) get an equally faint line. */
+.settings_stat {
+	position: relative;
+	display: grid;
+	align-content: center;
+	gap: 1px;
+	min-width: 0;
+	padding: 10px 16px;
+	box-shadow: 0 1px 0 var(--settings-hairline);
+}
+
+.settings_stat::before {
+	content: "";
+	position: absolute;
+	top: 26%;
+	bottom: 26%;
+	left: -1px;
+	width: 1px;
+	background: var(--settings-hairline);
+}
+
+.settings_stat dt {
+	overflow: hidden;
+	color: var(--settings-stat-dt-text);
+	font-size: var(--fs-xs, 11px);
+	font-weight: 600;
+	letter-spacing: 0.04em;
+	text-overflow: ellipsis;
+	text-transform: uppercase;
+	white-space: nowrap;
+}
+
+.settings_stat dd {
+	margin: 0;
+	overflow: hidden;
+	color: var(--settings-stat-dd-text);
+	font-size: 16px;
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
+	line-height: 1.3;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.settings_stat.is-lead dd {
+	font-size: 20px;
+	letter-spacing: -0.01em;
+}
+
+.settings_stat.is-success dd { color: var(--settings-stat-dd-success-text); }
+.settings_stat.is-danger dd { color: var(--settings-stat-dd-danger-text); }
+
+/* With a glyph: it leads the tile, the label, value and note beside it.
+   It takes the tile's tone (success, danger) or the accent. */
+.settings_stat.has-icon {
+	grid-template-columns: auto minmax(0, 1fr);
+	column-gap: 11px;
+}
+
+.settings_stat.has-icon > :not(.settings_stat_icon) {
+	grid-column: 2;
+}
+
+.settings_stat_icon {
+	--stat-tone: var(--settings-stat-icon-tone);
+	display: grid;
+	grid-row: 1 / span 3;
+	align-self: center;
+	place-items: center;
+	width: 18px;
+	height: 18px;
+	color: color-mix(in srgb, var(--stat-tone) 70%, var(--settings-text));
+}
+
+.settings_stat_icon svg {
+	width: 16px;
+	height: 16px;
+}
+
+.settings_stat.is-success .settings_stat_icon { --stat-tone: var(--settings-stat-icon-success-tone); }
+.settings_stat.is-danger .settings_stat_icon { --stat-tone: var(--settings-stat-icon-danger-tone); }
+
+.settings_stat.is-lead .settings_stat_icon {
+	width: 22px;
+	height: 22px;
+}
+
+.settings_stat.is-lead .settings_stat_icon svg {
+	width: 20px;
+	height: 20px;
+}
+
+/* A fact rather than a figure: words, at reading size, with a little more
+   room around them (two short lines need it more than a large figure). */
+.settings_stat.is-text {
+	gap: 3px;
+	padding: 12px 16px;
+}
+
+.settings_stat.is-text dd {
+	font-size: 12.5px;
+	line-height: 1.4;
+}
+
+.settings_stat.is-text.is-wrap dd {
+	white-space: normal;
+	word-break: break-word;
+}
+
+.settings_stat dd.is-empty {
+	color: var(--settings-stat-dd-empty-text);
+	font-weight: 400;
+}
+
+.settings_stat dd.is-code {
+	font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+	font-size: 12px;
+	font-weight: 500;
+	user-select: all;
+}
+
+.settings_stat small {
+	overflow: hidden;
+	color: var(--settings-stat-small-text);
+	font-size: var(--fs-xs, 11px);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* Masthead: the header and its figures merged into one container, so the
+   accent washes in from the top-left corner across both. */
+.settings_masthead {
+	--settings-hairline: var(--settings-masthead-hairline);
+	position: relative;
+	display: grid;
+	min-width: 0;
+	border-radius: 4px;
+	/* A soft lift, reaching further out at the sides than above or below. */
+	box-shadow:
+		0 1px 2px var(--settings-masthead-shadow),
+		0 4px 12px -6px var(--settings-masthead-shadow-2),
+		9px 0 16px -10px var(--settings-masthead-shadow-3),
+		-9px 0 16px -10px var(--settings-masthead-shadow-4);
+	background:
+		radial-gradient(140% 170px at 0 0, var(--settings-masthead-bg), transparent 70%),
+		var(--settings-masthead-bg-2);
+	overflow: hidden;
+}
+
+.settings_masthead > .settings_hero {
+	padding-left: 16px;
+	border: 0;
+	border-radius: 0;
+	background: none;
+	overflow: visible;
+}
+
+.settings_masthead > .settings_hero::before {
+	content: none;
+}
+
+/* The figures sit under the header, set off by one faint line. */
+.settings_masthead > .settings_stats {
+	border-top: 1px solid var(--settings-hairline);
+	border-radius: 0;
+	background: none;
+}
+
+/* Header extras: a leading tile (avatar, glyph) and trailing content. */
+.settings_hero_media {
+	display: grid;
+	flex: none;
+	place-items: center;
+	width: 44px;
+	height: 44px;
+	border: 1px solid var(--settings-hero-media-border);
+	border-radius: 4px;
+	background: var(--settings-hero-media-bg);
+	color: var(--settings-hero-media-text);
+	font-size: 19px;
+	font-weight: 700;
+	line-height: 1;
+}
+
+.settings_hero_media svg {
+	width: 20px;
+	height: 20px;
+}
+
+.settings_hero_main {
+	flex: 1;
+}
+
+.settings_hero_aside {
+	display: flex;
+	flex: none;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 8px;
+}
+
+.settings_hero_meta i {
+	color: var(--settings-hero-meta-i-text);
+	font-style: normal;
+}
+
+/* A plain card of the family. */
+.settings_card {
+	display: grid;
+	gap: 10px;
+	min-width: 0;
+	padding: 14px 16px;
+	border: 1px solid var(--settings-card-border);
+	border-radius: 4px;
+	background: var(--settings-card-bg);
+}
+
+/* Facts: label over value, a few to a row, inside a card. */
+.settings_facts {
+	grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+	gap: 12px 24px;
+	margin: 0;
+}
+
+.settings_facts > div {
+	display: grid;
+	gap: 3px;
+	min-width: 0;
+}
+
+.settings_facts dt {
+	color: var(--settings-facts-dt-text);
+	font-size: var(--fs-xs, 11px);
+	font-weight: 600;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+}
+
+.settings_facts dd {
+	margin: 0;
+	overflow: hidden;
+	color: var(--settings-facts-dd-text);
 	font-size: 13px;
+	font-weight: 500;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.settings_facts dd.is-empty {
+	color: var(--settings-facts-dd-empty-text);
+	font-weight: 400;
+}
+
+.settings_facts dd.is-code {
+	font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+	font-size: 12px;
+	user-select: all;
+}
+
+/* Options: a card per option (glyph, what it does, its state, its switch).
+   A card that is on takes the accent: a tinted edge and the family's
+   corner wash; one that is off stays plain. */
+.settings_options {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 10px;
+}
+
+.settings_option {
+	position: relative;
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	min-width: 0;
+	padding: 12px 14px;
+	border: 1px solid var(--settings-option-border);
+	border-radius: 4px;
+	background: var(--settings-option-bg);
+	cursor: pointer;
+	transition: border-color 140ms ease, box-shadow 140ms ease, background-color 140ms ease;
+}
+
+.settings_option.settings_switch {
+	font-weight: 400;
+	white-space: normal;
+}
+
+.settings_option:hover {
+	border-color: var(--settings-option-hover-border);
+	box-shadow: 0 3px 10px -4px var(--settings-option-hover-shadow);
+}
+
+.settings_option:has(input:focus-visible) {
+	border-color: var(--settings-option-focus-border);
+}
+
+.settings_option.is-on {
+	border-color: var(--settings-option-on-border);
+	background:
+		radial-gradient(120% 70px at 0 0, var(--settings-option-on-bg), transparent 70%),
+		var(--settings-option-on-bg-2);
+}
+
+.settings_option_icon {
+	display: grid;
+	flex: none;
+	place-items: center;
+	color: var(--settings-option-icon-text);
+	transition: color 140ms ease;
+}
+
+.settings_option.is-on .settings_option_icon {
+	color: var(--settings-option-icon-on-text);
+}
+
+.settings_option_text {
+	display: grid;
+	flex: 1;
+	gap: 1px;
+	min-width: 0;
+}
+
+.settings_option strong {
+	color: var(--settings-option-strong-text);
+	font-size: 13px;
+	font-weight: 600;
+	line-height: 1.35;
+}
+
+.settings_option small {
+	color: var(--settings-option-small-text);
+	font-size: var(--fs-xs, 11px);
+	line-height: 1.4;
+}
+
+.settings_option_state {
+	flex: none;
+	min-width: 20px;
+	color: var(--settings-option-state-text);
+	font-size: 10px;
+	font-weight: 700;
+	letter-spacing: 0.06em;
+	text-align: right;
+	text-transform: uppercase;
+}
+
+.settings_option.is-on .settings_option_state {
+	color: var(--settings-option-state-on-text);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.settings_option,
+	.settings_option_icon {
+		transition: none;
+	}
+}
+
+/* Small labels: roles, tags. */
+.settings_chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	margin: 0;
+	min-width: 0;
+}
+
+.settings_chips span {
+	padding: 2px 9px;
+	border: 1px solid var(--settings-card-border);
+	border-radius: 3px;
+	background: var(--settings-card-bg);
+	color: var(--settings-text);
+	font-size: 12px;
+	font-weight: 500;
+	line-height: 1.45;
+}
+
+.settings_chips.is-accent span {
+	border-color: color-mix(in srgb, var(--settings-accent) 45%, transparent);
+	background: color-mix(in srgb, var(--settings-accent) 12%, transparent);
+	color: var(--settings-accent-text);
+	font-weight: 600;
+}
+
+.settings_none {
+	margin: 0;
+	color: var(--settings-text-muted);
+	font-size: 12px;
+}
+
+/* Audit log */
+.settings_block {
+	display: grid;
+	gap: 10px;
+	min-width: 0;
+}
+
+.settings_block_header {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-end;
+	justify-content: space-between;
+	gap: 10px 16px;
+}
+
+.settings_block_header h4 {
+	margin: 0;
+	color: var(--settings-block-header-h4-text);
+	font-size: 15px;
+	font-weight: 600;
+}
+
+.settings_block_header p {
+	margin: 4px 0 0;
+	color: var(--settings-block-header-p-text);
+	font-size: 12px;
+}
+
+.settings_block_actions {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+}
+
+.settings_block_actions .settings_button {
+	border-radius: 3px;
+	white-space: nowrap;
+}
+
+.settings_block_actions .settings_button.settings_primary:not(:disabled) {
+	border-color: var(--settings-accent) !important;
+	background-image: none !important;
+	background-color: color-mix(in srgb, var(--settings-accent) 16%, transparent) !important;
+}
+
+/* The engine is either running, paused, or in trouble. */
+.vigilance .settings_hero:not(.is-active):not(.is-paused) {
+	--settings-state: var(--settings-hero-state-tone);
 }
 
 .vigilance_runs {
-	max-height: 340px;
+	max-height: 380px;
+}
+
+.vigilance_runs .config_window_table th {
+	padding: 8px 12px;
+	font-size: var(--fs-xs, 11px);
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+}
+
+.vigilance_runs .config_window_table td {
+	padding: 8px 12px;
+	border-bottom-color: var(--settings-hairline);
+	white-space: nowrap;
+}
+
+.vigilance_runs .is-number {
+	text-align: right;
+	font-variant-numeric: tabular-nums;
 }
 
 .vigilance_run {
 	cursor: pointer;
+	transition: background-color 120ms ease;
 }
 
-.vigilance_run:hover td {
-	background: color-mix(in srgb, var(--settings-text) 5%, transparent);
+.vigilance_run:hover td,
+.vigilance_run:focus-visible td {
+	background: var(--settings-vigilance-run-td-hover-bg);
 }
+
+/* Failed and running runs: a rail on the row's leading edge. */
+.vigilance_run.is-failed td:first-child { box-shadow: inset 3px 0 0 var(--settings-vigilance-run-td-failed-shadow); }
+.vigilance_run.is-running td:first-child { box-shadow: inset 3px 0 0 var(--settings-vigilance-run-td-running-shadow); }
 
 .vigilance_run.is-failed td {
-	background: color-mix(in srgb, var(--linkx-danger-bg) 55%, transparent);
+	background: var(--settings-vigilance-run-td-failed-bg);
 }
 
 .vigilance_run.is-checking {
@@ -455,18 +1371,3109 @@
 	opacity: 0.7;
 }
 
+.vigilance_run_id {
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
+}
+
+.vigilance_run_window {
+	color: var(--settings-vigilance-run-window-text) !important;
+	font-variant-numeric: tabular-nums;
+}
+
+.vigilance_run_window i {
+	margin: 0 6px;
+	color: var(--settings-vigilance-run-window-i-text);
+	font-style: normal;
+}
+
+.vigilance_run_status {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	color: var(--settings-vigilance-run-status-text);
+	font-size: var(--fs-xs, 11px);
+	font-weight: 600;
+	text-transform: capitalize;
+}
+
+.vigilance_run_status.is-succeeded { color: var(--settings-vigilance-run-status-succeeded-text); }
+.vigilance_run_status.is-failed { color: var(--settings-vigilance-run-status-failed-text); }
+.vigilance_run_status.is-running { color: var(--settings-vigilance-run-status-running-text); }
+
+.vigilance_run_actions {
+	text-align: right;
+}
+
+.vigilance_run_error {
+	margin-right: 10px;
+	color: var(--settings-vigilance-run-error-text);
+}
+
+.vigilance_run_chevron {
+	color: var(--settings-vigilance-run-chevron-text);
+	font-size: 15px;
+	line-height: 1;
+	opacity: 0.45;
+	transition: opacity 120ms ease, transform 120ms ease;
+}
+
+.vigilance_run:hover .vigilance_run_chevron,
+.vigilance_run:focus-visible .vigilance_run_chevron {
+	opacity: 1;
+	transform: translateX(2px);
+}
+
+@container settings-page (max-width: 760px) {
+	.settings_stats {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
+	.settings_stat.is-lead {
+		grid-column: 1 / -1;
+	}
+
+	.settings_options {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}
+
+@container settings-page (max-width: 480px) {
+	.settings_hero {
+		flex-direction: column;
+		align-items: flex-start;
+	}
+
+	.settings_stats {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.settings_pill i,
+	.vigilance_run_status i {
+		animation: none !important;
+	}
+
+	.settings_switch input,
+	.settings_switch input::after,
+	.vigilance_run,
+	.vigilance_run_chevron {
+		transition: none;
+	}
+}
+
 .vigilance_error_trace {
 	max-height: 50vh;
 	margin: 0;
 	padding: 10px;
 	overflow: auto;
-	border: 1px solid var(--settings-card-border);
+	border: 1px solid var(--settings-vigilance-error-trace-border);
 	border-radius: 4px;
-	color: var(--settings-text);
+	color: var(--settings-vigilance-error-trace-text);
 	font-size: 12px;
 	white-space: pre-wrap;
 }
 
 .config_window_dialog.is-wide {
 	width: min(640px, 100%);
+}
+
+/* Settings window header, compact (as the Reports window's): a small glyph,
+   the title and its one-line description on a single row, the session chip
+   at the far end. Opt-in (is-compact-header): the Configuration and Libraries
+   windows share the frame and keep their own header. */
+.settings_window_workspace.is-compact-header {
+	grid-template-rows: auto minmax(0, 1fr) clamp(58px, 10%, 74px);
+	gap: 12px;
+}
+
+.settings_window_workspace.is-compact-header .settings_window_choose_header {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+
+.settings_window_workspace.is-compact-header .settings_window_choose_header > .source_window_mode_icon {
+	flex: none;
+	width: 22px;
+	height: 22px;
+	color: var(--settings-window-choose-header-text) !important;
+}
+
+.settings_window_workspace.is-compact-header .settings_window_choose_header > div {
+	flex: 1;
+	min-width: 0;
+}
+
+.settings_window_workspace.is-compact-header .settings_window_choose_header h2 {
+	font-size: var(--fs-lg, 15px);
+	font-weight: 700;
+	line-height: 1.3;
+}
+
+.settings_window_workspace.is-compact-header .settings_window_choose_header p {
+	margin: 2px 0 0;
+	overflow: hidden;
+	font-size: var(--fs-xs, 11px);
+	line-height: 1.4;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.settings_window_workspace.is-compact-header .settings_window_choose_header .settings_window_session_chip {
+	flex: none;
+}
+
+.settings_window_workspace.is-compact-header .settings_window_choose_header .settings_window_session_chip div {
+	gap: 10px;
+	padding: 3px 9px;
+}
+
+.settings_window_workspace.is-compact-header .settings_window_choose_header .settings_window_session_chip dt,
+.settings_window_workspace.is-compact-header .settings_window_choose_header .settings_window_session_chip dd {
+	font-size: var(--fs-xs, 11px);
+}
+
+/* …and its footer, likewise compact: a quiet summary line and 30px buttons
+   on a row that takes only the height it needs. */
+.settings_window_workspace.is-compact-header {
+	grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
+.settings_window_workspace.is-compact-header .settings_window_footer {
+	flex-wrap: wrap;
+	gap: 10px;
+	font-size: var(--fs-xs, 11px);
+}
+
+/* The info glyph sits in the message's leading padding (shared footer rule). */
+.settings_window_workspace.is-compact-header .settings_window_footer > span {
+	min-width: 0;
+	padding-left: 22px !important;
+	font-size: var(--fs-xs, 11px);
+}
+
+.settings_window_workspace.is-compact-header .settings_window_footer .window_footer_info_icon {
+	left: 2px;
+	width: 14px;
+	height: 14px;
+}
+
+.settings_window_workspace.is-compact-header .settings_window_footer_actions {
+	gap: 8px;
+}
+
+.settings_window_workspace.is-compact-header .settings_window_footer .settings_button {
+	min-width: 0;
+	height: 30px !important;
+	min-height: 30px !important;
+	padding: 0 12px !important;
+	border-radius: 3px;
+}
+
+/* Pages that fill the tab area (is-fill): the page stretches to the area's
+   height and its main list takes whatever is left, scrolling inside itself.
+   Below the list's minimum the tab area scrolls as before. */
+.settings_window_surface:has(> .settings_page.is-fill) {
+	grid-template-rows: minmax(min-content, 1fr);
+	align-content: stretch;
+}
+
+.settings_page.is-fill {
+	display: flex;
+	flex-direction: column;
+}
+
+.settings_page.is-fill > * {
+	flex: none;
+}
+
+/* Vigilance: the audit log. */
+.vigilance.is-fill > .settings_block {
+	display: flex;
+	flex: 1 1 auto;
+	flex-direction: column;
+}
+
+.vigilance.is-fill .vigilance_runs {
+	flex: 1 1 0;
+	/* Never shorter than this (about ten runs); the tab area scrolls instead. */
+	min-height: 360px;
+	max-height: none;
+}
+
+/* The Theme Studio (Preferences): one card in three sections. The second
+   is a workbench: a menu bar of the parts of the app, by area, over the
+   settings of the chosen part, in groups that open. Those scroll inside
+   the card, so the page keeps its length. Its controls (colour and
+   alpha pickers, theme pills) are styled in main.css. */
+.theme_studio_container {
+	display: grid;
+	min-width: 0;
+	border: 1px solid var(--linkx-card-border);
+	border-radius: 4px;
+	background: var(--linkx-card-bg);
+	overflow: hidden;
+}
+
+.theme_studio_header {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	padding: 14px 16px;
+}
+
+.theme_studio_header_icon {
+	display: grid;
+	flex: 0 0 auto;
+	place-items: center;
+	width: 34px;
+	height: 34px;
+	border-radius: 6px;
+	background: var(--settings-theme-studio-cat-badge-bg);
+	color: var(--settings-theme-studio-header-icon-text);
+}
+
+.theme_studio_header_text {
+	flex: 1;
+	min-width: 0;
+}
+
+.theme_studio_header h4 {
+	margin: 0;
+	color: var(--settings-theme-studio-header-h4-text);
+	font-size: 15px;
+	font-weight: 600;
+}
+
+.theme_studio_header p {
+	margin: 3px 0 0;
+	color: var(--settings-theme-studio-header-p-text);
+	font-size: 12px;
+}
+
+.theme_studio_count {
+	flex: 0 0 auto;
+	padding: 3px 9px;
+	border: 1px solid var(--settings-theme-studio-category-tabs-border);
+	border-radius: 3px;
+	color: var(--settings-theme-studio-header-p-text);
+	font-size: 11px;
+	font-weight: 600;
+	white-space: nowrap;
+}
+
+.theme_studio_count.is-on {
+	border-color: transparent;
+	background: var(--settings-theme-studio-cat-badge-bg);
+	color: var(--settings-theme-studio-cat-badge-text);
+}
+
+.theme_studio_notice {
+	margin: 0 16px 12px;
+	padding: 7px 10px;
+	border-radius: 3px;
+	background: var(--settings-theme-studio-notice-bg);
+	color: var(--settings-theme-studio-notice-text);
+	font-size: 12px;
+	font-weight: 600;
+}
+
+.theme_studio_notice.is-bad {
+	background: var(--settings-theme-studio-reset-btn-bg);
+	color: var(--settings-theme-studio-reset-btn-text);
+}
+
+/* A section: what to do, then its content. */
+.theme_studio_step {
+	display: grid;
+	gap: 10px;
+	min-width: 0;
+	padding: 14px 16px 16px;
+	border-top: 1px solid var(--settings-theme-studio-category-tabs-border);
+}
+
+/* The section holding the themes to start from: a fill of its own. */
+.theme_studio_step.is-base {
+	background: var(--settings-theme-studio-base-bg);
+}
+
+.theme_studio_step_head {
+	display: flex;
+	align-items: flex-start;
+	gap: 10px;
+}
+
+.theme_studio_step_head h5 {
+	margin: 0;
+	color: var(--settings-theme-studio-card-info-h5-text);
+	font-size: 13px;
+	font-weight: 600;
+}
+
+.theme_studio_import_card .theme_studio_step_head h5 {
+	color: var(--settings-theme-studio-import-card-h5-text);
+}
+
+.theme_studio_step_head p {
+	margin: 0;
+	color: var(--settings-theme-studio-card-info-p-text);
+	font-size: 12px;
+}
+
+.theme_studio_step_body {
+	display: grid;
+	gap: 10px;
+	min-width: 0;
+}
+
+/* Step 2: search and the picker over the workbench. */
+.theme_studio_toolbar {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+}
+
+.theme_studio_search_input_wrapper {
+	position: relative;
+	display: flex;
+	flex: 1 1 220px;
+	align-items: center;
+	min-width: 0;
+}
+
+.theme_studio_search_icon {
+	position: absolute;
+	left: 10px;
+	display: grid;
+	color: var(--settings-theme-studio-search-clear-text);
+	pointer-events: none;
+}
+
+.theme_studio_search_input {
+	width: 100%;
+	height: 34px;
+	padding-left: 30px !important;
+	padding-right: 30px !important;
+	border: 1px solid var(--settings-theme-studio-search-input-border);
+	border-radius: 4px;
+	background: var(--settings-theme-studio-search-input-bg);
+	color: var(--settings-theme-studio-search-input-text);
+	font-size: 12px;
+	transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.theme_studio_search_input::-webkit-search-cancel-button {
+	display: none;
+}
+
+.theme_studio_search_input:focus {
+	border-color: var(--settings-theme-studio-search-input-focus-border);
+	box-shadow: 0 0 0 3px var(--settings-theme-studio-search-input-focus-shadow);
+	outline: none;
+}
+
+.theme_studio_search_clear {
+	position: absolute;
+	right: 6px;
+	display: grid;
+	place-items: center;
+	width: 22px;
+	height: 22px;
+	padding: 0;
+	border: 0;
+	border-radius: 3px;
+	background: transparent;
+	color: var(--settings-theme-studio-search-clear-text);
+	cursor: pointer;
+	transition: color 140ms ease, background-color 140ms ease;
+}
+
+.theme_studio_search_clear:hover {
+	background: var(--settings-theme-studio-search-clear-hover-bg);
+	color: var(--settings-theme-studio-search-clear-hover-text);
+}
+
+.theme_studio_container .settings_button {
+	gap: 6px;
+	white-space: nowrap;
+}
+
+.theme_studio_pick.is-on {
+	border-color: var(--settings-theme-studio-cat-btn-active-border) !important;
+	background-image: none !important;
+	background-color: var(--settings-theme-studio-cat-btn-active-bg) !important;
+	color: var(--settings-theme-studio-cat-btn-active-text) !important;
+}
+
+.theme_studio_workbench {
+	display: flex;
+	flex-direction: column;
+	height: min(560px, 72vh);
+	min-height: 320px;
+	border: 1px solid var(--settings-theme-studio-token-card-border);
+	border-radius: 4px;
+	overflow: hidden;
+}
+
+/* The parts of the app: a menu bar, one menu per area. A menu opens a
+   scrolling list of its parts over the settings below. */
+.theme_studio_nav {
+	position: relative;
+	z-index: 2;
+	display: flex;
+	flex: 0 0 auto;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 4px 8px;
+	padding: 6px;
+	border-bottom: 1px solid var(--settings-theme-studio-nav-border);
+	background: var(--settings-theme-studio-nav-bg);
+}
+
+/* The area menus from the left; "Your changes", one of them in look,
+   held to the right end. */
+.theme_studio_nav_menus {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 4px;
+}
+
+.theme_studio_cat_btn.is-changes {
+	width: auto;
+	margin-left: auto;
+	white-space: nowrap;
+}
+
+.theme_studio_menu_btn {
+	width: auto;
+}
+
+.theme_studio_menu {
+	position: relative;
+}
+
+.theme_studio_menu_btn svg {
+	flex: 0 0 auto;
+	transform: rotate(90deg);
+	transition: transform 140ms ease;
+}
+
+.theme_studio_menu_btn.is-open svg {
+	transform: rotate(-90deg);
+}
+
+.theme_studio_menu_btn.is-open:not(.is-active) {
+	background: var(--settings-theme-studio-cat-btn-hover-bg);
+	color: var(--settings-theme-studio-cat-btn-hover-text);
+}
+
+.theme_studio_menu_list {
+	position: absolute;
+	top: calc(100% + 4px);
+	left: 0;
+	display: grid;
+	gap: 2px;
+	width: max-content;
+	min-width: 100%;
+	max-width: 300px;
+	max-height: 232px;
+	padding: 4px;
+	border: 1px solid var(--settings-theme-studio-token-card-border);
+	border-radius: 4px;
+	background: var(--linkx-card-bg);
+	box-shadow: 0 8px 20px rgba(0, 0, 0, 0.16);
+	overflow-y: auto;
+	scrollbar-width: thin;
+}
+
+.theme_studio_menu:last-child .theme_studio_menu_list {
+	right: 0;
+	left: auto;
+}
+
+.theme_studio_cat_btn {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	width: 100%;
+	min-height: 28px;
+	padding: 4px 8px;
+	border: 1px solid transparent;
+	border-radius: 3px;
+	background: transparent;
+	color: var(--settings-theme-studio-cat-btn-text);
+	font: inherit;
+	font-size: 12px;
+	font-weight: 500;
+	text-align: left;
+	cursor: pointer;
+	transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease, opacity 140ms ease;
+}
+
+.theme_studio_cat_btn > span:first-of-type {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.theme_studio_cat_btn:hover {
+	background: var(--settings-theme-studio-cat-btn-hover-bg);
+	color: var(--settings-theme-studio-cat-btn-hover-text);
+}
+
+.theme_studio_cat_btn.is-active {
+	border-color: var(--settings-theme-studio-cat-btn-active-border);
+	background: var(--settings-theme-studio-cat-btn-active-bg);
+	color: var(--settings-theme-studio-cat-btn-active-text);
+	font-weight: 600;
+}
+
+.theme_studio_cat_btn.is-dim:not(.is-active) {
+	opacity: 0.45;
+}
+
+.theme_studio_cat_btn:focus-visible,
+.theme_studio_group_head:focus-visible,
+.theme_studio_found_open:focus-visible,
+.theme_studio_link:focus-visible,
+.theme_studio_reset_btn:focus-visible {
+	outline: 2px solid var(--settings-theme-studio-search-input-focus-border);
+	outline-offset: 1px;
+}
+
+.theme_studio_cat_badge {
+	flex: 0 0 auto;
+	padding: 1px 6px;
+	border-radius: 3px;
+	background: var(--settings-theme-studio-cat-badge-bg);
+	color: var(--settings-theme-studio-cat-badge-text);
+	font-size: 10px;
+	font-weight: 700;
+	line-height: 1.5;
+}
+
+/* A part with changes of yours. */
+.theme_studio_cat_dot {
+	flex: 0 0 auto;
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: var(--settings-theme-studio-token-row-overridden-border);
+}
+
+/* The chosen part: what it is, then its settings. */
+.theme_studio_token_card {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	gap: 8px;
+	min-width: 0;
+	min-height: 0;
+	padding: 12px 14px 14px;
+	background: var(--settings-theme-studio-token-card-bg);
+	overflow-y: auto;
+	scrollbar-width: thin;
+}
+
+.theme_studio_card_info {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-end;
+	justify-content: space-between;
+	gap: 6px 16px;
+	padding-bottom: 10px;
+	border-bottom: 1px solid var(--settings-theme-studio-category-tabs-border);
+}
+
+.theme_studio_crumb {
+	margin: 0 0 2px;
+	color: var(--settings-theme-studio-search-hint-text);
+	font-size: 10px;
+	font-weight: 700;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+}
+
+.theme_studio_card_info h5 {
+	margin: 0;
+	color: var(--settings-theme-studio-card-info-h5-text);
+	font-size: 14px;
+	font-weight: 600;
+}
+
+.theme_studio_card_info p:not(.theme_studio_crumb) {
+	max-width: 62ch;
+	margin: 3px 0 0;
+	color: var(--settings-theme-studio-card-info-p-text);
+	font-size: 12px;
+}
+
+.theme_studio_card_meta {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	color: var(--settings-theme-studio-card-info-p-text);
+	font-size: 11px;
+	white-space: nowrap;
+}
+
+.theme_studio_link {
+	padding: 0;
+	border: 0;
+	background: none;
+	color: var(--settings-theme-studio-search-hint-text);
+	font: inherit;
+	font-weight: 600;
+	text-decoration: underline;
+	text-underline-offset: 2px;
+	cursor: pointer;
+}
+
+/* A group of settings: a heading that opens it. */
+.theme_studio_group {
+	display: grid;
+	gap: 8px;
+	flex: 0 0 auto;
+}
+
+.theme_studio_group_head {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	min-height: 32px;
+	padding: 5px 10px;
+	border: 1px solid var(--settings-theme-studio-cat-btn-border);
+	border-radius: 3px;
+	background: var(--settings-theme-studio-cat-btn-bg);
+	color: var(--settings-theme-studio-cat-btn-text);
+	font: inherit;
+	font-size: 12px;
+	text-align: left;
+	cursor: pointer;
+	transition: background-color 140ms ease, color 140ms ease;
+}
+
+.theme_studio_group_head:hover {
+	background: var(--settings-theme-studio-cat-btn-hover-bg);
+	color: var(--settings-theme-studio-cat-btn-hover-text);
+}
+
+.theme_studio_group_head svg {
+	flex: 0 0 auto;
+	transition: transform 140ms ease;
+}
+
+.theme_studio_group.is-open > .theme_studio_group_head svg {
+	transform: rotate(90deg);
+}
+
+.theme_studio_group_head strong {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	font-weight: 600;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.theme_studio_group_head small {
+	flex: 0 0 auto;
+	font-size: 11px;
+	opacity: 0.7;
+}
+
+.theme_studio_group.is-open {
+	padding-bottom: 6px;
+}
+
+/* Search results and the list of changes: by part of the app. */
+.theme_studio_found {
+	display: grid;
+	gap: 8px;
+	flex: 0 0 auto;
+}
+
+.theme_studio_found_head {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	margin-top: 4px;
+	color: var(--settings-theme-studio-card-info-p-text);
+	font-size: 11px;
+}
+
+.theme_studio_found_open {
+	padding: 0;
+	border: 0;
+	background: none;
+	color: var(--settings-theme-studio-card-info-h5-text);
+	font: inherit;
+	font-weight: 600;
+	cursor: pointer;
+}
+
+.theme_studio_found_open:hover {
+	text-decoration: underline;
+	text-underline-offset: 2px;
+}
+
+.theme_studio_more {
+	flex: 0 0 auto;
+	align-self: center;
+}
+
+.theme_studio_token_grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+	gap: 6px;
+}
+
+/* A setting: its name over its control. */
+.theme_studio_token_row {
+	display: grid;
+	align-content: start;
+	gap: 4px;
+	min-width: 0;
+	padding: 5px 8px 6px;
+	border: 1px solid var(--settings-theme-studio-token-row-border);
+	border-radius: 3px;
+	background: var(--settings-theme-studio-token-row-bg);
+}
+
+.theme_studio_token_row.is-overridden {
+	border-color: var(--settings-theme-studio-token-row-overridden-border);
+	box-shadow: 0 0 6px var(--settings-theme-studio-token-row-overridden-shadow);
+}
+
+.theme_studio_token_label {
+	display: grid;
+	gap: 1px;
+	min-width: 0;
+}
+
+.theme_studio_token_label strong,
+.theme_studio_token_label code {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.theme_studio_token_label strong {
+	color: var(--settings-theme-studio-token-label-strong-text);
+	font-size: 12px;
+	font-weight: 600;
+}
+
+.theme_studio_token_label code {
+	color: var(--settings-theme-studio-token-label-code-text);
+	font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+	font-size: 10px;
+}
+
+.theme_studio_token_controls {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+}
+
+.theme_studio_token_controls > .theme_studio_color_alpha,
+.theme_studio_token_controls > .theme_studio_hex_input:not(.is-short) {
+	flex: 1;
+	min-width: 0;
+	max-width: none;
+}
+
+.theme_studio_token_controls .theme_studio_color_alpha .theme_studio_hex_input {
+	flex: 1 1 84px;
+	min-width: 0;
+	max-width: none;
+}
+
+.theme_studio_token_controls .theme_studio_range_slider {
+	width: 64px;
+}
+
+/* Compact controls inside a setting's card. */
+.theme_studio_token_row .theme_studio_swatch_preview,
+.theme_studio_token_row .theme_studio_color_swatch {
+	width: 24px;
+	height: 24px;
+}
+
+.theme_studio_token_row .theme_studio_hex_input {
+	height: 24px;
+	min-height: 24px;
+	padding: 2px 6px;
+	font-size: 11px;
+}
+
+.theme_studio_hex_input.is-short {
+	flex: 0 0 64px;
+	min-width: 0;
+}
+
+.theme_studio_reset_btn {
+	display: grid;
+	flex: 0 0 auto;
+	align-self: flex-start;
+	place-items: center;
+	width: 24px;
+	height: 24px;
+	padding: 0;
+	border: 0;
+	border-radius: 3px;
+	background: var(--settings-theme-studio-reset-btn-bg);
+	color: var(--settings-theme-studio-reset-btn-text);
+	cursor: pointer;
+}
+
+.theme_studio_empty_search {
+	margin: auto;
+	padding: 24px 16px;
+	color: var(--settings-theme-studio-empty-search-text);
+	font-size: 12px;
+	line-height: 1.5;
+	text-align: center;
+}
+
+.theme_studio_empty_search p {
+	margin: 0 0 6px;
+}
+
+.theme_studio_search_hint {
+	color: var(--settings-theme-studio-search-hint-text);
+	font-size: 11px;
+}
+
+/* Step 3: copy, import, reset. */
+.theme_studio_actions {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+}
+
+.theme_studio_actions_gap {
+	flex: 1;
+}
+
+.theme_studio_confirm {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+	color: var(--settings-theme-studio-import-card-h5-text);
+	font-size: 12px;
+	font-weight: 600;
+}
+
+.theme_studio_import_row {
+	display: flex;
+	align-items: flex-end;
+	gap: 8px;
+	padding: 10px;
+	border: 1px solid var(--settings-theme-studio-import-card-border);
+	border-radius: 3px;
+	background: var(--settings-theme-studio-import-card-bg);
+}
+
+.theme_studio_json_area {
+	flex: 1;
+	min-width: 0;
+	font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+	font-size: 11px;
+	resize: vertical;
+}
+
+/* A narrow Settings window. */
+@container settings-page (max-width: 640px) {
+	.theme_studio_count {
+		display: none;
+	}
+}
+
+/* Settings tab rail, as the Source window's steps: the tabs start at the
+   top, joined by short connectors, and only the last one is pinned to the
+   bottom (the connector before it takes the remaining height). */
+.settings_window_workspace.is-compact-header .settings_window_timeline.is-tabs .source_window_timeline_connector {
+	flex: 0 0 22px;
+}
+
+.settings_window_workspace.is-compact-header .settings_window_timeline.is-tabs .source_window_timeline_connector:nth-last-child(2) {
+	flex: 1 1 22px;
+}
+
+/* A short lead-in line above the first tab (a connector with nothing before it). */
+.settings_window_workspace.is-compact-header .settings_window_timeline.is-tabs .source_window_timeline_steps::before {
+	content: "";
+	position: relative;
+	z-index: 0;
+	flex: 0 0 16px;
+	width: 2px;
+	margin: 0 0 -6px 17px;
+	border-radius: 2px;
+	background: var(--settings-window-timeline-tabs-before-bg);
+}
+
+/* Profile: the avatar is a larger tile than the other pages' glyphs. */
+.profile .settings_hero_media {
+	width: 60px;
+	height: 60px;
+	font-size: 26px;
+}
+
+/* Figure tiles, compact: smaller type and a little less room. */
+.settings_stat {
+	padding: 7px 14px;
+}
+
+.settings_stat.is-text {
+	padding: 8px 14px;
+}
+
+.settings_stat dt {
+	font-size: 10px;
+}
+
+.settings_stat dd {
+	font-size: 14px;
+	line-height: 1.25;
+}
+
+.settings_stat.is-lead dd {
+	font-size: 16px;
+}
+
+.settings_stat.is-text dd {
+	font-size: 12px;
+}
+
+.settings_stat small {
+	font-size: 10.5px;
+}
+
+.settings_stat_icon svg,
+.settings_stat.is-lead .settings_stat_icon svg {
+	width: 15px;
+	height: 15px;
+}
+
+.settings_stat_icon,
+.settings_stat.is-lead .settings_stat_icon {
+	width: 16px;
+	height: 16px;
+}
+
+/* Vigilance audit log: its header is a toolbar joined to the table (one
+   card): the title with the run count and a live mark, the actions as
+   compact buttons with glyphs. */
+.vigilance > .settings_block {
+	gap: 0;
+}
+
+/* Two rows: the title with Re-analyze at the far end; under them the note
+   with the other two actions, also at the far end. */
+.vigilance_log_header {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	align-items: center;
+	gap: 6px 12px;
+	padding: 9px 10px 9px 14px;
+	border: 1px solid var(--settings-vigilance-log-header-border);
+	border-bottom: 0;
+	border-radius: 4px 4px 0 0;
+	background:
+		radial-gradient(120% 70px at 0 0, var(--settings-vigilance-log-header-bg), transparent 70%),
+		var(--settings-vigilance-log-header-bg-2);
+}
+
+.vigilance_log_header + .vigilance_runs {
+	border-radius: 0 0 4px 4px;
+}
+
+.vigilance_log_heading {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 2px 8px;
+	min-width: 0;
+}
+
+.vigilance_log_heading h4 {
+	font-size: 14px;
+}
+
+.vigilance_log_heading {
+	grid-area: 1 / 1;
+}
+
+.vigilance_log_rewind {
+	grid-area: 1 / 2;
+	justify-self: end;
+}
+
+.vigilance_log_header .vigilance_log_note {
+	grid-area: 2 / 1;
+	margin: 0;
+	font-size: var(--fs-xs, 11px);
+}
+
+.vigilance_log_count,
+.vigilance_log_live {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	padding: 1px 7px;
+	border-radius: 3px;
+	background: var(--settings-vigilance-log-count-bg);
+	color: var(--settings-vigilance-log-count-text);
+	font-size: 10.5px;
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+
+.vigilance_log_live {
+	background: var(--settings-vigilance-log-live-bg);
+	color: var(--settings-vigilance-log-live-text);
+}
+
+.vigilance_log_live i {
+	width: 5px;
+	height: 5px;
+	border-radius: 50%;
+	background: currentColor;
+	animation: vigilance_pulse 1.8s ease-in-out infinite;
+}
+
+.vigilance_log_actions {
+	display: flex;
+	flex-wrap: wrap;
+	grid-area: 2 / 2;
+	align-items: center;
+	justify-content: flex-end;
+	justify-self: end;
+	gap: 6px;
+}
+
+.vigilance_action {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	height: 30px;
+	padding: 0 11px;
+	border: 1px solid var(--settings-vigilance-action-border);
+	border-radius: 3px;
+	background: var(--settings-vigilance-action-bg);
+	color: var(--settings-vigilance-action-text);
+	font: inherit;
+	font-size: 12px;
+	font-weight: 600;
+	white-space: nowrap;
+	cursor: pointer;
+	transition: border-color 120ms ease, background-color 120ms ease, color 120ms ease;
+}
+
+.vigilance_action svg {
+	flex: none;
+	opacity: 0.8;
+}
+
+.vigilance_action:hover:not(:disabled) {
+	border-color: var(--settings-vigilance-action-hover-border);
+	background: var(--settings-vigilance-action-hover-bg);
+}
+
+.vigilance_action:focus-visible {
+	outline: 2px solid var(--settings-vigilance-action-focus-outline);
+	outline-offset: 2px;
+}
+
+.vigilance_action:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
+/* The main action: solid. */
+.vigilance_action.is-primary {
+	border-color: var(--settings-vigilance-action-primary-border);
+	background: var(--settings-vigilance-action-primary-bg);
+	color: var(--settings-vigilance-action-primary-text);
+}
+
+.vigilance_action.is-primary:hover:not(:disabled) {
+	border-color: var(--settings-vigilance-action-primary-hover-border);
+	background: var(--settings-vigilance-action-primary-hover-bg);
+}
+
+/* The destructive one stays quiet until pointed at. */
+.vigilance_action.is-danger {
+	border-color: transparent;
+	background: transparent;
+	color: var(--settings-vigilance-action-danger-text);
+}
+
+.vigilance_action.is-danger:hover:not(:disabled) {
+	border-color: var(--settings-vigilance-action-danger-hover-border);
+	background: var(--settings-vigilance-action-danger-hover-bg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.vigilance_log_live i {
+		animation: none;
+	}
+
+	.vigilance_action {
+		transition: none;
+	}
+}
+
+/* Launch cards (Users: Create user, Existing users): two cards side by
+   side, each opening a popup. */
+.settings_launch_cards {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 10px;
+}
+
+.settings_launch_card {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 10px;
+	min-width: 0;
+	min-height: 132px;
+	padding: 22px 18px;
+	border: 1px solid var(--settings-launch-card-border);
+	border-radius: 4px;
+	background: none;
+	color: inherit;
+	font: inherit;
+	text-align: center;
+	cursor: pointer;
+	transition: border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
+}
+
+.settings_launch_card:hover,
+.settings_launch_card[aria-expanded="true"] {
+	border-color: var(--settings-launch-card-hover-border);
+	box-shadow: 0 4px 12px -5px var(--settings-launch-card-hover-shadow);
+}
+
+.settings_launch_card:hover {
+	transform: translateY(-1px);
+}
+
+.settings_launch_card:focus-visible {
+	outline: 2px solid var(--settings-launch-card-focus-outline);
+	outline-offset: 2px;
+}
+
+.settings_launch_icon {
+	display: grid;
+	flex: none;
+	place-items: center;
+	color: var(--settings-launch-icon-text);
+}
+
+.settings_launch_icon svg {
+	width: 30px;
+	height: 30px;
+}
+
+.settings_launch_text {
+	display: grid;
+	justify-items: center;
+	gap: 3px;
+	min-width: 0;
+}
+
+.settings_launch_text strong {
+	color: var(--settings-launch-text-strong-text);
+	font-size: 14px;
+	font-weight: 600;
+	line-height: 1.35;
+}
+
+.settings_launch_text small {
+	color: var(--settings-launch-text-small-text);
+	font-size: var(--fs-xs, 11px);
+	line-height: 1.4;
+}
+
+@container settings-page (max-width: 560px) {
+	.settings_launch_cards {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}
+
+/* Settings popup: the Graph window's "Generate report" card (the
+   graph_customize shell) hosted by the Settings window's frame. */
+.settings_window_workspace {
+	position: relative;
+}
+
+.settings_popup_backdrop {
+	/* The shared popup shell (graph_customize) reads the Settings' own
+	   popup tokens here, so restyling them touches no other window. */
+	--customize-accent: var(--settings-popup-accent);
+	--graph-text: var(--settings-popup-text);
+	--graph-muted-text: var(--settings-popup-muted-text);
+	--graph-border: var(--settings-popup-border);
+	--graph-toolbar-bg: var(--settings-popup-bg);
+	z-index: 20;
+	background: var(--settings-popup-backdrop-bg);
+}
+
+.graph_customize.is-report.settings_popup {
+	width: min(760px, 100%);
+}
+
+/* Create user. */
+.graph_customize.is-report.settings_popup.is-narrow {
+	width: min(540px, 100%);
+}
+
+.graph_customize.is-report.settings_popup.is-wide {
+	width: min(980px, 100%);
+}
+
+.settings_popup_body {
+	display: grid;
+	align-content: start;
+	gap: 10px;
+	min-height: 0;
+	padding: 14px 24px 22px;
+	overflow: auto;
+	scrollbar-width: thin;
+	color: var(--settings-popup-body-text);
+	font-size: 12px;
+}
+
+.graph_customize.settings_popup {
+	max-height: 100%;
+}
+
+
+@media (prefers-reduced-motion: reduce) {
+	.settings_launch_card {
+		transition: none;
+	}
+
+	.settings_launch_card:hover {
+		transform: none;
+	}
+}
+
+/* ── Users popups ─────────────────────────────────────────────────────────
+   Both use the popup's own language: flat sections under small accent
+   heads, hairlines between areas, compact fields. --users-line is the
+   popup's hairline. */
+.settings_popup {
+	--users-line: var(--settings-popup-line);
+	--users-soft: var(--settings-popup-soft-bg);
+}
+
+.users_popup_error {
+	margin: 0;
+	font-size: 12px;
+}
+
+.users_section {
+	display: grid;
+	align-content: start;
+	gap: 9px;
+	min-width: 0;
+}
+
+.users_section .graph_customize_section_head {
+	display: flex;
+	align-items: baseline;
+	gap: 6px;
+}
+
+.users_section .graph_customize_section_head small {
+	color: var(--graph-muted-text);
+	font-size: 10px;
+	font-weight: 600;
+	letter-spacing: 0;
+	text-transform: none;
+}
+
+.users_section_bar {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 4px 12px;
+}
+
+/* A field: its label over the control, or (is-inline) beside it in a fixed
+   label column so a section's controls line up. */
+.users_field {
+	display: grid;
+	gap: 4px;
+	min-width: 0;
+}
+
+.users_field > span:first-child {
+	color: var(--graph-muted-text);
+	font-size: 11px;
+}
+
+.users_field.is-inline {
+	grid-template-columns: 104px minmax(0, 1fr);
+	align-items: center;
+	gap: 10px;
+}
+
+.users_field.is-inline > span:first-child {
+	align-self: start;
+	padding-top: 5px;
+}
+
+.settings_popup .graph_customize_input {
+	height: 30px;
+	font-size: 12px;
+}
+
+/* A browser that autofills a field paints its own background over the
+   well; hold the well's own background and text colour instead. */
+.settings_popup .graph_customize_input:-webkit-autofill,
+.settings_popup .graph_customize_input:-webkit-autofill:hover,
+.settings_popup .graph_customize_input:-webkit-autofill:focus,
+.settings_popup .graph_customize_input:autofill {
+	-webkit-text-fill-color: var(--settings-popup-text);
+	caret-color: var(--settings-popup-text);
+	transition: background-color 600000s 0s, color 600000s 0s;
+}
+
+/* Checkbox chips: roles and privileges. */
+.users_chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 5px;
+	min-width: 0;
+}
+
+.users_chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 3px 9px 3px 7px;
+	border: 1px solid transparent;
+	border-radius: 3px;
+	background: var(--users-soft);
+	color: var(--graph-text);
+	font-size: 11.5px;
+	line-height: 1.4;
+	white-space: nowrap;
+	cursor: pointer;
+	transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.users_chip input {
+	width: 12px;
+	height: 12px;
+	margin: 0;
+	accent-color: var(--customize-accent);
+}
+
+.users_chip:hover {
+	border-color: color-mix(in srgb, var(--customize-accent) 45%, transparent);
+}
+
+.users_chip:has(input:checked) {
+	border-color: color-mix(in srgb, var(--customize-accent) 40%, transparent);
+	background: color-mix(in srgb, var(--customize-accent) 12%, transparent);
+	font-weight: 600;
+}
+
+.users_chip:has(input:disabled) {
+	opacity: 0.6;
+	cursor: not-allowed;
+}
+
+/* Access levels: cards to pick one from. Each has its glyph, what it is
+   for and how many privileges it grants; the chosen one takes the accent
+   (tinted edge, corner wash, a tick). The radio itself is visually hidden. */
+.users_levels {
+	display: grid;
+	gap: 6px;
+}
+
+.users_level {
+	position: relative;
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 9px 10px;
+	border: 1px solid var(--users-line);
+	border-radius: 6px;
+	cursor: pointer;
+	transition: border-color 140ms ease, background-color 140ms ease, box-shadow 140ms ease;
+}
+
+.users_level input {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	margin: 0;
+	opacity: 0;
+	pointer-events: none;
+}
+
+.users_level:hover {
+	border-color: var(--settings-users-level-hover-border);
+	box-shadow: 0 3px 10px -5px var(--settings-users-level-hover-shadow);
+}
+
+.users_level:has(input:focus-visible) {
+	outline: 2px solid var(--settings-users-level-focus-outline);
+	outline-offset: 1px;
+}
+
+.users_level.is-current {
+	border-color: var(--settings-users-level-current-border);
+	background: var(--settings-users-level-current-fill);
+	box-shadow: 0 4px 12px -5px var(--settings-users-level-current-shadow);
+}
+
+.users_level.is-current .users_level_text strong {
+	color: var(--settings-users-level-current-title-text);
+}
+
+.users_level.is-current .users_level_text small {
+	color: var(--settings-users-level-current-note-text);
+}
+
+.users_level_icon {
+	display: grid;
+	flex: none;
+	place-items: center;
+	width: 30px;
+	height: 30px;
+	border-radius: 6px;
+	background: var(--users-soft);
+	color: var(--settings-users-level-icon-text);
+	transition: background-color 140ms ease, color 140ms ease;
+}
+
+.users_level.is-current .users_level_icon {
+	background: var(--settings-users-level-icon-current-bg);
+	color: var(--settings-users-level-icon-current-text);
+}
+
+.users_level_text {
+	display: grid;
+	flex: 1;
+	gap: 1px;
+	min-width: 0;
+}
+
+.users_level_text strong {
+	color: var(--settings-users-level-text-strong-text);
+	font-size: 12.5px;
+	font-weight: 600;
+}
+
+.users_level_text small {
+	color: var(--settings-users-level-text-small-text);
+	font-size: 10.5px;
+	line-height: 1.35;
+}
+
+.users_level_count {
+	flex: none;
+	padding: 1px 6px;
+	border-radius: 3px;
+	background: var(--users-soft);
+	color: var(--settings-users-level-count-text);
+	font-size: 10px;
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+
+.users_level.is-current .users_level_count {
+	background: var(--settings-users-level-count-current-bg);
+	color: var(--settings-users-level-count-current-text);
+}
+
+/* The tick of the chosen level. */
+.users_level_mark {
+	display: grid;
+	flex: none;
+	place-items: center;
+	width: 16px;
+	height: 16px;
+	border: 1.5px solid var(--settings-users-level-mark-border);
+	border-radius: 50%;
+	color: transparent;
+	transition: background-color 140ms ease, border-color 140ms ease;
+}
+
+.users_level.is-current .users_level_mark {
+	border-color: var(--settings-users-level-mark-current-border);
+	background: var(--settings-users-level-mark-current-bg);
+	color: var(--settings-users-level-mark-current-text);
+}
+
+/* A level this account may not assign. */
+/* An existing account's level: shown, not chosen. */
+.users_level.is-fixed,
+.users_level.is-fixed:hover {
+	box-shadow: none;
+	cursor: default;
+}
+
+.users_level.is-locked {
+	border-style: dashed;
+	opacity: 0.6;
+	cursor: not-allowed;
+}
+
+.users_level.is-locked:hover {
+	border-color: var(--users-line);
+	box-shadow: none;
+}
+
+.users_level.is-locked .users_level_mark {
+	visibility: hidden;
+}
+
+/* Privileges (the last step): areas two to a row; each privilege an on/off pill. */
+.users_picker {
+	display: grid;
+	gap: 9px;
+}
+
+/* An area: its name on top, its privileges underneath. No rules between
+   areas; the spacing tells them apart. */
+.users_picker_area {
+	display: grid;
+	gap: 4px;
+	min-width: 0;
+}
+
+.users_picker_name {
+	display: inline-flex;
+	align-items: baseline;
+	gap: 5px;
+	justify-self: start;
+	max-width: 100%;
+	padding: 0;
+	border: 0;
+	background: none;
+	color: var(--settings-users-picker-name-text);
+	font: inherit;
+	font-size: 11px;
+	font-weight: 600;
+	line-height: 1.3;
+	text-align: left;
+	white-space: nowrap;
+	cursor: pointer;
+}
+
+.users_picker_name small {
+	flex: none;
+	color: var(--settings-users-picker-name-small-text);
+	font-size: 9.5px;
+	font-weight: 500;
+	font-variant-numeric: tabular-nums;
+}
+
+.users_picker_name:hover {
+	color: var(--settings-users-picker-name-hover-text);
+}
+
+.users_picker_pills {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 3px;
+}
+
+/* A privilege: its glyph and name; filled when granted. */
+.users_pill {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 2px 8px 2px 6px;
+	border: 1px solid var(--users-line);
+	border-radius: 999px;
+	background: none;
+	color: var(--settings-users-pill-text);
+	font: inherit;
+	font-size: 10.5px;
+	line-height: 1.4;
+	text-transform: capitalize;
+	white-space: nowrap;
+	cursor: pointer;
+	transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.users_pill svg {
+	flex: none;
+	opacity: 0.75;
+}
+
+.users_pill:hover {
+	border-color: var(--settings-users-pill-hover-border);
+	color: var(--settings-users-pill-hover-text);
+}
+
+.users_pill.is-on {
+	border-color: var(--settings-users-pill-on-border);
+	background: var(--settings-users-pill-on-bg);
+	color: var(--settings-users-pill-on-text);
+	font-weight: 600;
+}
+
+.users_pill.is-on svg {
+	opacity: 1;
+}
+
+/* A privilege the signed-in account does not hold: shown as it is, but
+   it cannot be granted or removed from here. */
+.users_pill.is-locked {
+	cursor: not-allowed;
+	opacity: 0.55;
+	border-style: dashed;
+}
+.users_pill.is-locked:hover {
+	border-color: var(--users-line);
+	color: var(--settings-users-pill-locked-hover-text);
+}
+.users_pill.is-locked.is-on:hover {
+	border-color: var(--settings-users-pill-locked-on-hover-border);
+	color: var(--settings-users-pill-locked-on-hover-text);
+}
+
+.users_pill:focus-visible,
+.users_picker_name:focus-visible {
+	outline: 2px solid var(--settings-users-pill-focus-outline);
+	outline-offset: 1px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.users_level,
+	.users_level_icon,
+	.users_level_mark,
+	.users_pill {
+		transition: none;
+	}
+}
+
+/* Privileges matrix: an area per row, a privilege per column (its name
+   set upright to keep the columns narrow), a checkbox where the area has
+   that privilege. Scrolls sideways if the popup is too narrow for it. */
+.users_table_wrap {
+	border: 1px solid var(--users-line);
+	border-radius: 4px;
+	overflow-x: auto;
+	scrollbar-width: thin;
+}
+
+.users_table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 11.5px;
+}
+
+.users_table th,
+.users_table td {
+	padding: 5px 6px;
+	border-bottom: 1px solid var(--users-line);
+	text-align: center;
+	vertical-align: middle;
+}
+
+.users_table tbody tr:last-child > * {
+	border-bottom: 0;
+}
+
+.users_table thead th {
+	background: var(--users-soft);
+	color: var(--graph-muted-text);
+	font-size: 10px;
+	font-weight: 700;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	vertical-align: bottom;
+	white-space: nowrap;
+}
+
+.users_table .is-area {
+	padding-left: 10px;
+	text-align: left;
+	white-space: nowrap;
+}
+
+.users_table tbody .is-area {
+	font-weight: 600;
+}
+
+/* A privilege's name, read bottom to top. */
+.users_table .is-action {
+	width: 26px;
+	padding: 6px 2px;
+}
+
+.users_table .is-action button {
+	padding: 0;
+	border: 0;
+	background: none;
+	color: inherit;
+	font: inherit;
+	letter-spacing: inherit;
+	text-transform: inherit;
+	cursor: pointer;
+}
+
+.users_table .is-action button span {
+	display: inline-block;
+	writing-mode: vertical-rl;
+	transform: rotate(180deg);
+}
+
+.users_table .is-action button:hover {
+	color: color-mix(in srgb, var(--customize-accent) 75%, var(--graph-text));
+}
+
+.users_table .is-cell {
+	width: 26px;
+	padding: 4px 2px;
+	line-height: 1;
+}
+
+.users_table .is-cell input {
+	width: 13px;
+	height: 13px;
+	margin: 0;
+	vertical-align: middle;
+	accent-color: var(--customize-accent);
+	cursor: pointer;
+}
+
+.users_table .is-cell input:disabled {
+	cursor: not-allowed;
+}
+
+.users_table_none {
+	color: color-mix(in srgb, var(--graph-muted-text) 45%, transparent);
+}
+
+.users_table tbody tr:hover > * {
+	background: color-mix(in srgb, var(--graph-muted-text) 5%, transparent);
+}
+
+.users_table .is-count {
+	width: 52px;
+	padding-right: 10px;
+	color: var(--graph-muted-text);
+	font-variant-numeric: tabular-nums;
+	text-align: right;
+	white-space: nowrap;
+}
+
+.users_table tr.is-partial .is-count {
+	color: color-mix(in srgb, var(--customize-accent) 75%, var(--graph-text));
+	font-weight: 600;
+}
+
+.users_table tr.is-full .is-count {
+	color: var(--linkx-success-text);
+	font-weight: 600;
+}
+
+.users_table_area {
+	padding: 0;
+	border: 0;
+	background: none;
+	color: var(--graph-text);
+	font: inherit;
+	font-weight: 600;
+	cursor: pointer;
+}
+
+.users_table_area:hover {
+	color: color-mix(in srgb, var(--customize-accent) 75%, var(--graph-text));
+	text-decoration: underline;
+}
+
+/* Existing users: the list on the left, the selected user's editor on the
+   right; each scrolls on its own inside a fixed-height frame. */
+/* Existing users: the list only, in the Create user popup's parts. */
+.users_existing {
+	display: grid;
+	gap: 12px;
+	padding: 16px 34px 22px 24px;
+}
+
+.users_filter {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 5px;
+}
+
+.users_people {
+	display: grid;
+	gap: 6px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+/* An account's card: who it is, then its two actions at the end (edit;
+   active / inactive). Its own card, so the access level card's rules for
+   its hidden radio do not reach the switch. */
+.users_person {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	min-width: 0;
+	padding: 8px 10px;
+	border: 1px solid var(--users-line);
+	border-radius: 6px;
+}
+
+.users_person .users_level_text strong,
+.users_person .users_level_text small {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* A card with a brief: its row as before; a click on who it is opens a
+   few quiet lines underneath (not the whole account). */
+.users_person.has-brief {
+	display: block;
+	padding: 0;
+	transition: border-color 140ms ease;
+}
+
+.users_person.has-brief:hover,
+.users_person.has-brief.is-open {
+	border-color: var(--settings-users-person-hover-border);
+}
+
+.users_person_row {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	min-width: 0;
+	padding: 8px 10px;
+}
+
+.users_person_open {
+	display: flex;
+	flex: 1;
+	align-items: center;
+	gap: 10px;
+	min-width: 0;
+	padding: 0;
+	border: 0;
+	background: none;
+	color: inherit;
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+
+.users_person_open:focus-visible {
+	outline: 2px solid var(--settings-users-person-open-focus-outline);
+	outline-offset: 3px;
+}
+
+/* The brief: under the row, past a faint line; each line an icon and a
+   name, then its facts as small chips (a name and a figure). */
+.users_person_brief {
+	display: grid;
+	gap: 7px;
+	margin: 0 10px;
+	padding: 9px 2px 10px;
+	border-top: 1px solid var(--settings-users-person-brief-border);
+	animation: users_brief_in 0.16s ease-out;
+}
+
+@keyframes users_brief_in {
+	from { opacity: 0; transform: translateY(-3px); }
+}
+
+.users_person_brief > div {
+	display: grid;
+	grid-template-columns: 96px minmax(0, 1fr);
+	align-items: center;
+	gap: 8px;
+}
+
+.users_person_brief dt {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	color: var(--settings-users-person-brief-dt-text);
+	font-size: 11px;
+	font-weight: 600;
+}
+
+.users_person_brief dt svg {
+	flex: none;
+	color: var(--settings-users-person-brief-svg-text);
+}
+
+.users_person_brief dd {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+	min-width: 0;
+	margin: 0;
+	font-size: 10.5px;
+}
+
+.users_person_brief dd em {
+	color: var(--settings-users-person-brief-em-text);
+	font-style: normal;
+}
+
+/* A fact: its name, then its figure on a tinted end. No outline. */
+.users_person_fact {
+	display: inline-flex;
+	align-items: stretch;
+	min-width: 0;
+	overflow: hidden;
+	border-radius: 3px;
+	background: var(--settings-users-person-fact-bg);
+	color: var(--settings-users-person-fact-text);
+	line-height: 1.5;
+	text-transform: capitalize;
+}
+
+.users_person_fact,
+.users_person_fact b {
+	padding: 0 7px;
+}
+
+.users_person_fact {
+	padding-right: 0;
+}
+
+.users_person_fact b {
+	margin-left: 6px;
+	background: var(--settings-users-person-fact-b-bg);
+	color: var(--settings-users-person-fact-b-text);
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
+	text-transform: none;
+	overflow-wrap: anywhere;
+}
+
+.users_person_fact.is-code b {
+	font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+	font-size: 10px;
+	font-weight: 500;
+}
+
+.users_person_fact.is-unset b {
+	background: var(--settings-users-person-fact-b-unset-bg);
+	color: var(--settings-users-person-fact-b-unset-text);
+	font-weight: 500;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.users_person_brief {
+		animation: none;
+	}
+}
+
+.users_person.is-off .users_level_icon,
+.users_person.is-off .users_level_text,
+.users_person.is-off .users_level_count {
+	opacity: 0.55;
+}
+
+.users_person_edit {
+	display: grid;
+	flex: none;
+	place-items: center;
+	width: 26px;
+	height: 26px;
+	padding: 0;
+	border: 0;
+	border-radius: 3px;
+	background: none;
+	color: var(--settings-users-person-edit-text);
+	cursor: pointer;
+	transition: background-color 120ms ease, color 120ms ease;
+}
+
+.users_person_edit:hover:not(:disabled) {
+	background: var(--users-soft);
+	color: var(--settings-users-person-edit-hover-text);
+}
+
+.users_person_edit:focus-visible {
+	outline: 2px solid var(--settings-users-person-edit-focus-outline);
+	outline-offset: 1px;
+}
+
+.users_person_edit:disabled {
+	opacity: 0.45;
+	cursor: not-allowed;
+}
+
+.users_person_toggle {
+	display: inline-flex;
+	flex: none;
+	align-items: center;
+	gap: 7px;
+	color: var(--settings-users-person-toggle-text);
+	font-size: 10.5px;
+	font-weight: 600;
+	cursor: pointer;
+}
+
+/* The switch's label: Active (green) or Inactive. */
+.users_person_toggle > span {
+	min-width: 46px;
+}
+
+.users_person_toggle:has(input:checked) > span {
+	color: var(--settings-users-person-toggle-span-checked-text);
+}
+
+/* A switch that may not be changed (your own account, or while saving):
+   the plain pointer, not the waiting one. */
+/* One's own account: the switch looks unavailable; using it is refused
+   with a notification. */
+.settings_switch.is-restricted,
+.settings_switch.is-restricted input {
+	cursor: default;
+}
+
+.settings_switch.is-restricted input {
+	opacity: 0.55;
+}
+
+.users_person_toggle:has(input:disabled),
+.settings_popup .settings_switch:has(input:disabled),
+.settings_popup .settings_switch input:disabled {
+	cursor: default;
+}
+
+.users_browser {
+	display: grid;
+	grid-template-columns: 290px minmax(0, 1fr);
+	height: min(520px, 64vh);
+	min-height: 300px;
+	border: 1px solid var(--users-line);
+	border-radius: 4px;
+	overflow: hidden;
+}
+
+.users_list_pane {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+	min-height: 0;
+	border-right: 1px solid var(--users-line);
+	background: color-mix(in srgb, var(--graph-muted-text) 4%, transparent);
+}
+
+.users_list_tools {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) 104px;
+	gap: 6px;
+	padding: 10px 10px 6px;
+}
+
+.users_list_count {
+	margin: 0;
+	padding: 0 12px 6px;
+	color: var(--graph-muted-text);
+	font-size: 10.5px;
+}
+
+.users_list {
+	flex: 1;
+	min-height: 0;
+	margin: 0;
+	padding: 0 6px 6px;
+	overflow-y: auto;
+	list-style: none;
+	scrollbar-width: thin;
+}
+
+.users_row {
+	display: flex;
+	align-items: center;
+	gap: 9px;
+	padding: 7px 8px;
+	border-radius: 4px;
+	cursor: pointer;
+	transition: background-color 120ms ease;
+}
+
+.users_row:hover {
+	background: var(--users-soft);
+}
+
+.users_row.is-current {
+	background: color-mix(in srgb, var(--customize-accent) 14%, transparent);
+	box-shadow: inset 2px 0 0 var(--customize-accent);
+}
+
+.users_row:focus-visible {
+	outline: 2px solid color-mix(in srgb, var(--customize-accent) 55%, transparent);
+	outline-offset: -2px;
+}
+
+.users_avatar {
+	display: grid;
+	flex: none;
+	place-items: center;
+	width: 26px;
+	height: 26px;
+	border-radius: 4px;
+	background: color-mix(in srgb, var(--customize-accent) 16%, transparent);
+	color: color-mix(in srgb, var(--customize-accent) 70%, var(--graph-text));
+	font-size: 12px;
+	font-weight: 700;
+	line-height: 1;
+}
+
+.users_avatar.is-large {
+	width: 36px;
+	height: 36px;
+	font-size: 16px;
+}
+
+.users_row_main {
+	display: grid;
+	flex: 1;
+	gap: 1px;
+	min-width: 0;
+}
+
+.users_row_main strong {
+	overflow: hidden;
+	color: var(--graph-text);
+	font-size: 12.5px;
+	font-weight: 600;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.users_row_main small {
+	overflow: hidden;
+	color: var(--graph-muted-text);
+	font-size: 10.5px;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.users_row_modified {
+	flex: none;
+	padding: 1px 6px;
+	border-radius: 3px;
+	background: var(--settings-users-row-modified-bg);
+	color: var(--settings-users-row-modified-text);
+	font-size: 10px;
+	font-style: normal;
+	font-weight: 600;
+}
+
+.users_row_status {
+	display: inline-flex;
+	flex: none;
+	align-items: center;
+	gap: 5px;
+	color: var(--settings-users-row-status-text);
+	font-size: 10.5px;
+}
+
+.users_row_status i {
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: currentColor;
+}
+
+.users_row_status.is-active {
+	color: var(--settings-users-row-status-active-text);
+}
+
+.users_detail_pane {
+	display: grid;
+	align-content: start;
+	gap: 14px;
+	min-width: 0;
+	min-height: 0;
+	padding: 12px 16px 16px;
+	overflow-y: auto;
+	scrollbar-width: thin;
+}
+
+.users_detail_pane > .users_section + .users_section {
+	padding-top: 12px;
+	border-top: 1px solid var(--users-line);
+}
+
+.users_detail_header {
+	display: flex;
+	align-items: center;
+	gap: 11px;
+	min-width: 0;
+}
+
+.users_detail_header .users_row_main strong {
+	font-size: 14px;
+}
+
+.users_detail_header .users_row_main small {
+	font-size: 11px;
+}
+
+.users_status_switch {
+	justify-self: start;
+	font-weight: 500;
+}
+
+.users_empty {
+	margin: 0;
+	padding: 24px 12px;
+	color: var(--graph-muted-text);
+	font-size: 12px;
+	text-align: center;
+}
+
+.graph_customize_button.users_danger {
+	margin-right: auto;
+	color: var(--settings-users-danger-text);
+}
+
+.graph_customize_button.users_danger:hover:not(:disabled) {
+	background: var(--settings-users-danger-hover-bg);
+}
+
+/* Narrow popup: stack the panes / columns. */
+@container (max-width: 720px) {
+	.users_browser {
+		grid-template-columns: minmax(0, 1fr);
+		grid-template-rows: minmax(150px, 38%) minmax(0, 1fr);
+	}
+
+	.users_list_pane {
+		border-right: 0;
+		border-bottom: 1px solid var(--users-line);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.users_chip,
+	.users_row {
+		transition: none;
+	}
+}
+
+/* ── Create user ──────────────────────────────────────────────────────────
+   Three steps, a page each, in one strip. A window as tall as the current
+   page shows it, and the strip slides to the page; the popup's height
+   follows. Nothing in here scrolls: only a Settings window too short for
+   the popup makes its body scroll. */
+
+.settings_popup.is-narrow .settings_popup_body {
+	display: block;
+	flex: 0 1 auto;
+	min-height: 0;
+	padding: 0;
+	overflow-x: hidden;
+	overflow-y: auto;
+	scrollbar-width: thin;
+}
+
+.users_make {
+	padding-right: 10px;
+}
+
+.users_make > .users_popup_error {
+	margin: 12px 14px 0 24px;
+}
+
+/* The window onto the strip (its height is set to the page's). */
+.users_make_options {
+	padding: 0 24px;
+	overflow: hidden;
+	transition: height 0.32s cubic-bezier(0.3, 0.7, 0.2, 1);
+}
+
+/* The strip: a numbered mark per step, joined by a line. */
+.users_wizard {
+	position: relative;
+	display: block;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+	transition: transform 0.32s cubic-bezier(0.3, 0.7, 0.2, 1);
+}
+
+.users_wizard_step {
+	position: relative;
+	display: block;
+	padding: 16px 0 22px;
+}
+
+/* The access level sits close above the next step's header. */
+.users_wizard_step[data-step="2"] {
+	padding-bottom: 6px;
+}
+
+/* The line under a mark: down to the footer, ending there in three dots;
+   under the access level, down to the next mark. */
+.users_wizard_step::before {
+	--rail: var(--users-line);
+	--rail-dot: radial-gradient(circle at center, var(--rail) 1px, transparent 1.4px);
+	content: "";
+	position: absolute;
+	top: 42px;
+	bottom: 3px;
+	left: 9px;
+	width: 3px;
+	background:
+		var(--rail-dot) center bottom / 3px 3px no-repeat,
+		var(--rail-dot) center bottom 6px / 3px 3px no-repeat,
+		var(--rail-dot) center bottom 12px / 3px 3px no-repeat,
+		linear-gradient(var(--rail), var(--rail)) center top / 1px calc(100% - 18px) no-repeat;
+}
+
+.users_wizard_step[data-step="2"]::before {
+	bottom: -16px;
+	background: linear-gradient(var(--rail), var(--rail)) center / 1px 100% no-repeat;
+}
+
+/* Above the second mark, three dots: the first page's line, carried on. */
+.users_wizard_step[data-step="2"]::after {
+	--rail: var(--settings-users-wizard-step-after-rail);
+	--rail-dot: radial-gradient(circle at center, var(--rail) 1px, transparent 1.4px);
+	content: "";
+	position: absolute;
+	top: 0;
+	left: 9px;
+	width: 3px;
+	height: 15px;
+	background:
+		var(--rail-dot) center top / 3px 3px no-repeat,
+		var(--rail-dot) center top 6px / 3px 3px no-repeat,
+		var(--rail-dot) center top 12px / 3px 3px no-repeat;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.users_make_options,
+	.users_wizard {
+		transition: none;
+	}
+}
+
+/* A step that opens in a popup instead of a page (the privileges): its
+   header only, with an arrow at its end. */
+.users_wizard_step.is-popup {
+	padding-bottom: 14px;
+}
+
+.users_wizard_step.is-popup::before {
+	content: none;
+}
+
+.users_wizard_open {
+	display: grid;
+	flex: none;
+	place-items: center;
+	margin-left: 2px;
+	color: var(--settings-users-wizard-open-text);
+}
+
+/* A step's header: its name (which opens it) and, at the far end, its reset. */
+.users_wizard_headrow {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+}
+
+.users_wizard_reset {
+	display: grid;
+	flex: none;
+	place-items: center;
+	width: 22px;
+	height: 22px;
+	padding: 0;
+	border: 0;
+	border-radius: 4px;
+	background: none;
+	color: var(--settings-users-wizard-reset-text);
+	cursor: pointer;
+	transition: background-color 120ms ease, color 120ms ease;
+}
+
+.users_wizard_reset svg {
+	transition: transform 320ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.users_wizard_reset:hover:not(:disabled) {
+	background: var(--users-soft);
+	color: var(--settings-users-wizard-reset-hover-text);
+}
+
+/* The arrow turns back on itself when pointed at, and all the way round
+   when pressed. */
+.users_wizard_reset:hover:not(:disabled) svg {
+	transform: rotate(-120deg);
+}
+
+.users_wizard_reset:active:not(:disabled) svg {
+	transform: rotate(-360deg);
+}
+
+.users_wizard_reset:focus-visible {
+	outline: 2px solid var(--settings-users-wizard-reset-focus-outline);
+	outline-offset: 1px;
+}
+
+.users_wizard_reset:disabled {
+	opacity: 0.4;
+	cursor: default;
+}
+
+.users_wizard_head {
+	display: flex;
+	flex: 1;
+	align-items: center;
+	gap: 10px;
+	min-width: 0;
+	padding: 3px 4px 3px 0;
+	border: 0;
+	border-radius: 4px;
+	background: none;
+	color: var(--settings-users-wizard-head-text);
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+
+/* No fill on hover. The steps that are not open sit back a little, and
+   come forward when pointed at or focused. */
+.users_wizard_step:not(.is-current) .users_wizard_headrow {
+	opacity: 0.6;
+	transition: opacity 140ms ease;
+}
+
+.users_wizard_step:not(.is-current) .users_wizard_headrow:hover,
+.users_wizard_step:not(.is-current) .users_wizard_headrow:focus-within {
+	opacity: 1;
+}
+
+.users_wizard_head:focus-visible {
+	outline: 2px solid var(--settings-users-wizard-head-focus-outline);
+	outline-offset: 1px;
+}
+
+.users_wizard_head i {
+	position: relative;
+	z-index: 1;
+	display: grid;
+	flex: none;
+	place-items: center;
+	width: 21px;
+	height: 21px;
+	border: 1.5px solid var(--settings-users-wizard-head-i-border);
+	border-radius: 50%;
+	background: var(--settings-users-wizard-head-i-bg);
+	color: var(--settings-users-wizard-head-i-text);
+	font-size: 10.5px;
+	font-style: normal;
+	font-weight: 700;
+	line-height: 1;
+}
+
+.users_wizard_step.is-current .users_wizard_head i {
+	border-color: var(--settings-users-wizard-head-i-current-border);
+	background: var(--settings-users-wizard-head-i-current-bg);
+	color: var(--settings-users-wizard-head-i-current-text);
+}
+
+.users_wizard_step.is-done .users_wizard_head i {
+	border-color: var(--settings-users-wizard-head-i-done-border);
+	background: var(--settings-users-wizard-head-i-done-bg);
+	color: var(--settings-users-wizard-head-i-done-text);
+}
+
+/* A step not reached yet: its mark has a dashed edge. */
+.users_wizard_step.is-todo .users_wizard_head i {
+	border-style: dashed;
+}
+
+.users_wizard_step.is-todo .users_wizard_head .graph_customize_section_head {
+	color: var(--settings-users-wizard-head-todo-text);
+}
+
+.users_wizard_head small {
+	flex: 1;
+	overflow: hidden;
+	color: var(--settings-users-wizard-head-small-text);
+	font-size: 10.5px;
+	text-align: right;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.users_wizard_body {
+	display: grid;
+	gap: 8px;
+	min-width: 0;
+	padding: 6px 0 0 31px;
+}
+
+/* Fields: the name above the input; inside the input, at its end, a mark
+   of the field's condition; a line of help (or what is wrong) underneath. */
+.users_wizard_fields {
+	display: grid;
+	gap: 10px;
+}
+
+.users_input_field {
+	display: grid;
+	gap: 4px;
+	min-width: 0;
+}
+
+.users_input_label {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 10px;
+	color: var(--settings-users-input-label-text);
+	font-size: 11.5px;
+	font-weight: 600;
+}
+
+/* The field's name, led by its icon. */
+.users_input_name {
+	display: inline-flex;
+	flex: none;
+	align-items: center;
+	gap: 6px;
+}
+
+.users_input_name svg {
+	flex: none;
+	color: var(--settings-users-input-name-svg-text);
+}
+
+.users_input_field.is-bad .users_input_name svg {
+	color: currentColor;
+}
+
+/* What is wrong with the field, in its label. */
+.users_input_error {
+	min-width: 0;
+	overflow: hidden;
+	color: var(--settings-users-input-error-text);
+	font-size: 10.5px;
+	font-style: normal;
+	font-weight: 600;
+	text-align: right;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.users_input_field.is-bad .users_input_label {
+	color: var(--settings-users-input-label-bad-text);
+}
+
+.users_input_wrap {
+	position: relative;
+	display: block;
+}
+
+.settings_popup .users_input_wrap .graph_customize_input {
+	height: 32px;
+	padding-right: 32px;
+}
+
+.users_input_state {
+	position: absolute;
+	top: 50%;
+	right: 9px;
+	display: grid;
+	place-items: center;
+	color: var(--settings-users-input-state-text);
+	transform: translateY(-50%);
+	pointer-events: none;
+	transition: color 140ms ease;
+}
+
+.users_input_field.is-ok .users_input_state {
+	color: var(--settings-users-input-state-ok-text);
+}
+
+.users_input_field.is-bad .users_input_state {
+	color: var(--settings-users-input-state-bad-text);
+}
+
+/* An input with an action of its own at its end (generate a secret),
+   beside the mark of its condition. */
+.settings_popup .users_input_wrap.has-action .graph_customize_input {
+	padding-right: 58px;
+	font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+	font-size: 11px;
+}
+
+.users_input_wrap.has-action .users_input_state {
+	right: 33px;
+}
+
+.users_input_action {
+	position: absolute;
+	top: 50%;
+	right: 5px;
+	display: grid;
+	place-items: center;
+	width: 22px;
+	height: 22px;
+	padding: 0;
+	border: 0;
+	border-radius: 3px;
+	background: none;
+	color: var(--settings-users-input-action-text);
+	transform: translateY(-50%);
+	cursor: pointer;
+	transition: background-color 120ms ease, color 120ms ease;
+}
+
+.users_input_action:hover {
+	background: var(--users-soft);
+	color: var(--settings-users-input-action-hover-text);
+}
+
+.users_input_action:focus-visible {
+	outline: 2px solid var(--settings-users-input-action-focus-outline);
+	outline-offset: 1px;
+}
+
+/* The service account form (create, modify) is a little wider than the
+   users' one: client IDs, secrets and storage targets need the room. */
+.graph_customize.is-report.settings_popup.is-narrow:has(.service_storage_step) {
+	width: min(640px, 100%);
+}
+
+/* Service accounts, in the same popups. The storage targets editor loses
+   its own frame and takes the popup's quiet inputs and corners. */
+.settings_popup .service_target_editor {
+	padding: 0;
+	border: 0;
+	font-size: 11.5px;
+}
+
+.settings_popup .service_target_editor .settings_input {
+	min-height: 30px;
+	padding: 5px 9px;
+	border: 1px solid transparent;
+	border-radius: 6px;
+	background: var(--settings-input-bg);
+	color: var(--settings-input-text);
+	font-size: 12px;
+}
+
+.settings_popup .service_target_editor .settings_input:focus {
+	border-color: var(--settings-input-focus-border);
+	background: var(--settings-input-focus-bg);
+	box-shadow: 0 0 0 3px var(--settings-input-focus-shadow);
+	outline: none;
+}
+
+.settings_popup .service_target_editor .settings_button {
+	border-radius: 3px;
+}
+
+.settings_popup .service_target_editor .config_window_grid {
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 10px;
+}
+
+/* The domains, as compact as they go: one pill each, name only, with a
+   mark for its state (+ to register, a tick once registered). */
+.settings_popup .service_target_domain_grid {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 5px;
+}
+
+.settings_popup .service_target_domain_card {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	padding: 2px 9px 2px 7px;
+	border-color: var(--users-line);
+	border-radius: 999px;
+	background: none;
+	color: var(--settings-popup-service-target-domain-card-text);
+	line-height: 1.4;
+	transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.settings_popup .service_target_domain_card strong {
+	font-size: 10.5px;
+	font-weight: 500;
+}
+
+.settings_popup .service_target_domain_card small,
+.settings_popup .service_target_domain_card span {
+	display: none;
+}
+
+.settings_popup .service_target_domain_card::before {
+	content: "+";
+	font-size: 11px;
+	font-weight: 700;
+	line-height: 1;
+	opacity: 0.7;
+}
+
+.settings_popup .service_target_domain_card:hover:not(:disabled) {
+	border-color: var(--settings-service-target-domain-card-hover-border);
+	color: var(--settings-service-target-domain-card-hover-text);
+}
+
+.settings_popup .service_target_domain_card.is-registered {
+	border-color: var(--settings-popup-service-target-domain-card-registered-border);
+	background: var(--settings-service-target-domain-card-registered-bg);
+	color: var(--settings-service-target-domain-card-registered-text);
+}
+
+.settings_popup .service_target_domain_card.is-registered::before {
+	content: "✓";
+	color: var(--settings-service-target-domain-card-registered-before-text);
+	opacity: 1;
+}
+
+.settings_popup .service_target_domain_card.is-current {
+	box-shadow: 0 0 0 1px var(--settings-popup-service-target-domain-card-current-shadow);
+}
+
+/* Registering a custom domain: the form's own input, with its add button
+   inside it at the end. */
+.settings_popup .users_input_wrap.has-action.service_target_custom .graph_customize_input {
+	padding-right: 32px;
+	font-family: inherit;
+	font-size: 12px;
+}
+
+.users_input_action:disabled {
+	opacity: 0.4;
+	cursor: default;
+}
+
+/* Advanced schema & column mapping, in its own popup: compact. Small
+   section names, a line of help, chips, and one tight row per mapping. */
+.settings_popup .service_target_advanced {
+	gap: 6px;
+}
+
+.settings_popup .service_target_advanced .settings_permission_editor_header {
+	margin-top: 6px;
+	color: var(--graph-text);
+	font-size: 11.5px;
+}
+
+.settings_popup .service_target_advanced .settings_permission_editor_header:first-child {
+	margin-top: 0;
+}
+
+.settings_popup .service_target_advanced .settings_link_button {
+	color: var(--settings-popup-link-button-text);
+	font-size: 10.5px;
+}
+
+.settings_popup .service_target_advanced .settings_hint {
+	margin: 0;
+	color: var(--settings-hint-text);
+	font-size: 10.5px;
+	line-height: 1.35;
+}
+
+.settings_popup .service_target_chips {
+	gap: 4px;
+}
+
+.settings_popup .service_target_chips span {
+	gap: 3px;
+	padding: 1px 4px 1px 8px;
+	border-color: var(--users-line);
+	color: var(--settings-popup-service-target-chips-span-text);
+	font-size: 10.5px;
+	line-height: 1.5;
+}
+
+.settings_popup .service_target_chips button {
+	padding: 0 3px;
+	font-size: 9px;
+}
+
+.settings_popup .service_target_chips button:hover {
+	color: var(--settings-service-target-chips-button-hover-text);
+}
+
+.settings_popup .service_target_mapping_row {
+	grid-template-columns: minmax(0, 1fr) auto minmax(0, 1.3fr) auto;
+	gap: 6px;
+	color: var(--settings-service-target-mapping-row-text);
+	font-size: 11px;
+}
+
+.settings_popup .service_target_mapping_row .graph_customize_input {
+	height: 26px;
+	padding: 3px 8px;
+	font-size: 11px;
+}
+
+.service_target_mapping_remove:hover:not(:disabled) {
+	color: var(--settings-service-target-mapping-remove-hover-text);
+}
+
+.service_target_add_pair {
+	justify-self: start;
+	margin-top: 2px;
+	text-transform: none;
+}
+
+.service_target_template {
+	display: inline-flex;
+	flex: none;
+	align-items: center;
+	gap: 4px;
+	white-space: nowrap;
+}
+
+/* The template is what the columns and mappings hold: the button is
+   disabled and the card carries a small tag. */
+.service_target_template:disabled {
+	text-decoration: none;
+	opacity: 0.45;
+	cursor: default;
+}
+
+.service_target_template_tag {
+	margin-left: 7px;
+	padding: 1px 6px;
+	border-radius: 3px;
+	background: var(--settings-service-target-template-tag-bg);
+	color: var(--settings-service-target-template-tag-text);
+	font-size: 9.5px;
+	font-style: normal;
+	font-weight: 600;
+	letter-spacing: 0.02em;
+	vertical-align: 1px;
+}
+
+
+/* The mapping card: its text opens the popup; the bin at its end drops
+   every column and mapping. */
+div.service_target_advanced_toggle {
+	cursor: default;
+}
+
+.service_target_advanced_open {
+	display: grid;
+	flex: 1;
+	gap: 2px;
+	min-width: 0;
+	padding: 0;
+	border: 0;
+	background: none;
+	color: inherit;
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+
+.service_target_advanced_open > span {
+	display: grid;
+	gap: 2px;
+}
+
+.service_target_advanced_open:focus-visible {
+	outline: 2px solid var(--settings-service-target-advanced-open-focus-outline);
+	outline-offset: 3px;
+}
+
+/* The new secret, shown in the list popup: stacked, to fit its width. */
+.settings_popup .settings_secret_notice {
+	grid-template-columns: minmax(0, 1fr) auto auto;
+	gap: 8px;
+	padding: 10px 12px;
+	border-color: var(--settings-popup-secret-notice-border);
+	border-radius: 6px;
+	background: var(--settings-popup-secret-notice-bg);
+	font-size: 11.5px;
+}
+
+.settings_popup .settings_secret_notice > div {
+	grid-column: 1 / -1;
+}
+
+.settings_popup .settings_secret_notice code {
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+
+/* A field that cannot be changed (the username of an existing account). */
+.settings_popup .users_input_field.is-locked .graph_customize_input {
+	color: var(--settings-users-input-field-locked-text);
+	cursor: default;
+}
+
+.settings_popup .users_input_field.is-locked .graph_customize_input:hover {
+	background: var(--settings-users-input-field-locked-hover-bg);
+}
+
+/* The input of a field with a problem: a red edge and a faint red wash. */
+.settings_popup .users_input_field.is-bad .graph_customize_input,
+.settings_popup .users_input_field.is-bad .graph_customize_input:hover,
+.settings_popup .users_input_field.is-bad .graph_customize_input:focus {
+	border-color: var(--settings-users-input-field-bad-border);
+	background: var(--settings-users-input-field-bad-bg);
+	box-shadow: 0 0 0 3px var(--settings-users-input-field-bad-shadow);
+}
+
+.users_wizard_switch {
+	font-weight: 400;
+	white-space: normal;
+	cursor: pointer;
+}
+
+/* The Active row: a toned bar that follows the switch (green when on,
+   neutral when off). */
+.users_wizard_switch_row {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	min-height: 24px;
+	padding: 9px 12px;
+	border: 1px solid transparent;
+	border-radius: 6px;
+	background: var(--settings-users-wizard-switch-row-bg);
+	transition: background-color 160ms ease, border-color 160ms ease;
+}
+
+.users_wizard_switch_row:has(input:checked) {
+	border-color: var(--settings-users-wizard-switch-row-checked-border);
+	background: var(--settings-users-wizard-switch-row-checked-bg);
+}
+
+.users_wizard_switch_row:has(input:checked) .graph_customize_hint {
+	color: var(--settings-users-wizard-switch-row-checked-text);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.users_input_state,
+	.users_wizard_switch_row,
+	.users_wizard_headrow,
+	.users_wizard_reset svg {
+		transition: none;
+	}
+
+	.users_wizard_reset:hover:not(:disabled) svg,
+	.users_wizard_reset:active:not(:disabled) svg {
+		transform: none;
+	}
+}
+
+.users_wizard_privileges {
+	display: grid;
+	gap: 6px;
+	min-width: 0;
+}
+
+/* NBE Daylight: what is selected in the Create user popup takes the theme's
+   golden gradient (the official bronze-to-gold of its main buttons): the
+   granted privilege pills and the chosen access level's card. */
+
+/* NBE Daylight's own look for these parts (the golden selected cards and
+   pills, the navy step marks) is set as token values in
+   themes/nbe-daylight.css, so it can be restyled like any other theme. */
+[data-theme="nbe-daylight"] .users_level.is-current .users_level_text small {
+	opacity: 0.85;
+}
+
+/* The Settings window alone: the shared window-frame variables read the
+   Settings' own tokens here, so restyling them touches no other window. */
+.settings_theme_scope {
+	--window-footer-text-color: var(--settings-frame-window-footer-text-color);
+	--window-footer-info-icon-color: var(--settings-frame-window-footer-info-icon-color);
+	--window-footer-btn-border: var(--settings-frame-window-footer-btn-border);
+	--window-footer-btn-text: var(--settings-frame-window-footer-btn-text);
+	--window-footer-btn-bg-angle: var(--settings-frame-window-footer-btn-bg-angle);
+	--window-footer-btn-bg-top: var(--settings-frame-window-footer-btn-bg-top);
+	--window-footer-btn-bg-bottom: var(--settings-frame-window-footer-btn-bg-bottom);
+	--window-footer-btn-hover-border: var(--settings-frame-window-footer-btn-hover-border);
+	--window-footer-btn-hover-text: var(--settings-frame-window-footer-btn-hover-text);
+	--window-footer-btn-hover-bg-angle: var(--settings-frame-window-footer-btn-hover-bg-angle);
+	--window-footer-btn-hover-bg-top: var(--settings-frame-window-footer-btn-hover-bg-top);
+	--window-footer-btn-hover-bg-bottom: var(--settings-frame-window-footer-btn-hover-bg-bottom);
+	--window-footer-btn-pressed-border: var(--settings-frame-window-footer-btn-pressed-border);
+	--window-footer-btn-pressed-text: var(--settings-frame-window-footer-btn-pressed-text);
+	--window-footer-btn-pressed-bg-angle: var(--settings-frame-window-footer-btn-pressed-bg-angle);
+	--window-footer-btn-pressed-bg-top: var(--settings-frame-window-footer-btn-pressed-bg-top);
+	--window-footer-btn-pressed-bg-bottom: var(--settings-frame-window-footer-btn-pressed-bg-bottom);
+	--window-footer-btn-disabled-border: var(--settings-frame-window-footer-btn-disabled-border);
+	--window-footer-btn-disabled-text: var(--settings-frame-window-footer-btn-disabled-text);
+	--window-footer-btn-disabled-bg: var(--settings-frame-window-footer-btn-disabled-bg);
+	--window-cards-container-subtext: var(--settings-frame-window-cards-container-subtext);
+	--session-chip-border: var(--settings-frame-session-chip-border);
+	--session-chip-bg: var(--settings-frame-session-chip-bg);
+	--session-chip-label-color: var(--settings-frame-session-chip-label-color);
+	--session-chip-value-color: var(--settings-frame-session-chip-value-color);
+	--timeline-border: var(--settings-frame-timeline-border);
+	--timeline-bg: var(--settings-frame-timeline-bg);
+	--timeline-progress-label-color: var(--settings-frame-timeline-progress-label-color);
+	--timeline-progress-value-color: var(--settings-frame-timeline-progress-value-color);
+	--timeline-progress-track: var(--settings-frame-timeline-progress-track);
+	--timeline-progress-fill-start: var(--settings-frame-timeline-progress-fill-start);
+	--timeline-progress-fill-end: var(--settings-frame-timeline-progress-fill-end);
+	--timeline-step-border: var(--settings-frame-timeline-step-border);
+	--timeline-step-bg: var(--settings-frame-timeline-step-bg);
+	--timeline-step-line-track: var(--settings-frame-timeline-step-line-track);
+	--timeline-step-line-color: var(--settings-frame-timeline-step-line-color);
+	--timeline-step-hover-bg: var(--settings-frame-timeline-step-hover-bg);
+	--timeline-step-hover-border: var(--settings-frame-timeline-step-hover-border);
+	--timeline-step-active-bg: var(--settings-frame-timeline-step-active-bg);
+	--timeline-step-active-border: var(--settings-frame-timeline-step-active-border);
+	--timeline-step-active-bar: var(--settings-frame-timeline-step-active-bar);
+	--timeline-step-circle-inactive-border: var(--settings-frame-timeline-step-circle-inactive-border);
+	--timeline-step-circle-inactive-bg: var(--settings-frame-timeline-step-circle-inactive-bg);
+	--timeline-step-circle-inactive-text: var(--settings-frame-timeline-step-circle-inactive-text);
+	--timeline-step-circle-active-border: var(--settings-frame-timeline-step-circle-active-border);
+	--timeline-step-circle-active-bg: var(--settings-frame-timeline-step-circle-active-bg);
+	--timeline-step-circle-active-text: var(--settings-frame-timeline-step-circle-active-text);
+	--timeline-step-circle-active-ring: var(--settings-frame-timeline-step-circle-active-ring);
+	--timeline-step-circle-fulfilled-border: var(--settings-frame-timeline-step-circle-fulfilled-border);
+	--timeline-step-circle-fulfilled-bg-angle: var(--settings-frame-timeline-step-circle-fulfilled-bg-angle);
+	--timeline-step-circle-fulfilled-bg-top: var(--settings-frame-timeline-step-circle-fulfilled-bg-top);
+	--timeline-step-circle-fulfilled-bg-bottom: var(--settings-frame-timeline-step-circle-fulfilled-bg-bottom);
+	--timeline-step-circle-fulfilled-text: var(--settings-frame-timeline-step-circle-fulfilled-text);
+	--timeline-step-circle-fulfilled-shadow: var(--settings-frame-timeline-step-circle-fulfilled-shadow);
+	--timeline-step-locked-border: var(--settings-frame-timeline-step-locked-border);
+	--timeline-step-locked-text: var(--settings-frame-timeline-step-locked-text);
+	--timeline-step-title-color: var(--settings-frame-timeline-step-title-color);
+	--timeline-step-desc-color: var(--settings-frame-timeline-step-desc-color);
+	--timeline-step-active-title-color: var(--settings-frame-timeline-step-active-title-color);
+	--timeline-step-active-desc-color: var(--settings-frame-timeline-step-active-desc-color);
 }

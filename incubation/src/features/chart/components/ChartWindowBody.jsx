@@ -11,6 +11,7 @@ import { TABLE_SCOPES } from '../../table/lib/tableRows.js';
 import { COLOR_SCHEMAS, DEFAULT_SCHEMA, SCHEMA_NAMES, nodeOwnColor } from '../lib/chartColors.js';
 import { ADVANCED_HINT, CHART_METRICS, METRIC_GROUPS, isMetricAvailable, metricById } from '../lib/chartMetrics.js';
 import { normalizeChartState, scopeInput, toneStep } from '../lib/chartState.js';
+import { getChartDefaults, subscribeChartDefaults } from '../lib/chartDefaults.js';
 import { histogramKeys, histogramValues } from '../lib/chartHistogram.js';
 import ChartCard from './ChartCard.jsx';
 import ChartSnapDialog from './ChartSnapDialog.jsx';
@@ -70,7 +71,7 @@ const resultCache = new Map();
 
 // Generation (analyst decision 2026-11-18).
 const CHART_MODE_OPTIONS = Object.freeze([
-  { id: 'auto', label: 'Automatic', hint: 'The Global-level charts come up by themselves once linked' },
+  { id: 'auto', label: 'Automatic', hint: 'The starting charts (Libraries ▸ Charts) come up by themselves once linked' },
   { id: 'manual', label: 'Manual', hint: 'You choose: a whole category, or one chart at a time (New chart)' },
 ]);
 
@@ -83,7 +84,9 @@ export default function ChartWindowBody({ windowItem, hidden = false }) {
   const { notify } = useNotifications();
   const windowId = windowItem.id;
   const metadata = useMemo(() => windowItem.metadata || {}, [windowItem.metadata]);
-  const state = useMemo(() => normalizeChartState(metadata.chartState), [metadata.chartState]);
+  // A window without a state of its own starts from Libraries ▸ Charts.
+  const defaults = useSyncExternalStore(subscribeChartDefaults, getChartDefaults);
+  const state = useMemo(() => normalizeChartState(metadata.chartState, defaults), [metadata.chartState, defaults]);
   const setState = useCallback((patch) => {
     updateWindowMetadata(windowId, { metadata: { chartState: { ...state, ...patch } } });
   }, [state, updateWindowMetadata, windowId]);
@@ -355,11 +358,12 @@ export default function ChartWindowBody({ windowItem, hidden = false }) {
       setState(withNewCards(missing(ids)));
     }
   };
-  // Automatic: once linked to a graph, its Global-level charts come up by
+  // Automatic: once linked to a graph, the starting charts (Libraries ▸
+  // Charts; the Global-level ones unless chosen otherwise) come up by
   // themselves (once per graph: charts closed afterwards stay closed).
   useEffect(() => {
     if (!graphWindow || state.mode !== 'auto' || state.seeded === graphId) return;
-    setState({ seeded: graphId, ...withNewCards(missing(groupMetrics('global'))) });
+    setState({ seeded: graphId, ...withNewCards(missing(defaults.autoMetrics)) });
     // Only on linking, or on turning Automatic on.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [graphWindow, graphId, state.mode, state.seeded]);

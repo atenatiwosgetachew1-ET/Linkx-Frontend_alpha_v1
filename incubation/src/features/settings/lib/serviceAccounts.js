@@ -14,9 +14,11 @@ export const defaultDomainConfig = (domainKey) => ({
   column_mapping: {},
 });
 
+// A new account registers no domain: which ones exist (and their keys) is
+// the Service's catalog to say, so none is assumed here.
 export const defaultServiceConfig = () => ({
-  registered_domains: ['banking'],
-  domains: { banking: defaultDomainConfig('banking') },
+  registered_domains: [],
+  domains: {},
 });
 
 export const STANDARD_FORENSIC_DOMAINS = ['banking', 'microfinance', 'cdr', 'insurance', 'social_media'];

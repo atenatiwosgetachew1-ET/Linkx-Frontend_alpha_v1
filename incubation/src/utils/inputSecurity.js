@@ -32,9 +32,17 @@ export const sanitizeRelationshipName = (value = "", { maxLength = 80 } = {}) =>
   sanitizeIdentifier(value, { maxLength }).replace(/[@.-]/g, "_").toUpperCase()
 );
 
+// Permissions are "scope:action": the colon must survive (sanitizeIdentifier
+// strips it, which turned "session:create" into "sessioncreate").
+const PERMISSION_UNSAFE_CHARS = /[^a-zA-Z0-9_:.-]/g;
+
+export const sanitizePermission = (value = "", { maxLength = 80 } = {}) => (
+  stripControlChars(value).replace(PERMISSION_UNSAFE_CHARS, "").slice(0, maxLength)
+);
+
 export const sanitizePermissionList = (permissions = []) => Array.from(new Set(
   (Array.isArray(permissions) ? permissions : [])
-    .map((permission) => sanitizeIdentifier(permission, { maxLength: 80 }))
+    .map((permission) => sanitizePermission(permission, { maxLength: 80 }))
     .filter((permission) => PERMISSION_PATTERN.test(permission))
 )).sort();
 
