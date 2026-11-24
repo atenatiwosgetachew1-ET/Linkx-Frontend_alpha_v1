@@ -1458,11 +1458,15 @@ export default function SourceWindowBody({ windowItem }) {
     if (SOURCE_FLOW) {
       if (!initial.brokerToolbarCollapsed) patchModeState({ brokerToolbarCollapsed: true }, key);
       if (initial.sourceStatus === SOURCE_STATUSES.CONNECTED) return;
-      if (!brokerUsesDefault(initial, sourceDefaults)) {
+      // (Restored, and connected when it was kept: the analyst chose to
+      // restore it, so its own target connects once too.)
+      const reconnect = initial.reconnect === true;
+      if (reconnect) patchModeState({ reconnect: false }, key);
+      if (!brokerUsesDefault(initial, sourceDefaults) && !reconnect) {
         setValidationMessage(`A custom broker target is set, so it was not connected automatically.${OPEN_FORM_HINT}`);
         return;
       }
-      const missing = missingBrokerDefault(initial);
+      const missing = reconnect ? '' : missingBrokerDefault(initial);
       if (missing) {
         setValidationMessage(`${missing} It was not connected automatically.${OPEN_FORM_HINT}`);
         return;

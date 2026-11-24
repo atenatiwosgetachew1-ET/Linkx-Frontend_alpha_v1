@@ -299,6 +299,7 @@ export default function ConfigurationWindowBody({ windowItem }) {
       title: 'Reset to defaults?',
       message: `Load the default configuration for this session? It replaces the current settings for every Source window${dirtyRef.current ? ' and discards your unsaved changes' : ''}.`,
       confirmText: 'Reset',
+      icon: 'reset',
     });
     if (!confirmed) return;
     try {
@@ -323,6 +324,7 @@ export default function ConfigurationWindowBody({ windowItem }) {
       title: 'Discard unsaved changes?',
       message: 'Switching the domain pillar discards unsaved configuration changes. Continue?',
       confirmText: 'Switch domain',
+      icon: 'warning',
     }))) return;
     const label = formatDomainPillarLabel(domain);
     try {
@@ -368,6 +370,7 @@ export default function ConfigurationWindowBody({ windowItem }) {
       title: 'Discard unsaved changes?',
       message: 'Importing a configuration replaces the current settings and discards your unsaved changes. Continue?',
       confirmText: 'Continue',
+      icon: 'warning',
     }))) return;
     importInputRef.current?.click();
   };

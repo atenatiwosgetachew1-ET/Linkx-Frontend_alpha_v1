@@ -10212,8 +10212,9 @@ body{
 	display: grid;
 	place-items: center;
 	padding: 20px;
-	background: var(--linkx-card-bg);
-	backdrop-filter: blur(8px);
+	/* See-through: the workspace stays visible behind a confirmation. */
+	background: var(--linkx-popup-backdrop, var(--linkx-overlay-bg));
+	backdrop-filter: blur(3px);
 	animation: overlayFadeIn 0.2s ease;
 }
 
@@ -10229,7 +10230,7 @@ body{
 	flex-direction: column;
 	width: clamp(320px, 90vw, 440px);
 	padding: 24px;
-	border-radius: 14px;
+	border-radius: 3px;
 	border: 1px solid var(--window-glass-border);
 	background: var(--panel-bg);
 	box-shadow: 0 16px 40px var(--panel-shadow);
@@ -10261,6 +10262,62 @@ body{
 	font-size: 16px;
 	font-weight: 700;
 	color: var(--app-text);
+}
+
+/* A subtle line under a confirmation's header. */
+.linkx_confirm_header,
+.workspace_restore_head {
+	padding-bottom: 10px;
+	border-bottom: 1px solid color-mix(in srgb, var(--panel-border) 70%, transparent);
+}
+
+.linkx_confirm_header {
+	margin-bottom: 4px;
+}
+
+/* Room above and below what a confirmation says. */
+.linkx_confirm_body {
+	padding: 8px 0;
+}
+
+/* The header's icon, for what the popup asks. */
+.linkx_confirm_heading {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	min-width: 0;
+}
+
+.linkx_confirm_icon {
+	--confirm-tone: var(--accent-strong);
+	display: grid;
+	flex: none;
+	place-items: center;
+	width: 20px;
+	height: 20px;
+	color: var(--confirm-tone);
+}
+
+.linkx_confirm_icon.is-warning {
+	--confirm-tone: var(--graph-warning-text);
+}
+
+.linkx_confirm_icon.is-danger {
+	--confirm-tone: var(--status-error-text);
+}
+
+.linkx_confirm_icon svg {
+	width: 18px;
+	height: 18px;
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 1.9;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+
+.workspace_restore_head small {
+	padding-left: 30px;
 }
 
 .linkx_message_close,
@@ -10319,6 +10376,153 @@ body{
 
 .linkx_confirm_btn_ok:hover {
 	background: var(--primary-action-bg-hover);
+}
+
+/* Restore the last workspace (compact), and what leaving would lose. */
+.workspace_restore {
+	gap: 12px;
+	width: clamp(300px, 90vw, 400px);
+	max-height: calc(100dvh - 40px);
+	padding: 16px 18px;
+}
+
+.workspace_restore_head {
+	display: grid;
+	gap: 2px;
+}
+
+.workspace_restore_head .linkx_confirm_title {
+	font-size: 15px;
+}
+
+.workspace_restore_head small {
+	color: var(--muted-text);
+	font-size: 11px;
+}
+
+/* One pill per window, two to a row: its icon, its name, and a mark for what
+   comes back (its tooltip says it in words). */
+.workspace_restore_list {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 6px;
+	min-height: 0;
+	margin: 0;
+	/* The popup's body: as the others', with room for the focus ring. */
+	padding: 8px 2px;
+	overflow: auto;
+	list-style: none;
+}
+
+.workspace_restore_list li {
+	min-width: 0;
+}
+
+.workspace_restore_pill {
+	--restore-tone: var(--status-success-text);
+	display: grid;
+	grid-template-columns: 24px minmax(0, 1fr) 14px;
+	align-items: center;
+	gap: 8px;
+	min-height: 38px;
+	padding: 4px 9px 4px 6px;
+	border: 1px solid color-mix(in srgb, var(--restore-tone) 24%, var(--panel-border));
+	border-radius: 8px;
+	background: color-mix(in srgb, var(--restore-tone) 5%, transparent);
+	box-sizing: border-box;
+	cursor: default;
+	transition: border-color 140ms ease, background-color 140ms ease;
+}
+
+.workspace_restore_pill.is-partial {
+	--restore-tone: var(--accent-strong);
+}
+
+.workspace_restore_pill.is-lost {
+	--restore-tone: var(--status-error-text);
+}
+
+.workspace_restore_pill:hover,
+.workspace_restore_pill:focus-visible {
+	border-color: color-mix(in srgb, var(--restore-tone) 55%, var(--panel-border));
+	background: color-mix(in srgb, var(--restore-tone) 10%, transparent);
+}
+
+.workspace_restore_pill:focus-visible {
+	outline: 2px solid color-mix(in srgb, var(--restore-tone) 55%, transparent);
+	outline-offset: 0;
+}
+
+.workspace_restore_icon,
+.workspace_restore_mark {
+	fill: none;
+	stroke: currentColor;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+
+.workspace_restore_icon {
+	width: 24px;
+	height: 24px;
+	padding: 5px;
+	border-radius: 6px;
+	background: color-mix(in srgb, var(--app-text) 7%, transparent);
+	color: var(--app-text);
+	stroke-width: 1.8;
+	box-sizing: border-box;
+}
+
+.workspace_restore_mark {
+	width: 14px;
+	height: 14px;
+	color: var(--restore-tone);
+	stroke-width: 2.6;
+}
+
+.workspace_restore_name {
+	display: grid;
+	min-width: 0;
+	line-height: 1.25;
+}
+
+.workspace_restore_name strong,
+.workspace_restore_name small {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.workspace_restore_name strong {
+	font-size: 12px;
+	font-weight: 600;
+}
+
+.workspace_restore_name small {
+	color: var(--muted-text);
+	font-size: 10.5px;
+}
+
+.workspace_restore_pill.is-lost .workspace_restore_name,
+.workspace_restore_pill.is-lost .workspace_restore_icon {
+	opacity: 0.6;
+}
+
+@media (max-width: 420px) {
+	.workspace_restore_list { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.workspace_restore_pill { transition: none; }
+}
+
+.linkx_confirm_body .workspace_leave_reasons {
+	margin: 0 0 10px;
+}
+
+.linkx_confirm_body .workspace_leave_reasons {
+	display: grid;
+	gap: 4px;
+	padding-left: 18px;
 }
 
 /* Feature Lanes CSS Styles (Graph, Chart, Config) */

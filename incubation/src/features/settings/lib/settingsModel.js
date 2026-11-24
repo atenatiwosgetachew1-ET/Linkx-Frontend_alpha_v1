@@ -38,7 +38,6 @@ export function hexAlphaToOutput(hex, alpha) {
 export const SESSION_STORAGE_KEY = 'session';
 
 export const SETTINGS_STORAGE_KEYS = {
-  rememberLayout: 'linkx_settings_remember_layout',
   enableNotifications: 'linkx_settings_enable_notifications',
 };
 

@@ -1,6 +1,8 @@
 import React, { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 
+import ConfirmTitle from '../../../shared/components/ConfirmTitle.jsx';
+
 // Shown each time the Tasks window's Kept tab is opened with runs in it
 // (analyst decision 2026-11-24): they have finished, but each still uses an
 // analysis session.
@@ -33,7 +35,7 @@ export default function KeptSessionsDialog({ kept, usage, onClose }) {
         aria-describedby="tasks-kept-body"
       >
         <div className="linkx_confirm_header">
-          <span id="tasks-kept-title" className="linkx_confirm_title">{one ? 'This run is using a session' : 'These runs are using sessions'}</span>
+          <ConfirmTitle id="tasks-kept-title" icon="session">{one ? 'This run is using a session' : 'These runs are using sessions'}</ConfirmTitle>
           <button className="linkx_confirm_close" type="button" aria-label="Close" onClick={onClose}>✕</button>
         </div>
         <div id="tasks-kept-body" className="linkx_confirm_body">

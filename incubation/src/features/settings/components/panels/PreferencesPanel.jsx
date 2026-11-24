@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 
 import { useGlassEffects } from '../../../../utils/glassEffects.js';
+import { isRememberingWorkspace, setRememberingWorkspace } from '../../../../workspace/lib/workspaceCopy.js';
 import { SETTINGS_STORAGE_KEYS } from '../../lib/settingsModel.js';
 import { LiveThemeCustomizerStudio } from '../theme/ThemeStudio.jsx';
 import { Masthead, Option, PageHero, SettingsPage, Stat, Stats } from '../SettingsPage.jsx';
@@ -19,12 +20,12 @@ function useActiveTheme() {
 }
 
 export function PreferencesPanel({ areBackgroundAnimationsEnabled, setBackgroundAnimationsEnabled }) {
-  const [rememberLayout, setRememberLayout] = useState(() => localStorage.getItem(SETTINGS_STORAGE_KEYS.rememberLayout) !== 'false');
+  const [rememberLayout, setRememberLayout] = useState(isRememberingWorkspace);
   const [enableNotifications, setEnableNotifications] = useState(() => localStorage.getItem(SETTINGS_STORAGE_KEYS.enableNotifications) !== 'false');
   const { areGlassEffectsEnabled, setGlassEffectsEnabled } = useGlassEffects();
 
   useEffect(() => {
-    localStorage.setItem(SETTINGS_STORAGE_KEYS.rememberLayout, String(rememberLayout));
+    setRememberingWorkspace(rememberLayout); // off forgets what was kept
   }, [rememberLayout]);
 
   useEffect(() => {
@@ -32,7 +33,7 @@ export function PreferencesPanel({ areBackgroundAnimationsEnabled, setBackground
   }, [enableNotifications]);
 
   const options = [
-    { icon: 'layout', title: 'Remember window layout', description: 'Keep window positions and sizes between visits.', checked: rememberLayout, onChange: setRememberLayout },
+    { icon: 'layout', title: 'Remember window layout', description: 'Offer to restore your windows after a reload or sign-in. Kept in this browser for 7 days, without passwords, files or graph contents.', checked: rememberLayout, onChange: setRememberLayout },
     { icon: 'bell', title: 'Enable notifications', description: 'Show notices from the workspace.', checked: enableNotifications, onChange: setEnableNotifications },
     { icon: 'motion', title: 'Enable background animations', description: 'Animate the workspace background and the Source window’s data path.', checked: areBackgroundAnimationsEnabled, onChange: setBackgroundAnimationsEnabled },
     { icon: 'glass', title: 'Enable glass blur effects', description: 'Blur what lies behind translucent panels.', checked: areGlassEffectsEnabled, onChange: setGlassEffectsEnabled },

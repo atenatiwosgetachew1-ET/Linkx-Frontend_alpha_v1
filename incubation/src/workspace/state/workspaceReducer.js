@@ -207,6 +207,49 @@ export function workspaceReducer(state, action) {
       };
     }
 
+    // The last workspace, as offered (lib/workspaceCopy.js): every window gets
+    // a new id, so what is linked by id (Table and Chart to their Graph) is
+    // linked again. Limits and single windows apply as when opened by hand.
+    case WORKSPACE_ACTIONS.RESTORE_WINDOWS: {
+      const { windows: wanted = [], activeWindowId = '', orientation, contextTab } = action.payload || {};
+      let windows = [...state.windows];
+      let nextWindowIndex = state.nextWindowIndex;
+      const ids = new Map();
+      wanted.forEach((item) => {
+        if (!Object.values(WORKSPACE_WINDOW_TYPES).includes(item?.type)) return;
+        const sameType = windows.filter((windowItem) => windowItem.type === item.type);
+        if (!MULTI_INSTANCE_WINDOW_TYPES.has(item.type) && sameType.length) {
+          ids.set(item.id, sameType[0].id);
+          return;
+        }
+        if (getWindowLimitBlock(windows, item.type)) return;
+        const restored = createWindow(item.type, nextWindowIndex, {
+          customTitle: item.customTitle,
+          parentSessionId: item.parentSessionId,
+          backendWindowId: item.backendWindowId,
+          sourceSessionId: item.sourceSessionId,
+          sourceState: item.sourceState,
+          metadata: item.metadata,
+        }, sameType.length + 1);
+        ids.set(item.id, restored.id);
+        windows = [...windows, restored];
+        nextWindowIndex += 1;
+      });
+      const restoredIds = new Set(ids.values());
+      const relink = (metadata, key) => (metadata[key] ? { [key]: ids.get(metadata[key]) || null } : {});
+      return {
+        ...state,
+        windows: windows.map((windowItem) => (restoredIds.has(windowItem.id)
+          ? { ...windowItem, metadata: { ...windowItem.metadata, ...relink(windowItem.metadata, 'tableGraph'), ...relink(windowItem.metadata, 'chartGraph') } }
+          : windowItem)),
+        activeWindowId: ids.get(activeWindowId) || windows.at(-1)?.id || null,
+        orientation: Object.values(WORKSPACE_ORIENTATIONS).includes(orientation) ? orientation : state.orientation,
+        contextTab: contextTab || state.contextTab,
+        nextWindowIndex,
+        nextSourceWindowId: state.nextSourceWindowId + wanted.filter((item) => item?.type === WORKSPACE_WINDOW_TYPES.SOURCE).length,
+      };
+    }
+
     case WORKSPACE_ACTIONS.CLEAR_WINDOWS:
       return {
         ...state,

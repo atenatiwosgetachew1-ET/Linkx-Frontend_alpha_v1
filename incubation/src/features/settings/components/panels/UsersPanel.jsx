@@ -574,7 +574,7 @@ export function UsersPanel({ apiFetch, canManageUsers, canManageSuperusers, curr
       setError('You cannot delete your own account.');
       return;
     }
-    const confirmed = await requestConfirmation({ title: 'Delete user', message: `Delete user "${user.username}"? This action cannot be undone.`, confirmText: 'Delete', cancelText: 'Cancel' });
+    const confirmed = await requestConfirmation({ title: 'Delete user', message: `Delete user "${user.username}"? This action cannot be undone.`, confirmText: 'Delete', icon: 'delete', cancelText: 'Cancel' });
     if (!confirmed) return;
     setSaving(true);
     setError('');

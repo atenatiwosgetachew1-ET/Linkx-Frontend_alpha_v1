@@ -99,6 +99,7 @@ export default function ActivityLogPanel({ apiFetch, canManage, defaultSessionId
       title: 'Queue cleanup?',
       message: `Queue cleanup for ${runId || sessionId}? Session artifacts will be removed.`,
       confirmText: 'Queue cleanup',
+      icon: 'delete',
     }))) return;
     const payload = {
       id: 'cleanup_session',

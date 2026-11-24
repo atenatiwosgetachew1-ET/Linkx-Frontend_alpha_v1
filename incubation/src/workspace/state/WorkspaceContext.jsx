@@ -52,6 +52,7 @@ function createWorkspaceActions(dispatch, { getWindows, getNextWindowIndex, onLi
       type: WORKSPACE_ACTIONS.SET_CONTEXT_TAB,
       payload: { tab },
     }),
+    restoreWindows: (payload) => dispatch({ type: WORKSPACE_ACTIONS.RESTORE_WINDOWS, payload }),
     clearWindows: () => dispatch({ type: WORKSPACE_ACTIONS.CLEAR_WINDOWS }),
   };
 }

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import ConfirmTitle from '../components/ConfirmTitle.jsx';
 
 import { NotificationContext } from './notificationContext.js';
 
@@ -194,9 +195,7 @@ function ConfirmationDialog({ item, onResolve }) {
         aria-describedby="linkx-confirm-body"
       >
         <div className="linkx_confirm_header">
-          <span id="linkx-confirm-title" className="linkx_confirm_title">
-            {item.title}
-          </span>
+          <ConfirmTitle id="linkx-confirm-title" icon={item.icon}>{item.title}</ConfirmTitle>
           <button
             className="linkx_confirm_close linkx_tooltip_anchor"
             type="button"
@@ -340,7 +339,7 @@ export function NotificationProvider({ children }) {
 
       setConfirmations((current) => [
         ...current,
-        { id, title, message, confirmText, cancelText, resolve },
+        { id, title, message, confirmText, cancelText, icon: payload.icon, resolve },
       ]);
     });
   }, []);

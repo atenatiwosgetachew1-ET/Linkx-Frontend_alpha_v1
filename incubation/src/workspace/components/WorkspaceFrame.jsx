@@ -17,7 +17,7 @@ import { clearReportsPages } from '../../features/reports/lib/reportsPageCache.j
 import { clearEvidenceGraphs } from '../../features/reports/lib/evidenceGraphs.js';
 import { clearConfigurationDrafts } from '../../features/configuration/lib/configDraft.js';
 import { clearKnownBuiltinRules } from '../../features/libraries/lib/rulesLibrary.js';
-import { clearGraphStores, disposeGraphStore } from '../../features/graph/lib/graphStore.js';
+import { clearGraphStores, disposeGraphStore, getGraphStore, hasGraphStore } from '../../features/graph/lib/graphStore.js';
 import { forgetGraphState } from '../../features/graph/lib/graphLinkBus.js';
 import { forgetLayoutOwner } from '../../features/graph/lib/layoutClient.js';
 import { bindGraphStatusSocket, clearGraphStatus, markGraphSessionClosed, markGraphSessionTerminated, retainGraphStatus, setGraphStatusNotifier } from '../../features/graph/lib/graphStatus.js';
@@ -46,9 +46,16 @@ import {
 import { useNotifications } from '../../shared/notifications/useNotifications.js';
 import CloseAnalysisDialog from './CloseAnalysisDialog.jsx';
 import SaveBeforeCloseDialog from './SaveBeforeCloseDialog.jsx';
+import RestoreWorkspaceDialog from './RestoreWorkspaceDialog.jsx';
+import SignOutDialog from './SignOutDialog.jsx';
+import { useWorkspaceCopy } from '../hooks/useWorkspaceCopy.js';
+import { leaveReasons } from '../lib/leaveReasons.js';
+import { nextSourceWindowNumber } from '../lib/sourceWindowIds.js';
+import { isRememberingWorkspace, windowOutcome } from '../lib/workspaceCopy.js';
 import TaskEvidenceDialog from '../../features/tasks/components/TaskEvidenceDialog.jsx';
 import { canSaveAsEvidence, saveRunAsEvidence } from '../../features/tasks/lib/saveEvidence.js';
 import { WORKSPACE_CONTEXT_TABS, WORKSPACE_ORIENTATIONS, WORKSPACE_WINDOW_TYPES, getWindowLimitBlock } from '../state/workspaceTypes.js';
+import { getServiceRefusalMessage } from '../../services/apiErrors.js';
 import { createLogger } from '../../shared/logger.js';
 import { useParentAlerts } from '../../features/alerts/hooks/useParentAlerts.js';
 import { useServerTasks } from '../../features/tasks/hooks/useServerTasks.js';
@@ -116,7 +123,7 @@ export default function WorkspaceFrame({ user, token, mainSessionId, sessionErro
   const can = useCan();
   // Production hides launcher items the user has no permission for.
   const visibleLauncherItems = useMemo(() => getVisibleLauncherItems(can), [can]);
-  const { apiFetch, socket } = useSession();
+  const { apiFetch, socket, configuration } = useSession();
   // Token renewal re-creates the socket: move running stream logs and graph
   // status subscriptions onto it.
   useEffect(() => {
@@ -267,6 +274,9 @@ export default function WorkspaceFrame({ user, token, mainSessionId, sessionErro
     });
   }, [latestApiFetch]);
 
+  const releaseSourceSessionRef = React.useRef(releaseSourceSession);
+  releaseSourceSessionRef.current = releaseSourceSession;
+
   // Closes the window and stops its stream, if any (production Terminate
   // request: log_stream_unplug + end_session), then the window session.
   const closeAndStop = useCallback((targetWindow) => {
@@ -385,7 +395,15 @@ export default function WorkspaceFrame({ user, token, mainSessionId, sessionErro
       endAllAbandonedStreams(apiFetchRef.current, { reason, keepalive: true }).catch(() => null);
       releaseAllTaskSessions({ keepalive: true });
     };
-    const onPageHide = () => endAll('page_closed');
+    const onPageHide = (event) => {
+      endAll('page_closed');
+      // Their Source sessions too: ids are never reused, so nothing could
+      // open them again, and each still counts as one of the sessions.
+      if (event.persisted) return;
+      windowsRef.current.filter((item) => item.type === WORKSPACE_WINDOW_TYPES.SOURCE).forEach((item) => {
+        releaseSourceSessionRef.current(item, 'page_closed', { keepalive: true });
+      });
+    };
     window.addEventListener('pagehide', onPageHide);
     return () => {
       window.removeEventListener('pagehide', onPageHide);
@@ -404,6 +422,79 @@ export default function WorkspaceFrame({ user, token, mainSessionId, sessionErro
     }
     hadTokenRef.current = Boolean(token);
   }, [token]);
+
+  /* ── The last workspace (lib/workspaceCopy.js) ──────────────────────── */
+  const { offer: lastWorkspace, answered: lastWorkspaceAnswered } = useWorkspaceCopy({ user, workspace, configuration });
+  const [restoring, setRestoring] = useState(false);
+  const restoreLastWorkspace = async () => {
+    if (restoring || !lastWorkspace) return;
+    setRestoring(true);
+    const ready = [];
+    const missing = [];
+    let sessions = sessionUsage.available;
+    for (const item of lastWorkspace.windows) {
+      const permission = launcherItems.find((entry) => entry.windowType === item.type)?.permission;
+      if (permission && !can(permission)) {
+        missing.push('a window you have no permission for');
+      } else if (item.type === WORKSPACE_WINDOW_TYPES.SOURCE) {
+        if (sessions <= 0) {
+          missing.push('a Source window (all analysis sessions are in use)');
+          continue;
+        }
+        try {
+          // In order: each takes a session of its own.
+          const identity = await initializeSourceWindow(apiFetch, {
+            sessionId: mainSessionId,
+            windowId: nextSourceWindowNumber(mainSessionId, workspace.nextSourceWindowId + ready.length),
+          });
+          sessions -= 1;
+          ready.push({ ...item, backendWindowId: identity.windowId, parentSessionId: identity.parentSessionId, sourceSessionId: identity.sourceSessionId });
+        } catch (error) {
+          missing.push(`a Source window (${getServiceRefusalMessage(error) || 'its session could not be opened'})`);
+        }
+      } else {
+        const { state, note } = windowOutcome(item, lastWorkspace);
+        ready.push(item.type === WORKSPACE_WINDOW_TYPES.GRAPH && state === 'lost'
+          ? { ...item, metadata: { ...item.metadata, restoredNote: note } }
+          : item);
+      }
+    }
+    workspace.restoreWindows({ ...lastWorkspace, windows: ready });
+    setRestoring(false);
+    lastWorkspaceAnswered();
+    if (missing.length) notify({ title: 'Workspace restored in part', message: `Not restored: ${missing.join('; ')}.`, level: 'warning', source: 'Workspace' });
+  };
+
+  /* ── Leaving with work that would be lost (lib/leaveReasons.js) ─────── */
+  const reasonsToStay = () => leaveReasons({
+    tasks: getTasksSnapshot().tasks,
+    windows: windowsRef.current,
+    can,
+    graphChanged: (windowId) => {
+      if (!hasGraphStore(windowId)) return false;
+      const { nodes, history } = getGraphStore(windowId).getSnapshot();
+      const metadata = windowsRef.current.find((item) => item.id === windowId)?.metadata || {};
+      return nodes > 0 && (history.canUndo || metadata.graphBlank === true);
+    },
+  });
+  const reasonsRef = useRef(reasonsToStay);
+  reasonsRef.current = reasonsToStay;
+  useEffect(() => {
+    // The browser asks in its own words (reload, tab closed).
+    const onBeforeUnload = (event) => {
+      if (!reasonsRef.current().length) return;
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, []);
+  const [signOutReasons, setSignOutReasons] = useState(null);
+  const requestSignOut = () => {
+    const reasons = reasonsToStay();
+    if (reasons.length) setSignOutReasons(reasons);
+    else onSignOut();
+  };
 
   const windowWorkspace = useMemo(() => ({
     ...workspace,
@@ -437,7 +528,9 @@ export default function WorkspaceFrame({ user, token, mainSessionId, sessionErro
         return;
       }
 
-      const sourceWindowId = workspace.nextSourceWindowId;
+      // Never a number this main session already used (an earlier page load
+      // or another tab): the Service names the session after it (B-37).
+      const sourceWindowId = nextSourceWindowNumber(mainSessionId, workspace.nextSourceWindowId);
       setIsOpeningSource(true);
       try {
         const identity = await initializeSourceWindow(apiFetch, {
@@ -549,7 +642,7 @@ export default function WorkspaceFrame({ user, token, mainSessionId, sessionErro
               aria-label={signOutItem.label}
               onClick={() => {
                 collapseLauncher();
-                onSignOut();
+                requestSignOut();
               }}
             >
                 <LauncherIcon path={signOutItem.path} />
@@ -586,6 +679,17 @@ export default function WorkspaceFrame({ user, token, mainSessionId, sessionErro
                 onCancel={() => resolvePendingClose('cancel')}
               />
             )}
+            {lastWorkspace && mainSessionId ? (
+              <RestoreWorkspaceDialog copy={lastWorkspace} iconPaths={windowIconPaths} busy={restoring} onRestore={restoreLastWorkspace} onFresh={lastWorkspaceAnswered} />
+            ) : null}
+            {signOutReasons ? (
+              <SignOutDialog
+                reasons={signOutReasons}
+                remembered={isRememberingWorkspace()}
+                onSignOut={() => { setSignOutReasons(null); onSignOut(); }}
+                onCancel={() => setSignOutReasons(null)}
+              />
+            ) : null}
             {pendingSaveTask && !pendingSave.saving ? (
               <SaveBeforeCloseDialog
                 windowTitle={pendingSave.windowTitle}

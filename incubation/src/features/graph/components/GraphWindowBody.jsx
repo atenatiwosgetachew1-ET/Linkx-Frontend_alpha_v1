@@ -1836,7 +1836,7 @@ export default function GraphWindowBody({ windowItem }) {
       return;
     }
     if (store.getSnapshot().nodes > 0) {
-      const confirmed = await requestConfirmation({ title: 'Confirm Replace', message: 'Any unsaved progress will be lost. Continue?', confirmText: 'Continue', cancelText: 'Cancel' });
+      const confirmed = await requestConfirmation({ title: 'Confirm Replace', icon: 'warning', message: 'Any unsaved progress will be lost. Continue?', confirmText: 'Continue', cancelText: 'Cancel' });
       if (!confirmed) return;
     }
     let parsed;
@@ -2166,6 +2166,11 @@ export default function GraphWindowBody({ windowItem }) {
     // Or start one here: adding anything makes this a new graph.
     let start = 'To create an instant graph, start by adding components from the canvas context menu.';
     let again = false;
+    // A window of the last workspace whose graph could not come back.
+    if (source.kind === 'none' && metadata.restoredNote) {
+      title = 'This graph could not be restored';
+      text = String(metadata.restoredNote);
+    }
     if (source.kind === 'session' && emptySession === sessionId) {
       title = 'No graph data';
       text = `Session ${sessionId} returned no nodes and no relationships.`;

@@ -1,6 +1,8 @@
 import React, { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 
+import ConfirmTitle from '../../shared/components/ConfirmTitle.jsx';
+
 // Asked when a Source window with a running analysis is closed: keep the
 // stream running as a background task (default), stop it, or keep the window.
 // Escape / backdrop click cancel (never stop an analysis by accident).
@@ -34,7 +36,7 @@ export default function CloseAnalysisDialog({ windowTitle, taskTitle, onKeep, on
         aria-describedby="workspace-close-analysis-body"
       >
         <div className="linkx_confirm_header">
-          <span id="workspace-close-analysis-title" className="linkx_confirm_title">Analysis still running</span>
+          <ConfirmTitle id="workspace-close-analysis-title" icon="running">Analysis still running</ConfirmTitle>
           <button className="linkx_confirm_close" type="button" aria-label="Keep the window open" onClick={onCancel}>✕</button>
         </div>
         <div id="workspace-close-analysis-body" className="linkx_confirm_body">

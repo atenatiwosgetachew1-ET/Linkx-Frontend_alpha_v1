@@ -50,6 +50,7 @@ export const WORKSPACE_ACTIONS = Object.freeze({
   TOGGLE_ORIENTATION: 'workspace/toggleOrientation',
   SET_CONTEXT_TAB: 'workspace/setContextTab',
   CLEAR_WINDOWS: 'workspace/clearWindows',
+  RESTORE_WINDOWS: 'workspace/restoreWindows',
 });
 
 export const WORKSPACE_WINDOW_LABELS = Object.freeze({

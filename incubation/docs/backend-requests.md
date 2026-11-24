@@ -654,11 +654,15 @@ and, on `create_DF` for a batch source, `limits: { "last_seconds": 3600, "time_c
 
 **Changed in the frontend (2026-11-24):**
 - Show graph is offered only while the run is going in this page, or once it has completed while its Source window is open. It is not offered for tasks listed by the Service.
+- Source window numbers are no longer reused: each `/init_source` sends a number this main session has not used before, counted in the browser across reloads and tabs. Numbers therefore grow past 3. A browser that stores nothing still restarts at 1, so request 2 below still matters.
+- When the page goes away (reload, tab closed), it sends `/close_source_window` (`reason: "page_closed"`, keepalive) for each open Source window, next to the `end_session` of a running stream; the two may arrive in either order. A completed background run keeps its session until it is saved with its graph or released (`reason: "background_task_released"`).
+- **Restore workspace:** after a reload or sign-in the analyst may restore the last windows. Each Source window is opened with a new `/init_source`, one after the other.
 - For a completed run it now sends `/graph_link { id: "link" }` first, then `/get_graph`. Production does too: it has no "completed" stream state, so a completed run stays linkable until it is terminated, fails or its window closes.
 
 **Request:**
 1. Accept `task_id` on `/get_graph`, and answer with that run's graph only, using the task owner's saved Neo4j login. It should work after the Source window is closed, after a reload, and until the task is archived. Same permissions as reading the task.
 2. Say what `/init_source` does to an id already in use: does it clear its credentials or its data? Please refuse it or return a new id instead.
+   Please also confirm that window numbers above 3 are accepted, and that `/close_source_window` is safe before, after or without an `end_session`.
 3. Say exactly when a session's `tool_credentials` are removed: `/close_source_window`, sign-out, idle timeout, a restart, or a time limit.
 4. Confirm that `/graph_link` is accepted for a completed run, and that `*` then returns its nodes even when it has no relationships (follow-up item 6).
 5. Confirm that a configuration save **merges**: the frontend, like production, leaves out masked passwords, their `*_ref` and `tool_credentials`. They must not be removed by a save that omits them.

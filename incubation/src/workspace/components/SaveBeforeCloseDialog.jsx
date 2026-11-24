@@ -1,6 +1,8 @@
 import React, { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 
+import ConfirmTitle from '../../shared/components/ConfirmTitle.jsx';
+
 // Asked when a Source window is closed and its completed run was not saved
 // (analyst decision 2026-11-24): closing ends the session its graph is read
 // from. Escape / backdrop click keep the window (never lose a graph by
@@ -33,7 +35,7 @@ export default function SaveBeforeCloseDialog({ windowTitle, taskTitle, onSave, 
         aria-describedby="workspace-save-before-close-body"
       >
         <div className="linkx_confirm_header">
-          <span id="workspace-save-before-close-title" className="linkx_confirm_title">Save this run first?</span>
+          <ConfirmTitle id="workspace-save-before-close-title" icon="save">Save this run first?</ConfirmTitle>
           <button className="linkx_confirm_close" type="button" aria-label="Keep the window open" onClick={onCancel}>✕</button>
         </div>
         <div id="workspace-save-before-close-body" className="linkx_confirm_body">

@@ -630,7 +630,7 @@ export default function ServiceAccountsPanel({ apiFetch, canManageUsers, onNotic
 
   const rotateSecret = async (account) => {
     if (account.is_system) { restricted('Protected system account secret cannot be modified.'); return; }
-    if (!(await confirmAction({ title: 'Rotate secret', message: `Rotate secret for "${account.client_id}"? Sibling services must be updated with the new secret immediately.`, confirmText: 'Rotate secret' }))) return;
+    if (!(await confirmAction({ title: 'Rotate secret', message: `Rotate secret for "${account.client_id}"? Sibling services must be updated with the new secret immediately.`, confirmText: 'Rotate secret', icon: 'key' }))) return;
     let rotated;
     try {
       rotated = sanitizeSecret(generateClientSecret(), { maxLength: 128 });
@@ -656,7 +656,7 @@ export default function ServiceAccountsPanel({ apiFetch, canManageUsers, onNotic
 
   const deleteAccount = async (account) => {
     if (account.is_system) { restricted('Protected system accounts cannot be deleted.'); return false; }
-    if (!(await confirmAction({ title: 'Delete service account', message: `Delete service account "${account.client_id}"? This action cannot be undone.`, confirmText: 'Delete' }))) return false;
+    if (!(await confirmAction({ title: 'Delete service account', message: `Delete service account "${account.client_id}"? This action cannot be undone.`, confirmText: 'Delete', icon: 'delete' }))) return false;
     setSaving(true);
     setError('');
     try {
