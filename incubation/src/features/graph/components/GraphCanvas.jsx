@@ -1,6 +1,6 @@
 import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
-import cytoscape from 'cytoscape';
 
+import { createGraph, releaseGraph } from '../lib/cytoscapeInstance.js';
 import { buildElements, buildStylesheet, edgeCurveFor } from '../lib/graphElements.js';
 import { GRAPH_LIMITS, layoutSignatureOf } from '../lib/graphSettings.js';
 import { requestLayout, startPhysics } from '../lib/layoutClient.js';
@@ -34,18 +34,6 @@ const FAR_NODE_PX = 14;
 const FAR_EDGE_ZOOM = 0.6;
 // The zoom such a click goes to.
 const FAR_TAP_ZOOM = 0.5;
-
-const releaseGraph = (cy) => {
-  if (!cy) return;
-  const canvases = cy.container() ? [...cy.container().querySelectorAll('canvas')] : [];
-  cy.destroy();
-  canvases.forEach((canvas) => {
-    // Returns the canvas's existing context of that type, or null (Cytoscape
-    // canvas-mode layers hold 2d contexts, so nothing new is created).
-    const gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
-    gl?.getExtension('WEBGL_lose_context')?.loseContext();
-  });
-};
 
 // The canvas as an image, on its own background colour.
 const capture = (cy, { full, scale, maxSide, format }) => {
@@ -273,7 +261,7 @@ const GraphCanvas = forwardRef(function GraphCanvas({ windowId, store, view, set
     releaseGraph(previous);
     let cy;
     try {
-      cy = cytoscape({
+      cy = createGraph({
         container,
         style: buildStylesheet(themeRef.current, { curve, zoom: 1 }),
         layout: { name: 'preset' },
@@ -282,7 +270,6 @@ const GraphCanvas = forwardRef(function GraphCanvas({ windowId, store, view, set
         // it; Ctrl (or Cmd / Shift) + click adds to it (production vis
         // multiselect; analyst decision 2026-11-16, was additive).
         selectionType: 'single',
-        ...(renderer === RENDERERS.WEBGL ? { renderer: { name: 'canvas', webgl: true } } : {}),
         // No textureOnViewport: it draws a cached snapshot while zooming and
         // fills around it with grey (visible when zooming out fast). Large
         // canvas views use pixel ratio 1, and hide edges while moving only
@@ -290,7 +277,7 @@ const GraphCanvas = forwardRef(function GraphCanvas({ windowId, store, view, set
         motionBlur: false,
         ...(fast ? { pixelRatio: 1 } : {}),
         ...(hideEdgesWhileMoving ? { hideEdgesOnViewport: true } : {}),
-      });
+      }, { gpu: renderer === RENDERERS.WEBGL });
     } catch (error) {
       setCyInstance(null);
       if (renderer === RENDERERS.WEBGL) callbacksRef.current.onRendererFailed?.(error);

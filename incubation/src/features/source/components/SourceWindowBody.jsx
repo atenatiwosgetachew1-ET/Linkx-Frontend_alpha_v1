@@ -1,4 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { SOURCE_FLOW, SOURCE_FRAME_CLASS } from '../lib/sourceFrame.js';
+import { connectionById } from '../lib/sourceConnections.js';
+import { formatDomainPillarLabel } from '../../configuration/lib/configModel.js';
+import { SourceSteps } from './SourceSteps.jsx';
+import { SourceCapacity } from './SourceNeeds.jsx';
 
 import WindowLoadScreen from '../../../shared/components/WindowLoadScreen.jsx';
 import { useCan } from '../../../auth/useCan.js';
@@ -45,6 +50,7 @@ import { useWorkspaceActions } from '../../../workspace/hooks/useWorkspace.js';
 import { WORKSPACE_WINDOW_TYPES } from '../../../workspace/state/workspaceTypes.js';
 import { buildSourceAutofillPatch, resolveSourceDefaults } from '../lib/sourceConfig.js';
 import {
+  brokerUsesDefault,
   canPrepareDataframe,
   canStream,
   connectionKindOf,
@@ -67,6 +73,7 @@ import {
   mergeSourceState,
   modeLabels,
   normalizeWindowSessionId,
+  resolveBrokerTarget,
   SOURCE_MODES,
   SOURCE_STATUSES,
   sourceStatusFromMessage,
@@ -302,6 +309,14 @@ export default function SourceWindowBody({ windowItem }) {
     });
   };
 
+  // The same window, on the tab that holds what a connection misses.
+  const openConnectionSettings = (tab = 'connections') => {
+    workspace.openWindow(WORKSPACE_WINDOW_TYPES.CONFIGURATION, {
+      customTitle: 'Source defaults',
+      metadata: { configurationUi: { activeTab: tab }, configurationRequest: { tab, seq: Date.now() } },
+    });
+  };
+
   const openLibrariesWindow = () => {
     workspace.openWindow(WORKSPACE_WINDOW_TYPES.LIBRARIES, {
       customTitle: 'Rules library',
@@ -346,6 +361,8 @@ export default function SourceWindowBody({ windowItem }) {
       ? 'Selected storage files will be used to create the dataframe.'
       : modeState.selectedConnectionType === 'search'
         ? 'Selected search results will be used to create the dataframe.'
+        : modeState.selectedConnectionType === 'broker'
+        ? 'The connected broker will be used to create the dataframe.'
         : 'Selected files will be used to create the dataframe.'
     : nextStep
       ? 'Continue to the next source workflow step.'
@@ -388,16 +405,25 @@ export default function SourceWindowBody({ windowItem }) {
               : 'Ready to start. Run the analysis to begin streaming.'
     : workflowFooterMessage;
 
+  // Broker target: with the flow page, the configured one behind "Use
+  // Default" or the typed one; with the earlier page, what its fields hold.
+  const brokerTarget = (state = modeState, defaults = sourceDefaults) => (SOURCE_FLOW
+    ? resolveBrokerTarget(state, defaults)
+    : { address: state.brokerAddress || '', topic: state.topic || '' });
+  const brokerLabel = () => (SOURCE_FLOW && brokerUsesDefault(modeState, sourceDefaults)
+    ? '(default)'
+    : `${modeState.brokerAddress || ''}${modeState.topic ? ' / ' + modeState.topic : ''}`);
+
   const describeStreamInput = () => {
     if (activeMode === SOURCE_MODES.REALTIME) {
-      return `Realtime ${modeState.sourceAddressType || 'broker'} ${modeState.brokerAddress || ''}${modeState.topic ? ' / ' + modeState.topic : ''}`.trim();
+      return `Realtime ${modeState.sourceAddressType || 'broker'} ${brokerLabel()}`.trim();
     }
     if (modeState.selectedConnectionType === 'storage') {
       const files = (modeState.selectedStorageFiles || []).map((file) => file.name);
       return 'Batch storage: ' + files.length + (files.length === 1 ? ' file' : ' files') + (files.length ? ' (' + files.join(', ') + ')' : '');
     }
     if (modeState.selectedConnectionType === 'search') return 'Batch search results: ' + (modeState.selectedSearchFiles || []).length + ' selected';
-    if (modeState.selectedConnectionType === 'broker') return `Batch broker ${modeState.brokerAddress || ''}${modeState.topic ? ' / ' + modeState.topic : ''}`.trim();
+    if (modeState.selectedConnectionType === 'broker') return `Batch broker ${brokerLabel()}`.trim();
     const files = modeState.selectedFiles || [];
     return 'Batch upload: ' + files.length + (files.length === 1 ? ' file' : ' files') + (files.length ? ' (' + files.join(', ') + ')' : '');
   };
@@ -707,6 +733,14 @@ export default function SourceWindowBody({ windowItem }) {
     patchModeState({ step: nextStep.id });
   };
 
+  // What "Use Default" lacks on the broker page, in words ('' = nothing).
+  const missingBrokerDefault = (state, defaults = sourceDefaults) => {
+    const target = resolveBrokerTarget(state, defaults);
+    if (state.sourceAddressType === 'api') return target.address ? '' : 'No default REST API address is configured.';
+    if (target.address && target.topic) return '';
+    return `No default Kafka ${!target.address && !target.topic ? 'address and topic are' : !target.address ? 'address is' : 'topic is'} configured.`;
+  };
+
   const validateSourcePayload = (state = modeState, defaults = sourceDefaults) => {
     if (!normalizeWindowSessionId(windowItem)) return 'Source session is not ready yet.';
     if (state.sourceAddressType === 'storage') {
@@ -720,9 +754,14 @@ export default function SourceWindowBody({ windowItem }) {
       }
       return validateConnectionValue(resolveStorageAddress(state, defaults), 'Storage address');
     }
+    const target = brokerTarget(state, defaults);
+    if (SOURCE_FLOW && brokerUsesDefault(state, defaults)) {
+      const missing = missingBrokerDefault(state, defaults);
+      if (missing) return `${missing} Untick "Use Default" and enter the connection values.`;
+    }
     return compactValidationErrors(
-      validateConnectionValue(state.brokerAddress, 'Broker/API address'),
-      state.sourceAddressType === 'broker' ? validateKafkaTopic(state.topic, 'Kafka topic') : ''
+      validateConnectionValue(target.address, 'Broker/API address'),
+      state.sourceAddressType === 'broker' ? validateKafkaTopic(target.topic, 'Kafka topic') : ''
     );
   };
 
@@ -754,7 +793,8 @@ export default function SourceWindowBody({ windowItem }) {
   // /disconnect_source (sourceConnectionSchema).
   const buildSourcePayload = (state = modeState, defaults = sourceDefaults, mode = activeMode) => {
     const isStorage = state.sourceAddressType === 'storage';
-    const brokerAddress = sanitizeConnectionValue(state.brokerAddress);
+    const target = brokerTarget(state, defaults);
+    const brokerAddress = sanitizeConnectionValue(target.address);
     const storageAddress = resolveStorageAddress(state, defaults);
     const address = isStorage ? storageAddress : brokerAddress;
 
@@ -764,7 +804,7 @@ export default function SourceWindowBody({ windowItem }) {
       broker: isStorage ? '' : brokerAddress,
       hdfs: storageAddress,
       storage: storageAddress,
-      topic: state.sourceAddressType === 'broker' ? sanitizeKafkaTopic(state.topic) : null,
+      topic: state.sourceAddressType === 'broker' ? sanitizeKafkaTopic(target.topic) : null,
       mode: mode === SOURCE_MODES.REALTIME ? 'realtime' : 'batch',
       session_id: normalizeWindowSessionId(windowItem),
     };
@@ -779,6 +819,7 @@ export default function SourceWindowBody({ windowItem }) {
   // are reported in the page message (shown below the results) with a hint
   // to open the form, never by expanding it on the analyst's behalf.
   const isStorageInput = activeMode === SOURCE_MODES.BATCH && ['storage', 'search'].includes(modeState.selectedConnectionType);
+  const hasCollapsedForm = isStorageInput || SOURCE_FLOW; // the flow broker page has one too
   const OPEN_FORM_HINT = ' Open the connection form (chevron in the header) to review it.';
 
   const handleSourceAction = async ({ auto = false } = {}) => {
@@ -791,7 +832,7 @@ export default function SourceWindowBody({ windowItem }) {
     )) return;
     const validationError = isDisconnecting ? '' : validateSourcePayload();
     if (validationError) {
-      setValidationMessage(validationError + (auto && isStorageInput ? OPEN_FORM_HINT : ''));
+      setValidationMessage(validationError + (auto && hasCollapsedForm ? OPEN_FORM_HINT : ''));
       return;
     }
     if (auto) log.info('Auto-connecting storage with the configured default');
@@ -827,7 +868,7 @@ export default function SourceWindowBody({ windowItem }) {
       if (!result.ok && auto) {
         setValidationMessage(isStorageInput
           ? `Automatic connection to the default storage failed${result.message ? ': ' + result.message : '.'}${OPEN_FORM_HINT}`
-          : `Automatic connection failed${result.message ? ': ' + result.message : '.'} Review the values and press Connect.`);
+          : `Automatic connection failed${result.message ? ': ' + result.message : '.'}${SOURCE_FLOW ? OPEN_FORM_HINT : ' Review the values and press Connect.'}`);
       }
       notify({
         title: !result.ok ? (isDisconnecting ? 'Source disconnect failed' : 'Source connection failed') : isDisconnecting ? 'Source disconnected' : 'Source connected',
@@ -986,7 +1027,7 @@ export default function SourceWindowBody({ windowItem }) {
     setValidationMessage('');
     setToolValidationMessage('');
     const request = trackRequest(windowItem.id);
-    // Upload and storage flows connect the tool on the analyst's behalf.
+    // Every input connects the tool on the analyst's behalf.
     const ensureToolConnected = async () => {
       if (read().toolStatus === TOOL_STATUSES.CONNECTED) return true;
       patch({ preparing: 'Connecting tool…' });
@@ -1048,12 +1089,14 @@ export default function SourceWindowBody({ windowItem }) {
         if (!(await ensureToolConnected())) return;
         payload = buildArrayDataframePayload({ sourceSessionId, kind: 'hybrid', items });
       } else {
+        if (!(await ensureToolConnected())) return;
         const state = read();
+        const target = brokerTarget(state);
         payload = buildAddressDataframePayload({
           sourceSessionId,
           addressType: state.sourceAddressType,
-          address: sanitizeConnectionValue(state.brokerAddress),
-          topic: state.sourceAddressType === 'broker' ? sanitizeKafkaTopic(state.topic) : null,
+          address: sanitizeConnectionValue(target.address),
+          topic: state.sourceAddressType === 'broker' ? sanitizeKafkaTopic(target.topic) : null,
         });
       }
 
@@ -1389,8 +1432,8 @@ export default function SourceWindowBody({ windowItem }) {
   }, [storageAutoConnectKind, hasConfiguration, sourceDefaults.storage.address, windowItem.sourceSessionId]);
 
   // Message broker page (batch broker input and realtime connect): connect
-  // the configured Kafka broker / REST API, then the tool, on the analyst's
-  // behalf. Once per visit, like the storage pages; a manual disconnect or a
+  // the configured Kafka broker / REST API on the analyst's behalf (the tool
+  // follows on Continue; with the earlier page, SOURCE_FLOW off, right away). Once per visit, like the storage pages; a manual disconnect or a
   // failure is never retried automatically.
   const brokerAutoConnectRef = windowRef(windowItem.id, 'brokerAutoConnect', { visit: '' });
   const brokerAutoConnectVisit = (activeMode === SOURCE_MODES.BATCH && modeState.step === 'upload' && modeState.selectedConnectionType === 'broker')
@@ -1410,6 +1453,23 @@ export default function SourceWindowBody({ windowItem }) {
     const ready = hasConfiguration && Boolean(normalizeWindowSessionId(windowItem));
     if (!ready || isSourceBusy(initial) || isToolBusy(initial) || initial.preparing) return;
     brokerAutoConnectRef.current.visit = key;
+    // Like the storage pages: every visit starts with the form collapsed, and
+    // only the configured default connects on its own.
+    if (SOURCE_FLOW) {
+      if (!initial.brokerToolbarCollapsed) patchModeState({ brokerToolbarCollapsed: true }, key);
+      if (initial.sourceStatus === SOURCE_STATUSES.CONNECTED) return;
+      if (!brokerUsesDefault(initial, sourceDefaults)) {
+        setValidationMessage(`A custom broker target is set, so it was not connected automatically.${OPEN_FORM_HINT}`);
+        return;
+      }
+      const missing = missingBrokerDefault(initial);
+      if (missing) {
+        setValidationMessage(`${missing} It was not connected automatically.${OPEN_FORM_HINT}`);
+        return;
+      }
+      handleSourceActionRef.current({ auto: true });
+      return;
+    }
 
     const isKafka = initial.sourceAddressType !== 'api';
     const label = isKafka ? 'Kafka broker' : 'REST API';
@@ -1595,6 +1655,9 @@ export default function SourceWindowBody({ windowItem }) {
           initialConnectionType={sourceState.lastMode === SOURCE_MODES.REALTIME ? 'broker' : sourceState.batch.selectedConnectionType}
           onSelectMode={selectMode}
           onOpenConfiguration={openConfigurationWindow}
+          onSetUpConnection={openConnectionSettings}
+          defaults={sourceDefaults}
+          capacity={<SourceCapacity />}
           onCopySession={copySessionId}
         />
       </div>
@@ -1603,7 +1666,7 @@ export default function SourceWindowBody({ windowItem }) {
 
   return (
     <div className="workspace_window_body source_window_body">
-      <div className="source_window_workspace">
+      <div className={`source_window_workspace${SOURCE_FRAME_CLASS}`}>
         <header className="source_window_choose_header">
           <SourceWindowHeading
             icon={modeState.step === 'upload' ? ({ storage: 'hadoop', search: 'elastic', broker: 'kafka' })[modeState.selectedConnectionType] || 'upload' : activeMode === SOURCE_MODES.REALTIME ? 'realtime' : 'source'}
@@ -1617,13 +1680,25 @@ export default function SourceWindowBody({ windowItem }) {
             <SessionBadge sessionId={normalizeWindowSessionId(windowItem)} onCopySession={copySessionId} />
           </SourceWindowHeading>
         </header>
-        <div className="source_window_workflow_shell">
-          <WorkflowTimeline
-            activeStep={modeState.step}
-            steps={workflowSteps}
-            accessibleSteps={accessibleSteps}
-            onStepChange={(step) => patchModeState({ step })}
-          />
+        <div className={'source_window_workflow_shell' + (SOURCE_FLOW ? ' source_window_flow is-steps' : '')}>
+          {SOURCE_FLOW ? (
+            <SourceSteps
+              activeStep={modeState.step}
+              steps={workflowSteps}
+              accessibleSteps={accessibleSteps}
+              connection={connectionById(activeMode === SOURCE_MODES.REALTIME ? 'broker' : modeState.selectedConnectionType)}
+              domainLabel={formatDomainPillarLabel(sourceDefaults.domain) + ' · ' + (activeMode === SOURCE_MODES.REALTIME ? 'Live' : 'Batch')}
+              capacity={<SourceCapacity />}
+              onStepChange={(step) => patchModeState({ step })}
+            />
+          ) : (
+            <WorkflowTimeline
+              activeStep={modeState.step}
+              steps={workflowSteps}
+              accessibleSteps={accessibleSteps}
+              onStepChange={(step) => patchModeState({ step })}
+            />
+          )}
           <WorkflowBody
           mode={activeMode}
           modeState={modeState}

@@ -1,60 +1,14 @@
-import React, { useState, useRef, useEffect, useSyncExternalStore } from 'react';
-import { CHART_ICON, TABLE_ICON } from '../../shared/icons/windowIcons.js';
+import React, { useMemo, useState, useRef, useEffect, useSyncExternalStore } from 'react';
 import { WORKSPACE_WINDOW_TYPES } from '../state/workspaceTypes.js';
-import { useCan } from '../../auth/useCan.js';
-import { SOURCE_PERMISSIONS } from '../../auth/permissions.js';
-import {
-  TASK_ORIGINS,
-  TASK_STATUSES,
-  appendTaskLog,
-  createTask,
-  finishTask,
-  getTask,
-  getTasksSnapshot,
-  isTaskActive,
-  markTaskRunning,
-  sessionLimitMessage,
-  setTaskBackground,
-  setTaskHandlers,
-  subscribeTasks,
-  updateTask,
-} from '../../features/tasks/lib/taskRegistry.js';
+import { useSession } from '../../shared/session/useSession.js';
+import { resolveSourceDefaults } from '../../features/source/lib/sourceConfig.js';
+import { quickReview } from '../lib/quickReview.js';
+import { getTasksSnapshot, isTaskActive, subscribeTasks } from '../../features/tasks/lib/taskRegistry.js';
 
-const QUICK_INPUT_LABELS = {
-  realtime: 'Real-time source',
-  kafka: 'Real-time · Apache Kafka',
-  rest_api: 'Real-time · REST API',
-  batch_kafka: 'Batch · Apache Kafka',
-  batch_rest_api: 'Batch · REST API',
-  batch_hadoop: 'Batch · HDFS',
-};
-
-const defaultConfigItems = [
-  { label: 'Ingestion Engine', value: 'Auto-detect Pipeline' },
-  { label: 'Deep Scan Depth', value: 'Entity & Relationship Extraction' },
-  { label: 'Confidence Threshold', value: '95.8% Validation' },
-  { label: 'Output Stream', value: 'Unified Graph & Analysis' },
-];
-
-const mockFindingsData = {
-  status: 'Flagged!',
-  statusType: 'danger', // danger, warning, success
-  anomalies: ['Dormant to Active', 'Smurfing', 'Rapid Velocity Flow', 'High-Degree Hub'],
-  gdsMetrics: [
-    { label: 'Most centrality', value: '4.85' },
-    { label: 'Highest PageRank', value: '0.924' },
-    { label: 'Louvain Clusters', value: '7 Communities' },
-    { label: 'Graph Density', value: '0.642' },
-  ],
-  influencers: [
-    { id: 'ACC-8892', gds: 'Centrality: 4.85 | PageRank: 0.924 | Community: C-12' },
-    { id: 'TX-4019', gds: 'Centrality: 4.62 | PageRank: 0.887 | Community: C-12' },
-    { id: 'HUB-1044', gds: 'Centrality: 4.15 | PageRank: 0.812 | Community: C-04' },
-    { id: 'NODE-7721', gds: 'Centrality: 3.98 | PageRank: 0.765 | Community: C-09' },
-    { id: 'ENTITY-302', gds: 'Centrality: 3.74 | PageRank: 0.721 | Community: C-04' },
-  ],
-};
-
+// The quick panel is not connected to the Service yet (analyst decision
+// 2026-11-24: no simulated runs or findings). It shows what would be used and
+// runs nothing: no task, no result. Plan: the formal analysis pipeline, with
+// limits (docs/backend-requests.md B-35).
 const footerLinks = ['Privacy Policy', 'Terms of Service', 'Contact Us', 'Help'];
 
 function ChevronDownIcon() {
@@ -176,56 +130,6 @@ function FileIcon() {
   );
 }
 
-function WarningIcon() {
-  return (
-    <svg className="workspace_home_svg_icon is-warning" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
-      <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-      <line x1="12" y1="9" x2="12" y2="13" />
-      <line x1="12" y1="17" x2="12.01" y2="17" />
-    </svg>
-  );
-}
-
-function GraphIcon() {
-  return (
-    <svg className="workspace_home_svg_icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
-      <circle cx="6" cy="6" r="3" />
-      <circle cx="18" cy="6" r="3" />
-      <circle cx="12" cy="18" r="3" />
-      <line x1="8.5" y1="7.5" x2="15.5" y2="7.5" />
-      <line x1="7.5" y1="8.5" x2="10.5" y2="15.5" />
-      <line x1="16.5" y1="8.5" x2="13.5" y2="15.5" />
-    </svg>
-  );
-}
-
-function ChartIcon() {
-  return (
-    <svg className="workspace_home_svg_icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
-      <path d={CHART_ICON} />
-    </svg>
-  );
-}
-
-function TableIcon() {
-  return (
-    <svg className="workspace_home_svg_icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
-      <path d={TABLE_ICON} />
-    </svg>
-  );
-}
-
-function TrashIcon() {
-  return (
-    <svg className="workspace_home_svg_icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
-      <polyline points="3 6 5 6 21 6" />
-      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-      <line x1="10" y1="11" x2="10" y2="17" />
-      <line x1="14" y1="11" x2="14" y2="17" />
-    </svg>
-  );
-}
-
 function KafkaIcon() {
   return (
     <svg className="workspace_home_svg_icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
@@ -259,16 +163,6 @@ function HadoopIcon() {
   );
 }
 
-function TaskIcon() {
-  return (
-    <svg className="workspace_home_svg_icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
-      <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2" />
-      <rect x="9" y="3" width="6" height="4" rx="1" />
-      <path d="m9 14 2 2 4-4" />
-    </svg>
-  );
-}
-
 function ResetIcon() {
   return (
     <svg className="workspace_home_svg_icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
@@ -278,43 +172,18 @@ function ResetIcon() {
   );
 }
 
-function LockIcon() {
-  return (
-    <svg className="workspace_home_svg_icon is-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
-      <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-    </svg>
-  );
-}
-
-function WorkspaceHome({ openWindowsCount = 0, onOpenWindow, onOpenTask, onReportReady, sessionUsage = null, unseenTasks = 0, unseenReports = 0 }) {
+function WorkspaceHome({ openWindowsCount = 0, onOpenWindow, onOpenTask, unseenTasks = 0, unseenReports = 0 }) {
   const [isDragOver, setIsDragOver] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState([]);
   const [selectedSourceMode, setSelectedSourceMode] = useState(null); // Options: null, 'realtime', 'batch', 'tasks', 'reports'
   const [selectedSubOption, setSelectedSubOption] = useState(null); // Options: null, 'kafka', 'rest_api', 'batch_kafka', 'batch_rest_api', 'batch_hadoop'
-  const [lockedSubOptions, setLockedSubOptions] = useState([]); // Sub-option IDs currently locked due to active/background task
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  // Quick analyses are tasks too (Tasks window, 3-session cap).
   const { tasks: allTasks } = useSyncExternalStore(subscribeTasks, getTasksSnapshot);
   const activeTasksCount = allTasks.filter(isTaskActive).length;
-  const quickTaskRef = useRef(null); // the live (foreground) quick task
-  const handleCancelRef = useRef(null); // Tasks window "Terminate" on the live task
-  const [resultTaskId, setResultTaskId] = useState(null);
-  const isSessionLimitReached = Boolean(sessionUsage && sessionUsage.available <= 0);
-  const can = useCan();
-  // Running an analysis needs analysis:run (production RBAC); opening the
-  // network view needs graph:create.
-  const canRunAnalysis = can(SOURCE_PERMISSIONS.ANALYSIS_RUN);
-  const canOpenGraph = can(SOURCE_PERMISSIONS.GRAPH_CREATE);
-  const [reportsCount, setReportsCount] = useState(0);
-  const [analysisStatus, setAnalysisStatus] = useState('');
-  const [analysisProgress, setAnalysisProgress] = useState(0);
-  const [analysisResult, setAnalysisResult] = useState(null);
-  const [showDropConfirmModal, setShowDropConfirmModal] = useState(false);
+  const { configuration } = useSession();
+  const sourceDefaults = useMemo(() => resolveSourceDefaults(configuration), [configuration]);
   const [isResetSpinning, setIsResetSpinning] = useState(false);
   const [isSecondaryResetSpinning, setIsSecondaryResetSpinning] = useState(false);
   const [analyzeButtonLabelText, setAnalyzeButtonLabelText] = useState('Analyze');
-  const [analyzingActiveLabelText, setAnalyzingActiveLabelText] = useState('Analyzing');
 
   const handleResetSecondaryPanel = () => {
     if (isSecondaryResetSpinning) return;
@@ -325,12 +194,9 @@ function WorkspaceHome({ openWindowsCount = 0, onOpenWindow, onOpenTask, onRepor
   };
 
   const [isScrolledToSecondary, setIsScrolledToSecondary] = useState(false);
-  const liveTimeoutsRef = useRef([]); // Only tracks live progress overlay timeouts
-  const activeAnalysisSubRef = useRef(null);
   const workspaceHomeRef = useRef(null);
   const secondaryBoxRef = useRef(null);
   const panelsContainerRef = useRef(null);
-  const quickPanelRef = useRef(null);
 
   const handleToggleScroll = () => {
     setIsScrolledToSecondary((prev) => !prev);
@@ -343,10 +209,6 @@ function WorkspaceHome({ openWindowsCount = 0, onOpenWindow, onOpenTask, onRepor
   const handleScrollBottom = () => {
     setIsScrolledToSecondary(true);
   };
-
-  useEffect(() => {
-    if (isAnalyzing && quickPanelRef.current) quickPanelRef.current.scrollTop = 0;
-  }, [isAnalyzing]);
 
   useEffect(() => {
     const container = panelsContainerRef.current;
@@ -367,13 +229,6 @@ function WorkspaceHome({ openWindowsCount = 0, onOpenWindow, onOpenTask, onRepor
       if (customAnalyze) {
         setAnalyzeButtonLabelText(customAnalyze.replace(/^['"]|['"]$/g, ''));
       }
-
-      const customAnalyzing = getComputedStyle(document.documentElement)
-        .getPropertyValue('--central-analyzing-active-label')
-        .trim();
-      if (customAnalyzing) {
-        setAnalyzingActiveLabelText(customAnalyzing.replace(/^['"]|['"]$/g, ''));
-      }
     };
     updateLabels();
     let frame = null;
@@ -391,11 +246,6 @@ function WorkspaceHome({ openWindowsCount = 0, onOpenWindow, onOpenTask, onRepor
     };
   }, []);
 
-  const clearLiveAnalysisTimeouts = () => {
-    liveTimeoutsRef.current.forEach((t) => clearTimeout(t));
-    liveTimeoutsRef.current = [];
-  };
-
   const formatFileSize = (bytes) => {
     if (!bytes) return '0 B';
     const k = 1024;
@@ -405,7 +255,6 @@ function WorkspaceHome({ openWindowsCount = 0, onOpenWindow, onOpenTask, onRepor
   };
 
   const handleFiles = (newFiles) => {
-    if (isAnalyzing) return;
     const fileArray = Array.from(newFiles).map((file) => ({
       id: Math.random().toString(36).substring(2, 9),
       name: file.name,
@@ -415,13 +264,12 @@ function WorkspaceHome({ openWindowsCount = 0, onOpenWindow, onOpenTask, onRepor
     setSelectedSourceMode(null);
     setSelectedSubOption(null);
     setUploadedFiles((prev) => [...prev, ...fileArray]);
-    setAnalysisResult(null);
   };
 
   const handleDragOver = (e) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!isAnalyzing) setIsDragOver(true);
+    setIsDragOver(true);
   };
 
   const handleDragLeave = (e) => {
@@ -434,13 +282,13 @@ function WorkspaceHome({ openWindowsCount = 0, onOpenWindow, onOpenTask, onRepor
     e.preventDefault();
     e.stopPropagation();
     setIsDragOver(false);
-    if (!isAnalyzing && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       handleFiles(e.dataTransfer.files);
     }
   };
 
   const handleFileInputChange = (e) => {
-    if (!isAnalyzing && e.target.files && e.target.files.length > 0) {
+    if (e.target.files && e.target.files.length > 0) {
       handleFiles(e.target.files);
     }
   };
@@ -448,198 +296,15 @@ function WorkspaceHome({ openWindowsCount = 0, onOpenWindow, onOpenTask, onRepor
   const removeFile = (id, e) => {
     e.stopPropagation();
     e.preventDefault();
-    if (isAnalyzing) return;
     setUploadedFiles((prev) => prev.filter((f) => f.id !== id));
-    if (uploadedFiles.length <= 1) {
-      setAnalysisResult(null);
-    }
-  };
-
-  // A new quick analysis needs a free analysis session (max 3).
-  const isAnalyzeDisabled = isAnalyzing || isSessionLimitReached || !canRunAnalysis;
-
-  const QUICK_STEPS = [
-    [450, 20, 'Establishing connections'],
-    [900, 38, 'Preparing dataframe'],
-    [1350, 55, 'Ingesting...'],
-    [1800, 72, 'Analyzing...'],
-    [2250, 88, 'Collecting results'],
-    [2700, 100, 'Finalizing...'],
-  ];
-
-  const handleStartAnalysis = () => {
-    if (isAnalyzeDisabled) return;
-    clearLiveAnalysisTimeouts();
-
-    // Capture current sub-option protocol locally for this task instance
-    const currentSub = selectedSubOption || 'realtime';
-    activeAnalysisSubRef.current = currentSub;
-    if (currentSub && !lockedSubOptions.includes(currentSub)) {
-      setLockedSubOptions((prev) => [...prev, currentSub]);
-    }
-
-    const fileNames = uploadedFiles.map((file) => file.name);
-    const taskId = createTask({
-      origin: TASK_ORIGINS.QUICK,
-      title: 'Quick analysis',
-      action: 'Link Analysis',
-      input: fileNames.length
-        ? `Upload: ${fileNames.length} file${fileNames.length === 1 ? '' : 's'} (${fileNames.join(', ')})`
-        : QUICK_INPUT_LABELS[currentSub] || 'Quick analysis',
-      mode: fileNames.length || currentSub.startsWith('batch') ? 'batch' : 'realtime',
-      windowTitle: 'Quick analysis panel',
-    });
-    quickTaskRef.current = taskId;
-    setTaskHandlers(taskId, { terminate: () => handleCancelRef.current?.() });
-    appendTaskLog(taskId, 'Quick analysis requested with the saved configuration.');
-    updateTask(taskId, { progress: 5, statusText: 'Initializing services...' });
-    setResultTaskId(null);
-
-    setIsAnalyzing(true);
-    setAnalysisResult(null);
-    setAnalysisProgress(5);
-    setAnalysisStatus('Initializing services...');
-
-    QUICK_STEPS.forEach(([delay, progress, status]) => {
-      liveTimeoutsRef.current.push(setTimeout(() => {
-        setAnalysisProgress(progress);
-        setAnalysisStatus(status);
-        updateTask(taskId, { progress, statusText: status });
-        appendTaskLog(taskId, status);
-        if (progress >= 55) markTaskRunning(taskId);
-      }, delay));
-    });
-
-    liveTimeoutsRef.current.push(setTimeout(() => {
-      setIsAnalyzing(false);
-      setAnalysisStatus('');
-      setAnalysisProgress(0);
-      setAnalysisResult(mockFindingsData);
-      appendTaskLog(taskId, `Analysis complete. Flagged rules: ${mockFindingsData.anomalies.join(', ')}`);
-      updateTask(taskId, { statusText: '', message: `${mockFindingsData.status} ${mockFindingsData.anomalies.length} anomalies` });
-      finishTask(taskId, TASK_STATUSES.COMPLETED);
-      if (quickTaskRef.current === taskId) quickTaskRef.current = null;
-      setResultTaskId(taskId);
-
-      // Live task complete: unlock sub-option protocol
-      if (currentSub) {
-        setLockedSubOptions((prev) => prev.filter((item) => item !== currentSub));
-      }
-      if (activeAnalysisSubRef.current === currentSub) {
-        activeAnalysisSubRef.current = null;
-      }
-    }, 3700));
-  };
-
-  const handleMinimizeToTask = () => {
-    clearLiveAnalysisTimeouts();
-
-    // Capture the exact sub-option protocol running for this specific background task
-    const taskSub = activeAnalysisSubRef.current;
-    activeAnalysisSubRef.current = null;
-    const taskId = quickTaskRef.current;
-    quickTaskRef.current = null;
-    const unlock = () => {
-      if (taskSub) setLockedSubOptions((prev) => prev.filter((item) => item !== taskSub));
-    };
-
-    setIsAnalyzing(false);
-
-    // Keep source option mode active (e.g. 'batch' or 'realtime'), but unselect specific sub-option card
-    setUploadedFiles([]);
-    setSelectedSubOption(null); // Sub-option unselected -> Analyze button becomes disabled!
-    setAnalysisResult(null);
-    setAnalysisProgress(0);
-    setAnalysisStatus('');
-
-    if (taskId) {
-      setTaskBackground(taskId, true);
-      markTaskRunning(taskId);
-      appendTaskLog(taskId, 'Moved to the background.');
-    }
-
-    // Independent background timer: does NOT get cleared when new live tasks start
-    const timer = setTimeout(() => {
-      if (taskId && isTaskActive(getTask(taskId))) {
-        appendTaskLog(taskId, `Analysis complete. Flagged rules: ${mockFindingsData.anomalies.join(', ')}`);
-        updateTask(taskId, { statusText: '', message: `${mockFindingsData.status} ${mockFindingsData.anomalies.length} anomalies` });
-        finishTask(taskId, TASK_STATUSES.COMPLETED);
-      }
-      setReportsCount((prev) => prev + 1);
-      if (onReportReady) onReportReady();
-      // Unlock this specific task's protocol upon background completion
-      unlock();
-    }, 6000);
-
-    if (taskId) {
-      setTaskHandlers(taskId, {
-        terminate: () => {
-          clearTimeout(timer);
-          appendTaskLog(taskId, 'Stopped by user.', 'warn');
-          finishTask(taskId, TASK_STATUSES.TERMINATED);
-          unlock();
-        },
-      });
-    }
-  };
-
-  // Ends the live quick task (cancel, drop, reset).
-  const stopLiveQuickTask = (message) => {
-    const taskId = quickTaskRef.current;
-    quickTaskRef.current = null;
-    if (!taskId || !isTaskActive(getTask(taskId))) return;
-    appendTaskLog(taskId, message, 'warn');
-    finishTask(taskId, TASK_STATUSES.TERMINATED, { message });
-  };
-
-  const handleCancelAnalysis = () => {
-    clearLiveAnalysisTimeouts();
-    stopLiveQuickTask('Analysis cancelled.');
-    const currentSub = activeAnalysisSubRef.current;
-    if (currentSub) {
-      setLockedSubOptions((prev) => prev.filter((item) => item !== currentSub));
-    }
-    activeAnalysisSubRef.current = null;
-    setIsAnalyzing(false);
-    setAnalysisProgress(0);
-    setAnalysisStatus('Analysis job cancelled.');
-    const t = setTimeout(() => setAnalysisStatus(''), 2000);
-    liveTimeoutsRef.current.push(t);
-  };
-
-  handleCancelRef.current = handleCancelAnalysis;
-
-  const handlePromptDropAnalysis = () => {
-    setShowDropConfirmModal(true);
-  };
-
-  const handleConfirmDropAnalysis = () => {
-    clearLiveAnalysisTimeouts();
-    stopLiveQuickTask('Analysis dropped.');
-    setIsAnalyzing(false);
-    setUploadedFiles([]);
-    setSelectedSourceMode(null);
-    setSelectedSubOption(null);
-    setAnalysisResult(null);
-    setAnalysisProgress(0);
-    setAnalysisStatus('');
-    setShowDropConfirmModal(false);
   };
 
   const handleResetPanel = () => {
-    if (isAnalyzing) return;
-    stopLiveQuickTask('Panel reset.');
     setIsResetSpinning(true);
     setTimeout(() => setIsResetSpinning(false), 650); // full-turn spin duration (600ms) + buffer
-    clearLiveAnalysisTimeouts();
     setUploadedFiles([]);
     setSelectedSourceMode(null);
     setSelectedSubOption(null);
-    setAnalysisResult(null);
-    setIsAnalyzing(false);
-    setAnalysisProgress(0);
-    setAnalysisStatus('');
-    setShowDropConfirmModal(false);
   };
 
   const handleOptionClick = (option, e) => {
@@ -647,7 +312,6 @@ function WorkspaceHome({ openWindowsCount = 0, onOpenWindow, onOpenTask, onRepor
       e.preventDefault();
       e.stopPropagation();
     }
-    if (isAnalyzing) return;
     if (option.id === 'tasks') {
       if (allTasks.length > 0) {
         if (onOpenTask) onOpenTask(null);
@@ -656,9 +320,7 @@ function WorkspaceHome({ openWindowsCount = 0, onOpenWindow, onOpenTask, onRepor
       return;
     }
     if (option.id === 'reports') {
-      if (reportsCount > 0 && onOpenWindow) {
-        onOpenWindow(WORKSPACE_WINDOW_TYPES.REPORTS);
-      }
+      if (onOpenWindow) onOpenWindow(WORKSPACE_WINDOW_TYPES.REPORTS);
       return;
     }
     if (!option.disabled) {
@@ -670,7 +332,6 @@ function WorkspaceHome({ openWindowsCount = 0, onOpenWindow, onOpenTask, onRepor
         setSelectedSubOption(null);
         setUploadedFiles([]);
       }
-      setAnalysisResult(null);
     }
   };
 
@@ -685,14 +346,17 @@ function WorkspaceHome({ openWindowsCount = 0, onOpenWindow, onOpenTask, onRepor
     },
     {
       id: 'reports',
-      label: reportsCount > 0 ? `Reports (${reportsCount})` : 'Reports',
-      disabled: reportsCount === 0,
+      label: 'Reports',
+      disabled: false,
       badge: unseenReports > 0 ? unseenReports : null,
     },
   ];
 
-  const showExpandedReview = (uploadedFiles.length > 0 || selectedSourceMode === 'realtime' || selectedSourceMode === 'batch') && !analysisResult;
-  const isOverlayVisible = isAnalyzing;
+  const showExpandedReview = uploadedFiles.length > 0 || selectedSourceMode === 'realtime' || selectedSourceMode === 'batch';
+  const reviewItems = quickReview({
+    defaults: sourceDefaults,
+    input: uploadedFiles.length ? 'upload' : selectedSubOption,
+  });
 
   return (
     <div className="workspace_home" ref={workspaceHomeRef} aria-label="Workspace start">
@@ -723,82 +387,34 @@ function WorkspaceHome({ openWindowsCount = 0, onOpenWindow, onOpenTask, onRepor
         {/* Full-Page Viewport Section 1: Quick Analysis Panel */}
         <div className="workspace_home_viewport_section workspace_home_section_primary">
         <section
-          ref={quickPanelRef}
-          className={`workspace_home_panel${showExpandedReview || analysisResult ? ' is-expanded' : ''}${isOverlayVisible ? ' is-overlay-active' : ''}${analysisResult ? ' is-results' : ''}`}
+          className={`workspace_home_panel${showExpandedReview ? ' is-expanded' : ''}`}
           aria-label="Quick analysis"
         >
-        {/* Semi-transparent Full-Panel Cover Overlay during Analysis */}
-        {isOverlayVisible && (
-          <div className="workspace_home_analysis_overlay" aria-label="Analysis overlay">
-            <div className="workspace_home_overlay_controls">
-              <button
-                type="button"
-                className="workspace_home_overlay_btn is-minimize linkx_tooltip_anchor"
-                data-tooltip="Run in background"
-                title="Run in background (minimizes & adds to Tasks)"
-                onClick={handleMinimizeToTask}
-              >
-                −
-              </button>
-              <button
-                type="button"
-                className="workspace_home_overlay_btn is-close linkx_tooltip_anchor"
-                data-tooltip="Cancel analysis"
-                title="Cancel analysis"
-                onClick={handleCancelAnalysis}
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="workspace_home_overlay_center">
-              <div className="workspace_home_overlay_title">
-                <ShockIcon /> {analyzingActiveLabelText}... {analysisProgress}%
-              </div>
-
-              <div className="workspace_home_analysis_progress_large">
-                <div className="workspace_home_progress_bar" style={{ width: `${analysisProgress}%` }} />
-              </div>
-
-              {analysisStatus && (
-                <div className="workspace_home_analysis_status_large">
-                  {analysisStatus}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
         {/* Panel Header: Badge + Subtitle on Left, Reset Button Side-by-Side on Right */}
-        {!analysisResult && (
           <header className="workspace_home_panel_header">
             <div className="workspace_home_header_left">
               <div className="workspace_home_panel_badge">Quick analysis panel</div>
-              <div className="workspace_home_panel_subtitle">
-                Saved configurations are used for quick analysis activities.
+              <div className="workspace_home_panel_subtitle" role="note">
+                Not connected to the Service yet: nothing here is sent or analysed. Use a Source window to run an analysis.
               </div>
             </div>
-            {!isOverlayVisible && (
-              <button
-                type="button"
-                className={`workspace_home_panel_reset_btn linkx_tooltip_anchor${isResetSpinning ? ' is-spinning' : ''}`}
-                data-tooltip="Reset quick analysis panel"
-                aria-label="Reset quick analysis panel"
-                onClick={handleResetPanel}
-              >
-                <ResetIcon />
-              </button>
-            )}
+            <button
+              type="button"
+              className={`workspace_home_panel_reset_btn linkx_tooltip_anchor${isResetSpinning ? ' is-spinning' : ''}`}
+              data-tooltip="Reset quick analysis panel"
+              aria-label="Reset quick analysis panel"
+              onClick={handleResetPanel}
+            >
+              <ResetIcon />
+            </button>
           </header>
-        )}
 
-        {!analysisResult && (
         <div className={`workspace_home_panel_body${showExpandedReview ? ' is-fill' : ''}`}>
         <div className="workspace_home_panel_inputs">
         {/* Dropzone at top */}
           <>
             <label
-              className={`workspace_home_upload${isDragOver ? ' is-dragover' : ''}${isOverlayVisible ? ' is-disabled' : ''}`}
+              className={`workspace_home_upload${isDragOver ? ' is-dragover' : ''}`}
               htmlFor="workspace-home-file-input"
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
@@ -808,7 +424,6 @@ function WorkspaceHome({ openWindowsCount = 0, onOpenWindow, onOpenTask, onRepor
                 id="workspace-home-file-input"
                 type="file"
                 multiple
-                disabled={isOverlayVisible}
                 onChange={handleFileInputChange}
               />
               <span className="workspace_home_upload_mark">
@@ -817,12 +432,8 @@ function WorkspaceHome({ openWindowsCount = 0, onOpenWindow, onOpenTask, onRepor
               <span className="workspace_home_upload_text">
                 <strong>File upload</strong>
                 <small>
-                  {isAnalyzing
-                    ? 'Analysis in progress...'
-                    : activeTasksCount > 0
-                    ? `${activeTasksCount} background task${activeTasksCount > 1 ? 's' : ''} running.`
-                    : uploadedFiles.length > 0
-                    ? `${uploadedFiles.length} file${uploadedFiles.length > 1 ? 's' : ''} attached to quick session.`
+                  {uploadedFiles.length > 0
+                    ? `${uploadedFiles.length} file${uploadedFiles.length > 1 ? 's' : ''} selected (not uploaded).`
                     : openWindowsCount
                     ? `${openWindowsCount} workspace window active.`
                     : 'Drop source files here or click to browse.'}
@@ -841,7 +452,6 @@ function WorkspaceHome({ openWindowsCount = 0, onOpenWindow, onOpenTask, onRepor
                       type="button"
                       className="workspace_home_file_remove"
                       title="Remove file"
-                      disabled={isOverlayVisible}
                       onClick={(e) => removeFile(file.id, e)}
                     >
                       ✕
@@ -876,128 +486,93 @@ function WorkspaceHome({ openWindowsCount = 0, onOpenWindow, onOpenTask, onRepor
           </>
 
         {/* Real-time Source Sub-Menu Container */}
-        {selectedSourceMode === 'realtime' && !isOverlayVisible && !analysisResult && (
+        {selectedSourceMode === 'realtime' && (
           <div className="workspace_home_realtime_container" aria-label="Real-time source options">
             <div className="workspace_home_realtime_header">
               <strong>Real-time Stream Ingestion</strong>
               <span>Select stream protocol for real-time analysis</span>
             </div>
             <div className="workspace_home_realtime_grid">
-              {(() => {
-                const isLocked = lockedSubOptions.includes('kafka');
-                return (
-                  <button
-                    type="button"
-                    disabled={isLocked}
-                    className={`workspace_home_realtime_card${isLocked ? ' is-disabled linkx_tooltip_anchor' : ''}${selectedSubOption === 'kafka' ? ' is-selected' : ''}`}
-                    data-tooltip={isLocked ? 'Task running for Kafka broker' : undefined}
-                    onClick={() => !isLocked && setSelectedSubOption((prev) => (prev === 'kafka' ? null : 'kafka'))}
-                  >
-                    <div className="workspace_home_realtime_icon">
-                      {isLocked ? <LockIcon /> : <KafkaIcon />}
-                    </div>
-                    <div className="workspace_home_realtime_info">
-                      <strong>Kafka broker {isLocked ? '(Task running...)' : ''}</strong>
-                      <p>Event streaming cluster ingestion for real-time telemetry.</p>
-                    </div>
-                  </button>
-                );
-              })()}
+              <button
+                type="button"
+                className={`workspace_home_realtime_card${selectedSubOption === 'kafka' ? ' is-selected' : ''}`}
+                onClick={() => setSelectedSubOption((prev) => (prev === 'kafka' ? null : 'kafka'))}
+              >
+                <div className="workspace_home_realtime_icon">
+                  <KafkaIcon />
+                </div>
+                <div className="workspace_home_realtime_info">
+                  <strong>Kafka broker</strong>
+                  <p>Event streaming cluster ingestion for real-time telemetry.</p>
+                </div>
+              </button>
 
-              {(() => {
-                const isLocked = lockedSubOptions.includes('rest_api');
-                return (
-                  <button
-                    type="button"
-                    disabled={isLocked}
-                    className={`workspace_home_realtime_card${isLocked ? ' is-disabled linkx_tooltip_anchor' : ''}${selectedSubOption === 'rest_api' ? ' is-selected' : ''}`}
-                    data-tooltip={isLocked ? 'Task running for REST API' : undefined}
-                    onClick={() => !isLocked && setSelectedSubOption((prev) => (prev === 'rest_api' ? null : 'rest_api'))}
-                  >
-                    <div className="workspace_home_realtime_icon">
-                      {isLocked ? <LockIcon /> : <RestApiIcon />}
-                    </div>
-                    <div className="workspace_home_realtime_info">
-                      <strong>REST API {isLocked ? '(Task running...)' : ''}</strong>
-                      <p>HTTP endpoint webhook & streaming JSON payload ingestion.</p>
-                    </div>
-                  </button>
-                );
-              })()}
+              <button
+                type="button"
+                className={`workspace_home_realtime_card${selectedSubOption === 'rest_api' ? ' is-selected' : ''}`}
+                onClick={() => setSelectedSubOption((prev) => (prev === 'rest_api' ? null : 'rest_api'))}
+              >
+                <div className="workspace_home_realtime_icon">
+                  <RestApiIcon />
+                </div>
+                <div className="workspace_home_realtime_info">
+                  <strong>REST API</strong>
+                  <p>HTTP endpoint webhook & streaming JSON payload ingestion.</p>
+                </div>
+              </button>
             </div>
           </div>
         )}
 
         {/* Batch Source Sub-Menu Container */}
-        {selectedSourceMode === 'batch' && !isOverlayVisible && !analysisResult && (
+        {selectedSourceMode === 'batch' && (
           <div className="workspace_home_realtime_container" aria-label="Batch source options">
             <div className="workspace_home_realtime_header">
               <strong>Batch Scheduled Ingestion (1hr Window)</strong>
               <span>Select batch data source protocol for 1-hour window analysis</span>
             </div>
             <div className="workspace_home_realtime_grid is-batch">
-              {(() => {
-                const isLocked = lockedSubOptions.includes('batch_kafka');
-                return (
-                  <button
-                    type="button"
-                    disabled={isLocked}
-                    className={`workspace_home_realtime_card${isLocked ? ' is-disabled linkx_tooltip_anchor' : ''}${selectedSubOption === 'batch_kafka' ? ' is-selected' : ''}`}
-                    data-tooltip={isLocked ? 'Task running for Kafka Broker' : undefined}
-                    onClick={() => !isLocked && setSelectedSubOption((prev) => (prev === 'batch_kafka' ? null : 'batch_kafka'))}
-                  >
-                    <div className="workspace_home_realtime_icon">
-                      {isLocked ? <LockIcon /> : <KafkaIcon />}
-                    </div>
-                    <div className="workspace_home_realtime_info">
-                      <strong>Kafka Broker {isLocked ? '(Task running...)' : ''}</strong>
-                      <p>Hourly batch consumer window from Kafka topic logs.</p>
-                    </div>
-                  </button>
-                );
-              })()}
+              <button
+                type="button"
+                className={`workspace_home_realtime_card${selectedSubOption === 'batch_kafka' ? ' is-selected' : ''}`}
+                onClick={() => setSelectedSubOption((prev) => (prev === 'batch_kafka' ? null : 'batch_kafka'))}
+              >
+                <div className="workspace_home_realtime_icon">
+                  <KafkaIcon />
+                </div>
+                <div className="workspace_home_realtime_info">
+                  <strong>Kafka Broker</strong>
+                  <p>Hourly batch consumer window from Kafka topic logs.</p>
+                </div>
+              </button>
 
-              {(() => {
-                const isLocked = lockedSubOptions.includes('batch_rest_api');
-                return (
-                  <button
-                    type="button"
-                    disabled={isLocked}
-                    className={`workspace_home_realtime_card${isLocked ? ' is-disabled linkx_tooltip_anchor' : ''}${selectedSubOption === 'batch_rest_api' ? ' is-selected' : ''}`}
-                    data-tooltip={isLocked ? 'Task running for REST API' : undefined}
-                    onClick={() => !isLocked && setSelectedSubOption((prev) => (prev === 'batch_rest_api' ? null : 'batch_rest_api'))}
-                  >
-                    <div className="workspace_home_realtime_icon">
-                      {isLocked ? <LockIcon /> : <RestApiIcon />}
-                    </div>
-                    <div className="workspace_home_realtime_info">
-                      <strong>REST API {isLocked ? '(Task running...)' : ''}</strong>
-                      <p>Hourly batch polling from external REST endpoints.</p>
-                    </div>
-                  </button>
-                );
-              })()}
+              <button
+                type="button"
+                className={`workspace_home_realtime_card${selectedSubOption === 'batch_rest_api' ? ' is-selected' : ''}`}
+                onClick={() => setSelectedSubOption((prev) => (prev === 'batch_rest_api' ? null : 'batch_rest_api'))}
+              >
+                <div className="workspace_home_realtime_icon">
+                  <RestApiIcon />
+                </div>
+                <div className="workspace_home_realtime_info">
+                  <strong>REST API</strong>
+                  <p>Hourly batch polling from external REST endpoints.</p>
+                </div>
+              </button>
 
-              {(() => {
-                const isLocked = lockedSubOptions.includes('batch_hadoop');
-                return (
-                  <button
-                    type="button"
-                    disabled={isLocked}
-                    className={`workspace_home_realtime_card${isLocked ? ' is-disabled linkx_tooltip_anchor' : ''}${selectedSubOption === 'batch_hadoop' ? ' is-selected' : ''}`}
-                    data-tooltip={isLocked ? 'Task running for Hadoop Cluster' : undefined}
-                    onClick={() => !isLocked && setSelectedSubOption((prev) => (prev === 'batch_hadoop' ? null : 'batch_hadoop'))}
-                  >
-                    <div className="workspace_home_realtime_icon">
-                      {isLocked ? <LockIcon /> : <HadoopIcon />}
-                    </div>
-                    <div className="workspace_home_realtime_info">
-                      <strong>Hadoop Cluster {isLocked ? '(Task running...)' : ''}</strong>
-                      <p>Distributed HDFS batch dump from Hadoop storage cluster.</p>
-                    </div>
-                  </button>
-                );
-              })()}
+              <button
+                type="button"
+                className={`workspace_home_realtime_card${selectedSubOption === 'batch_hadoop' ? ' is-selected' : ''}`}
+                onClick={() => setSelectedSubOption((prev) => (prev === 'batch_hadoop' ? null : 'batch_hadoop'))}
+              >
+                <div className="workspace_home_realtime_icon">
+                  <HadoopIcon />
+                </div>
+                <div className="workspace_home_realtime_info">
+                  <strong>Hadoop Cluster</strong>
+                  <p>Distributed HDFS batch dump from Hadoop storage cluster.</p>
+                </div>
+              </button>
             </div>
           </div>
         )}
@@ -1005,15 +580,15 @@ function WorkspaceHome({ openWindowsCount = 0, onOpenWindow, onOpenTask, onRepor
         </div>
 
         {/* Pre-Analysis Review Section (right column when expanded) */}
-        {showExpandedReview && !isOverlayVisible && !analysisResult && (
+        {showExpandedReview && (
           <div className="workspace_home_review_section">
             <div className="workspace_home_configs_review">
               <div className="workspace_home_configs_header">
-                <strong>Default Configurations Review</strong>
-                <span className="workspace_home_configs_tag">Preset Active</span>
+                <strong>Session configuration</strong>
+                <span className="workspace_home_configs_tag">Read only</span>
               </div>
               <div className="workspace_home_configs_grid">
-                {defaultConfigItems.map((cfg) => (
+                {reviewItems.map((cfg) => (
                   <div key={cfg.label} className="workspace_home_config_item">
                     <span className="workspace_home_config_label">{cfg.label}</span>
                     <span className="workspace_home_config_val">{cfg.value}</span>
@@ -1025,146 +600,20 @@ function WorkspaceHome({ openWindowsCount = 0, onOpenWindow, onOpenTask, onRepor
             <div className="workspace_home_analyze_bar">
               <button
                 type="button"
-                className={`workspace_home_analyze_btn${isAnalyzeDisabled ? ' is-disabled' : ''}${isAnalyzing ? ' is-analyzing' : ''}`}
-                disabled={isAnalyzeDisabled}
-                onClick={handleStartAnalysis}
+                className="workspace_home_analyze_btn is-disabled"
+                disabled
+                title="Quick analysis is not connected to the Service yet."
               >
-                {isAnalyzing ? (
-                  <><ShockIcon /> {analyzingActiveLabelText}... {analysisProgress}%</>
-                ) : (
-                  <><ShockIcon /> {analyzeButtonLabelText}{uploadedFiles.length > 0 ? ` (${uploadedFiles.length} file${uploadedFiles.length > 1 ? 's' : ''})` : ''}</>
-                )}
+                <ShockIcon /> {analyzeButtonLabelText}
               </button>
-              {!canRunAnalysis && !isAnalyzing && (
-                <p className="workspace_home_session_limit" role="status">
-                  You need analysis:run to run an analysis.
-                </p>
-              )}
-              {canRunAnalysis && isSessionLimitReached && !isAnalyzing && (
-                <p className="workspace_home_session_limit" role="status">
-                  {sessionLimitMessage(sessionUsage)}{' '}
-                  <button type="button" onClick={() => onOpenTask && onOpenTask(null)}>Open Tasks</button>
-                </p>
-              )}
+              <p className="workspace_home_session_limit" role="status">
+                Not available yet. Use a Source window to run this analysis.
+              </p>
             </div>
           </div>
         )}
         </div>
-        )}
 
-        {/* Completed Analysis Findings Container */}
-        {analysisResult && !isOverlayVisible && (
-          <div className="workspace_home_findings" aria-label="Analysis findings">
-            <div className="workspace_home_findings_header">
-              <h3>Analysis findings</h3>
-              <span className="workspace_home_findings_badge">Session #8492 — Completed</span>
-            </div>
-
-            {/* Status Section */}
-            <div className="workspace_home_findings_section is-status">
-              <span className="workspace_home_findings_subtitle">Status</span>
-              <div className={`workspace_home_status_tag is-${analysisResult.statusType}`}>
-                <span className="workspace_home_status_dot" />
-                <strong>{analysisResult.status}</strong>
-              </div>
-            </div>
-
-            {/* Anomalies Detected Section */}
-            <div className="workspace_home_findings_section is-anomalies">
-              <span className="workspace_home_findings_subtitle">Anomalies detected</span>
-              <div className="workspace_home_anomalies_list">
-                {analysisResult.anomalies.map((item) => (
-                  <span key={item} className="workspace_home_anomaly_chip">
-                    <WarningIcon /> {item}
-                  </span>
-                ))}
-              </div>
-            </div>
-
-            {/* GDS Metric Values Subtitle & Grid */}
-            <div className="workspace_home_findings_section is-gds">
-              <span className="workspace_home_findings_subtitle">GDS metric values</span>
-              <div className="workspace_home_gds_grid">
-                {analysisResult.gdsMetrics.map((m) => (
-                  <div key={m.label} className="workspace_home_gds_card">
-                    <span className="workspace_home_gds_label">{m.label}</span>
-                    <strong className="workspace_home_gds_val">{m.value}</strong>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Highest-Influencers Subtitle & Node Tooltip Buttons */}
-            <div className="workspace_home_findings_section is-influencers">
-              <span className="workspace_home_findings_subtitle">Highest-Influencers</span>
-              <div className="workspace_home_influencers_list">
-                {analysisResult.influencers.map((inf) => (
-                  <button
-                    type="button"
-                    key={inf.id}
-                    className="workspace_home_influencer_btn linkx_tooltip_anchor"
-                    data-tooltip={inf.gds}
-                    aria-label={`Node ${inf.id}`}
-                  >
-                    <ShockIcon /> {inf.id}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Action Buttons Bar */}
-            <div className="workspace_home_findings_actions">
-              <button
-                type="button"
-                className="workspace_home_findings_btn is-reanalyze"
-                disabled={isAnalyzeDisabled}
-                onClick={handleStartAnalysis}
-              >
-                <ShockIcon /> Re-analyze
-              </button>
-              {resultTaskId && onOpenTask && (
-                <button
-                  type="button"
-                  className="workspace_home_findings_btn is-task"
-                  onClick={() => onOpenTask(resultTaskId)}
-                >
-                  <TaskIcon /> View task
-                </button>
-              )}
-              <button
-                type="button"
-                className="workspace_home_findings_btn is-network"
-                disabled={!canOpenGraph}
-                title={canOpenGraph ? undefined : 'You need graph:create to open the network view.'}
-                onClick={() => onOpenWindow && onOpenWindow(WORKSPACE_WINDOW_TYPES.GRAPH)}
-              >
-                <GraphIcon /> Explore network
-              </button>
-              <button
-                type="button"
-                className="workspace_home_findings_btn is-chart"
-                onClick={() => onOpenWindow && onOpenWindow(WORKSPACE_WINDOW_TYPES.CHART)}
-              >
-                <ChartIcon /> Explore chart
-              </button>
-              {/* The chart's twin (analyst decision 2026-11-18). */}
-              <button
-                type="button"
-                className="workspace_home_findings_btn is-table"
-                onClick={() => onOpenWindow && onOpenWindow(WORKSPACE_WINDOW_TYPES.TABLE)}
-              >
-                <TableIcon /> Explore table
-              </button>
-              <button
-                type="button"
-                className="workspace_home_findings_btn is-drop"
-                onClick={handlePromptDropAnalysis}
-              >
-                <TrashIcon /> Drop analysis
-              </button>
-            </div>
-          </div>
-        )}
       </section>
       </div>
 
@@ -1225,48 +674,6 @@ function WorkspaceHome({ openWindowsCount = 0, onOpenWindow, onOpenTask, onRepor
       </div>
       </div>
       </div>
-
-      {/* Confirmation Window Modal for Dropping Analysis */}
-      {showDropConfirmModal && (
-        <div className="workspace_home_modal_backdrop" aria-label="Drop analysis confirmation modal">
-          <div className="workspace_home_confirm_modal">
-            <header className="workspace_home_modal_header">
-              <div className="workspace_home_modal_title">
-                <TrashIcon /> Drop analysis session?
-              </div>
-              <button
-                type="button"
-                className="workspace_home_modal_close"
-                title="Cancel"
-                onClick={() => setShowDropConfirmModal(false)}
-              >
-                ✕
-              </button>
-            </header>
-            <div className="workspace_home_modal_body">
-              <p>
-                Are you sure you want to drop this analysis session? All findings, telemetry, and metrics for this session will be cleared.
-              </p>
-            </div>
-            <footer className="workspace_home_modal_footer">
-              <button
-                type="button"
-                className="workspace_home_modal_btn is-cancel"
-                onClick={() => setShowDropConfirmModal(false)}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="workspace_home_modal_btn is-confirm"
-                onClick={handleConfirmDropAnalysis}
-              >
-                <TrashIcon /> Confirm Drop
-              </button>
-            </footer>
-          </div>
-        </div>
-      )}
 
       {/* Static Footer (Anchored statically at default central bottom position) */}
       <footer className="workspace_home_footer" aria-label="Workspace footer">

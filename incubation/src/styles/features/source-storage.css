@@ -1,0 +1,302 @@
+/* The Storage page's colours, part by part, so the element picker and the
+   Theme Studio can change each one alone (StorageStep.jsx, the class
+   .source_window_flow_storage). Only while the Source window's flow pages
+   are on (sourceFrame.js): every rule is under .source_window_flow.
+   Own colours: --source-storage-*. Parts with a colour already (--storage-*,
+   --source-status-pill-*) keep it; a text that only inherited its colour
+   names it here, so picking the text itself offers it. The search row and
+   the table: source-results.css. */
+
+/* An icon is picked whole, never one of its lines. */
+.source_window_flow .source_window_flow_storage svg * {
+	pointer-events: none;
+}
+
+.source_window_flow .source_window_flow_storage.source_window_step_body {
+	background: var(--source-storage-page-bg) !important;
+}
+
+.source_window_flow .source_window_flow_storage .source_window_storage_browser {
+	background: var(--source-storage-panel-bg);
+}
+
+/* ── Header ── */
+.source_window_flow .source_window_flow_storage .source_window_storage_browser_header {
+	background: var(--source-storage-header-bg);
+}
+
+.source_window_flow .source_window_flow_storage .source_window_storage_title,
+.source_window_flow .source_window_flow_storage .source_window_storage_title h3 {
+	color: var(--source-storage-title-text);
+}
+
+.source_window_flow .source_window_flow_storage .source_window_status_pill > span {
+	color: var(--source-status-pill-text, var(--source-text-muted));
+}
+
+.source_window_flow .source_window_flow_storage .source_window_status_pill.is-connected > span {
+	color: var(--source-status-pill-active-text);
+}
+
+.source_window_flow .source_window_flow_storage .source_window_status_pill.is-failed > span {
+	color: var(--source-status-pill-error-text);
+}
+
+.source_window_flow .source_window_flow_storage .source_window_storage_type_buttons {
+	background: var(--source-storage-types-bg);
+}
+
+.source_window_flow .source_window_flow_storage .source_window_storage_type_buttons button > span {
+	color: var(--storage-type-btn-text, var(--mode-grid-btn-title-color));
+}
+
+.source_window_flow .source_window_flow_storage .source_window_storage_type_buttons button.is-selected > span {
+	color: var(--storage-type-btn-selected-text, var(--mode-grid-btn-active-title-color));
+}
+
+.source_window_flow .source_window_flow_storage .source_window_toolbar_toggle {
+	border-color: var(--source-storage-collapse-border);
+	background: var(--source-storage-collapse-bg);
+	color: var(--source-storage-collapse-icon);
+}
+
+.source_window_flow .source_window_flow_storage .source_window_toolbar_toggle svg {
+	color: var(--source-storage-collapse-icon);
+}
+
+.source_window_flow .source_window_flow_storage .source_window_toolbar_toggle:hover,
+.source_window_flow .source_window_flow_storage .source_window_toolbar_toggle:focus-visible {
+	background: var(--source-storage-collapse-hover-bg);
+}
+
+.source_window_flow .source_window_flow_storage .source_window_toolbar_toggle:hover svg,
+.source_window_flow .source_window_flow_storage .source_window_toolbar_toggle:focus-visible svg {
+	color: var(--source-storage-collapse-hover-icon);
+}
+
+/* ── Connection form ── */
+.source_window_flow .source_window_flow_storage .source_window_storage_default_toggle > span {
+	color: var(--storage-toggle-label-color, var(--source-text-secondary));
+}
+
+.source_window_flow .source_window_flow_storage .source_window_storage_default_toggle input {
+	accent-color: var(--source-storage-default-check);
+}
+
+.source_window_flow .source_window_flow_storage .source_window_storage_fields .source_window_field input:focus {
+	border-color: var(--source-storage-input-focus-border) !important;
+}
+
+.source_window_flow .source_window_flow_storage .source_window_storage_fields .source_window_field input::placeholder {
+	color: var(--source-storage-input-placeholder);
+}
+
+.source_window_flow .source_window_flow_storage .source_window_storage_fields .source_window_field input:disabled {
+	border-color: var(--source-storage-input-disabled-border) !important;
+	background: var(--source-storage-input-disabled-bg) !important;
+	color: var(--source-storage-input-disabled-text) !important;
+}
+
+.source_window_flow .source_window_flow_storage .source_window_storage_fields .source_window_field select {
+	border-color: var(--source-storage-select-border);
+	background-color: var(--source-storage-select-bg);
+	color: var(--source-storage-select-text);
+}
+
+.source_window_flow .source_window_flow_storage .source_window_storage_fields .source_window_field select:focus {
+	border-color: var(--source-storage-select-focus-border);
+}
+
+.source_window_flow .source_window_flow_storage .source_window_storage_fields .source_window_field select:disabled {
+	color: var(--source-storage-select-disabled-text);
+}
+
+.source_window_flow .source_window_flow_storage .source_window_storage_fields .source_window_field.is-discarded input,
+.source_window_flow .source_window_flow_storage .source_window_storage_fields .source_window_field.is-discarded select {
+	text-decoration-color: var(--source-storage-unused-line);
+}
+
+.source_window_flow .source_window_flow_storage .source_window_storage_connect_button:hover:not(:disabled) {
+	border-color: var(--source-storage-connect-hover-border) !important;
+	background: var(--source-storage-connect-hover-bg) !important;
+	color: var(--source-storage-connect-hover-text) !important;
+}
+
+/* ── Messages ── */
+.source_window_flow .source_window_flow_storage .source_window_validation {
+	border-color: var(--source-storage-error-border) !important;
+	background: var(--source-storage-error-bg) !important;
+	color: var(--source-storage-error-text) !important;
+}
+
+/* ── Tool panel (shown when the tool could not be connected) ── */
+.source_window_flow .source_window_flow_storage > .source_window_section {
+	background: var(--source-storage-tool-bg);
+}
+
+.source_window_flow .source_window_flow_storage > .source_window_section > header {
+	background: var(--source-storage-tool-header-bg);
+}
+
+.source_window_flow .source_window_flow_storage > .source_window_section .source_window_panel_title,
+.source_window_flow .source_window_flow_storage > .source_window_section .source_window_panel_title h3 {
+	color: var(--source-storage-tool-title-text);
+}
+
+.source_window_flow .source_window_flow_storage > .source_window_section .source_window_panel_title .source_window_mode_icon {
+	color: var(--source-storage-tool-icon) !important;
+	stroke: var(--source-storage-tool-icon) !important;
+}
+
+.source_window_flow .source_window_flow_storage > .source_window_section .source_window_status_text,
+.source_window_flow .source_window_flow_storage > .source_window_section .source_window_tool_hint {
+	color: var(--source-storage-tool-note-text);
+}
+
+.source_window_flow .source_window_flow_storage > .source_window_section .source_window_form_grid,
+.source_window_flow .source_window_flow_storage > .source_window_section .source_window_actions {
+	background: var(--source-storage-tool-form-bg);
+}
+
+.source_window_flow .source_window_flow_storage > .source_window_section .source_window_field,
+.source_window_flow .source_window_flow_storage > .source_window_section .source_window_field > span {
+	color: var(--source-storage-tool-label-text);
+}
+
+.source_window_flow .source_window_flow_storage > .source_window_section .source_window_field input,
+.source_window_flow .source_window_flow_storage > .source_window_section .source_window_field select {
+	border-color: var(--source-storage-tool-input-border);
+	background-color: var(--source-storage-tool-input-bg);
+	color: var(--source-storage-tool-input-text);
+}
+
+.source_window_flow .source_window_flow_storage > .source_window_section .source_window_field input:focus,
+.source_window_flow .source_window_flow_storage > .source_window_section .source_window_field select:focus {
+	border-color: var(--source-storage-tool-input-focus-border);
+}
+
+.source_window_flow .source_window_flow_storage > .source_window_section .source_window_field input:disabled,
+.source_window_flow .source_window_flow_storage > .source_window_section .source_window_field select:disabled {
+	color: var(--source-storage-tool-input-disabled-text);
+}
+
+.source_window_flow .source_window_flow_storage > .source_window_section .source_window_actions button {
+	border-color: var(--source-storage-tool-button-border);
+	background: var(--source-storage-tool-button-bg);
+	color: var(--source-storage-tool-button-text);
+}
+
+.source_window_flow .source_window_flow_storage > .source_window_section .source_window_actions button:hover:not(:disabled) {
+	background: var(--source-storage-tool-button-hover-bg);
+	color: var(--source-storage-tool-button-hover-text);
+}
+
+/* ── Compact: a 28px header and a one-line form, each field's label inside
+   its box. (!important where window-controls.css sets the size with it.) ── */
+.source_window_flow .source_window_flow_storage .source_window_storage_browser {
+	gap: 6px;
+}
+
+.source_window_flow .source_window_flow_storage .source_window_storage_title {
+	gap: 8px;
+}
+
+.source_window_flow .source_window_flow_storage .source_window_storage_title h3 {
+	font-size: 13px;
+	white-space: nowrap;
+}
+
+.source_window_flow .source_window_flow_storage .source_window_storage_title .source_window_status_pill {
+	padding: 4px 8px;
+}
+
+.source_window_flow .source_window_flow_storage .source_window_storage_type_buttons {
+	gap: 4px;
+}
+
+.source_window_flow .source_window_flow_storage .source_window_storage_type_buttons button {
+	grid-template-columns: 14px minmax(0, 1fr);
+	gap: 6px;
+	height: 28px;
+	padding: 0 9px;
+	border-radius: 3px;
+}
+
+.source_window_flow .source_window_flow_storage .source_window_storage_type_buttons .source_window_mode_icon {
+	width: 14px;
+	height: 14px;
+}
+
+.source_window_flow .source_window_flow_storage .source_window_toolbar_toggle {
+	width: 28px;
+	height: 28px;
+	border-radius: 3px;
+}
+
+/* One line; what doesn't fit goes to the next. */
+.source_window_flow .source_window_flow_storage .source_window_storage_fields {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: stretch;
+	gap: 6px;
+	padding: 6px 0 0;
+}
+
+.source_window_flow .source_window_flow_storage .source_window_storage_default_toggle,
+.source_window_flow .source_window_flow_storage .source_window_storage_connect_button {
+	flex: none;
+	height: 34px;
+	border-radius: 3px;
+	box-sizing: border-box;
+}
+
+.source_window_flow .source_window_flow_storage .source_window_storage_default_toggle {
+	gap: 6px;
+	padding: 0 8px;
+}
+
+.source_window_flow .source_window_flow_storage .source_window_storage_connect_button {
+	min-width: 84px;
+}
+
+.source_window_flow .source_window_flow_storage .source_window_storage_fields .source_window_field {
+	position: relative;
+	display: block;
+	flex: 1 1 120px;
+	min-width: 0;
+}
+
+/* The port is short, the domain with its path is long. */
+.source_window_flow .source_window_flow_storage .source_window_storage_fields .source_window_field:nth-of-type(3) {
+	flex: 0 1 92px;
+}
+
+.source_window_flow .source_window_flow_storage .source_window_storage_fields .source_window_field:nth-of-type(4) {
+	flex: 1.4 1 140px;
+}
+
+.source_window_flow .source_window_flow_storage .source_window_storage_fields .source_window_field > span {
+	position: absolute;
+	top: 5px;
+	right: 9px;
+	left: 9px;
+	z-index: 1;
+	overflow: hidden;
+	font-size: 9px !important;
+	line-height: 10px;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.source_window_flow .source_window_flow_storage .source_window_storage_fields .source_window_field input,
+.source_window_flow .source_window_flow_storage .source_window_storage_fields .source_window_field select {
+	display: block;
+	height: 34px;
+	padding: 13px 8px 1px;
+	border-radius: 3px;
+	box-sizing: border-box;
+}
+
+.source_window_flow .source_window_flow_storage .source_window_storage_fields .source_window_field select {
+	padding-left: 4px;
+}

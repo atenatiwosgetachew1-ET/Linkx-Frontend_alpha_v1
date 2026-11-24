@@ -1,0 +1,206 @@
+/* The Elasticsearch page (ElasticSearchStep.jsx): the Storage page's look
+   (source-storage.css, source-results.css) with its own colours, the
+   --source-elastic-* tokens, and its search mode. Only while the Source
+   window's flow pages are on: every rule is under .source_window_flow. */
+.source_window_flow .source_window_flow_elastic {
+	--storage-type-btn-bg: var(--source-elastic-type-bg);
+	--storage-type-btn-border: var(--source-elastic-type-border);
+	--storage-type-btn-text: var(--source-elastic-type-text);
+	--storage-type-btn-icon-color: var(--source-elastic-type-icon);
+	--storage-type-btn-selected-bg: var(--source-elastic-type-on-bg);
+	--storage-type-btn-selected-border: var(--source-elastic-type-on-border);
+	--storage-type-btn-selected-text: var(--source-elastic-type-on-text);
+	--storage-type-btn-selected-icon-color: var(--source-elastic-type-on-icon);
+	--storage-toggle-bg: var(--source-elastic-default-bg);
+	--storage-toggle-border: var(--source-elastic-default-border);
+	--storage-toggle-label-color: var(--source-elastic-default-text);
+	--storage-toggle-hover-bg: var(--source-elastic-default-hover-bg);
+	--storage-toggle-hover-border: var(--source-elastic-default-hover-border);
+	--storage-toolbar-bg: var(--source-elastic-form-bg);
+	--storage-toolbar-border: var(--source-elastic-form-line);
+	--storage-field-label-color: var(--source-elastic-label-text);
+	--storage-input-bg: var(--source-elastic-input-bg);
+	--storage-input-border: var(--source-elastic-input-border);
+	--storage-input-text: var(--source-elastic-input-text);
+	--storage-connect-btn-bg: var(--source-elastic-connect-bg);
+	--storage-connect-btn-border: var(--source-elastic-connect-border);
+	--storage-connect-btn-text: var(--source-elastic-connect-text);
+	--source-storage-page-bg: var(--source-elastic-page-bg);
+	--source-storage-panel-bg: var(--source-elastic-panel-bg);
+	--source-storage-header-bg: var(--source-elastic-header-bg);
+	--source-storage-title-text: var(--source-elastic-title-text);
+	--source-storage-types-bg: var(--source-elastic-types-bg);
+	--source-storage-collapse-bg: var(--source-elastic-collapse-bg);
+	--source-storage-collapse-border: var(--source-elastic-collapse-border);
+	--source-storage-collapse-icon: var(--source-elastic-collapse-icon);
+	--source-storage-collapse-hover-bg: var(--source-elastic-collapse-hover-bg);
+	--source-storage-collapse-hover-icon: var(--source-elastic-collapse-hover-icon);
+	--source-storage-default-check: var(--source-elastic-default-check);
+	--source-storage-input-focus-border: var(--source-elastic-input-focus-border);
+	--source-storage-input-placeholder: var(--source-elastic-input-placeholder);
+	--source-storage-input-disabled-bg: var(--source-elastic-input-disabled-bg);
+	--source-storage-input-disabled-border: var(--source-elastic-input-disabled-border);
+	--source-storage-input-disabled-text: var(--source-elastic-input-disabled-text);
+	--source-storage-select-bg: var(--source-elastic-select-bg);
+	--source-storage-select-border: var(--source-elastic-select-border);
+	--source-storage-select-text: var(--source-elastic-select-text);
+	--source-storage-select-focus-border: var(--source-elastic-select-focus-border);
+	--source-storage-select-disabled-text: var(--source-elastic-select-disabled-text);
+	--source-storage-unused-line: var(--source-elastic-unused-line);
+	--source-storage-connect-hover-bg: var(--source-elastic-connect-hover-bg);
+	--source-storage-connect-hover-border: var(--source-elastic-connect-hover-border);
+	--source-storage-connect-hover-text: var(--source-elastic-connect-hover-text);
+	--source-storage-error-text: var(--source-elastic-error-text);
+	--source-storage-error-bg: var(--source-elastic-error-bg);
+	--source-storage-error-border: var(--source-elastic-error-border);
+	--source-storage-tool-bg: var(--source-elastic-tool-bg);
+	--source-storage-tool-header-bg: var(--source-elastic-tool-header-bg);
+	--source-storage-tool-title-text: var(--source-elastic-tool-title-text);
+	--source-storage-tool-icon: var(--source-elastic-tool-icon);
+	--source-storage-tool-note-text: var(--source-elastic-tool-note-text);
+	--source-storage-tool-form-bg: var(--source-elastic-tool-form-bg);
+	--source-storage-tool-label-text: var(--source-elastic-tool-label-text);
+	--source-storage-tool-input-bg: var(--source-elastic-tool-input-bg);
+	--source-storage-tool-input-border: var(--source-elastic-tool-input-border);
+	--source-storage-tool-input-text: var(--source-elastic-tool-input-text);
+	--source-storage-tool-input-focus-border: var(--source-elastic-tool-input-focus-border);
+	--source-storage-tool-input-disabled-text: var(--source-elastic-tool-input-disabled-text);
+	--source-storage-tool-button-bg: var(--source-elastic-tool-button-bg);
+	--source-storage-tool-button-border: var(--source-elastic-tool-button-border);
+	--source-storage-tool-button-text: var(--source-elastic-tool-button-text);
+	--source-storage-tool-button-hover-bg: var(--source-elastic-tool-button-hover-bg);
+	--source-storage-tool-button-hover-text: var(--source-elastic-tool-button-hover-text);
+	--source-table-input-bg: var(--source-elastic-table-input-bg);
+	--source-table-input-border: var(--source-elastic-table-input-border);
+	--source-table-input-text: var(--source-elastic-table-input-text);
+	--source-table-input-placeholder: var(--source-elastic-table-input-placeholder);
+	--source-table-input-focus-border: var(--source-elastic-table-input-focus-border);
+	--source-table-input-focus-ring: var(--source-elastic-table-input-focus-ring);
+	--source-table-input-disabled-bg: var(--source-elastic-table-input-disabled-bg);
+	--source-table-input-disabled-text: var(--source-elastic-table-input-disabled-text);
+	--source-table-border: var(--source-elastic-table-border);
+	--source-table-bg: var(--source-elastic-table-bg);
+	--source-table-head-bg: var(--source-elastic-table-head-bg);
+	--source-table-head-text: var(--source-elastic-table-head-text);
+	--source-table-row-line: var(--source-elastic-table-row-line);
+	--source-table-row-hover-bg: var(--source-elastic-table-row-hover-bg);
+	--source-table-row-selected-bg: var(--source-elastic-table-row-selected-bg);
+	--source-table-cell-text: var(--source-elastic-table-cell-text);
+	--source-table-index-text: var(--source-elastic-table-index-text);
+	--source-table-empty-text: var(--source-elastic-table-empty-text);
+	--source-table-clear-icon: var(--source-elastic-table-clear-icon);
+	--source-table-clear-hover-bg: var(--source-elastic-table-clear-hover-bg);
+	--source-table-clear-hover-icon: var(--source-elastic-table-clear-hover-icon);
+	--source-table-more-text: var(--source-elastic-table-more-text);
+	--source-table-area-bg: var(--source-elastic-table-area-bg);
+	--source-table-search-row-bg: var(--source-elastic-table-search-row-bg);
+	--source-table-date-bg: var(--source-elastic-table-date-bg);
+	--source-table-date-border: var(--source-elastic-table-date-border);
+	--source-table-date-text: var(--source-elastic-table-date-text);
+	--source-table-date-arrow: var(--source-elastic-table-date-arrow);
+	--source-table-date-icon: var(--source-elastic-table-date-icon);
+	--source-table-search-border: var(--source-elastic-table-search-border);
+	--source-table-search-icon: var(--source-elastic-table-search-icon);
+	--source-table-search-hover-border: var(--source-elastic-table-search-hover-border);
+	--source-table-search-hover-icon: var(--source-elastic-table-search-hover-icon);
+	--source-table-search-pressed-border: var(--source-elastic-table-search-pressed-border);
+	--source-table-search-pressed-icon: var(--source-elastic-table-search-pressed-icon);
+	--source-table-search-disabled-border: var(--source-elastic-table-search-disabled-border);
+	--source-table-search-disabled-icon: var(--source-elastic-table-search-disabled-icon);
+	--source-table-search-disabled-bg: var(--source-elastic-table-search-disabled-bg);
+	--source-table-search-bg: var(--source-elastic-table-search-bg);
+	--source-table-search-hover-bg: var(--source-elastic-table-search-hover-bg);
+	--source-table-search-pressed-bg: var(--source-elastic-table-search-pressed-bg);
+	--source-table-head-line: var(--source-elastic-table-head-line);
+	--source-table-row-bg: var(--source-elastic-table-row-bg);
+	--source-table-row-selected-text: var(--source-elastic-table-row-selected-text);
+	--source-table-name-text: var(--source-elastic-table-name-text);
+	--source-table-date-cell-text: var(--source-elastic-table-date-cell-text);
+	--source-table-size-text: var(--source-elastic-table-size-text);
+	--source-table-check-border: var(--source-elastic-table-check-border);
+	--source-table-check-bg: var(--source-elastic-table-check-bg);
+	--source-table-check-on-bg: var(--source-elastic-table-check-on-bg);
+	--source-table-check-on-tick: var(--source-elastic-table-check-on-tick);
+	--source-table-empty-bg: var(--source-elastic-table-empty-bg);
+	--source-table-foot-bg: var(--source-elastic-table-foot-bg);
+	--source-table-foot-line: var(--source-elastic-table-foot-line);
+	--source-table-picked-border: var(--source-elastic-table-picked-border);
+	--source-table-picked-bg: var(--source-elastic-table-picked-bg);
+	--source-table-picked-icon: var(--source-elastic-table-picked-icon);
+	--source-table-picked-text: var(--source-elastic-table-picked-text);
+	--source-table-picked-on-border: var(--source-elastic-table-picked-on-border);
+	--source-table-picked-on-bg: var(--source-elastic-table-picked-on-bg);
+	--source-table-picked-on-icon: var(--source-elastic-table-picked-on-icon);
+	--source-table-picked-on-text: var(--source-elastic-table-picked-on-text);
+	--source-table-clear-bg: var(--source-elastic-table-clear-bg);
+	--source-table-more-bg: var(--source-elastic-table-more-bg);
+	--source-table-more-border: var(--source-elastic-table-more-border);
+	--source-table-more-hover-bg: var(--source-elastic-table-more-hover-bg);
+	--source-table-more-hover-text: var(--source-elastic-table-more-hover-text);
+}
+
+/* Default, address, search mode, column, Connect in one line. */
+.source_window_flow .source_window_flow_elastic .source_window_storage_fields .source_window_search_mode_field {
+	flex: none;
+}
+
+.source_window_flow .source_window_flow_elastic .source_window_storage_fields .source_window_field:nth-of-type(3) {
+	flex: 1.2 1 130px;
+}
+
+.source_window_flow .source_window_flow_elastic .source_window_search_mode_field > span {
+	color: var(--source-elastic-label-text) !important;
+}
+
+/* One box like the fields: its label, then the two choices. */
+.source_window_flow .source_window_flow_elastic .source_window_search_mode_group {
+	display: flex;
+	flex-wrap: nowrap;
+	align-items: flex-start;
+	gap: 12px;
+	height: 34px;
+	padding: 15px 9px 0;
+	border: 1px solid var(--source-elastic-mode-border);
+	border-radius: 3px;
+	background: var(--source-elastic-mode-bg);
+	box-sizing: border-box;
+}
+
+.source_window_flow .source_window_flow_elastic .source_window_search_mode_group label {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	height: 14px;
+	padding: 0;
+	border: 0;
+	background: none;
+	box-shadow: none;
+	color: var(--source-elastic-mode-text);
+	font-size: 12px;
+	font-weight: 400;
+	line-height: 14px;
+}
+
+.source_window_flow .source_window_flow_elastic .source_window_search_mode_group label > span {
+	color: var(--source-elastic-mode-text);
+}
+
+.source_window_flow .source_window_flow_elastic .source_window_search_mode_group label:hover > span {
+	color: var(--source-elastic-mode-hover-text);
+}
+
+.source_window_flow .source_window_flow_elastic .source_window_search_mode_group label.is-selected > span {
+	color: var(--source-elastic-mode-on-text);
+}
+
+.source_window_flow .source_window_flow_elastic .source_window_search_mode_group input {
+	width: 11px;
+	height: 11px;
+	margin: 0;
+	accent-color: var(--source-elastic-mode-radio) !important;
+}
+
+.source_window_flow .source_window_flow_elastic .source_window_search_mode_group label:hover {
+	background: none !important;
+	box-shadow: none;
+}

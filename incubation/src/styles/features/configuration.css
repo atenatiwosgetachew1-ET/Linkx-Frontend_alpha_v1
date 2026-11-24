@@ -2278,6 +2278,12 @@ button.libraries_icon {
 	grid-template-columns: minmax(0, 1fr);
 }
 
+/* settings.css (imported later) lays options out in two columns; the GPU
+   option is alone, so it takes the whole row. */
+.libraries_rendering .libraries_gpu_option {
+	grid-template-columns: minmax(0, 1fr);
+}
+
 .libraries_current {
 	margin: 0;
 	color: var(--libraries-current-text);

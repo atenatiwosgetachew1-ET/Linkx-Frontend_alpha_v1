@@ -1,4 +1,4 @@
-import React, { useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import React, { useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import WindowLoadScreen from '../../../shared/components/WindowLoadScreen.jsx';
 
 import { useSession } from '../../../shared/session/useSession.js';
@@ -7,7 +7,7 @@ import { useWorkspace } from '../../../workspace/hooks/useWorkspace.js';
 import { formatDomainPillarLabel, getActiveDomainKey } from '../../configuration/lib/configModel.js';
 import { buildEvidencePayload, buildRelationshipPayload } from '../../../services/graphApi.js';
 import { getCachedEvidenceGraph, cacheEvidenceGraph } from '../../reports/lib/evidenceGraphs.js';
-import { markGpuNotCapable } from '../../../shared/device/gpuCapability.js';
+import { markGpuFailed } from '../../../shared/device/gpuCapability.js';
 import { getTasksSnapshot, subscribeTasks } from '../../tasks/lib/taskRegistry.js';
 import { disposeGraphStore, getGraphStore } from '../lib/graphStore.js';
 import { getGraphState, handleGraphActions, publishGraphState } from '../lib/graphLinkBus.js';
@@ -25,7 +25,8 @@ import {
   DEFAULT_GRAPH_SETTINGS, GRAPH_LIMITS, applyPerformancePolicy, layoutSignatureOf, normalizeGraphSettings, viewKeyOf, visibleCapFor,
 } from '../lib/graphSettings.js';
 import { getGraphDefaults, subscribeGraphDefaults } from '../lib/graphDefaults.js';
-import { RENDERERS, markGpuSuggested, resolveRenderer, setGpuPreference, shouldSuggestGpu, subscribeGpuPreference } from '../lib/rendererPreference.js';
+import { getGpuLimits, shouldPromptBenchmark, subscribeGpuBenchmark } from '../lib/gpuBenchmark.js';
+import { RENDERERS, markGpuSuggested, resolveRenderer, shouldSuggestGpu, subscribeRenderer } from '../lib/rendererPreference.js';
 import { WORKSPACE_WINDOW_TYPES, getWindowLimitBlock } from '../../../workspace/state/workspaceTypes.js';
 
 import { allPairsLinked, contextMenuItems } from '../lib/graphContextMenu.js';
@@ -212,16 +213,14 @@ export default function GraphWindowBody({ windowItem }) {
     [metadata.graphSettings, graphDefaults],
   );
 
-  // Renderer: canvas unless GPU is allowed, chosen on this device and capable.
-  const [renderer, setRenderer] = useState(() => resolveRenderer(configuration));
-  useEffect(() => subscribeGpuPreference(() => setRenderer(resolveRenderer(configuration))), [configuration]);
+  // Renderer: canvas unless GPU is allowed, chosen on this device and usable
+  // now. Follows the choice, the GPU check and the configuration at once.
+  const renderer = useSyncExternalStore(subscribeRenderer, () => resolveRenderer(configuration));
   const handleRendererFailed = useCallback((error) => {
-    markGpuNotCapable(error?.message || 'GPU rendering failed on this device.');
-    setGpuPreference(false);
-    setRenderer(RENDERERS.CANVAS);
+    markGpuFailed(error?.message || 'A graph could not be drawn with the GPU.');
     notify({
       title: 'Switched to standard rendering',
-      message: 'GPU rendering stopped working on this device, so the graph is drawn without it. Your view was kept.',
+      message: 'GPU drawing stopped working, so graphs in this tab are drawn without it for now. Your view was kept. To try again: Libraries → Graph rendering → Check again.',
       level: 'warning',
       source: windowItem.title,
     });
@@ -229,14 +228,20 @@ export default function GraphWindowBody({ windowItem }) {
 
   // The visible view, capped for the renderer (plan §5.3). An active search
   // (right panel → Filter) replaces it, as in production.
-  const cap = visibleCapFor(renderer);
+  // With the GPU, the cap is this computer's (its benchmark).
+  const gpuLimits = useSyncExternalStore(subscribeGpuBenchmark, getGpuLimits);
+  const cap = visibleCapFor(renderer, gpuLimits);
   const requested = settings.limit.max - settings.limit.min;
   const capped = requested > cap;
   const search = metadata.graphSearch;
   // Expand / collapse edits belong to the view they were made on; a new
-  // limit, search or renderer cap starts from the plain view again
-  // (production applyLimit rebuilds VISIBLE_STATE).
-  const viewKey = useMemo(() => viewKeyOf(settings.limit, cap, search), [settings.limit, cap, search]);
+  // limit or search starts from the plain view again (production applyLimit
+  // rebuilds VISIBLE_STATE). A new cap does not: while there are edits, the
+  // plain view keeps the size they were made on.
+  const viewKey = useMemo(() => viewKeyOf(settings.limit, search), [settings.limit, search]);
+  const plainCap = Math.min(cap, store.editedCap(viewKey) ?? cap);
+  const heldBack = !capped && plainCap < Math.min(requested, cap);
+  useLayoutEffect(() => store.setDrawingCap(plainCap), [store, plainCap]);
   // Element types hidden with Filter Elements (production keeps the choice
   // on the device; each window starts from it).
   const elementFilters = useMemo(() => metadata.graphElementFilters || readElementFilters(), [metadata.graphElementFilters]);
@@ -246,14 +251,14 @@ export default function GraphWindowBody({ windowItem }) {
   const baseView = useMemo(
     () => applyElementFilters(store.graph(), store.applyVisibility(store.searchView({
       ...settings.limit,
-      max: settings.limit.min + Math.min(requested, cap),
+      max: settings.limit.min + Math.min(requested, plainCap),
       keyword: search?.keyword || '',
       includeLinked: Boolean(search?.includeLinked),
       keys: Array.isArray(search?.keys) ? search.keys : [],
-    }), viewKey), elementFilters),
+    }), viewKey, cap), elementFilters),
     // `snapshot.version` changes whenever the data (or an edit) changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [store, snapshot.version, settings.limit, cap, requested, search, viewKey, elementFilters],
+    [store, snapshot.version, settings.limit, cap, plainCap, requested, search, viewKey, elementFilters],
   );
   // The timeline's applied period, shown as a title top-left of the canvas.
   const [timelinePeriod, setTimelinePeriod] = useState('');
@@ -280,7 +285,7 @@ export default function GraphWindowBody({ windowItem }) {
     markGpuSuggested();
     notify({
       title: 'Faster drawing available',
-      message: 'This device can draw large graphs faster with its GPU. You can turn it on in Libraries → Graph rendering.',
+      message: 'This device can draw large graphs faster with its GPU. You can turn it on in Libraries → Graph rendering, after a short benchmark.',
       level: 'info',
       source: windowItem.title,
       durationMs: 12000,
@@ -292,6 +297,25 @@ export default function GraphWindowBody({ windowItem }) {
       },
     });
   }, [configuration, notify, openWindow, renderer, view.nodeIds.length, windowItem.title]);
+
+  // Once per device: GPU drawing was on before benchmarks existed, so its
+  // limit is a temporary one.
+  useEffect(() => {
+    if (renderer !== RENDERERS.WEBGL || gpuLimits.measured || !shouldPromptBenchmark()) return;
+    notify({
+      title: 'GPU benchmark needed',
+      message: `GPU graphs show at most ${formatCount(gpuLimits.cap)} nodes until a short benchmark sets this computer’s own limit.`,
+      level: 'info',
+      source: windowItem.title,
+      durationMs: 12000,
+      action: {
+        label: 'Open Libraries',
+        onClick: () => openWindow(WORKSPACE_WINDOW_TYPES.LIBRARIES, {
+          metadata: { librariesUi: { activeTab: 'graph_rendering' }, librariesRequest: { tab: 'graph_rendering', seq: Date.now() } },
+        }),
+      },
+    });
+  }, [gpuLimits, notify, openWindow, renderer, windowItem.title]);
 
   // Production: the first draw of each fetched graph shows nodes 0–25 (or
   // the count chosen in Libraries ▸ Graph defaults) and drops any search.
@@ -1156,7 +1180,8 @@ export default function GraphWindowBody({ windowItem }) {
   const applySavedView = useCallback((saved) => {
     const graph = store.graph();
     const next = fromSavedView(saved, settings);
-    const nodes = (saved.visibleNodes || []).map(String).filter((id) => graph.hasNode(id)).slice(0, cap);
+    const savedNodes = (saved.visibleNodes || []).map(String).filter((id) => graph.hasNode(id));
+    const nodes = savedNodes.slice(0, cap);
     const positions = Object.entries(saved.positions || {}).filter(([id, at]) => graph.hasNode(id) && Array.isArray(at));
     const placed = nodes.length > 0 && nodes.every((id) => saved.positions?.[id]);
     if (positions.length) {
@@ -1164,9 +1189,9 @@ export default function GraphWindowBody({ windowItem }) {
       if (placed) store.setLayoutSignature(layoutSignatureOf(next.layout));
     }
     if (nodes.length) {
-      const targetKey = viewKeyOf(next.limit, cap, null);
+      const targetKey = viewKeyOf(next.limit, null);
       const base = store.searchView({ ...next.limit, max: next.limit.min + Math.min(next.limit.max - next.limit.min, cap) });
-      store.restoreVisibility(targetKey, base.nodeIds, nodes);
+      store.restoreVisibility(targetKey, base.nodeIds, nodes, { cap });
     }
     const filters = savedElementFilters(saved);
     updateWindowMetadata(windowId, {
@@ -1184,7 +1209,11 @@ export default function GraphWindowBody({ windowItem }) {
       ];
       canvas.select(selected);
     }));
-    report(`View “${saved.name}” loaded.`);
+    if (savedNodes.length > nodes.length) {
+      report(`View “${saved.name}” loaded with ${formatCount(nodes.length)} of its ${formatCount(savedNodes.length)} nodes: at most ${formatCount(cap)} can be drawn at once here. The saved view itself is unchanged.`, 'warning');
+    } else {
+      report(`View “${saved.name}” loaded.`);
+    }
   }, [cap, report, settings, store, updateWindowMetadata, windowId]);
 
   const loadView = useCallback(() => {
@@ -1241,11 +1270,11 @@ export default function GraphWindowBody({ windowItem }) {
   // records edits against).
   const plainNodeIds = useCallback(() => store.searchView({
     ...settings.limit,
-    max: settings.limit.min + Math.min(requested, cap),
+    max: settings.limit.min + Math.min(requested, plainCap),
     keyword: search?.keyword || '',
     includeLinked: Boolean(search?.includeLinked),
     keys: Array.isArray(search?.keys) ? search.keys : [],
-  }).nodeIds, [cap, requested, search, settings.limit, store]);
+  }).nodeIds, [plainCap, requested, search, settings.limit, store]);
 
   // Graph editing (G3.1; production graphs_basic.html GB:2240 cases, GA
   // handleAddNode, handleDeleteNode, handleLinkNodes, handleUnlinkNode(s),
@@ -2114,7 +2143,7 @@ export default function GraphWindowBody({ windowItem }) {
   // its count arrives.
   const alertsAwaitScan = hasData && status.state === 'ready' && !ALERTS_AUTO_OPENED.has(status);
   const shown = view.nodeIds.length;
-  const warnAt = renderer === RENDERERS.WEBGL ? GRAPH_LIMITS.WEBGL_WARNING : GRAPH_LIMITS.WARNING;
+  const warnAt = renderer === RENDERERS.WEBGL ? gpuLimits.warnAt : GRAPH_LIMITS.WARNING;
   const busy = status.state === 'loading' || status.state === 'queued';
   const relationships = session.relationships || [];
 
@@ -2171,8 +2200,12 @@ export default function GraphWindowBody({ windowItem }) {
             {isLayingOut ? <span className="graph_window_hint"> · arranging…</span> : null}
           </p>
           {capped ? (
-            <span className="graph_window_flag is-warning linkx_tooltip_anchor" data-tooltip-placement="bottom" data-tooltip={`This renderer shows at most ${formatCount(cap)} nodes at once.`}>
+            <span className="graph_window_flag is-warning linkx_tooltip_anchor" data-tooltip-placement="bottom" data-tooltip={renderer !== RENDERERS.WEBGL ? `This renderer shows at most ${formatCount(cap)} nodes at once.` : gpuLimits.measured ? `This computer’s GPU benchmark allows ${formatCount(cap)} nodes at once (Libraries → Graph rendering).` : `A temporary limit of ${formatCount(cap)} nodes, until the GPU benchmark is run (Libraries → Graph rendering).`}>
               Limited to {formatCount(cap)}
+            </span>
+          ) : heldBack ? (
+            <span className="graph_window_flag is-warning linkx_tooltip_anchor" data-tooltip-placement="bottom" data-tooltip={`Your changes (expanded, hidden or added nodes) were made on a view limited to ${formatCount(plainCap)} nodes, and are kept on it. Change the limit to start again with up to ${formatCount(cap)}.`}>
+              Kept at {formatCount(plainCap)}
             </span>
           ) : shown > warnAt ? (
             <span className="graph_window_flag is-warning">Large view: may be slow</span>

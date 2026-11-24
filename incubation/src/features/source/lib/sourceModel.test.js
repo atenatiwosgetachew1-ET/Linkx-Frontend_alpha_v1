@@ -16,6 +16,8 @@ import {
   isBatchInputReady,
   isSourceReady,
   mergeSourceState,
+  brokerUsesDefault,
+  resolveBrokerTarget
 } from './sourceModel.js';
 
 const batch = (patch = {}) => ({ ...defaultSourceState.batch, ...patch });
@@ -68,10 +70,14 @@ describe('isBatchInputReady', () => {
     expect(isBatchInputReady(batch({ ...base, selectedSearchFiles: [{ name: 'r' }] }))).toBe(true);
   });
 
-  it('broker needs the broker and the tool', () => {
+  it('broker needs the broker (the tool is connected on Continue)', () => {
     const base = { selectedConnectionType: 'broker', sourceStatus: SOURCE_STATUSES.CONNECTED, connectedKind: 'broker' };
-    expect(isBatchInputReady(batch(base))).toBe(false);
-    expect(isBatchInputReady(batch({ ...base, toolStatus: 'connected' }))).toBe(true);
+    expect(isBatchInputReady(batch(base))).toBe(true);
+    expect(isBatchInputReady(batch({ ...base, sourceStatus: SOURCE_STATUSES.IDLE, toolStatus: 'connected' }))).toBe(false);
+    expect(getContinueBlockers(SOURCE_MODES.BATCH, batch({ selectedConnectionType: 'broker' }))).toEqual(['Connect the broker']);
+    const live = { ...defaultSourceState.realtime, step: 'connect' };
+    expect(getContinueBlockers(SOURCE_MODES.REALTIME, live)).toEqual(['Connect the source']);
+    expect(getContinueBlockers(SOURCE_MODES.REALTIME, { ...live, sourceStatus: SOURCE_STATUSES.CONNECTED })).toEqual([]);
   });
 });
 
@@ -150,6 +156,29 @@ describe('formatStreamLog', () => {
       { at: '2026-11-13 12:05:00', level: 'warn', message: 'Terminating' },
     ]);
     expect(text).toBe('[2026-11-13 12:04:55] Analyze requested.\n[09:04:56] [Info] - Injection started\n[2026-11-13 12:05:00] WARN Terminating');
+  });
+});
+
+describe('the broker target', () => {
+  const defaults = { broker: { address: 'k:9092', apiAddress: 'https://api', topic: 't' } };
+
+  it('is the configured one behind Use Default, the typed one otherwise', () => {
+    const typed = { sourceAddressType: 'broker', brokerAddress: 'mine:1', topic: 'm' };
+    expect(resolveBrokerTarget({ ...typed, brokerUseDefault: true }, defaults)).toEqual({ address: 'k:9092', topic: 't' });
+    expect(resolveBrokerTarget({ ...typed, brokerUseDefault: false }, defaults)).toEqual({ address: 'mine:1', topic: 'm' });
+    expect(resolveBrokerTarget({ ...typed, sourceAddressType: 'api', brokerUseDefault: true }, defaults)).toEqual({ address: 'https://api', topic: '' });
+  });
+
+  it('keeps the values a window already held before there was a choice', () => {
+    expect(brokerUsesDefault({ brokerAddress: 'k:9092', topic: 't' }, defaults)).toBe(true);
+    expect(brokerUsesDefault({ brokerAddress: '', topic: '' }, defaults)).toBe(true);
+    expect(brokerUsesDefault({ brokerAddress: 'mine:1', topic: 't' }, defaults)).toBe(false);
+  });
+
+  it('is not refilled by a domain switch while entered manually', () => {
+    const next = { broker: { address: 'new:9092', topic: 'n' }, tool: {} };
+    const patch = domainDefaultsPatch({ brokerUseDefault: false, brokerAddress: '', topic: '' }, { ...defaults, tool: {} }, next);
+    expect(patch).toEqual({});
   });
 });
 

@@ -13,6 +13,12 @@ import {
 } from '../../lib/sourceModel.js';
 import { Field, SourceModeIcon, StatusPill, ToolbarToggle } from '../sourceUi.jsx';
 import SearchResultBrowser from '../SearchResultBrowser.jsx';
+import SearchResultTable from '../SearchResultTable.jsx';
+import { SOURCE_FLOW } from '../../lib/sourceFrame.js';
+
+// As on the Storage page: the restyled search row and table, or the list it
+// replaced.
+const ResultList = SOURCE_FLOW ? SearchResultTable : SearchResultBrowser;
 
 // Production batch "Search" page with the Hybrid (Elastic + Hive) radio:
 // strict search needs one of the configured strict columns, fuzzy search may
@@ -60,11 +66,11 @@ export function ElasticSearchStep({ state, defaults, windowId, validationMessage
   const changeSearchSetup = (patch) => onPatchModeState({ ...patch, ...ELASTIC_SEARCH_RESET_PATCH, ...STALE_DATAFRAME_PATCH });
 
   return (
-    <div className="source_window_step_body source_window_step_body_storage">
+    <div className={'source_window_step_body source_window_step_body_storage' + (SOURCE_FLOW ? ' source_window_flow_storage source_window_flow_elastic' : '')}>
       <section className={'source_window_storage_browser' + (toolbarCollapsed ? ' is-toolbar-collapsed' : '')}>
         <header className="source_window_storage_browser_header">
           <div className="source_window_storage_title">
-            <SourceModeIcon type="elastic" />
+            {SOURCE_FLOW ? null : <SourceModeIcon type="elastic" />}
             <h3>Elasticsearch source</h3>
             <StatusPill label="Storage" status={state.sourceStatus} />
           </div>
@@ -135,7 +141,7 @@ export function ElasticSearchStep({ state, defaults, windowId, validationMessage
           </button>
         </div>
 
-        <SearchResultBrowser
+        <ResultList
           label="Elasticsearch result browser"
           showIcon={false}
           query={state.searchQuery}

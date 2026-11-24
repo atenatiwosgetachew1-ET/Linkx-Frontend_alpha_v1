@@ -18,8 +18,8 @@ export const GRAPH_LIMITS = Object.freeze({
   WARNING: 300, // production GRAPH_LIMIT_WARNING_THRESHOLD; confirmed by G0 for canvas
   ABSOLUTE_MAX: 100000, // production GRAPH_LIMIT_HARD_MAX
   CANVAS_HARD_CAP: 2000,
-  WEBGL_WARNING: 5000,
-  WEBGL_HARD_CAP: 20000,
+  WEBGL_WARNING: 5000, // also the GPU limit until this computer's benchmark
+  WEBGL_HARD_CAP: 20000, // the most a benchmark can give (largest size tested)
   CANVAS_FAST_ABOVE: 300, // pixel ratio 1 above this (canvas)
   CANVAS_HIDE_EDGES_ABOVE: 1000, // edges hidden while panning / zooming above this
   PHYSICS_AUTO_OFF_AT: 300, // production AUTO_PHYSICS_NODE_THRESHOLD
@@ -182,9 +182,14 @@ export const layoutSignatureOf = (layout = DEFAULT_GRAPH_SETTINGS.layout) => {
   return JSON.stringify([type, direction, sortMethod, layerMode, layerKey]);
 };
 
-// Which plain view expand / collapse edits belong to: the limit, the
-// renderer's cap and the search (GraphWindowBody).
-export const viewKeyOf = (limit, cap, search) => JSON.stringify([limit, cap, search || null]);
+// Which plain view expand / collapse edits belong to: the limit and the
+// search (GraphWindowBody). Not the renderer's cap: turning the GPU on or off
+// or a new benchmark must not drop them (graphStore keeps the cap they were
+// made under).
+export const viewKeyOf = (limit, search) => JSON.stringify([limit, search || null]);
 
-// Visible-node cap for a renderer (plan §5.3).
-export const visibleCapFor = (renderer) => (renderer === 'webgl' ? GRAPH_LIMITS.WEBGL_HARD_CAP : GRAPH_LIMITS.CANVAS_HARD_CAP);
+// Visible-node cap for a renderer (plan §5.3). With the GPU it is this
+// computer's (gpuBenchmark.js getGpuLimits).
+export const visibleCapFor = (renderer, gpuLimits) => (
+  renderer === 'webgl' ? gpuLimits?.cap ?? GRAPH_LIMITS.WEBGL_WARNING : GRAPH_LIMITS.CANVAS_HARD_CAP
+);

@@ -24,17 +24,6 @@ import { Block, Masthead, Option, PageHero, Pill, SettingsPage, Stat, Stats } fr
 
 const truthy = (value) => value === true || value === 'true';
 
-// TEMPORARY (style check): extra domain pills that are not real domains.
-// They show the pill states and do nothing when clicked. Remove this
-// constant and its two uses below once the look is settled.
-const MOCK_DOMAINS = import.meta.env.MODE === 'test' ? [] : [
-  { key: 'mock_insurance', label: 'Insurance', ready: true },
-  { key: 'mock_telecom', label: 'Telecom', ready: true },
-  { key: 'mock_customs', label: 'Customs & Trade', ready: false },
-  { key: 'mock_tax', label: 'Tax Revenue', ready: false },
-  { key: 'mock_long', label: 'Anti-Money-Laundering Unit', ready: true },
-];
-
 /* ── System ─────────────────────────────────────────────────────────── */
 
 export function SystemPanel({ draft, onChange, onSwitchDomain, isSwitchingDomain, canWrite, idleSettings, idlePolicyMeta, onIdleSettingsChange }) {
@@ -129,21 +118,6 @@ export function SystemPanel({ draft, onChange, onSwitchDomain, isSwitchingDomain
               </button>
             );
           })}
-          {MOCK_DOMAINS.map((mock) => (
-            <button
-              key={mock.key}
-              type="button"
-              role="radio"
-              aria-checked={false}
-              className={`config_system_domain${mock.ready ? '' : ' is-unready'}`}
-              disabled={isSwitchingDomain || !canWrite}
-              title="Mock pill for checking styles: it does nothing"
-            >
-              <i aria-hidden="true" />
-              {mock.label}
-              <small>{mock.ready ? 'Ready' : 'Unconfigured'}</small>
-            </button>
-          ))}
         </div>
       </Block>
 

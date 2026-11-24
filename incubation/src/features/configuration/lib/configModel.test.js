@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  getRegisteredDomains,
   applyConfigurationChange,
   buildConfigurationSavePayload,
   checkIsBuiltinRule,
@@ -79,5 +80,17 @@ describe('checkIsBuiltinRule', () => {
     expect(checkIsBuiltinRule('R1', { builtin_rules: ['r1'] }, new Set())).toBe(true);
     expect(checkIsBuiltinRule('custom', { custom_rules: ['custom'] }, new Set())).toBe(false);
     expect(checkIsBuiltinRule('known', {}, new Set(['known']))).toBe(true);
+  });
+});
+
+describe('getRegisteredDomains', () => {
+  it('lists every domain the Service names, once', () => {
+    expect(getRegisteredDomains({ active_domain: 'bank', registered_domains: ['bank'], domain_connections: { bank: {}, cdr: {} } })).toEqual(['bank', 'cdr']);
+    expect(getRegisteredDomains({ active_domain: 'bank', registered_domains: ['banking', 'cdr'] })).toEqual(['bank', 'cdr']);
+    expect(getRegisteredDomains({ active_domain: 'insurance', domain_connections: { cdr: {} } })).toEqual(['cdr', 'insurance']);
+  });
+
+  it('falls back to the known domains when the Service names none', () => {
+    expect(getRegisteredDomains({})).toEqual(['bank', 'microfinance', 'cdr', 'insurance', 'social_media']);
   });
 });

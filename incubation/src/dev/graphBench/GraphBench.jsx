@@ -11,8 +11,13 @@ import cytoscape from 'cytoscape';
 import ELK from 'elkjs/lib/elk-api.js';
 import elkWorkerUrl from 'elkjs/lib/elk-worker.min.js?url';
 
+import '../../styles/themes/index.css';
+import '../../main.css';
+import '../../styles/features/benchmark.css';
+import { BenchmarkCard, BenchmarkFrame } from '../../features/graph/components/BenchmarkFrame.jsx';
+import { ThemeProvider } from '../../shared/theme/ThemeContext.jsx';
 import { getGpuCapability } from '../../shared/device/gpuCapability.js';
-import { makeStyleSample, makeSyntheticGraph } from './synthetic.js';
+import { makeStyleSample, makeSyntheticGraph } from '../../features/graph/lib/syntheticGraph.js';
 
 const SIZES = [300, 1000, 5000, 20000];
 // Canvas "fast": Cytoscape's standard viewport optimisations for the CPU path
@@ -139,7 +144,7 @@ const watchLongTasks = () => {
   };
 };
 
-export default function GraphBench() {
+function GraphBenchPage() {
   const containerRef = useRef(null);
   const cyRef = useRef(null);
   const [gpu, setGpu] = useState(() => getGpuCapability({ force: true }));
@@ -353,96 +358,108 @@ export default function GraphBench() {
     }
   };
 
-  const box = { border: '1px solid #cbd5e1', borderRadius: 8, padding: 10, background: '#fff' };
+  const busy = Boolean(running);
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '340px 1fr', gap: 12, height: '100vh', padding: 12, boxSizing: 'border-box', background: '#f1f5f9', color: '#0f172a', font: '13px/1.4 system-ui, sans-serif' }}>
-      <aside style={{ display: 'grid', gap: 10, alignContent: 'start', overflow: 'auto' }}>
-        <section style={box}>
-          <h1 style={{ fontSize: 16, margin: '0 0 4px' }}>LinkX graph benchmark (G0)</h1>
-          <p style={{ margin: 0, color: '#475569' }}>Cytoscape {cytoscape.version}: canvas (default) vs WebGL (opt-in).</p>
-        </section>
-        <section style={box} aria-label="GPU capability">
-          <strong>GPU: {gpu.verdict.replace('_', ' ')}</strong>
-          <ul style={{ margin: '4px 0', paddingLeft: 18 }}>{gpu.reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul>
-          <button type="button" disabled={Boolean(running)} onClick={() => setGpu(getGpuCapability({ force: true }))}>Check again</button>
-        </section>
-        <section style={box}>
-          <button type="button" disabled={Boolean(running)} onClick={runSuite} style={{ fontWeight: 700 }}>
-            {running === 'Full suite' ? 'Running… (takes a few minutes)' : 'Run full suite'}
-          </button>
-          <p style={{ margin: '6px 0 0', color: '#475569' }}>
-            Sizes {SIZES.join(' / ')} nodes (about 3 edges per node): canvas, canvas (fast){gpuOk ? ' and WebGL' : ' (no usable GPU, so no WebGL)'}; PNG capped at {PNG_MAX_SIDE}px; ForceAtlas2 and ELK layouts in workers; canvas→WebGL switch.
-          </p>
-        </section>
-        <section style={box}>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-            <label>Mode <select value={mode} onChange={(event) => setMode(event.target.value)}><option value="canvas">Canvas</option><option value="canvas-fast">Canvas (fast)</option><option value="webgl">WebGL</option></select></label>
-            <label>Nodes <select value={size} onChange={(event) => setSize(Number(event.target.value))}>{SIZES.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
-            <label><input type="checkbox" checked={labels} onChange={(event) => setLabels(event.target.checked)} /> Labels</label>
-          </div>
-          <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-            <button type="button" disabled={Boolean(running)} onClick={showSize}>Draw graph</button>
-            <button type="button" disabled={Boolean(running)} onClick={showSample}>Style sample</button>
-          </div>
-        </section>
-        <section style={box} aria-label="Visual checklist">
-          <strong>Visual checklist (Style sample, each mode)</strong>
-          {['canvas', 'webgl'].map((checkMode) => (
-            <fieldset key={checkMode} style={{ border: 0, padding: 0, margin: '6px 0 0' }}>
-              <legend style={{ fontWeight: 600 }}>{checkMode === 'canvas' ? 'Canvas' : 'WebGL'}</legend>
-              {CHECKS.map(([key, label]) => (
-                <label key={key} style={{ display: 'block' }}>
-                  <input
-                    type="checkbox"
-                    checked={Boolean(checks[`${checkMode}.${key}`])}
-                    onChange={(event) => setChecks((current) => ({ ...current, [`${checkMode}.${key}`]: event.target.checked }))}
-                  />
-                  {' '}{label}
-                </label>
-              ))}
-            </fieldset>
-          ))}
-        </section>
-        <section style={box}>
-          <button type="button" onClick={copyReport} disabled={!results.length && !Object.keys(checks).length}>Copy results (JSON)</button>
-        </section>
-        <section style={{ ...box, maxHeight: 220, overflow: 'auto', fontFamily: 'ui-monospace, monospace', fontSize: 11 }} aria-label="Log">
-          {log.length ? log.map((line, index) => <div key={index}>{line}</div>) : <span style={{ color: '#64748b' }}>Log</span>}
-        </section>
-      </aside>
-      <main style={{ display: 'grid', gridTemplateRows: '1fr auto', gap: 12, minHeight: 0 }}>
-        <div ref={containerRef} style={{ ...box, padding: 0, minHeight: 0, position: 'relative' }} />
-        <section style={{ ...box, maxHeight: '32vh', overflow: 'auto' }} aria-label="Results">
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-            <thead>
-              <tr style={{ textAlign: 'left' }}>
-                {['Test', 'Mode / layout', 'Nodes', 'Edges', 'First paint', 'FPS', 'p95 frame', 'Max frame', 'PNG', 'Time', 'Main thread', 'Note'].map((head) => <th key={head} style={{ borderBottom: '1px solid #cbd5e1', padding: '4px 6px' }}>{head}</th>)}
+    <BenchmarkFrame
+      title="Graph benchmark (developer)"
+      subtitle={`Cytoscape ${cytoscape.version}: canvas (default) and WebGL (opt-in)`}
+      actions={(
+        <button type="button" className="linkx_bench_button" onClick={copyReport} disabled={!results.length && !Object.keys(checks).length}>Copy results (JSON)</button>
+      )}
+      side={(
+        <>
+          <BenchmarkCard title={`GPU: ${gpu.verdict.replace('_', ' ')}`} aria-label="GPU capability">
+            <ul>{[...gpu.reasons, ...(gpu.cautions || [])].map((reason) => <li key={reason}>{reason}</li>)}</ul>
+            <div className="linkx_bench_row">
+              <button type="button" className="linkx_bench_button" disabled={busy} onClick={() => setGpu(getGpuCapability({ force: true }))}>Check again</button>
+            </div>
+          </BenchmarkCard>
+          <BenchmarkCard title="Full suite">
+            <p>
+              Sizes {SIZES.map((value) => value.toLocaleString()).join(' / ')} nodes (about 3 edges per node): canvas, canvas (fast){gpuOk ? ' and WebGL' : ' (WebGL cannot be used now)'}; PNG capped at {PNG_MAX_SIDE}px; ForceAtlas2 and ELK layouts in workers; canvas→WebGL switch.
+            </p>
+            <div className="linkx_bench_row">
+              <button type="button" className="linkx_bench_button" disabled={busy} onClick={runSuite}>
+                {running === 'Full suite' ? 'Running… (takes a few minutes)' : 'Run full suite'}
+              </button>
+            </div>
+          </BenchmarkCard>
+          <BenchmarkCard title="By hand">
+            <div className="linkx_bench_row">
+              <label>Mode <select className="linkx_bench_field" value={mode} onChange={(event) => setMode(event.target.value)}><option value="canvas">Canvas</option><option value="canvas-fast">Canvas (fast)</option><option value="webgl">WebGL</option></select></label>
+              <label>Nodes <select className="linkx_bench_field" value={size} onChange={(event) => setSize(Number(event.target.value))}>{SIZES.map((value) => <option key={value} value={value}>{value.toLocaleString()}</option>)}</select></label>
+              <label className="linkx_bench_check"><input type="checkbox" checked={labels} onChange={(event) => setLabels(event.target.checked)} /> Labels</label>
+            </div>
+            <div className="linkx_bench_row">
+              <button type="button" className="linkx_bench_button" disabled={busy} onClick={showSize}>Draw graph</button>
+              <button type="button" className="linkx_bench_button" disabled={busy} onClick={showSample}>Style sample</button>
+            </div>
+          </BenchmarkCard>
+          <BenchmarkCard title="Visual checklist (Style sample, each mode)" aria-label="Visual checklist">
+            {['canvas', 'webgl'].map((checkMode) => (
+              <fieldset key={checkMode} className="linkx_bench_checks">
+                <legend><strong>{checkMode === 'canvas' ? 'Canvas' : 'WebGL'}</strong></legend>
+                {CHECKS.map(([key, label]) => (
+                  <label key={key} className="linkx_bench_check">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(checks[`${checkMode}.${key}`])}
+                      onChange={(event) => setChecks((current) => ({ ...current, [`${checkMode}.${key}`]: event.target.checked }))}
+                    />
+                    {label}
+                  </label>
+                ))}
+              </fieldset>
+            ))}
+          </BenchmarkCard>
+          <BenchmarkCard title="Log" aria-label="Log">
+            <div className="linkx_bench_log">
+              {log.length ? log.map((line, index) => <div key={index}>{line}</div>) : 'Nothing yet.'}
+            </div>
+          </BenchmarkCard>
+        </>
+      )}
+    >
+      <div className="linkx_bench_stage"><div ref={containerRef} className="linkx_bench_canvas" /></div>
+      <BenchmarkCard className="linkx_bench_results" aria-label="Results">
+        <table className="linkx_bench_table">
+          <thead>
+            <tr>
+              {['Test', 'Mode / layout', 'Nodes', 'Edges', 'First paint', 'FPS', 'p95 frame', 'Max frame', 'PNG', 'Time', 'Main thread', 'Note'].map((head) => <th key={head}>{head}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {results.map((row, index) => (
+              <tr key={index}>
+                <td>{row.test}</td>
+                <td>{row.mode || row.layout || `${row.from}→${row.to}`}</td>
+                <td>{row.nodes}</td>
+                <td>{row.edges ?? ''}</td>
+                <td>{row.firstPaintMs != null ? `${row.firstPaintMs} ms` : ''}</td>
+                <td>{row.fps ?? ''}</td>
+                <td>{row.p95FrameMs != null ? `${row.p95FrameMs} ms` : ''}</td>
+                <td>{row.maxFrameMs != null ? `${row.maxFrameMs} ms` : ''}</td>
+                <td>{row.pngMs != null ? `${row.pngMs} ms` : row.pngError ? 'failed' : ''}</td>
+                <td>{row.test !== 'render' && row.ms != null ? `${row.ms} ms` : ''}</td>
+                <td>{row.mainThreadLongTasks?.supported ? `${row.mainThreadLongTasks.count} long (max ${row.mainThreadLongTasks.maxMs} ms)` : ''}</td>
+                <td className={row.error || row.timedOut ? 'is-bad' : undefined}>
+                  {row.error || (row.timedOut ? 'timed out' : '') || (row.viewAndSelectionKept === false ? 'view lost' : row.viewAndSelectionKept ? 'view kept' : '')}
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {results.map((row, index) => (
-                <tr key={index}>
-                  <td style={{ padding: '3px 6px' }}>{row.test}</td>
-                  <td style={{ padding: '3px 6px' }}>{row.mode || row.layout || `${row.from}→${row.to}`}</td>
-                  <td style={{ padding: '3px 6px' }}>{row.nodes}</td>
-                  <td style={{ padding: '3px 6px' }}>{row.edges ?? ''}</td>
-                  <td style={{ padding: '3px 6px' }}>{row.firstPaintMs != null ? `${row.firstPaintMs} ms` : ''}</td>
-                  <td style={{ padding: '3px 6px' }}>{row.fps ?? ''}</td>
-                  <td style={{ padding: '3px 6px' }}>{row.p95FrameMs != null ? `${row.p95FrameMs} ms` : ''}</td>
-                  <td style={{ padding: '3px 6px' }}>{row.maxFrameMs != null ? `${row.maxFrameMs} ms` : ''}</td>
-                  <td style={{ padding: '3px 6px' }}>{row.pngMs != null ? `${row.pngMs} ms` : row.pngError ? 'failed' : ''}</td>
-                  <td style={{ padding: '3px 6px' }}>{row.test !== 'render' && row.ms != null ? `${row.ms} ms` : ''}</td>
-                  <td style={{ padding: '3px 6px' }}>{row.mainThreadLongTasks?.supported ? `${row.mainThreadLongTasks.count} long (max ${row.mainThreadLongTasks.maxMs} ms)` : ''}</td>
-                  <td style={{ padding: '3px 6px', color: row.error || row.timedOut ? '#b91c1c' : '#475569' }}>
-                    {row.error || (row.timedOut ? 'timed out' : '') || (row.viewAndSelectionKept === false ? 'view lost' : row.viewAndSelectionKept ? 'view kept' : '')}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {!results.length ? <p style={{ margin: 0, color: '#64748b' }}>No results yet. Run the full suite, or draw a graph to try it by hand.</p> : null}
-        </section>
-      </main>
-    </div>
+            ))}
+          </tbody>
+        </table>
+        {!results.length ? <p>No results yet. Run the full suite, or draw a graph to try it by hand.</p> : null}
+      </BenchmarkCard>
+    </BenchmarkFrame>
+  );
+}
+
+// In the workspace's active theme, with the analyst's own overrides.
+export default function GraphBench() {
+  return (
+    <ThemeProvider>
+      <GraphBenchPage />
+    </ThemeProvider>
   );
 }

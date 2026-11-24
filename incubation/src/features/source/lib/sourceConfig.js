@@ -135,8 +135,10 @@ export const buildSourceAutofillPatch = (defaults, currentState = {}) => {
   const hasTypedPassword = isPresent(currentState.toolPassword);
 
   return {
-    ...fill('brokerAddress', defaults.broker.address),
-    ...fill('topic', defaults.broker.topic),
+    ...(currentState.brokerUseDefault === false ? {} : {
+      ...fill('brokerAddress', defaults.broker.address),
+      ...fill('topic', defaults.broker.topic),
+    }),
     // Storage address/port are not prefilled: with "Use Default" the window
     // connects to the configured storage without exposing its address.
     ...fill('storagePath', defaults.storage.path),

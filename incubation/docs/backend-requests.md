@@ -482,15 +482,15 @@ Or say this should not be offered.
 - **The frontend counts** toward the 3 sessions per analyst:
   - every open Source window, idle or not (each holds a source session on the Service);
   - every background stream;
-  - every running quick analysis (STR, rule engine, ML);
+  - every running quick analysis (none exist on the Service yet: B-35);
   - every alert run.
 - **The Service counts today:** running streams and alert runs only.
 
-**Request:** count the same four things: open source sessions (`/init_source` until `/close_source_window` or cleanup), running streams, running quick analyses and alert runs.
+**Request:** count the same things: open source sessions (`/init_source` until `/close_source_window` or cleanup), running streams and alert runs, plus quick analyses once B-35 exists.
 - Refuse with `429 { code: "session_limit", limit, in_use, detail }`.
 - Return it from `/init_source` too, so opening a fourth Source window is refused.
 
-**Verify:** with 3 Source windows open and idle, a 4th `/init_source`, a quick analysis and an alert run are each refused with `session_limit`.
+**Verify:** with 3 Source windows open and idle, a 4th `/init_source` and an alert run are each refused with `session_limit` (and a quick analysis, once B-35 exists).
 
 **Frontend:** already counts this way (`getSessionUsage`, `src/features/tasks/lib/taskRegistry.js`). `429 session_limit` is shown with its `detail`.
 
@@ -541,7 +541,7 @@ The answer carries no reason, so neither the analyst nor we can tell which field
    - whether service-only keys (`alerts:ingest`, `auth:verify`) may be assigned.
 3. Say which field this particular refusal was about.
 
-4. Confirm the escalation rule: an actor may grant (and remove) only permissions it holds, on create and on update. Say whether `superuser:manage` holders are exempt. Confirm that an account without `superuser:manage` may not change an `admin` or `superuser` account.
+4. Say whether an escalation rule exists today. We asked for one in B-1, and you have not confirmed it: an actor may grant (and remove) only permissions it holds, on create and on update. The frontend already behaves as if it does; that may or may not explain this refusal. Say whether `superuser:manage` holders are exempt. Confirm that an account without `superuser:manage` may not change an `admin` or `superuser` account.
 5. Is there an admin endpoint to unlock an account (`is_locked`)?
 
 **Frontend:**
@@ -590,3 +590,55 @@ We recommend (a) for now, and (b) only if graph size becomes a problem.
 - Read and write sets through these endpoints instead of `localStorage` (`src/features/graph/lib/iconSets.js` is the only place that stores them).
 - Label the tab **System**, show who last changed a set, and lock the management actions without the permission.
 - Offer a one-time "Send this browser's sets to the Service" for sets made before.
+
+### B-35. Time-limited runs for the quick analysis panel (`stream` limits, P2)
+**Analyst decisions 2026-11-24.** The quick analysis panel is a light way to check a small amount of data. It uses the **formal analysis pipeline** (same rules, permissions, tasks and evidence), not a second one, with these limits:
+- **File:** one file, 5 MB at most.
+- **Batch:** the last hour.
+- **Realtime:** the next 15 minutes, counted from the start of the run.
+- **Rule and connections:** the session configuration's defaults, as in a Source window (Link Analysis with the configured rule).
+
+**Today:** the panel runs nothing. It used to show simulated progress and findings; those were removed on 2026-11-24. No call to the Service has ever come from it.
+
+**Why the Service has to do this:**
+- A realtime stream ended by a browser timer keeps running when the tab closes or the network drops.
+- A time limit made with `dataframe_filter` (B-27) needs a date column and, as far as we can tell, is applied after the source is read, so the run is not light.
+
+**Request:** an optional `limits` on `POST /live_batch_files { id: 'stream', value: { …, limits } }`, proposed as:
+
+```jsonc
+{ "max_duration_seconds": 900 }                 // realtime: stop after this long
+```
+
+and, on `create_DF` for a batch source, `limits: { "last_seconds": 3600, "time_column": "optional" }`.
+
+1. **Realtime:** start from new messages only. Stop the run when the time is up, whether or not the browser is connected, and finish it as a normal `completed` task with its verdict and flags. Not `terminated` or `failed`. A run that received no rows completes with 0 rows.
+2. **Batch:** read only the last hour from the source. Say which time you use for each source: Kafka message time, the domain's `date_column`, or the file time on HDFS. Say what happens where a source has no usable time (REST API). Refuse it rather than reading everything.
+3. **File:** say whether you want a row limit as well. A 5 MB Parquet or XLSX file can hold many rows.
+4. **Task:** mark the run (`origin: "quick"`, or a `quick: true` flag) and record the limits and the time covered (`window_start`, `window_end`), so the result can say what it covers.
+5. **Enforce the limits on the Service** for a marked run, and refuse with `400 { code: "quick_limit", detail }`. The frontend's own checks can be bypassed.
+6. **Session limit:** a quick run counts as one session (B-30) and frees it when it ends.
+
+**Questions:**
+- Which of these inputs can do it today: Kafka, REST API, HDFS?
+- Does a realtime stream already have any way to end by itself?
+- Is the rule in the session configuration enough to start, or must the rule come from `create_DF`'s list?
+
+**What the result will say:** "No flags in this window", never "Clean". A short window cannot show patterns that need history (dormant-to-active) or longer periods (smurfing). Please do not return the verdict `clean` for a quick run; `undetermined` with empty `flags` is right, unless you prefer another word.
+
+**Verify:**
+1. Start a realtime quick run and close the browser. It ends by itself after 15 minutes as `completed`, and its session is free.
+2. A batch quick run ingests only rows from the last hour, and the log gives the time range.
+
+**Frontend once done:** build the run in the panel on the existing upload, `create_DF` and `stream` calls.
+
+### B-36. Send the "GPU drawing allowed" setting (`graph_gpu_allowed` in the configuration, P3)
+**Found 2026-11-24.** Libraries ▸ Graph rendering reads `graph_gpu_allowed` from the session configuration, so an administrator can turn GPU drawing off for everyone (L-B2 in `libraries-plan.md`). We found no request to the Service for it, and do not know that it sends it.
+
+**Today:** when the key is missing, GPU drawing is not restricted and the page says "Not set".
+
+**Request:**
+1. Say whether the configuration carries `graph_gpu_allowed`. If not, add it (`true` / `false`, default `true`), saved like other configuration keys with `config:write`.
+2. Keep it in the answers of `/init`, `/configuration` load and save.
+
+**Frontend once done:** nothing to change to honour it: `false` already turns GPU drawing off, and open graphs follow. A control to change it would be added to the Configuration window.

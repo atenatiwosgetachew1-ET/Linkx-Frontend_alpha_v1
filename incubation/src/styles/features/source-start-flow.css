@@ -1,0 +1,1089 @@
+/* Source window, first page as one calm surface (SourceStartFlow.jsx;
+   analyst request 2026-11-23). Every rule is under .source_window_flow,
+   which is drawn only while SOURCE_FIRST_PAGE is 'flow'
+   (src/features/source/lib/sourceFrame.js). No boxes: type, space and one
+   accent do the work. Imported after source-restyle.css. */
+.source_window_flow {
+	grid-area: main;
+	container: source-flow / size;
+	display: flex;
+	align-items: flex-start;
+	justify-content: center;
+	min-width: 0;
+	min-height: 0;
+	border: 1px solid var(--source-flow-border);
+	border-radius: 6px;
+	background:
+		radial-gradient(70% 60% at 50% 0, var(--source-flow-wash), transparent 75%),
+		var(--source-flow-bg);
+	overflow: auto;
+	scrollbar-width: thin;
+}
+
+.source_window_flow .source_window_flow_inner {
+	display: flex;
+	flex-direction: column;
+	gap: 26px;
+	/* The whole height: the configuration line rests at the bottom, the
+	   rest is centred in what is left over it. */
+	flex: 1 1 0;
+	min-width: 0;
+	max-width: 880px;
+	min-height: 100%;
+	padding: 24px 28px 16px;
+	box-sizing: border-box;
+}
+
+/* Each part arrives just after the one above it. */
+.source_window_flow .source_window_flow_inner > * {
+	animation: source-flow-in 520ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+.source_window_flow .source_window_flow_inner > :nth-child(2) { animation-delay: 80ms; }
+.source_window_flow .source_window_flow_inner > :nth-child(3) { animation-delay: 150ms; }
+.source_window_flow .source_window_flow_inner > :nth-child(4) { animation-delay: 220ms; }
+
+@keyframes source-flow-in {
+	from {
+		opacity: 0;
+		transform: translateY(10px);
+	}
+}
+
+/* ── The path: source, arrival, analysis ── */
+.source_window_flow .source_window_flow_path {
+	display: grid;
+	grid-template-columns: 104px minmax(24px, 1fr) 104px minmax(24px, 1fr) 104px;
+	align-items: start;
+	width: 100%;
+	margin: auto 0 0;
+	padding-top: 26px;
+}
+
+.source_window_flow .source_window_flow_stop {
+	display: grid;
+	justify-items: center;
+	min-width: 0;
+	text-align: center;
+}
+
+.source_window_flow .source_window_flow_stop_icon {
+	display: grid;
+	place-items: center;
+	width: 46px;
+	height: 46px;
+	margin-bottom: 8px;
+	border: 1px solid var(--source-flow-stop-border);
+	border-radius: 50%;
+	background: var(--source-flow-stop-bg);
+	box-sizing: border-box;
+	animation: source-flow-pop 320ms cubic-bezier(0.3, 1.3, 0.5, 1) both;
+}
+
+.source_window_flow .source_window_flow_stop_icon svg {
+	width: 21px;
+	height: 21px;
+	fill: none;
+	color: var(--source-flow-stop-icon) !important;
+	stroke: currentColor;
+	stroke-width: 1.7;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+
+.source_window_flow .source_window_flow_stop.is-end .source_window_flow_stop_icon {
+	border-color: transparent;
+	background: var(--source-flow-end-bg);
+}
+
+.source_window_flow .source_window_flow_stop.is-end .source_window_flow_stop_icon svg {
+	color: var(--source-flow-end-icon) !important;
+}
+
+.source_window_flow .source_window_flow_stop_value {
+	max-width: 100%;
+	overflow: hidden;
+	color: var(--source-flow-stop-value);
+	font-size: 13px;
+	font-weight: 600;
+	line-height: 1.3;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.source_window_flow .source_window_flow_stop_label {
+	color: var(--source-flow-stop-label);
+	font-size: 11px;
+	font-weight: 400;
+	line-height: 1.4;
+}
+
+/* What travels along it: in batches, three together and then a pause;
+   live, one after another without end. */
+.source_window_flow .source_window_flow_link {
+	position: relative;
+	container-type: inline-size;
+	height: 1px;
+	margin: 23px -20px 0;
+	background: linear-gradient(to right, transparent, var(--source-flow-line) 18%, var(--source-flow-line) 82%, transparent);
+}
+
+.source_window_flow .source_window_flow_link i {
+	position: absolute;
+	top: -2px;
+	left: 0;
+	width: 5px;
+	height: 5px;
+	border-radius: 50%;
+	background: var(--source-flow-dot);
+	opacity: 0;
+	animation: source-flow-batch 3.2s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+}
+
+.source_window_flow .source_window_flow_link i:nth-child(2) { animation-delay: 130ms; }
+.source_window_flow .source_window_flow_link i:nth-child(3) { animation-delay: 260ms; }
+
+.source_window_flow.is-live .source_window_flow_link i {
+	animation: source-flow-live 2.1s linear infinite;
+}
+
+.source_window_flow.is-live .source_window_flow_link i:nth-child(2) { animation-delay: -0.7s; }
+.source_window_flow.is-live .source_window_flow_link i:nth-child(3) { animation-delay: -1.4s; }
+
+/* Standing still, spread along the line: Settings ▸ Preferences ▸ background
+   animations is off (an endless animation is never free), or the system
+   asks for reduced motion (below). */
+.source_window_flow.is-still .source_window_flow_link i {
+	left: 25%;
+	opacity: 1;
+	animation: none;
+}
+
+.source_window_flow.is-still .source_window_flow_link i:nth-child(2) { left: 50%; }
+.source_window_flow.is-still .source_window_flow_link i:nth-child(3) { left: 75%; }
+
+/* At rest while another window is in front. */
+.workspace_window:not(.is-active) .source_window_flow .source_window_flow_link i {
+	animation-play-state: paused;
+}
+
+@keyframes source-flow-batch {
+	0% { opacity: 0; transform: translateX(8cqw); }
+	12% { opacity: 1; }
+	42% { opacity: 1; }
+	54%, 100% { opacity: 0; transform: translateX(92cqw); }
+}
+
+@keyframes source-flow-live {
+	0% { opacity: 0; transform: translateX(8cqw); }
+	18% { opacity: 1; }
+	82% { opacity: 1; }
+	100% { opacity: 0; transform: translateX(92cqw); }
+}
+
+@keyframes source-flow-pop {
+	from {
+		opacity: 0;
+		transform: scale(0.8);
+	}
+}
+
+/* ── Sections: a title, what it is about at the far end, the choices ── */
+.source_window_flow .source_window_flow_section {
+	display: grid;
+	gap: 10px;
+	min-width: 0;
+}
+
+.source_window_flow .source_window_flow_heading {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 12px;
+	padding: 0 2px;
+}
+
+.source_window_flow .source_window_flow_title {
+	margin: 0;
+	color: var(--source-flow-title);
+	font-size: 13px;
+	font-weight: 600;
+	line-height: 1.3;
+}
+
+.source_window_flow .source_window_flow_note {
+	margin: 0;
+	color: var(--source-flow-note);
+	font-size: 11.5px;
+	line-height: 1.3;
+	text-align: right;
+}
+
+/* Input mode: one control; a filled panel slides under the chosen half.
+   Its section and the connections' take up spare height, up to a point. */
+.source_window_flow .source_window_flow_section.is-modes {
+	flex: 1 0 auto;
+	grid-template-rows: auto minmax(min-content, 1fr);
+	max-height: 146px;
+}
+
+.source_window_flow .source_window_flow_section.is-connections {
+	flex: 2 0 auto;
+	grid-template-rows: auto minmax(min-content, 1fr);
+	max-height: 174px;
+}
+
+.source_window_flow .source_window_flow_modes {
+	position: relative;
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	padding: 4px;
+	border-radius: 8px;
+	background: var(--source-flow-track);
+}
+
+.source_window_flow .source_window_flow_modes::before {
+	content: "";
+	position: absolute;
+	top: 4px;
+	bottom: 4px;
+	left: 4px;
+	width: calc(50% - 4px);
+	border-radius: 6px;
+	background: var(--source-flow-thumb);
+	box-shadow: 0 6px 16px -10px var(--source-flow-thumb-shadow);
+	transition: transform 340ms cubic-bezier(0.3, 0.9, 0.3, 1);
+}
+
+.source_window_flow.is-live .source_window_flow_modes::before {
+	transform: translateX(100%);
+}
+
+.source_window_flow .source_window_flow_mode {
+	position: relative;
+	display: flex;
+	align-items: center;
+	gap: 13px;
+	min-width: 0;
+	margin: 0;
+	padding: 20px;
+	border: 0;
+	border-radius: 6px;
+	background: none;
+	box-shadow: none;
+	color: var(--source-flow-mode-title);
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+
+.source_window_flow .source_window_flow_mode svg {
+	flex: none;
+	width: 22px;
+	height: 22px;
+	color: var(--source-flow-mode-icon) !important;
+	transition: color 240ms ease;
+}
+
+.source_window_flow .source_window_flow_mode_text {
+	display: grid;
+	gap: 1px;
+	min-width: 0;
+}
+
+.source_window_flow .source_window_flow_mode_title {
+	color: var(--source-flow-mode-title);
+	font-size: 13px;
+	font-weight: 600;
+	line-height: 1.35;
+	transition: color 240ms ease;
+}
+
+.source_window_flow .source_window_flow_mode_note {
+	color: var(--source-flow-mode-note);
+	font-size: 11px;
+	font-weight: 400;
+	line-height: 1.4;
+	transition: color 240ms ease;
+}
+
+.source_window_flow .source_window_flow_mode:hover:not(.is-selected) svg {
+	color: var(--source-flow-accent) !important;
+}
+
+.source_window_flow .source_window_flow_mode.is-selected svg {
+	color: var(--source-flow-thumb-icon) !important;
+}
+
+.source_window_flow .source_window_flow_mode.is-selected .source_window_flow_mode_title {
+	color: var(--source-flow-thumb-title);
+}
+
+.source_window_flow .source_window_flow_mode.is-selected .source_window_flow_mode_note {
+	color: var(--source-flow-thumb-note);
+}
+
+/* Connections: plain tiles; the chosen one rests on a soft fill with a
+   short accent bar that draws itself under it. */
+.source_window_flow .source_window_flow_connections {
+	display: grid;
+	grid-template-columns: repeat(5, minmax(0, 1fr));
+	gap: 6px;
+}
+
+.source_window_flow .source_window_flow_connection {
+	position: relative;
+	display: grid;
+	align-content: center;
+	justify-items: center;
+	gap: 3px;
+	min-width: 0;
+	margin: 0;
+	padding: 19px 8px 21px;
+	border: 0;
+	border-radius: 6px;
+	background: none;
+	box-shadow: none;
+	color: var(--source-flow-tile-title);
+	font: inherit;
+	text-align: center;
+	cursor: pointer;
+	transition: background-color 180ms ease, opacity 240ms ease;
+}
+
+.source_window_flow .source_window_flow_connection svg {
+	width: 26px;
+	height: 26px;
+	margin-bottom: 7px;
+	color: var(--source-flow-tile-icon) !important;
+	stroke-width: 1.5;
+	transition: color 180ms ease, transform 260ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.source_window_flow .source_window_flow_connection_title {
+	color: var(--source-flow-tile-title);
+	font-size: 12.5px;
+	font-weight: 600;
+	line-height: 1.3;
+}
+
+.source_window_flow .source_window_flow_connection_note {
+	color: var(--source-flow-tile-note);
+	font-size: 10.5px;
+	font-weight: 400;
+	line-height: 1.4;
+}
+
+.source_window_flow .source_window_flow_connection::after {
+	content: "";
+	position: absolute;
+	bottom: 6px;
+	left: 50%;
+	width: 22px;
+	height: 2px;
+	margin-left: -11px;
+	border-radius: 2px;
+	background: var(--source-flow-accent);
+	transform: scaleX(0);
+	transition: transform 280ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.source_window_flow .source_window_flow_connection:hover:not(:disabled):not(.is-selected) {
+	background: var(--source-flow-tile-hover);
+}
+
+.source_window_flow .source_window_flow_connection:hover:not(:disabled) svg {
+	transform: translateY(-2px);
+}
+
+.source_window_flow .source_window_flow_connection.is-selected {
+	background: var(--source-flow-tile-on);
+}
+
+.source_window_flow .source_window_flow_connection.is-selected::after {
+	transform: scaleX(1);
+}
+
+.source_window_flow .source_window_flow_connection.is-selected svg {
+	color: var(--source-flow-accent) !important;
+}
+
+.source_window_flow .source_window_flow_connection:disabled {
+	opacity: 0.38;
+	cursor: not-allowed;
+}
+
+/* Configuration: one quiet line. */
+.source_window_flow .source_window_flow_configure {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	min-width: 0;
+	margin: auto 0 0;
+	padding: 14px 2px 2px;
+	border: 0;
+	border-top: 1px solid var(--source-flow-hairline);
+	background: none;
+	box-shadow: none;
+	color: var(--source-flow-title);
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+
+.source_window_flow .source_window_flow_configure svg {
+	flex: none;
+	width: 17px;
+	height: 17px;
+	color: var(--source-flow-tile-icon) !important;
+	transition: color 180ms ease, transform 240ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.source_window_flow .source_window_flow_configure_title {
+	flex: none;
+	color: var(--source-flow-title);
+	font-size: 12.5px;
+	font-weight: 600;
+}
+
+.source_window_flow .source_window_flow_configure_note {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	color: var(--source-flow-note);
+	font-size: 11.5px;
+	font-weight: 400;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.source_window_flow .source_window_flow_configure .source_window_flow_arrow {
+	fill: none;
+	color: var(--source-flow-accent) !important;
+	stroke: currentColor;
+	stroke-width: 1.8;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+
+.source_window_flow .source_window_flow_configure:hover svg:first-child {
+	color: var(--source-flow-accent) !important;
+}
+
+.source_window_flow .source_window_flow_configure:hover .source_window_flow_arrow {
+	transform: translateX(4px);
+}
+
+.source_window_flow .source_window_flow_mode:focus-visible,
+.source_window_flow .source_window_flow_connection:focus-visible,
+.source_window_flow .source_window_flow_configure:focus-visible {
+	outline: 2px solid var(--source-flow-accent);
+	outline-offset: 2px;
+}
+
+/* ── What you need, on the left: a side panel (after the choices in the
+   document, so Tab reaches those first). Head: the connection in a
+   ring that closes as its settings are saved. Rows split by hairlines. Foot:
+   the next page, and the analysis sessions as a segmented meter. ── */
+.source_window_flow .source_window_flow_needs {
+	position: sticky;
+	top: 0;
+	display: flex;
+	order: -1;
+	/* One width, whatever it lists. */
+	flex: 0 0 236px;
+	width: 236px;
+	min-width: 0;
+	flex-direction: column;
+	gap: 14px;
+	min-height: 100%;
+	padding: 34px 16px 16px;
+	border-right: 1px solid var(--source-flow-hairline);
+	background: var(--source-flow-needs-bg);
+	box-sizing: border-box;
+	animation: source-flow-in 520ms cubic-bezier(0.2, 0.7, 0.2, 1) 180ms both;
+}
+
+.source_window_flow .source_window_flow_needs_head {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	min-width: 0;
+}
+
+.source_window_flow .source_window_flow_needs_ring {
+	position: relative;
+	display: grid;
+	flex: none;
+	place-items: center;
+	width: 48px;
+	height: 48px;
+}
+
+.source_window_flow .source_window_flow_needs_gauge {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	color: var(--source-flow-need-ok);
+	fill: none;
+	transform: rotate(-90deg);
+}
+
+.source_window_flow .source_window_flow_needs_track {
+	stroke: var(--source-flow-needs-track);
+	stroke-width: 2.5;
+}
+
+.source_window_flow .source_window_flow_needs_arc {
+	stroke: var(--source-flow-need-ok);
+	stroke-width: 2.5;
+	stroke-linecap: round;
+	transition: stroke-dasharray 620ms cubic-bezier(0.2, 0.7, 0.2, 1), stroke 240ms ease;
+}
+
+.source_window_flow .is-missing .source_window_flow_needs_arc {
+	stroke: var(--source-flow-need-missing);
+}
+
+.source_window_flow .source_window_flow_needs_icon {
+	display: grid;
+	place-items: center;
+	width: 38px;
+	height: 38px;
+	border-radius: 50%;
+	background: var(--source-flow-end-bg);
+	animation: source-flow-pop 320ms cubic-bezier(0.3, 1.3, 0.5, 1) both;
+}
+
+.source_window_flow .source_window_flow_needs_icon svg {
+	width: 18px;
+	height: 18px;
+	color: var(--source-flow-end-icon) !important;
+	stroke-width: 1.6;
+}
+
+.source_window_flow .source_window_flow_needs_names {
+	display: grid;
+	gap: 1px;
+	min-width: 0;
+}
+
+.source_window_flow .source_window_flow_needs_domain {
+	margin: 0;
+	color: var(--source-flow-note);
+	font-size: 11px;
+	line-height: 1.4;
+}
+
+.source_window_flow .source_window_flow_needs_title {
+	margin: 0;
+	overflow: hidden;
+	color: var(--source-flow-title);
+	font-size: 15px;
+	font-weight: 600;
+	letter-spacing: -0.01em;
+	line-height: 1.25;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.source_window_flow .source_window_flow_needs_state {
+	margin: 0;
+	color: var(--source-flow-need-ok);
+	font-size: 11.5px;
+	font-weight: 600;
+	line-height: 1.3;
+}
+
+.source_window_flow .is-missing .source_window_flow_needs_state {
+	color: var(--source-flow-need-missing);
+}
+
+.source_window_flow .source_window_flow_needs_main {
+	display: grid;
+	justify-items: start;
+	grid-template-columns: minmax(0, 1fr);
+	gap: 10px;
+}
+
+.source_window_flow .source_window_flow_needs_list {
+	width: 100%;
+	margin: 22px 0 0;
+	padding: 0;
+	list-style: none;
+}
+
+/* A row: its glyph, its name over what is saved, then a mark. */
+.source_window_flow .source_window_flow_need {
+	display: grid;
+	grid-template-columns: 14px minmax(0, 1fr) 14px;
+	align-items: center;
+	gap: 0 10px;
+	padding: 6px 0;
+	border-top: 1px solid var(--source-flow-hairline);
+	animation: source-flow-in 360ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+.source_window_flow .source_window_flow_need:first-child {
+	border-top: 0;
+}
+
+.source_window_flow .source_window_flow_need_icon {
+	grid-row: 1 / span 2;
+	width: 14px;
+	height: 14px;
+	color: var(--source-flow-need-info);
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 1.7;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+
+.source_window_flow .source_window_flow_need_label {
+	grid-column: 2;
+	color: var(--source-flow-note);
+	font-size: 10.5px;
+	line-height: 1.35;
+}
+
+.source_window_flow .source_window_flow_need_value {
+	grid-column: 2;
+	min-width: 0;
+	overflow: hidden;
+	color: var(--source-flow-title);
+	font-size: 11.5px;
+	font-weight: 600;
+	line-height: 1.35;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.source_window_flow .source_window_flow_need.is-missing .source_window_flow_need_value {
+	color: var(--source-flow-need-missing);
+	font-weight: 400;
+}
+
+.source_window_flow .source_window_flow_need_mark {
+	display: grid;
+	grid-row: 1 / span 2;
+	grid-column: 3;
+	place-items: center;
+	width: 14px;
+	height: 14px;
+	border: 1.5px dashed var(--source-flow-need-missing);
+	border-radius: 50%;
+	color: var(--source-flow-need-ok);
+	box-sizing: border-box;
+}
+
+.source_window_flow .source_window_flow_need.is-ok .source_window_flow_need_mark {
+	border: 0;
+	background: color-mix(in srgb, var(--source-flow-need-ok) 15%, transparent);
+}
+
+.source_window_flow .source_window_flow_need_mark svg {
+	width: 9px;
+	height: 9px;
+	color: var(--source-flow-need-ok);
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 3;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+
+.source_window_flow .source_window_flow_needs_link {
+	display: inline-flex;
+	align-items: center;
+	gap: 7px;
+	margin: 0;
+	padding: 0;
+	border: 0;
+	background: none;
+	color: var(--source-flow-accent);
+	font: inherit;
+	font-size: 12px;
+	font-weight: 600;
+	cursor: pointer;
+}
+
+.source_window_flow .source_window_flow_needs_link svg {
+	width: 14px;
+	height: 14px;
+	color: var(--source-flow-accent);
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 2;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+	transition: transform 240ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.source_window_flow .source_window_flow_needs_link:hover svg {
+	transform: translateX(4px);
+}
+
+.source_window_flow .source_window_flow_needs_link:focus-visible {
+	outline: 2px solid var(--source-flow-accent);
+	outline-offset: 3px;
+}
+
+.source_window_flow .source_window_flow_needs_note {
+	margin: 0;
+	color: var(--source-flow-note);
+	font-size: 11.5px;
+	line-height: 1.45;
+}
+
+.source_window_flow .source_window_flow_needs_foot {
+	display: grid;
+	gap: 10px;
+	margin-top: auto;
+}
+
+.source_window_flow .source_window_flow_needs_next {
+	display: grid;
+	margin: 0;
+	color: var(--source-flow-title);
+	font-size: 12px;
+	font-weight: 600;
+	line-height: 1.35;
+}
+
+.source_window_flow .source_window_flow_needs_next_label {
+	color: var(--source-flow-note);
+	font-size: 11px;
+	font-weight: 400;
+}
+
+.source_window_flow .source_window_flow_meter {
+	display: grid;
+	gap: 6px;
+}
+
+.source_window_flow .source_window_flow_meter_text {
+	display: flex;
+	justify-content: space-between;
+	gap: 10px;
+	margin: 0;
+	color: var(--source-flow-note);
+	font-size: 11px;
+}
+
+.source_window_flow .source_window_flow_meter_text b {
+	color: var(--source-flow-title);
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
+}
+
+.source_window_flow .source_window_flow_meter_bar {
+	display: flex;
+	gap: 4px;
+}
+
+.source_window_flow .source_window_flow_meter_bar i {
+	flex: 1;
+	height: 4px;
+	border-radius: 2px;
+	background: var(--source-flow-needs-track);
+	transition: background-color 240ms ease;
+}
+
+.source_window_flow .source_window_flow_meter_bar i.is-on {
+	background: var(--source-flow-meter);
+}
+
+/* No room for it: the page as it is without. */
+@container source-flow (max-width: 819px) {
+	.source_window_flow .source_window_flow_needs:not(.is-steps) {
+		display: none;
+	}
+}
+
+/* ── The workflow pages (SourceSteps.jsx): the same panel holding the steps,
+   the same surface, and the first page's spacing round each page. ── */
+.source_window_flow.is-steps {
+	align-items: stretch;
+	justify-content: flex-start;
+	gap: 0;
+	overflow: hidden;
+}
+
+.source_window_flow .source_window_flow_needs.is-steps {
+	min-height: 0;
+	overflow: hidden auto;
+	scrollbar-width: thin;
+}
+
+.source_window_flow .source_window_flow_steps {
+	width: auto;
+	margin-right: -8px;
+	margin-left: -8px;
+}
+
+.source_window_flow .source_window_flow_steps > li {
+	margin: 0 0 2px;
+	list-style: none;
+}
+
+.source_window_flow .source_window_flow_step {
+	position: relative;
+	width: 100%;
+	margin: 0;
+	padding: 9px 8px;
+	border: 0;
+	border-radius: 6px;
+	background: none;
+	box-shadow: none;
+	color: var(--source-flow-title);
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+	transition: background-color 180ms ease;
+}
+
+.source_window_flow .source_window_flow_step:hover:not(:disabled):not(.is-active) {
+	background: var(--source-flow-tile-hover);
+}
+
+.source_window_flow .source_window_flow_step.is-active {
+	background: var(--source-flow-tile-on);
+	cursor: default;
+}
+
+.source_window_flow .source_window_flow_step:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
+.source_window_flow .source_window_flow_step:focus-visible {
+	outline: 2px solid var(--source-flow-accent);
+	outline-offset: -2px;
+}
+
+.source_window_flow .source_window_flow_step_name {
+	grid-column: 2;
+	min-width: 0;
+	overflow: hidden;
+	color: var(--source-flow-title);
+	font-size: 12px;
+	font-weight: 600;
+	line-height: 1.35;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.source_window_flow .source_window_flow_step_note {
+	grid-column: 2;
+	color: var(--source-flow-note);
+	font-size: 10.5px;
+	font-weight: 400;
+	line-height: 1.35;
+}
+
+/* Its mark: an empty ring ahead, a filled dot now, a tick behind, a lock. */
+.source_window_flow .source_window_flow_step .source_window_flow_need_mark {
+	border: 1.5px solid var(--source-flow-needs-track);
+}
+
+.source_window_flow .source_window_flow_step.is-active .source_window_flow_need_mark {
+	border: 4px solid var(--source-flow-accent);
+}
+
+.source_window_flow .source_window_flow_step.is-locked .source_window_flow_need_mark {
+	border: 0;
+}
+
+.source_window_flow .source_window_flow_step.is-locked .source_window_flow_need_mark svg {
+	width: 13px;
+	height: 13px;
+	color: var(--source-flow-need-info);
+	stroke-width: 2;
+}
+
+.source_window_flow.is-steps > .source_window_step_body {
+	flex: 1 1 0;
+	gap: 16px;
+	min-width: 0;
+	padding: 24px 28px 16px;
+	box-sizing: border-box;
+}
+
+@container source-flow (max-height: 470px) {
+	.source_window_flow.is-steps > .source_window_step_body {
+		gap: 12px;
+		padding: 16px 20px 12px;
+	}
+}
+
+@container source-flow (max-width: 819px) {
+	.source_window_flow .source_window_flow_needs.is-steps {
+		flex-basis: 196px;
+		width: 196px;
+	}
+
+	.source_window_flow.is-steps > .source_window_step_body {
+		padding: 16px;
+	}
+}
+
+/* Very narrow: the panel is a rail of icons (the words stay for screen
+   readers). */
+@container source-flow (max-width: 560px) {
+	.source_window_flow .source_window_flow_needs.is-steps {
+		flex-basis: 62px;
+		width: 62px;
+		padding: 16px 7px;
+	}
+
+	.source_window_flow .is-steps .source_window_flow_needs_names,
+	.source_window_flow .is-steps .source_window_flow_needs_foot,
+	.source_window_flow .is-steps .source_window_flow_need_mark {
+		display: none;
+	}
+
+	.source_window_flow .is-steps .source_window_flow_steps {
+		margin: 6px 0 0;
+	}
+
+	.source_window_flow .source_window_flow_step {
+		grid-template-columns: minmax(0, 1fr);
+		justify-items: center;
+		padding: 11px 0;
+	}
+
+	.source_window_flow .source_window_flow_step_name,
+	.source_window_flow .source_window_flow_step_note {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip-path: inset(50%);
+	}
+}
+
+/* Lined up on the left (SOURCE_FLOW_ALIGN, sourceFrame.js); the path and
+   the connection tiles keep their centre. */
+.source_window_flow.is-left {
+	justify-content: flex-start;
+}
+
+.source_window_flow.is-left .source_window_flow_heading {
+	justify-content: flex-start;
+}
+
+/* A subtle line from the label to the right end. */
+.source_window_flow.is-left .source_window_flow_heading::after {
+	content: "";
+	flex: 1;
+	align-self: center;
+	min-width: 12px;
+	height: 1px;
+	background: var(--source-flow-label-line);
+}
+
+.source_window_flow.is-left .source_window_flow_note {
+	text-align: left;
+}
+
+/* A short window: less air, so the whole page still fits. */
+@container source-flow (max-height: 470px) {
+	.source_window_flow .source_window_flow_inner {
+		gap: 18px;
+		padding: 16px 24px 12px;
+	}
+
+	.source_window_flow .source_window_flow_needs {
+		gap: 10px;
+		padding: 20px 16px 12px;
+	}
+
+	.source_window_flow .source_window_flow_need {
+		padding: 4px 0;
+	}
+
+	.source_window_flow .source_window_flow_connection {
+		padding: 12px 8px 16px;
+	}
+
+	.source_window_flow .source_window_flow_mode {
+		padding: 12px 16px;
+	}
+
+	.source_window_flow .source_window_flow_path {
+		padding-top: 8px;
+	}
+}
+
+/* A narrow one: the two modes stack, the tiles wrap. */
+@container source-flow (max-width: 560px) {
+	.source_window_flow .source_window_flow_inner {
+		padding: 16px;
+	}
+
+	.source_window_flow .source_window_flow_path {
+		grid-template-columns: 84px minmax(16px, 1fr) 84px minmax(16px, 1fr) 84px;
+	}
+
+	.source_window_flow .source_window_flow_modes {
+		grid-template-columns: minmax(0, 1fr);
+		grid-auto-rows: 1fr;
+	}
+
+	.source_window_flow .source_window_flow_section.is-modes,
+	.source_window_flow .source_window_flow_section.is-connections {
+		max-height: none;
+	}
+
+	.source_window_flow .source_window_flow_modes::before {
+		right: 4px;
+		bottom: auto;
+		width: auto;
+		height: calc(50% - 4px);
+	}
+
+	.source_window_flow.is-live .source_window_flow_modes::before {
+		transform: translateY(100%);
+	}
+
+	.source_window_flow .source_window_flow_connections {
+		grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+	}
+
+	.source_window_flow .source_window_flow_configure_note {
+		display: none;
+	}
+
+	.source_window_flow .source_window_flow_configure_title {
+		flex: 1;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.source_window_flow .source_window_flow_inner > *,
+	.source_window_flow .source_window_flow_needs,
+	.source_window_flow .source_window_flow_need,
+	.source_window_flow .source_window_flow_needs_icon,
+	.source_window_flow .source_window_flow_stop_icon {
+		animation: none;
+	}
+
+	.source_window_flow .source_window_flow_modes::before,
+	.source_window_flow .source_window_flow_needs_arc,
+	.source_window_flow .source_window_flow_connection svg,
+	.source_window_flow .source_window_flow_connection::after {
+		transition: none;
+	}
+
+	/* The dots stand still, spread along the line. */
+	.source_window_flow .source_window_flow_link i {
+		left: 25%;
+		opacity: 1;
+		animation: none !important;
+	}
+
+	.source_window_flow .source_window_flow_link i:nth-child(2) { left: 50%; }
+	.source_window_flow .source_window_flow_link i:nth-child(3) { left: 75%; }
+}

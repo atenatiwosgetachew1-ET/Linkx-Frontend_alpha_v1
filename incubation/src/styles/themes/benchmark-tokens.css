@@ -1,0 +1,58 @@
+/*
+ * Graph benchmark tokens: one variable per coloured part, starting as the
+ * window header's, footer buttons' and Settings cards' values.
+ * Listed for the Theme Studio in src/shared/theme/benchmarkThemeTokens.js.
+ */
+:root {
+  --bench-page-bg: var(--linkx-shell-bg-solid);
+  --bench-page-text: var(--settings-text);
+  --bench-header-bg: var(--linkx-window-header-active-bg);
+  --bench-header-border: var(--window-header-border);
+  --bench-header-brand-text: var(--window-header-text);
+  --bench-header-title-text: var(--window-header-text);
+  --bench-header-subtitle-text: color-mix(in srgb, var(--window-header-text) 72%, transparent);
+  --bench-header-divider: color-mix(in srgb, var(--window-header-text) 28%, transparent);
+  --bench-card-bg: var(--settings-card-bg);
+  --bench-card-border: var(--settings-card-border);
+  --bench-card-title-text: var(--settings-text);
+  --bench-card-text: var(--settings-text-secondary);
+  --bench-card-mark: var(--settings-accent);
+  --bench-note-text: var(--settings-text-secondary);
+  --bench-result-text: var(--settings-text);
+  --bench-result-strong-text: var(--settings-accent-text);
+  --bench-step-border: var(--settings-card-border);
+  --bench-step-text: var(--settings-text);
+  --bench-step-note-text: var(--settings-text-secondary);
+  --bench-step-active-mark: var(--settings-accent);
+  --bench-step-active-bg: color-mix(in srgb, var(--settings-accent) 12%, transparent);
+  --bench-step-good-text: var(--status-success-text);
+  --bench-step-fair-text: var(--settings-accent-text);
+  --bench-step-bad-text: var(--settings-danger-text);
+  --bench-stage-bg: var(--graph-canvas-bg);
+  --bench-stage-border: var(--settings-card-border);
+  --bench-stage-note-text: var(--settings-text-secondary);
+  --bench-table-line: var(--settings-card-border);
+  --bench-table-head-text: var(--settings-text-secondary);
+  --bench-table-text: var(--settings-text);
+  --bench-field-bg: var(--input-bg);
+  --bench-field-border: var(--settings-card-border);
+  --bench-field-text: var(--settings-text);
+  --bench-button-border: var(--window-footer-btn-border);
+  --bench-button-text: var(--window-footer-btn-text);
+  --bench-button-bg-angle: var(--window-footer-btn-bg-angle);
+  --bench-button-bg-top: var(--window-footer-btn-bg-top);
+  --bench-button-bg-bottom: var(--window-footer-btn-bg-bottom);
+  --bench-button-hover-border: var(--window-footer-btn-hover-border);
+  --bench-button-hover-text: var(--window-footer-btn-hover-text);
+  --bench-button-hover-bg-angle: var(--window-footer-btn-hover-bg-angle);
+  --bench-button-hover-bg-top: var(--window-footer-btn-hover-bg-top);
+  --bench-button-hover-bg-bottom: var(--window-footer-btn-hover-bg-bottom);
+  --bench-button-pressed-border: var(--window-footer-btn-pressed-border);
+  --bench-button-pressed-text: var(--window-footer-btn-pressed-text);
+  --bench-button-pressed-bg-angle: var(--window-footer-btn-pressed-bg-angle);
+  --bench-button-pressed-bg-top: var(--window-footer-btn-pressed-bg-top);
+  --bench-button-pressed-bg-bottom: var(--window-footer-btn-pressed-bg-bottom);
+  --bench-button-disabled-border: var(--window-footer-btn-disabled-border);
+  --bench-button-disabled-text: var(--window-footer-btn-disabled-text);
+  --bench-button-disabled-bg: var(--window-footer-btn-disabled-bg);
+}

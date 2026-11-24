@@ -514,9 +514,7 @@ export default function WorkspaceFrame({ user, token, mainSessionId, sessionErro
             <WorkspaceHome
               openWindowsCount={workspace.windows.length}
               onOpenWindow={handleOpenWindow}
-              onReportReady={handleReportReady}
               onOpenTask={openTask}
-              sessionUsage={sessionUsage}
               unseenTasks={activeTaskCount}
               unseenReports={unseenBadges.reports}
             />

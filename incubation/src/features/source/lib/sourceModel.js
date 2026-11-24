@@ -32,7 +32,7 @@ export const BATCH_SEARCH_TIMELINE_STEPS = [
 ];
 
 export const REALTIME_TIMELINE_STEPS = [
-  { id: 'connect', label: 'Connect', value: 'Broker/API and tool' },
+  { id: 'connect', label: 'Connect', value: 'Connect broker or API' },
   { id: 'dataframe', label: 'Dataframe', value: 'Prepare columns and action' },
   { id: 'stream', label: 'Stream', value: 'Run ingestion' },
 ];
@@ -176,6 +176,8 @@ export const defaultSourceState = {
     sourceAddressType: 'broker',
     brokerAddress: '',
     topic: '',
+    // `brokerUseDefault` stays unset until chosen (brokerUsesDefault).
+    brokerToolbarCollapsed: true,
     storageAddress: '',
     storageUseDefault: true,
     // Storage / Elastic connection toolbar hidden to free vertical space.
@@ -238,6 +240,8 @@ export const defaultSourceState = {
     sourceAddressType: 'broker',
     brokerAddress: '',
     topic: '',
+    // `brokerUseDefault` stays unset until chosen (brokerUsesDefault).
+    brokerToolbarCollapsed: true,
     sourceStatus: SOURCE_STATUSES.IDLE,
     sourceMessage: 'Not connected.',
     toolStatus: TOOL_STATUSES.IDLE,
@@ -272,8 +276,11 @@ export const domainDefaultsPatch = (state, previousDefaults, nextDefaults) => {
   const swap = (field, oldValue, newValue) => {
     if (newValue && (!state[field] || state[field] === oldValue) && state[field] !== newValue) patch[field] = newValue;
   };
-  swap('brokerAddress', previousDefaults.broker.address, nextDefaults.broker.address);
-  swap('topic', previousDefaults.broker.topic, nextDefaults.broker.topic);
+  // Manual entry ("Use Default" off): what the analyst typed, or left empty.
+  if (state.brokerUseDefault !== false) {
+    swap('brokerAddress', previousDefaults.broker.address, nextDefaults.broker.address);
+    swap('topic', previousDefaults.broker.topic, nextDefaults.broker.topic);
+  }
   swap('toolUrl', previousDefaults.tool.url, nextDefaults.tool.url);
   swap('toolUsername', previousDefaults.tool.username, nextDefaults.tool.username);
   swap('toolDatabase', previousDefaults.tool.database, nextDefaults.tool.database);
@@ -378,12 +385,33 @@ export const isSourceReady = (state) => {
   return !state.connectedKind || state.connectedKind === kind;
 };
 
-export const isToolReady = (state) => state.toolStatus === TOOL_STATUSES.CONNECTED;
+// The Message broker page's "Use Default" (its flow page, sourceFrame.js).
+// Not chosen yet: on, unless the window already holds values of its own.
+const isBrokerDefault = (value, ...defaults) => !value || defaults.includes(value);
+export const brokerUsesDefault = (state, defaults) => {
+  if (typeof state.brokerUseDefault === 'boolean') return state.brokerUseDefault;
+  const { address, apiAddress, topic } = defaults.broker;
+  return isBrokerDefault(state.brokerAddress, address, apiAddress) && isBrokerDefault(state.topic, topic);
+};
 
-// Broker/API input needs the tool as well (same as production's first page);
-// staged files, search picks or a connected storage are enough on their own.
+// What it connects to: the configured address and topic, or the typed ones.
+export const resolveBrokerTarget = (state, defaults) => {
+  const isApi = state.sourceAddressType === 'api';
+  if (!brokerUsesDefault(state, defaults)) return { address: state.brokerAddress || '', topic: isApi ? '' : state.topic || '' };
+  return { address: (isApi ? defaults.broker.apiAddress : defaults.broker.address) || '', topic: isApi ? '' : defaults.broker.topic || '' };
+};
+
+// The typed values as shown: a prefilled default is never among them.
+export const typedBrokerValues = (state, defaults) => ({
+  brokerAddress: isBrokerDefault(state.brokerAddress, defaults.broker.address, defaults.broker.apiAddress) ? '' : state.brokerAddress,
+  topic: isBrokerDefault(state.topic, defaults.broker.topic) ? '' : state.topic,
+});
+
+// Staged files, search picks or a live connection are enough on their own:
+// every input connects the tool on Continue (analyst decision 2026-11-23;
+// production's broker page asks for the tool first).
 export const isBatchInputReady = (state) => {
-  if (state.selectedConnectionType === 'broker') return isSourceReady(state) && isToolReady(state);
+  if (state.selectedConnectionType === 'broker') return isSourceReady(state);
   if (state.selectedConnectionType === 'storage') return isSourceReady(state) && (state.selectedStorageFiles || []).length > 0;
   if (state.selectedConnectionType === 'search') return isSourceReady(state) && (state.selectedSearchFiles || []).length > 0;
   return (state.selectedFiles || []).length > 0;
@@ -402,7 +430,7 @@ export const isInputStep = (state) => state.step === 'upload' || state.step === 
 
 // Input ready -> Continue may run the upload / tool / create_DF pipeline.
 export const canPrepareDataframe = (mode, state) => (
-  mode === SOURCE_MODES.REALTIME ? isSourceReady(state) && isToolReady(state) : isBatchInputReady(state)
+  mode === SOURCE_MODES.REALTIME ? isSourceReady(state) : isBatchInputReady(state)
 );
 
 // Storage search results/selection belong to one storage connection.
@@ -473,19 +501,13 @@ export const getContinueBlockers = (mode, state) => {
       ].filter(Boolean);
     }
     if (state.selectedConnectionType === 'broker') {
-      return [
-        !isSourceReady(state) && 'Connect the broker',
-        !isToolReady(state) && 'Connect the tool',
-      ].filter(Boolean);
+      return ['Connect the broker'];
     }
     return ['Stage at least one file'];
   }
 
   if (state.step === 'connect') {
-    return [
-      !isSourceReady(state) && 'Connect the source',
-      !isToolReady(state) && 'Connect the tool',
-    ].filter(Boolean);
+    return isSourceReady(state) ? [] : ['Connect the source'];
   }
 
   return [];

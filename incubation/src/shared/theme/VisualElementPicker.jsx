@@ -22,6 +22,7 @@ const PICKER_LANDMARK_SELECTOR = [
   '.settings_theme_scope',
   '.configuration_theme_scope',
   '.libraries_theme_scope',
+  '.source_theme_scope',
   '.settings_popup_backdrop',
 ].join(', ');
 
@@ -307,6 +308,12 @@ export default function VisualElementPicker() {
     setPanelPos({ x: Math.min(e.clientX + 12, window.innerWidth - 380), y: Math.min(e.clientY + 12, window.innerHeight - 400) });
   }, [inspectorActive, extractCssVars]);
 
+  // A disabled control gets no click event, so it is picked on pointer down.
+  const handlePointerDown = useCallback((e) => {
+    const el = document.elementFromPoint(e.clientX, e.clientY);
+    if (el?.closest('button:disabled, input:disabled, select:disabled, textarea:disabled')) handleClick(e);
+  }, [handleClick]);
+
   // Escape key to exit
   useEffect(() => {
     const handleKey = (e) => {
@@ -337,6 +344,7 @@ export default function VisualElementPicker() {
     window.addEventListener('keyup', onModifier, true);
     window.addEventListener('blur', onBlur);
     window.addEventListener('mousemove', handleMouseMove, true);
+    window.addEventListener('pointerdown', handlePointerDown, true);
     window.addEventListener('click', handleClick, true);
     return () => {
       window.removeEventListener('keydown', onModifier, true);
@@ -344,9 +352,10 @@ export default function VisualElementPicker() {
       window.removeEventListener('blur', onBlur);
       setPassThrough(false);
       window.removeEventListener('mousemove', handleMouseMove, true);
+      window.removeEventListener('pointerdown', handlePointerDown, true);
       window.removeEventListener('click', handleClick, true);
     };
-  }, [inspectorActive, handleMouseMove, handleClick]);
+  }, [inspectorActive, handleMouseMove, handlePointerDown, handleClick]);
 
   // The crosshair, except while the picker is stepping aside.
   useEffect(() => {

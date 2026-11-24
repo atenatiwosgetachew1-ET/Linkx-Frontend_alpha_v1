@@ -1,0 +1,517 @@
+/* The Storage page's search row and results table (SearchResultTable.jsx),
+   drawn like Configuration > Rules > Column mapping. Only while the Source
+   window's flow pages are on (sourceFrame.js): every rule is under
+   .source_window_flow. Colours: the --source-table-* tokens. */
+.source_window_flow .source_window_flow_results {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	min-width: 0;
+	min-height: 0;
+	overflow: hidden;
+	background: var(--source-table-area-bg);
+}
+
+/* ── The search row ── */
+.source_window_flow .source_window_flow_search {
+	display: flex;
+	flex: none;
+	gap: 6px;
+	min-width: 0;
+	background: var(--source-table-search-row-bg);
+}
+
+.source_window_flow .source_window_flow_search_box,
+.source_window_flow .source_window_flow_search_date {
+	/* Room for the search button at the footer buttons' height. */
+	height: 34px;
+	border: 1px solid;
+	border-radius: 3px;
+	box-sizing: border-box;
+	transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+
+.source_window_flow .source_window_flow_search_box {
+	display: flex;
+	flex: 1 1 0;
+	min-width: 0;
+	border-color: var(--source-table-input-border);
+	border-radius: 3px;
+	background: var(--source-table-input-bg);
+}
+
+.source_window_flow .source_window_flow_search_box input {
+	flex: 1;
+	min-width: 0;
+	padding: 0 10px;
+	border: 0;
+	border-radius: 2px 0 0 2px;
+	background: none;
+	color: var(--source-table-input-text);
+	font: inherit;
+	font-size: 12px;
+	outline: none;
+}
+
+.source_window_flow .source_window_flow_search_box input::placeholder {
+	color: var(--source-table-input-placeholder);
+}
+
+.source_window_flow .source_window_flow_search_box input:disabled {
+	background: var(--source-table-input-disabled-bg);
+	color: var(--source-table-input-disabled-text);
+	cursor: not-allowed;
+}
+
+/* The search button: the window footer's buttons, at the field's end. */
+.source_window_flow .source_window_flow_search_box button {
+	display: grid;
+	flex: none;
+	place-items: center;
+	/* Their size in this window (source-restyle.css): 30px, 12px sides. */
+	width: 41px;
+	height: 30px;
+	margin: 1px;
+	padding: 0;
+	border: 1px solid var(--source-table-search-border);
+	border-radius: 3px;
+	background: var(--source-table-search-bg);
+	box-sizing: border-box;
+	color: var(--source-table-search-icon);
+	cursor: pointer;
+	transition: background 160ms ease, border-color 160ms ease, color 160ms ease, opacity 160ms ease;
+}
+
+.source_window_flow .source_window_flow_search_box button:hover:not(:disabled) {
+	border-color: var(--source-table-search-hover-border);
+	background: var(--source-table-search-hover-bg);
+	color: var(--source-table-search-hover-icon);
+}
+
+.source_window_flow .source_window_flow_search_box button:active:not(:disabled) {
+	border-color: var(--source-table-search-pressed-border);
+	background: var(--source-table-search-pressed-bg);
+	color: var(--source-table-search-pressed-icon);
+}
+
+.source_window_flow .source_window_flow_search_box button:disabled {
+	border-color: var(--source-table-search-disabled-border);
+	background: var(--source-table-search-disabled-bg);
+	color: var(--source-table-search-disabled-icon);
+	opacity: var(--window-footer-btn-disabled-opacity, 0.5);
+	cursor: not-allowed;
+}
+
+.source_window_flow .source_window_flow_search_box button:focus-visible {
+	outline: 2px solid var(--source-table-input-focus-border);
+	outline-offset: -2px;
+}
+
+.source_window_flow .source_window_flow_search_box .source_window_mode_icon {
+	width: 15px;
+	height: 15px;
+	/* Over the shared icons' own !important colour. */
+	color: inherit !important;
+}
+
+.source_window_flow .source_window_flow_search_date {
+	flex: 0 0 136px;
+	width: 136px;
+	padding: 0 8px;
+	border-color: var(--source-table-date-border);
+	background: var(--source-table-date-bg);
+	color: var(--source-table-date-text);
+	font: inherit;
+	font-size: 12px;
+}
+
+/* Start and end date (Elasticsearch page). */
+.source_window_flow .source_window_flow_search_range {
+	display: flex;
+	flex: none;
+	align-items: center;
+	gap: 4px;
+	color: var(--source-table-date-arrow);
+}
+
+.source_window_flow .source_window_flow_search_range b {
+	color: var(--source-table-date-arrow);
+	font-size: 11px;
+	font-weight: 400;
+}
+
+.source_window_flow .source_window_flow_search_range .source_window_flow_search_date {
+	flex: none;
+	width: 124px;
+}
+
+/* The browser's calendar button, as an icon a colour can reach. */
+.source_window_flow .source_window_flow_search_date::-webkit-calendar-picker-indicator {
+	width: 13px;
+	height: 13px;
+	margin: 0;
+	padding: 0;
+	background: var(--source-table-date-icon);
+	mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='5' width='18' height='16' rx='2'/%3E%3Cpath d='M3 10h18M8 2v5M16 2v5'/%3E%3C/svg%3E") center / contain no-repeat;
+	cursor: pointer;
+}
+
+.source_window_flow .source_window_flow_search_date:disabled {
+	background: var(--source-table-input-disabled-bg);
+	color: var(--source-table-input-disabled-text);
+	cursor: not-allowed;
+}
+
+.source_window_flow .source_window_flow_search_box:focus-within,
+.source_window_flow .source_window_flow_search_date:focus {
+	border-color: var(--source-table-input-focus-border);
+	box-shadow: 0 0 0 2px var(--source-table-input-focus-ring);
+	outline: none;
+}
+
+/* The focus ring stays inside the clipped column. */
+.source_window_flow .source_window_flow_results > .source_window_flow_search {
+	padding: 2px 2px 0;
+	margin: 0 -2px;
+}
+
+/* ── The table ── */
+.source_window_flow .source_window_flow_table_box {
+	display: flex;
+	flex: 1 1 0;
+	flex-direction: column;
+	min-height: 0;
+	overflow: hidden;
+	border: 1px solid var(--source-table-border);
+	border-radius: 4px;
+	background: var(--source-table-bg);
+}
+
+.source_window_flow .source_window_flow_table_scroll {
+	display: flex;
+	flex: 1 1 0;
+	flex-direction: column;
+	min-height: 0;
+	overflow: auto;
+	background: var(--source-table-bg);
+}
+
+.source_window_flow .source_window_flow_table {
+	flex: none;
+	width: 100%;
+	min-width: 420px;
+	border-collapse: separate;
+	border-spacing: 0;
+	table-layout: fixed;
+	font-size: 12px;
+}
+
+.source_window_flow .source_window_flow_table th,
+.source_window_flow .source_window_flow_table td {
+	padding: 5px 8px;
+	overflow: hidden;
+	border-bottom: 1px solid var(--source-table-row-line);
+	color: var(--source-table-cell-text);
+	font-weight: 400;
+	line-height: 18px;
+	text-align: left;
+	text-overflow: ellipsis;
+	vertical-align: middle;
+	white-space: nowrap;
+}
+
+.source_window_flow .source_window_flow_table th {
+	position: sticky;
+	top: 0;
+	z-index: 1;
+	padding: 6px 8px;
+	border-bottom-color: var(--source-table-head-line);
+	/* Opaque under the band, so rows don't show through while scrolling. */
+	background: linear-gradient(var(--source-table-head-bg), var(--source-table-head-bg)), var(--source-table-bg);
+	color: var(--source-table-head-text);
+	font-size: 10.5px;
+	font-weight: 700;
+	letter-spacing: 0.04em;
+	line-height: 16px;
+	text-transform: uppercase;
+}
+
+.source_window_flow .source_window_flow_table .is-date {
+	width: 170px;
+	box-sizing: border-box;
+}
+
+.source_window_flow .source_window_flow_table .is-check {
+	width: 32px;
+	padding-right: 0;
+	text-overflow: clip;
+	box-sizing: border-box;
+}
+
+.source_window_flow .source_window_flow_table .is-check input {
+	display: grid;
+	place-items: center;
+	width: 13px;
+	height: 13px;
+	margin: 0 auto;
+	border: 1px solid var(--source-table-check-border);
+	border-radius: 3px;
+	background: var(--source-table-check-bg);
+	box-sizing: border-box;
+	appearance: none;
+	cursor: pointer;
+	transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.source_window_flow .source_window_flow_table .is-check input:checked {
+	border-color: var(--source-table-check-on-bg);
+	background: var(--source-table-check-on-bg);
+}
+
+.source_window_flow .source_window_flow_table .is-check input:checked::after {
+	width: 6px;
+	height: 3px;
+	border: solid var(--source-table-check-on-tick);
+	border-width: 0 0 1.6px 1.6px;
+	transform: translateY(-1px) rotate(-45deg);
+	content: "";
+}
+
+.source_window_flow .source_window_flow_table .is-check input:focus-visible {
+	outline: 2px solid var(--source-table-input-focus-border);
+	outline-offset: 1px;
+}
+
+.source_window_flow .source_window_flow_table .is-index {
+	width: 44px;
+	box-sizing: border-box;
+	font-variant-numeric: tabular-nums;
+}
+
+.source_window_flow .source_window_flow_table td {
+	background: var(--source-table-row-bg);
+}
+
+.source_window_flow .source_window_flow_table td.is-index {
+	color: var(--source-table-index-text);
+}
+
+.source_window_flow .source_window_flow_table td.is-name {
+	color: var(--source-table-name-text);
+}
+
+.source_window_flow .source_window_flow_table td.is-date {
+	color: var(--source-table-date-cell-text);
+}
+
+.source_window_flow .source_window_flow_table td.is-number {
+	color: var(--source-table-size-text);
+}
+
+.source_window_flow .source_window_flow_table .is-number {
+	width: 96px;
+	box-sizing: border-box;
+	font-variant-numeric: tabular-nums;
+}
+
+.source_window_flow .source_window_flow_table tbody tr {
+	cursor: pointer;
+}
+
+.source_window_flow .source_window_flow_table tbody tr:hover td {
+	background: var(--source-table-row-hover-bg);
+}
+
+.source_window_flow .source_window_flow_table tbody tr.is-selected td {
+	background: var(--source-table-row-selected-bg);
+	color: var(--source-table-row-selected-text);
+}
+
+.source_window_flow .source_window_flow_table_empty {
+	display: grid;
+	flex: 1;
+	place-items: center;
+	margin: 0;
+	padding: 18px 8px;
+	background: var(--source-table-empty-bg);
+	color: var(--source-table-empty-text);
+	font-size: 12px;
+	text-align: center;
+}
+
+/* ── The line under it ── */
+.source_window_flow .source_window_flow_table_foot {
+	display: flex;
+	flex: none;
+	align-items: center;
+	gap: 4px;
+	min-height: 30px;
+	padding: 0 8px;
+	border-top: 1px solid var(--source-table-foot-line);
+	background: var(--source-table-foot-bg);
+}
+
+.source_window_flow .source_window_flow_table_picked {
+	display: inline-flex;
+	flex: none;
+	align-items: center;
+	gap: 6px;
+	/* Room for its × and a count, so the search box keeps its width. */
+	min-width: 150px;
+	height: 34px;
+	padding: 0 5px 0 10px;
+	border: 1px solid var(--source-table-picked-border);
+	border-radius: 3px;
+	background: var(--source-table-picked-bg);
+	box-sizing: border-box;
+	transition: background-color 160ms ease, border-color 160ms ease;
+}
+
+.source_window_flow .source_window_flow_table_picked svg {
+	flex: none;
+	width: 12px;
+	height: 12px;
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 2.4;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+	color: var(--source-table-picked-icon);
+}
+
+.source_window_flow .source_window_flow_table_count {
+	color: var(--source-table-picked-text);
+	font-size: 11px;
+	font-variant-numeric: tabular-nums;
+	line-height: 1;
+	white-space: nowrap;
+}
+
+.source_window_flow .source_window_flow_table_picked.is-on {
+	border-color: var(--source-table-picked-on-border);
+	background: var(--source-table-picked-on-bg);
+}
+
+.source_window_flow .source_window_flow_table_picked.is-on > svg {
+	color: var(--source-table-picked-on-icon);
+}
+
+.source_window_flow .source_window_flow_table_picked.is-on .source_window_flow_table_count {
+	color: var(--source-table-picked-on-text);
+	font-weight: 600;
+}
+
+.source_window_flow .source_window_flow_table_clear {
+	display: grid;
+	place-items: center;
+	width: 20px;
+	height: 20px;
+	margin-left: auto;
+	padding: 0;
+	border: 0;
+	border-radius: 50%;
+	background: var(--source-table-clear-bg);
+	cursor: pointer;
+	transition: background-color 120ms ease;
+}
+
+.source_window_flow .source_window_flow_table_clear:disabled {
+	visibility: hidden;
+}
+
+.source_window_flow .source_window_flow_table_picked .source_window_flow_table_clear svg {
+	width: 11px;
+	height: 11px;
+	color: var(--source-table-clear-icon);
+	transition: color 120ms ease;
+}
+
+.source_window_flow .source_window_flow_table_clear:hover:not(:disabled) {
+	background: var(--source-table-clear-hover-bg);
+}
+
+.source_window_flow .source_window_flow_table_picked .source_window_flow_table_clear:hover svg {
+	color: var(--source-table-clear-hover-icon);
+}
+
+.source_window_flow .source_window_flow_table_more {
+	height: 24px;
+	margin-left: auto;
+	padding: 0 8px;
+	border: 1px solid var(--source-table-more-border);
+	border-radius: 3px;
+	background: var(--source-table-more-bg);
+	color: var(--source-table-more-text);
+	font: inherit;
+	font-size: 11px;
+	font-weight: 600;
+	cursor: pointer;
+}
+
+.source_window_flow .source_window_flow_table_more:hover:not(:disabled) {
+	background: var(--source-table-more-hover-bg);
+	color: var(--source-table-more-hover-text);
+}
+
+.source_window_flow .source_window_flow_table_more:disabled {
+	opacity: 0.6;
+	cursor: wait;
+}
+
+.source_window_flow .source_window_flow_table_clear:focus-visible,
+.source_window_flow .source_window_flow_table_more:focus-visible {
+	outline: 2px solid var(--source-table-input-focus-border);
+	outline-offset: -2px;
+}
+
+/* A narrow page: the date and the count go under the search box. */
+@container (max-width: 520px) {
+	.source_window_flow .source_window_flow_search {
+		flex-wrap: wrap;
+	}
+
+	.source_window_flow .source_window_flow_search_box {
+		flex: 1 1 100%;
+	}
+}
+
+@container (max-width: 640px) {
+	.source_window_flow .source_window_flow_search:has(.source_window_flow_search_range) {
+		flex-wrap: wrap;
+	}
+
+	.source_window_flow .source_window_flow_search:has(.source_window_flow_search_range) .source_window_flow_search_box {
+		flex: 1 1 100%;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.source_window_flow .source_window_flow_search_box,
+	.source_window_flow .source_window_flow_search_date,
+	.source_window_flow .source_window_flow_search_box button,
+	.source_window_flow .source_window_flow_table_clear {
+		transition: none;
+	}
+}
+
+/* The page: the results take the room the tool panel leaves, and the page
+   scrolls rather than squeezing them out in a short window. */
+.source_window_flow > .source_window_step_body_storage:has(.source_window_flow_results) {
+	grid-template-rows: minmax(240px, 1fr);
+	grid-auto-rows: auto;
+	overflow: hidden auto;
+}
+
+/* A small icon button is picked as one: its background and its icon. */
+.source_window_flow .source_window_flow_search_box button svg,
+.source_window_flow .source_window_flow_table_clear svg {
+	pointer-events: none;
+}
+
+.source_window_flow .source_window_flow_table_clear {
+	color: var(--source-table-clear-icon);
+}
+
+.source_window_flow .source_window_flow_table_clear:hover:not(:disabled) {
+	color: var(--source-table-clear-hover-icon);
+}

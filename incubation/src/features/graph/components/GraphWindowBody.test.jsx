@@ -61,6 +61,8 @@ vi.mock('../../chart/lib/chartReport.js', () => ({
   }),
 }));
 const { default: GraphWindowBody } = await import('./GraphWindowBody.jsx');
+const { getGpuCapability, recheckGpuCapability } = await import('../../../shared/device/gpuCapability.js');
+const { getGpuPreference, setGpuPreference } = await import('../lib/rendererPreference.js');
 
 afterEach(() => {
   cleanup();
@@ -183,6 +185,67 @@ describe('GraphWindowBody', () => {
     renderGraph({ id: 'graph-9', metadata: { graphSettings: { limit: { min: 0, max: 3000 } } } });
     expect(screen.getByTestId('canvas')).toHaveAttribute('data-nodes', '2000');
     expect(screen.getByText('Limited to 2,000')).toBeInTheDocument();
+  });
+
+  it('follows the GPU choice, the GPU check and the system setting at once, and keeps the choice when a graph fails', async () => {
+    cacheEvidenceGraph('tr-gpu', { data: {}, ...graphOf(3) });
+    const verdict = { current: 'capable' };
+    getGpuCapability.mockImplementation(() => ({ verdict: verdict.current, reasons: [] }));
+    const windowItem = { id: 'graph-gpu', type: WORKSPACE_WINDOW_TYPES.GRAPH, title: 'Graph 1', metadata: { evidence: { traceId: 'tr-gpu', reportId: 5 } } };
+    const ui = (configuration) => (
+      <NotificationProvider>
+        <SessionContext.Provider value={{ apiFetch: vi.fn(), configuration }}>
+          <WorkspaceProvider><GraphWindowBody windowItem={windowItem} /></WorkspaceProvider>
+        </SessionContext.Provider>
+      </NotificationProvider>
+    );
+    const { rerender } = render(ui({ active_domain: 'bank' }));
+    const drawnWith = () => screen.getByTestId('canvas').dataset.renderer;
+    await waitFor(() => expect(drawnWith()).toBe('canvas'));
+    act(() => setGpuPreference(true));
+    expect(drawnWith()).toBe('webgl');
+    rerender(ui({ active_domain: 'bank', graph_gpu_allowed: false }));
+    expect(drawnWith()).toBe('canvas');
+    rerender(ui({ active_domain: 'bank' }));
+    expect(drawnWith()).toBe('webgl');
+    act(() => {
+      verdict.current = 'not_capable';
+      canvasProps.current.onRendererFailed(new Error('The GPU context was lost.'));
+    });
+    expect(drawnWith()).toBe('canvas');
+    expect(getGpuPreference()).toBe(true);
+    // Check again finds it usable.
+    act(() => {
+      verdict.current = 'capable';
+      recheckGpuCapability();
+    });
+    expect(drawnWith()).toBe('webgl');
+    getGpuCapability.mockImplementation(() => ({ verdict: 'capable', reasons: [] }));
+  });
+
+  it('the GPU limit is the benchmark’s, and a new one keeps what was hidden', async () => {
+    const { saveGpuBenchmark } = await import('../lib/gpuBenchmark.js');
+    const result = (limit) => ({ version: 1, at: 'x', outcome: 'ok', limit, warnAt: limit, steps: [] });
+    setGpuPreference(true);
+    saveGpuBenchmark(result(2000));
+    cacheEvidenceGraph('tr-cap', { data: {}, ...graphOf(6000) });
+    renderGraph({ id: 'graph-cap', metadata: { evidence: { traceId: 'tr-cap', reportId: 5 }, graphSettings: { limit: { key: '', sort: 'asc', min: 0, max: 6000 } } } });
+    const shown = () => screen.getByTestId('canvas').dataset.nodes;
+    await waitFor(() => expect(shown()).toBe('2000'));
+    expect(screen.getByText('Limited to 2,000')).toBeInTheDocument();
+    act(() => saveGpuBenchmark(result(5000)));
+    expect(shown()).toBe('5000');
+    const store = getGraphStore('graph-cap');
+    const viewKey = canvasProps.current.view.viewKey;
+    act(() => store.hideNodes([canvasProps.current.view.nodeIds[4]], { viewKey, visibleIds: canvasProps.current.view.nodeIds }));
+    expect(shown()).toBe('4999');
+    act(() => saveGpuBenchmark(result(10000)));
+    expect(shown()).toBe('4999');
+    expect(screen.getByText('Kept at 5,000')).toBeInTheDocument();
+    act(() => setGpuPreference(false)); // standard drawing, the hidden one still hidden
+    expect(shown()).toBe('1999');
+    act(() => setGpuPreference(true));
+    expect(shown()).toBe('4999');
   });
 
   it('warns above 300 visible nodes, and suggests GPU rendering once per device', () => {

@@ -543,7 +543,7 @@
   --source-text-secondary: #54595f;
   --settings-switch-input-border: #e8eff7;
   /* Added by the 2026-11-23 export. */
-  --settings-frame-session-chip-value-color: #7a7a7a;
+  --settings-frame-session-chip-value-color: #ffffff;
   --settings-theme-studio-cat-btn-active-text: #ffffff;
   --settings-theme-studio-cat-badge-bg: #ae874f;
   --settings-theme-studio-header-h4-text: #121d29;
@@ -563,7 +563,7 @@
   /* Added by the second 2026-11-23 export. */
   --settings-vigilance-action-primary-text: #ffffff;
   --settings-theme-studio-pill-active-text: #ffffff;
-  --settings-frame-session-chip-label-color: #ffffff;
+  --settings-frame-session-chip-label-color: #9e9e9e;
   --settings-vigilance-action-hover-bg: #f7f3ed;
   --settings-vigilance-action-bg: #ffffff;
   --settings-frame-timeline-step-circle-active-text: #ffffff;
@@ -571,6 +571,46 @@
   --settings-frame-window-footer-info-icon-color: #131e2a;
   --settings-frame-timeline-step-circle-inactive-bg: #f7f7f7;
   --settings-frame-timeline-step-circle-inactive-text: #131e2a;
+  /* Added by the third 2026-11-23 export. */
+  --config-system-domain-pill-hover-text: #131e2a;
+  --config-system-domain-pill-on-text: #ededed;
+  --config-system-domain-pill-bg: #fafafa;
+  --config-system-domain-pill-hover-border: #a4adb6;
+  --config-system-domain-pill-text: #949494;
+  --config-system-domain-pill-hover-bg: #edebe9;
+  --config-system-domain-pill-ready-text: #147f3c;
+  --config-system-domain-pill-unready-text: #d9ab4a;
+  --config-form-group-label-text: #131e2a;
+  --config-form-label-icon: #ae874f;
+  --config-form-group-line: #e8eff7;
+  --config-active-rule-border: #ffffff;
+  --config-active-rule-shadow: #ffffff;
+  --config-active-rule-tag-border: #8fbd96;
+  --config-active-rule-tag-text: #7bb284;
+  --config-form-info-icon: #ae874f;
+  --config-form-info-icon-hover: #7f7566;
+  --libraries-set-open-border: #ffffff;
+  --source-choose-step-label-border: #dce4ee;
+  --source-start-panel-bg: #ffffff;
+  --source-start-timeline-bg: #f0f0f0;
+  --source-flow-bg: #ffffff;
+  --source-flow-border: #ffffff;
+  --source-flow-wash: #ffffff;
+  --source-flow-needs-bg: #f7f7f7;
+  --source-flow-hairline: #e6ebf0;
+  --mode-grid-btn-icon: #ae874f;
+  --storage-type-btn-icon-color: #ae874f;
+  --storage-type-btn-selected-icon-color: #ffffff;
+  --source-table-picked-on-bg: #f7f7f7;
+  --source-table-row-selected-bg: #f7f7f7;
+  --source-table-row-selected-text: #ae874f;
+  --source-table-head-bg: #EFEFEF;
+  --source-table-head-line: #EFEFEF;
+  --source-table-row-line: #f5f5f5;
+  --source-table-head-text: #1e2c3c;
+  --source-table-check-on-bg: #1e2c3c;
+  --source-elastic-select-bg: #ffffff;
+  --source-storage-select-bg: #ffffff;
 }
 
 /* Settings window: this theme's values for the Settings tokens

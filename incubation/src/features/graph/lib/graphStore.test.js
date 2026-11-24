@@ -29,3 +29,38 @@ describe('graphStore dataVersion', () => {
     expect(now.dataVersion).toBe(start.dataVersion);
   });
 });
+
+describe('edits and the drawing limit', () => {
+  const graphOf = (count) => ({ nodes: Array.from({ length: count }, (_, i) => ({ id: i + 1 })), edges: [] });
+  const viewOf = (store, key, requested, cap) => {
+    const plain = Math.min(requested, cap, store.editedCap(key) ?? cap);
+    store.setDrawingCap(plain);
+    return store.applyVisibility({ nodeIds: Array.from({ length: plain }, (_, i) => String(i + 1)), edgeIds: [], searched: false }, key, cap).nodeIds;
+  };
+
+  it('a higher limit keeps them exactly; a lower one draws fewer plain nodes, and they come back', () => {
+    const store = createGraphStore();
+    graphOf(40).nodes.forEach((node) => store.graph().addNode(String(node.id), node));
+    expect(viewOf(store, 'v', 30, 10)).toHaveLength(10);
+    store.hideNodes(['3'], { viewKey: 'v', visibleIds: viewOf(store, 'v', 30, 10) });
+    store.revealNodes(['35'], { viewKey: 'v', visibleIds: viewOf(store, 'v', 30, 10), cap: 10 });
+    const kept = viewOf(store, 'v', 30, 10);
+    expect(kept).not.toContain('3');
+    expect(kept).toContain('35');
+    expect(viewOf(store, 'v', 30, 20)).toEqual(kept);
+    const fewer = viewOf(store, 'v', 30, 4);
+    expect(fewer).toHaveLength(4);
+    expect(fewer).toContain('35');
+    expect(viewOf(store, 'v', 30, 20)).toEqual(kept);
+    // Without edits the new limit applies.
+    expect(viewOf(store, 'other', 30, 20)).toHaveLength(20);
+  });
+
+  it('a lower limit made of added nodes only is still respected', () => {
+    const store = createGraphStore();
+    graphOf(40).nodes.forEach((node) => store.graph().addNode(String(node.id), node));
+    store.restoreVisibility('v', ['1', '2'], Array.from({ length: 30 }, (_, i) => String(i + 5)), { cap: 30 });
+    expect(store.applyVisibility({ nodeIds: ['1', '2'], edgeIds: [] }, 'v', 12).nodeIds).toHaveLength(12);
+    expect(store.applyVisibility({ nodeIds: ['1', '2'], edgeIds: [] }, 'v', 30).nodeIds).toHaveLength(30);
+  });
+});

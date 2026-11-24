@@ -12,6 +12,11 @@ import {
 } from '../../lib/sourceModel.js';
 import { Field, SourceModeIcon, StatusPill, ToolbarToggle } from '../sourceUi.jsx';
 import SearchResultBrowser from '../SearchResultBrowser.jsx';
+import SearchResultTable from '../SearchResultTable.jsx';
+import { SOURCE_FLOW } from '../../lib/sourceFrame.js';
+
+// The restyled search row and table, or the list it replaced.
+const ResultList = SOURCE_FLOW ? SearchResultTable : SearchResultBrowser;
 
 // Batch > Storage (HDFS). Mirrors production's batch input "Search" page with
 // the Files radio on: connect the storage, raw-search files by keyword/date
@@ -53,7 +58,7 @@ export function StorageStep({ state, defaults, windowId, validationMessage, tool
   };
 
   return (
-    <div className="source_window_step_body source_window_step_body_storage">
+    <div className={'source_window_step_body source_window_step_body_storage' + (SOURCE_FLOW ? ' source_window_flow_storage' : '')}>
       <section className={'source_window_storage_browser' + (toolbarCollapsed ? ' is-toolbar-collapsed' : '')}>
         <header className="source_window_storage_browser_header">
           <div className="source_window_storage_title">
@@ -150,7 +155,7 @@ export function StorageStep({ state, defaults, windowId, validationMessage, tool
           </button>
         </div>
 
-        <SearchResultBrowser
+        <ResultList
           label="Storage file browser"
           icon="storage"
           query={state.storageSearchQuery}

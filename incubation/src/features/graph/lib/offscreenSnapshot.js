@@ -1,4 +1,4 @@
-import cytoscape from 'cytoscape';
+import { createGraph, releaseGraph } from './cytoscapeInstance.js';
 
 import { buildElements, buildStylesheet, edgeCurveFor } from './graphElements.js';
 import { compareNodeValues, getNodeValue } from './graphModel.js';
@@ -169,7 +169,7 @@ export const renderOffscreenSnapshot = async (store, { isCdr = false, host = doc
       if (position) node.position = { x: position.x, y: position.y };
     });
     await preloadImages([...new Set(nodes.map((node) => node.data.image).filter((url) => typeof url === 'string' && url))]);
-    cy = cytoscape({
+    cy = createGraph({
       container,
       style: buildStylesheet(theme, { curve: edgeCurveFor(view.nodeIds.length), zoom: 1 }),
       elements: { nodes, edges },
@@ -187,7 +187,7 @@ export const renderOffscreenSnapshot = async (store, { isCdr = false, host = doc
   } catch {
     return null;
   } finally {
-    cy?.destroy();
+    releaseGraph(cy);
     container.remove();
   }
 };

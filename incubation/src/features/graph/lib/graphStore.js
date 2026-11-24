@@ -72,7 +72,11 @@ export const createGraphStore = () => {
   // double-click expand) and applyLimit rebuilds it from scratch. Here the
   // edits are kept against the view they were made on (`viewKey`: limit +
   // search) and dropped once that view changes, the same outcome.
-  let visibility = { viewKey: '', added: [], removed: new Set() };
+  // `cap`: how many nodes the plain view could show when the edits began. The
+  // plain view stays there while they stand, so a new drawing limit (GPU
+  // turned on or off, a new benchmark) never loses or changes them.
+  let drawingCap = Infinity;
+  let visibility = { viewKey: '', added: [], removed: new Set(), cap: drawingCap };
   // Production highlight overlays (GA:2711 getMarkerSets), by priority:
   // path > traversal > alert > pinned.
   const emptyMarkers = () => Object.fromEntries(MARKER_KINDS.map((kind) => [kind, { nodes: new Set(), edges: new Set() }]));
@@ -171,7 +175,7 @@ export const createGraphStore = () => {
     selection = [];
     viewport = null;
     layoutSignature = '';
-    visibility = { viewKey: '', added: [], removed: new Set() };
+    visibility = { viewKey: '', added: [], removed: new Set(), cap: drawingCap };
     originals = new Map();
     clearTimeout(flashTimer);
     flashTimer = null;
@@ -285,7 +289,8 @@ export const createGraphStore = () => {
   /* ── Expand / collapse (GA:3410, GA:3456, GA:5601) ─────────────────── */
 
   // The view with this window's expand / collapse edits applied.
-  const applyVisibility = (base, viewKey) => {
+  // `cap` below the one the edits were made under: plain nodes give way first.
+  const applyVisibility = (base, viewKey, cap = Infinity) => {
     if (visibility.viewKey !== viewKey || (!visibility.added.length && !visibility.removed.size)) return { ...base, viewKey };
     const shown = new Set();
     const nodeIds = [];
@@ -295,14 +300,28 @@ export const createGraphStore = () => {
       nodeIds.push(id);
     };
     base.nodeIds.forEach(show);
+    const plainCount = nodeIds.length;
     visibility.added.forEach(show);
+    if (cap < visibility.cap && nodeIds.length > cap) {
+      nodeIds.splice(Math.max(0, cap - (nodeIds.length - plainCount)), Math.min(plainCount, nodeIds.length - cap));
+      nodeIds.length = Math.min(nodeIds.length, cap);
+    }
     return { ...base, nodeIds, ...edgesAmong(nodeIds), viewKey, edited: true };
   };
 
   // Starts editing the given view; edits made on another view are dropped.
   const editVisibility = (viewKey) => {
-    if (visibility.viewKey !== viewKey) visibility = { viewKey, added: [], removed: new Set() };
+    if (visibility.viewKey !== viewKey || (!visibility.added.length && !visibility.removed.size)) {
+      visibility = { viewKey, added: [], removed: new Set(), cap: drawingCap };
+    }
     return visibility;
+  };
+  // The cap the view's edits were made under; null without edits.
+  const editedCap = (viewKey) => (
+    visibility.viewKey === viewKey && (visibility.added.length || visibility.removed.size) ? visibility.cap : null
+  );
+  const setDrawingCap = (cap) => {
+    drawingCap = cap;
   };
   const makeVisible = (edit, id, visible) => {
     edit.removed.delete(id);
@@ -426,7 +445,7 @@ export const createGraphStore = () => {
 
   // Production loadSavedView: the view shows exactly `targetIds` (those in
   // the graph), recorded as edits of the plain view `baseIds` of `viewKey`.
-  const restoreVisibility = (viewKey, baseIds = [], targetIds = []) => {
+  const restoreVisibility = (viewKey, baseIds = [], targetIds = [], { cap = drawingCap } = {}) => {
     const target = [...new Set(targetIds.map(String))].filter((id) => graph.hasNode(id));
     const wanted = new Set(target);
     const base = new Set(baseIds.map(String));
@@ -434,6 +453,7 @@ export const createGraphStore = () => {
       viewKey,
       added: target.filter((id) => !base.has(id)),
       removed: new Set([...base].filter((id) => !wanted.has(id))),
+      cap,
     };
     emit({ dataChanged: false });
     return target.length;
@@ -834,7 +854,7 @@ export const createGraphStore = () => {
     positions: [...positions].map(([id, position]) => [id, { ...position }]),
     layoutSignature,
     originals: cloneDeep([...originals]),
-    visibility: { viewKey: visibility.viewKey, added: [...visibility.added], removed: [...visibility.removed] },
+    visibility: { viewKey: visibility.viewKey, added: [...visibility.added], removed: [...visibility.removed], cap: visibility.cap },
     // Path and traversal highlights; alerts and pinned items are worked out
     // again from the rules and the pinned list.
     path: copyMarker(markers.path),
@@ -850,7 +870,7 @@ export const createGraphStore = () => {
     positions = new Map(taken.positions.map(([id, position]) => [id, { ...position }]));
     layoutSignature = taken.layoutSignature;
     originals = new Map(cloneDeep(taken.originals));
-    visibility = { viewKey: taken.visibility.viewKey, added: [...taken.visibility.added], removed: new Set(taken.visibility.removed) };
+    visibility = { viewKey: taken.visibility.viewKey, added: [...taken.visibility.added], removed: new Set(taken.visibility.removed), cap: taken.visibility.cap ?? drawingCap };
     const marker = (saved) => ({ nodes: new Set(saved.nodes), edges: new Set(saved.edges), ...(saved.viewKey !== undefined ? { viewKey: saved.viewKey } : {}) });
     markers.path = marker(taken.path);
     markers.traversal = marker(taken.traversal);
@@ -975,6 +995,8 @@ export const createGraphStore = () => {
     patchNodes,
     restoreNodePatches,
     hasNodePatches: () => originals.size > 0,
+    editedCap,
+    setDrawingCap,
     getMarkers: (viewKey) => (
       viewKey !== undefined && markers.traversal.viewKey !== undefined && markers.traversal.viewKey !== viewKey
         ? { ...markers, traversal: { nodes: new Set(), edges: new Set() } }

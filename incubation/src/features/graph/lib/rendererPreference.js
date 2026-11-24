@@ -2,9 +2,9 @@
 // §2). GPU (WebGL) is OFF by default. It is used only when all three agree:
 // - System: the configuration does not forbid it (graph_gpu_allowed !== false)
 // - Device: the user switched it on in this browser (Libraries → Graph rendering)
-// - Device: this device is capable (gpuCapability.js)
+// - Device: this browser can draw with the graphics card now (gpuCapability.js)
 
-import { GPU_VERDICTS, getGpuCapability } from '../../../shared/device/gpuCapability.js';
+import { GPU_VERDICTS, getGpuCapability, subscribeGpuCapability } from '../../../shared/device/gpuCapability.js';
 
 const STORAGE_KEY = 'linkx.device.graphRenderer.v1';
 const listeners = new Set();
@@ -32,8 +32,14 @@ export const subscribeGpuPreference = (listener) => {
   return () => listeners.delete(listener);
 };
 
-export const isGpuAllowedBySystem = (configuration) => configuration?.graph_gpu_allowed !== false
-  && String(configuration?.graph_gpu_allowed).toLowerCase() !== 'false';
+// 'off' | 'allowed' | 'not_set' (the Service sent nothing: not restricted).
+export const getSystemGpuSetting = (configuration) => {
+  const value = configuration?.graph_gpu_allowed;
+  if (value === undefined || value === null || value === '') return 'not_set';
+  return String(value).toLowerCase() === 'false' ? 'off' : 'allowed';
+};
+
+export const isGpuAllowedBySystem = (configuration) => getSystemGpuSetting(configuration) !== 'off';
 
 // Pure decision (unit-tested).
 export const decideRenderer = ({ allowedBySystem, preferGpu, verdict }) => (
@@ -46,6 +52,12 @@ export const resolveRenderer = (configuration) => decideRenderer({
   // Only probed when the user asked for GPU (the probe costs a WebGL context).
   verdict: getGpuPreference() ? getGpuCapability().verdict : GPU_VERDICTS.UNKNOWN,
 });
+
+// Anything resolveRenderer depends on, besides the configuration.
+export const subscribeRenderer = (listener) => {
+  const stops = [subscribeGpuPreference(listener), subscribeGpuCapability(listener)];
+  return () => stops.forEach((stop) => stop());
+};
 
 /* ── One-time suggestion (graph-chart-plan §3.9) ─────────────────────── */
 
@@ -65,9 +77,10 @@ export const markGpuSuggested = () => {
   } catch { /* storage unavailable */ }
 };
 
-// True once per device: GPU off, allowed, and this device is capable. The
+// True once per device: GPU off, allowed, and usable without cautions. The
 // capability probe (a short WebGL context) only runs when the rest holds.
 export const shouldSuggestGpu = (configuration) => {
   if (wasSuggested() || getGpuPreference() || !isGpuAllowedBySystem(configuration)) return false;
-  return getGpuCapability().verdict === GPU_VERDICTS.CAPABLE;
+  const capability = getGpuCapability();
+  return capability.verdict === GPU_VERDICTS.CAPABLE && !capability.cautions?.length;
 };

@@ -34,7 +34,7 @@ export function PreferencesPanel({ areBackgroundAnimationsEnabled, setBackground
   const options = [
     { icon: 'layout', title: 'Remember window layout', description: 'Keep window positions and sizes between visits.', checked: rememberLayout, onChange: setRememberLayout },
     { icon: 'bell', title: 'Enable notifications', description: 'Show notices from the workspace.', checked: enableNotifications, onChange: setEnableNotifications },
-    { icon: 'motion', title: 'Enable background animations', description: 'Animate the workspace background.', checked: areBackgroundAnimationsEnabled, onChange: setBackgroundAnimationsEnabled },
+    { icon: 'motion', title: 'Enable background animations', description: 'Animate the workspace background and the Source window’s data path.', checked: areBackgroundAnimationsEnabled, onChange: setBackgroundAnimationsEnabled },
     { icon: 'glass', title: 'Enable glass blur effects', description: 'Blur what lies behind translucent panels.', checked: areGlassEffectsEnabled, onChange: setGlassEffectsEnabled },
   ];
   const onCount = options.filter((option) => option.checked).length;

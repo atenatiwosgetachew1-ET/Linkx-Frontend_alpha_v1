@@ -10,6 +10,8 @@
 import { SETTINGS_THEME_CATEGORIES } from './settingsThemeTokens.js';
 import { CONFIGURATION_THEME_CATEGORIES } from './configurationThemeTokens.js';
 import { LIBRARIES_THEME_CATEGORIES } from './librariesThemeTokens.js';
+import { SOURCE_THEME_CATEGORIES } from './sourceThemeTokens.js';
+import { BENCHMARK_THEME_CATEGORIES } from './benchmarkThemeTokens.js';
 
 export const THEME_COMPONENT_CATEGORIES = [
   {
@@ -1195,6 +1197,10 @@ export const THEME_COMPONENT_CATEGORIES = [
   ...CONFIGURATION_THEME_CATEGORIES,
   // The Libraries window's own tokens (librariesThemeTokens.js).
   ...LIBRARIES_THEME_CATEGORIES,
+  // The Source window's frame tokens (sourceThemeTokens.js).
+  ...SOURCE_THEME_CATEGORIES,
+  // The graph benchmark page (benchmarkThemeTokens.js).
+  ...BENCHMARK_THEME_CATEGORIES,
   {
     id: 'configuration_window',
     name: '🛠️ Configuration & Window Scales',

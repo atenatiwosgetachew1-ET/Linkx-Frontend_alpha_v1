@@ -1,0 +1,522 @@
+/* Source window frame, restyled to match the Settings, Configuration and
+   Libraries windows (analyst trial, 2026-11-23).
+
+   Everything here applies only under .is-restyled / .source_theme_scope,
+   which src/features/source/lib/sourceFrame.js adds to the window's root.
+   Turn that switch off and none of these rules match: the window is exactly
+   as it was. Imported after source.css (src/app/App.jsx); order matters. */
+
+/* The frame's colours read the Source window's own tokens here, so
+   restyling them touches no other window. */
+.source_theme_scope {
+	--window-footer-text-color: var(--source-frame-window-footer-text-color);
+	--window-footer-info-icon-color: var(--source-frame-window-footer-info-icon-color);
+	--window-footer-btn-border: var(--source-frame-window-footer-btn-border);
+	--window-footer-btn-text: var(--source-frame-window-footer-btn-text);
+	--window-footer-btn-bg-angle: var(--source-frame-window-footer-btn-bg-angle);
+	--window-footer-btn-bg-top: var(--source-frame-window-footer-btn-bg-top);
+	--window-footer-btn-bg-bottom: var(--source-frame-window-footer-btn-bg-bottom);
+	--window-footer-btn-hover-border: var(--source-frame-window-footer-btn-hover-border);
+	--window-footer-btn-hover-text: var(--source-frame-window-footer-btn-hover-text);
+	--window-footer-btn-hover-bg-angle: var(--source-frame-window-footer-btn-hover-bg-angle);
+	--window-footer-btn-hover-bg-top: var(--source-frame-window-footer-btn-hover-bg-top);
+	--window-footer-btn-hover-bg-bottom: var(--source-frame-window-footer-btn-hover-bg-bottom);
+	--window-footer-btn-pressed-border: var(--source-frame-window-footer-btn-pressed-border);
+	--window-footer-btn-pressed-text: var(--source-frame-window-footer-btn-pressed-text);
+	--window-footer-btn-pressed-bg-angle: var(--source-frame-window-footer-btn-pressed-bg-angle);
+	--window-footer-btn-pressed-bg-top: var(--source-frame-window-footer-btn-pressed-bg-top);
+	--window-footer-btn-pressed-bg-bottom: var(--source-frame-window-footer-btn-pressed-bg-bottom);
+	--window-footer-btn-disabled-border: var(--source-frame-window-footer-btn-disabled-border);
+	--window-footer-btn-disabled-text: var(--source-frame-window-footer-btn-disabled-text);
+	--window-footer-btn-disabled-bg: var(--source-frame-window-footer-btn-disabled-bg);
+	--window-cards-container-subtext: var(--source-frame-window-cards-container-subtext);
+	--session-chip-border: var(--source-frame-session-chip-border);
+	--session-chip-bg: var(--source-frame-session-chip-bg);
+	--session-chip-label-color: var(--source-frame-session-chip-label-color);
+	--session-chip-value-color: var(--source-frame-session-chip-value-color);
+	--timeline-border: var(--source-frame-timeline-border);
+	--timeline-bg: var(--source-frame-timeline-bg);
+	--timeline-progress-label-color: var(--source-frame-timeline-progress-label-color);
+	--timeline-progress-value-color: var(--source-frame-timeline-progress-value-color);
+	--timeline-progress-track: var(--source-frame-timeline-progress-track);
+	--timeline-progress-fill-start: var(--source-frame-timeline-progress-fill-start);
+	--timeline-progress-fill-end: var(--source-frame-timeline-progress-fill-end);
+	--timeline-step-border: var(--source-frame-timeline-step-border);
+	--timeline-step-bg: var(--source-frame-timeline-step-bg);
+	--timeline-step-line-track: var(--source-frame-timeline-step-line-track);
+	--timeline-step-line-color: var(--source-frame-timeline-step-line-color);
+	--timeline-step-hover-bg: var(--source-frame-timeline-step-hover-bg);
+	--timeline-step-hover-border: var(--source-frame-timeline-step-hover-border);
+	--timeline-step-active-bg: var(--source-frame-timeline-step-active-bg);
+	--timeline-step-active-border: var(--source-frame-timeline-step-active-border);
+	--timeline-step-active-bar: var(--source-frame-timeline-step-active-bar);
+	--timeline-step-circle-inactive-border: var(--source-frame-timeline-step-circle-inactive-border);
+	--timeline-step-circle-inactive-bg: var(--source-frame-timeline-step-circle-inactive-bg);
+	--timeline-step-circle-inactive-text: var(--source-frame-timeline-step-circle-inactive-text);
+	--timeline-step-circle-active-border: var(--source-frame-timeline-step-circle-active-border);
+	--timeline-step-circle-active-bg: var(--source-frame-timeline-step-circle-active-bg);
+	--timeline-step-circle-active-text: var(--source-frame-timeline-step-circle-active-text);
+	--timeline-step-circle-active-ring: var(--source-frame-timeline-step-circle-active-ring);
+	--timeline-step-circle-fulfilled-border: var(--source-frame-timeline-step-circle-fulfilled-border);
+	--timeline-step-circle-fulfilled-bg-angle: var(--source-frame-timeline-step-circle-fulfilled-bg-angle);
+	--timeline-step-circle-fulfilled-bg-top: var(--source-frame-timeline-step-circle-fulfilled-bg-top);
+	--timeline-step-circle-fulfilled-bg-bottom: var(--source-frame-timeline-step-circle-fulfilled-bg-bottom);
+	--timeline-step-circle-fulfilled-text: var(--source-frame-timeline-step-circle-fulfilled-text);
+	--timeline-step-circle-fulfilled-shadow: var(--source-frame-timeline-step-circle-fulfilled-shadow);
+	--timeline-step-locked-border: var(--source-frame-timeline-step-locked-border);
+	--timeline-step-locked-text: var(--source-frame-timeline-step-locked-text);
+	--timeline-step-title-color: var(--source-frame-timeline-step-title-color);
+	--timeline-step-desc-color: var(--source-frame-timeline-step-desc-color);
+	--timeline-step-active-title-color: var(--source-frame-timeline-step-active-title-color);
+	--timeline-step-active-desc-color: var(--source-frame-timeline-step-active-desc-color);
+}
+
+/* The three rows take what they need; the same gutters as the Settings
+   window. */
+.source_window_workspace.is-restyled,
+.source_window_choose.is-restyled {
+	grid-template-rows: auto minmax(0, 1fr) auto;
+	gap: 12px;
+	padding: 18px;
+}
+
+/* Header, compact: a small glyph, the title with its tags and a one-line
+   description, the session chip at the far end. */
+.is-restyled > .source_window_choose_header {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+
+.is-restyled .source_window_header_icon {
+	flex: none;
+	width: 22px;
+	height: 22px;
+}
+
+.is-restyled .source_window_header_icon .source_window_mode_icon {
+	width: 22px;
+	height: 22px;
+}
+
+.is-restyled .source_window_header_text {
+	display: grid;
+	flex: 1;
+	grid-template-columns: minmax(0, 1fr) auto;
+	grid-template-areas:
+		'title chip'
+		'text chip';
+	align-items: center;
+	column-gap: 12px;
+	min-width: 0;
+}
+
+.is-restyled .source_window_header_title_row {
+	grid-area: title;
+	gap: 4px 7px;
+}
+
+.is-restyled .source_window_choose_header .source_window_header_title_row h2 {
+	font-size: var(--fs-lg, 15px);
+	font-weight: 700;
+	line-height: 1.3;
+}
+
+.is-restyled .source_window_header_tag {
+	height: 16px;
+	padding: 0 6px;
+	font-size: 9px;
+}
+
+.is-restyled .source_window_choose_header .source_window_header_text p {
+	grid-area: text;
+	margin: 2px 0 0;
+	overflow: hidden;
+	font-size: var(--fs-xs, 11px);
+	line-height: 1.4;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.is-restyled .source_window_header_text > dl {
+	display: block;
+	grid-area: chip;
+	align-self: center;
+}
+
+.is-restyled .source_window_choose_header .source_window_header_text dl div {
+	gap: 10px;
+	padding: 3px 6px 3px 9px;
+}
+
+.is-restyled .source_window_choose_header .source_window_header_text dt,
+.is-restyled .source_window_choose_header .source_window_header_text dd {
+	font-size: var(--fs-xs, 11px);
+}
+
+/* Footer, compact: a quiet summary line and 30px buttons on a row that
+   takes only the height it needs. */
+.is-restyled > .source_window_choose_footer {
+	flex-wrap: wrap;
+	gap: 10px;
+	font-size: var(--fs-xs, 11px);
+}
+
+/* The info glyph sits in the message's leading padding (shared footer rule). */
+.is-restyled > .source_window_choose_footer > span {
+	min-width: 0;
+	padding-left: 22px !important;
+	font-size: var(--fs-xs, 11px);
+}
+
+.is-restyled > .source_window_choose_footer .window_footer_info_icon {
+	left: 2px;
+	width: 14px;
+	height: 14px;
+}
+
+.is-restyled > .source_window_choose_footer > div {
+	gap: 8px;
+}
+
+.is-restyled > .source_window_choose_footer button {
+	min-width: 0;
+	height: 30px !important;
+	min-height: 30px !important;
+	padding: 0 12px !important;
+	border-radius: 3px;
+}
+
+/* ── First page, as it was, with finishing touches: the three steps arrive
+   one after another; cards lift on hover and carry a tick when
+   chosen. The steps' labels and the cards keep their own colours. ── */
+.source_window_choose.is-restyled .source_window_choose_board {
+	gap: 10px;
+	padding: 12px;
+	border-radius: 8px;
+}
+
+/* One board in two parts (analyst request 2026-11-23): the steps' timeline,
+   a vertical line, the cards. Each part has a background of its own (the
+   same by default, so they read as one surface). The markup is unchanged:
+   each step row is taken apart (display: contents) so its label falls in
+   the first column and its cards in the second, row by row; the parts'
+   backgrounds are drawn behind those columns. */
+@media (min-width: 981px) {
+	.source_window_choose.is-restyled .source_window_choose_board {
+		position: relative;
+		display: grid;
+		grid-template-columns: clamp(180px, 20%, 222px) minmax(0, 1fr);
+		grid-template-rows: repeat(3, minmax(min-content, 1fr));
+		gap: 0;
+		padding: 0;
+	}
+
+	.source_window_choose.is-restyled .source_window_choose_board::before,
+	.source_window_choose.is-restyled .source_window_choose_board::after {
+		content: "";
+		grid-row: 1 / span 3;
+		pointer-events: none;
+	}
+
+	/* The timeline's part, and the line that separates it from the cards. */
+	.source_window_choose.is-restyled .source_window_choose_board::before {
+		grid-column: 1;
+		border-right: 1px solid var(--source-start-divider);
+		background: var(--source-start-timeline-bg);
+	}
+
+	/* The cards' part. */
+	.source_window_choose.is-restyled .source_window_choose_board::after {
+		grid-column: 2;
+		background: var(--source-start-panel-bg);
+	}
+
+	.source_window_choose.is-restyled .source_window_choose_step {
+		display: contents;
+	}
+
+	.source_window_choose.is-restyled .source_window_choose_step > * {
+		position: relative;
+		z-index: 1;
+		animation: source-start-in 460ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+	}
+
+	.source_window_choose.is-restyled .source_window_choose_step:nth-child(1) > * { grid-row: 1; }
+	.source_window_choose.is-restyled .source_window_choose_step:nth-child(2) > * { grid-row: 2; animation-delay: 70ms; }
+	.source_window_choose.is-restyled .source_window_choose_step:nth-child(3) > * { grid-row: 3; animation-delay: 140ms; }
+
+	.source_window_choose.is-restyled .source_window_choose_step > .source_window_choose_step_label {
+		grid-column: 1;
+		/* The board's own vertical line takes the place of the label's. */
+		border-right: 0 !important;
+	}
+
+	/* The line joining the step numbers. It is laid out in the numbers' own
+	   grid column and centred there, so it follows them whatever the label's
+	   padding: from the first number's middle to the last one's. (For an
+	   absolute grid child, an auto grid line is the label's edge.) */
+	.source_window_choose.is-restyled .source_window_choose_step_label > span {
+		justify-self: center;
+	}
+
+	.source_window_choose.is-restyled .source_window_choose_step_label::before {
+		content: "";
+		position: absolute;
+		grid-column: 1 / 2;
+		top: 0;
+		right: 0;
+		bottom: 0;
+		left: 0;
+		z-index: 0;
+		width: 1px;
+		margin: 0 auto;
+		background: var(--source-start-rail-line);
+		pointer-events: none;
+	}
+
+	.source_window_choose.is-restyled .source_window_choose_step:first-child .source_window_choose_step_label::before {
+		grid-row: 1 / auto;
+		top: 11px;
+	}
+
+	.source_window_choose.is-restyled .source_window_choose_step:last-child .source_window_choose_step_label::before {
+		grid-row: auto / 1;
+		bottom: -11px;
+	}
+
+	/* A step's options. */
+	.source_window_choose.is-restyled .source_window_choose_step > :not(.source_window_choose_step_label) {
+		grid-column: 2;
+		align-self: stretch;
+		width: auto;
+		margin: 16px 14px;
+	}
+
+	/* A thin line between one step's options and the next. */
+	.source_window_choose.is-restyled .source_window_choose_step:not(:first-child) > .source_window_choice::before {
+		content: "";
+		position: absolute;
+		top: -16px;
+		right: 0;
+		left: 0;
+		height: 1px;
+		background: var(--source-start-panel-line);
+		pointer-events: none;
+	}
+}
+
+@keyframes source-start-in {
+	from {
+		opacity: 0;
+		transform: translateY(8px);
+	}
+}
+
+/* Stacked (a narrow screen): the steps are rows again, each label a short
+   line over its cards. */
+@media (max-width: 980px) {
+	.source_window_choose.is-restyled .source_window_choose_step {
+		border-radius: 8px;
+		animation: source-start-in 460ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+	}
+
+	.source_window_choose.is-restyled .source_window_choose_step:nth-child(2) { animation-delay: 70ms; }
+	.source_window_choose.is-restyled .source_window_choose_step:nth-child(3) { animation-delay: 140ms; }
+}
+
+/* A step's options: a short label, then the cards in the room that is
+   left. The cards are a little more compact than before the restyle. */
+.source_window_choose.is-restyled .source_window_choice {
+	display: grid;
+	grid-template-rows: auto minmax(min-content, 1fr);
+	gap: 7px;
+	min-width: 0;
+}
+
+.source_window_choose.is-restyled .source_window_choice_title {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin: 0;
+	padding: 5px 4px;
+	color: var(--source-start-choice-title-text);
+	font-size: 12px;
+	font-weight: 600;
+	line-height: 1.3;
+}
+
+.source_window_choose.is-restyled .source_window_choice_icon {
+	flex: none;
+	width: 15px;
+	height: 15px;
+	fill: none;
+	color: var(--source-start-choice-icon-text);
+	stroke: currentColor;
+	stroke-width: 2;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+
+.source_window_choose.is-restyled .source_window_choice > .source_window_input_mode_grid,
+.source_window_choose.is-restyled .source_window_choice > .source_window_connection_grid {
+	grid-auto-rows: 1fr;
+	align-content: stretch;
+}
+
+.source_window_choose.is-restyled .source_window_mode_grid button,
+.source_window_choose.is-restyled .source_window_config_preview {
+	padding: 8px 12px;
+}
+
+.source_window_choose.is-restyled .source_window_connection_grid button {
+	gap: 4px;
+	padding: 8px 6px;
+}
+
+.source_window_choose.is-restyled .source_window_mode_grid button > svg,
+.source_window_choose.is-restyled .source_window_config_preview > svg {
+	padding: 8px;
+}
+
+.source_window_choose.is-restyled .source_window_connection_grid button > svg {
+	padding: 6px;
+}
+
+/* Cards: lifting on hover; the chosen one carries a tick. */
+.source_window_choose.is-restyled .source_window_mode_grid button,
+.source_window_choose.is-restyled .source_window_connection_grid button,
+.source_window_choose.is-restyled .source_window_config_preview {
+	position: relative;
+	transition: background-color 160ms ease, border-color 160ms ease, box-shadow 200ms ease, color 160ms ease, opacity 160ms ease, transform 200ms cubic-bezier(0.2, 0.7, 0.2, 1) !important;
+}
+
+.source_window_choose.is-restyled .source_window_mode_grid button:hover:not(:disabled):not(.is-selected),
+.source_window_choose.is-restyled .source_window_connection_grid button:hover:not(:disabled):not(.is-selected),
+.source_window_choose.is-restyled .source_window_config_preview:hover:not(:disabled) {
+	transform: translateY(-2px);
+	box-shadow: 0 10px 22px -12px var(--source-start-lift-shadow) !important;
+}
+
+.source_window_choose.is-restyled .source_window_mode_grid button:active:not(:disabled),
+.source_window_choose.is-restyled .source_window_connection_grid button:active:not(:disabled),
+.source_window_choose.is-restyled .source_window_config_preview:active:not(:disabled) {
+	transform: translateY(0);
+}
+
+.source_window_choose.is-restyled .source_window_mode_grid button:focus-visible,
+.source_window_choose.is-restyled .source_window_connection_grid button:focus-visible,
+.source_window_choose.is-restyled .source_window_config_preview:focus-visible {
+	outline: 2px solid var(--source-start-focus-outline);
+	outline-offset: 2px;
+}
+
+.source_window_choose.is-restyled .source_window_mode_grid button > svg,
+.source_window_choose.is-restyled .source_window_connection_grid button > svg,
+.source_window_choose.is-restyled .source_window_config_preview > svg {
+	border-radius: 12px;
+}
+
+.source_window_choose.is-restyled .source_window_mode_grid button.is-selected::after,
+.source_window_choose.is-restyled .source_window_connection_grid button.is-selected::after {
+	content: "";
+	position: absolute;
+	top: 8px;
+	right: 8px;
+	width: 18px;
+	height: 18px;
+	border-radius: 50%;
+	/* The badge; its tick is the ::before over it, drawn through a mask. */
+	background: var(--source-start-check-bg);
+	box-shadow: 0 2px 6px -2px var(--source-start-lift-shadow);
+	animation: source-start-pop 220ms cubic-bezier(0.3, 1.4, 0.5, 1) both;
+}
+
+.source_window_choose.is-restyled .source_window_mode_grid button.is-selected::before,
+.source_window_choose.is-restyled .source_window_connection_grid button.is-selected::before {
+	content: "";
+	position: absolute;
+	top: 8px;
+	right: 8px;
+	z-index: 1;
+	width: 18px;
+	height: 18px;
+	background: var(--source-start-check-text);
+	-webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 12.5l4 4 8-9'/%3E%3C/svg%3E") no-repeat center / 11px 11px;
+	mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 12.5l4 4 8-9'/%3E%3C/svg%3E") no-repeat center / 11px 11px;
+	animation: source-start-pop 220ms cubic-bezier(0.3, 1.4, 0.5, 1) both;
+}
+
+@keyframes source-start-pop {
+	from {
+		opacity: 0;
+		transform: scale(0.4);
+	}
+}
+
+/* A connection that is not there yet says so on a small tag. */
+.source_window_choose.is-restyled .source_window_connection_grid button:disabled:last-child::after {
+	content: "Soon";
+	position: absolute;
+	top: 8px;
+	right: 8px;
+	padding: 1px 6px;
+	border: 1px solid var(--source-start-soon-border);
+	border-radius: 999px;
+	background: var(--source-start-soon-bg);
+	color: var(--source-start-soon-text);
+	font-size: 9px;
+	font-weight: 700;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+}
+
+/* Open configuration: an arrow at its end that steps forward on hover. */
+.source_window_choose.is-restyled .source_window_config_preview {
+	grid-template-columns: 40px minmax(0, 1fr) auto;
+}
+
+.source_window_choose.is-restyled .source_window_config_preview::after {
+	content: "";
+	width: 9px;
+	height: 9px;
+	margin-right: 6px;
+	border-top: 2px solid var(--source-start-go-text);
+	border-right: 2px solid var(--source-start-go-text);
+	transform: rotate(45deg);
+	transition: transform 200ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.source_window_choose.is-restyled .source_window_config_preview:hover::after {
+	transform: translateX(4px) rotate(45deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.source_window_choose.is-restyled .source_window_choose_step,
+	.source_window_choose.is-restyled .source_window_choose_step > *,
+	.source_window_choose.is-restyled .source_window_mode_grid button.is-selected::after,
+	.source_window_choose.is-restyled .source_window_mode_grid button.is-selected::before,
+	.source_window_choose.is-restyled .source_window_connection_grid button.is-selected::after,
+	.source_window_choose.is-restyled .source_window_connection_grid button.is-selected::before {
+		animation: none;
+	}
+
+	.source_window_choose.is-restyled .source_window_mode_grid button,
+	.source_window_choose.is-restyled .source_window_connection_grid button,
+	.source_window_choose.is-restyled .source_window_config_preview,
+	.source_window_choose.is-restyled .source_window_config_preview::after {
+		transform: none !important;
+	}
+}
+
+/* A narrow window: the chip drops under the title and its line. */
+@media (max-width: 720px) {
+	.is-restyled .source_window_header_text {
+		grid-template-columns: minmax(0, 1fr);
+		grid-template-areas:
+			'title'
+			'text'
+			'chip';
+		row-gap: 4px;
+	}
+}

@@ -1,0 +1,95 @@
+/* The Message broker page (BrokerFlowStep.jsx): the Storage page's look
+   (source-storage.css, source-results.css) with its own colours, the
+   --source-broker-* tokens, and the few parts that differ. Only while the
+   Source window's flow pages are on: every rule is under
+   .source_window_flow. */
+.source_window_flow .source_window_flow_broker {
+	--source-storage-page-bg: var(--source-broker-page-bg);
+	--source-storage-panel-bg: var(--source-broker-panel-bg);
+	--source-storage-header-bg: var(--source-broker-header-bg);
+	--source-storage-title-text: var(--source-broker-title-text);
+	--source-storage-types-bg: var(--source-broker-types-bg);
+	--storage-type-btn-bg: var(--source-broker-type-bg);
+	--storage-type-btn-border: var(--source-broker-type-border);
+	--storage-type-btn-text: var(--source-broker-type-text);
+	--storage-type-btn-icon-color: var(--source-broker-type-icon);
+	--storage-type-btn-selected-bg: var(--source-broker-type-on-bg);
+	--storage-type-btn-selected-border: var(--source-broker-type-on-border);
+	--storage-type-btn-selected-text: var(--source-broker-type-on-text);
+	--storage-type-btn-selected-icon-color: var(--source-broker-type-on-icon);
+	--source-storage-unused-line: var(--source-broker-unused-line);
+	--storage-toggle-bg: var(--source-broker-default-bg);
+	--storage-toggle-border: var(--source-broker-default-border);
+	--storage-toggle-label-color: var(--source-broker-default-text);
+	--storage-toggle-hover-bg: var(--source-broker-default-hover-bg);
+	--storage-toggle-hover-border: var(--source-broker-default-hover-border);
+	--source-storage-default-check: var(--source-broker-default-check);
+	--source-storage-collapse-bg: var(--source-broker-collapse-bg);
+	--source-storage-collapse-border: var(--source-broker-collapse-border);
+	--source-storage-collapse-icon: var(--source-broker-collapse-icon);
+	--source-storage-collapse-hover-bg: var(--source-broker-collapse-hover-bg);
+	--source-storage-collapse-hover-icon: var(--source-broker-collapse-hover-icon);
+	--storage-toolbar-bg: var(--source-broker-form-bg);
+	--storage-toolbar-border: var(--source-broker-form-line);
+	--storage-field-label-color: var(--source-broker-label-text);
+	--storage-input-bg: var(--source-broker-input-bg);
+	--storage-input-border: var(--source-broker-input-border);
+	--storage-input-text: var(--source-broker-input-text);
+	--source-storage-input-placeholder: var(--source-broker-input-placeholder);
+	--source-storage-input-focus-border: var(--source-broker-input-focus-border);
+	--source-storage-input-disabled-bg: var(--source-broker-input-disabled-bg);
+	--source-storage-input-disabled-border: var(--source-broker-input-disabled-border);
+	--source-storage-input-disabled-text: var(--source-broker-input-disabled-text);
+	--storage-connect-btn-bg: var(--source-broker-connect-bg);
+	--storage-connect-btn-border: var(--source-broker-connect-border);
+	--storage-connect-btn-text: var(--source-broker-connect-text);
+	--source-storage-connect-hover-bg: var(--source-broker-connect-hover-bg);
+	--source-storage-connect-hover-border: var(--source-broker-connect-hover-border);
+	--source-storage-connect-hover-text: var(--source-broker-connect-hover-text);
+	--source-table-area-bg: var(--source-broker-table-area-bg);
+	--source-table-border: var(--source-broker-table-border);
+	--source-table-bg: var(--source-broker-table-bg);
+	--source-table-head-bg: var(--source-broker-table-head-bg);
+	--source-table-head-text: var(--source-broker-table-head-text);
+	--source-table-head-line: var(--source-broker-table-head-line);
+	--source-table-empty-bg: var(--source-broker-table-empty-bg);
+	--source-table-empty-text: var(--source-broker-table-empty-text);
+	--source-storage-error-text: var(--source-broker-error-text);
+	--source-storage-error-bg: var(--source-broker-error-bg);
+	--source-storage-error-border: var(--source-broker-error-border);
+	--source-storage-tool-bg: var(--source-broker-tool-bg);
+	--source-storage-tool-header-bg: var(--source-broker-tool-header-bg);
+	--source-storage-tool-title-text: var(--source-broker-tool-title-text);
+	--source-storage-tool-icon: var(--source-broker-tool-icon);
+	--source-storage-tool-note-text: var(--source-broker-tool-note-text);
+	--source-storage-tool-form-bg: var(--source-broker-tool-form-bg);
+	--source-storage-tool-label-text: var(--source-broker-tool-label-text);
+	--source-storage-tool-input-bg: var(--source-broker-tool-input-bg);
+	--source-storage-tool-input-border: var(--source-broker-tool-input-border);
+	--source-storage-tool-input-text: var(--source-broker-tool-input-text);
+	--source-storage-tool-input-focus-border: var(--source-broker-tool-input-focus-border);
+	--source-storage-tool-input-disabled-text: var(--source-broker-tool-input-disabled-text);
+	--source-storage-tool-button-bg: var(--source-broker-tool-button-bg);
+	--source-storage-tool-button-border: var(--source-broker-tool-button-border);
+	--source-storage-tool-button-text: var(--source-broker-tool-button-text);
+	--source-storage-tool-button-hover-bg: var(--source-broker-tool-button-hover-bg);
+	--source-storage-tool-button-hover-text: var(--source-broker-tool-button-hover-text);
+}
+
+/* The chosen type stays clear while the connection locks it. */
+.source_window_flow .source_window_flow_broker .source_window_storage_type_buttons button.is-selected:disabled {
+	opacity: 1;
+}
+
+/* Address, then topic; no port or domain here. */
+.source_window_flow .source_window_flow_broker .source_window_storage_fields .source_window_field:nth-of-type(2) {
+	flex: 1.4 1 160px;
+}
+
+.source_window_flow .source_window_flow_broker .source_window_storage_fields .source_window_field:nth-of-type(3) {
+	flex: 1 1 120px;
+}
+
+.source_window_flow .source_window_flow_broker .source_window_flow_table {
+	min-width: 0;
+}

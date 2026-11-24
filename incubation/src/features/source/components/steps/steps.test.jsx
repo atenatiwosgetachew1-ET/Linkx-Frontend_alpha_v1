@@ -13,6 +13,7 @@ import { resolveSourceDefaults } from '../../lib/sourceConfig.js';
 import { DATAFRAME_STATUSES, defaultSourceState, SOURCE_MODES, SOURCE_STATUSES, TOOL_STATUSES } from '../../lib/sourceModel.js';
 import { getSecret, disposeSourceRuntime } from '../../lib/sourceRuntime.js';
 import { ModeChooser } from '../ModeChooser.jsx';
+import { BrokerFlowStep } from './BrokerFlowStep.jsx';
 import { BrokerStep } from './BrokerStep.jsx';
 import { DataframeStep } from './DataframeStep.jsx';
 import { ElasticSearchStep } from './ElasticSearchStep.jsx';
@@ -30,6 +31,7 @@ const makeDefaults = (overrides = {}) => ({
   ...baseDefaults,
   ...overrides,
   storage: { ...baseDefaults.storage, ...(overrides.storage || {}) },
+  broker: { ...baseDefaults.broker, ...(overrides.broker || {}) },
   search: { ...baseDefaults.search, ...(overrides.search || {}) },
   dataframe: { ...baseDefaults.dataframe, ...(overrides.dataframe || {}) },
 });
@@ -129,10 +131,11 @@ describe('StorageStep', () => {
       state: { sourceStatus: SOURCE_STATUSES.CONNECTED, storageSearchStatus: 'done', storageSearchResults: results },
       ...props(),
     });
-    const rowA = screen.getByRole('button', { name: /a\.csv/ });
+    const rowA = screen.getByRole('checkbox', { name: 'a.csv' });
     await user.click(rowA);
-    expect(rowA).toHaveAttribute('aria-pressed', 'true');
-    await user.click(screen.getByRole('button', { name: /b\.csv/ }));
+    expect(rowA).toBeChecked();
+    // Anywhere on the row picks it.
+    await user.click(screen.getByText('b.csv'));
     expect(state().selectedStorageFiles).toHaveLength(2);
     expect(screen.getByText('2 selected files')).toBeInTheDocument();
     await user.click(rowA);
@@ -216,6 +219,52 @@ describe('BrokerStep', () => {
     expect(screen.getByLabelText('Kafka broker address')).toBeDisabled();
     expect(screen.getByLabelText('Apache Kafka')).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Disconnect' })).toBeEnabled();
+  });
+});
+
+describe('BrokerFlowStep', () => {
+  const defaults = makeDefaults({ broker: { address: 'kafka.internal:9092', apiAddress: 'https://api.internal', topic: 'tx' } });
+  const props = { defaults, onSourceAction: vi.fn() };
+  const open = { selectedConnectionType: 'broker', brokerToolbarCollapsed: false };
+
+  it('hides and locks the configured values while "Use Default" is on, and has no tool connection', () => {
+    renderStep(BrokerFlowStep, { state: { ...open, brokerAddress: 'kafka.internal:9092', topic: 'tx' }, ...props });
+    expect(screen.getByLabelText('Use Default')).toBeChecked();
+    ['Kafka broker address', 'Kafka topic'].forEach((label) => {
+      expect(screen.getByLabelText(label)).toHaveValue('');
+      expect(screen.getByLabelText(label)).toHaveAttribute('placeholder', 'Default');
+      expect(screen.getByLabelText(label)).toBeDisabled();
+    });
+    expect(screen.queryByText(/Tool integration/)).not.toBeInTheDocument();
+  });
+
+  it('takes typed values once "Use Default" is off, for Kafka or REST API', async () => {
+    const { user, state } = renderStep(BrokerFlowStep, { state: { ...open, brokerAddress: 'kafka.internal:9092', topic: 'tx' }, ...props });
+    await user.click(screen.getByLabelText('Use Default'));
+    expect(state()).toMatchObject({ brokerUseDefault: false, brokerAddress: '', topic: '' });
+    await user.type(screen.getByLabelText('Kafka broker address'), ' kafka:9092 ');
+    expect(state().brokerAddress).toBe('kafka:9092');
+    await user.type(screen.getByLabelText('Kafka topic'), 'my topic!');
+    expect(state().topic).toBe('mytopic');
+    await user.click(screen.getByRole('button', { name: 'REST API' }));
+    expect(state().sourceAddressType).toBe('api');
+    expect(screen.queryByLabelText('Kafka topic')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('REST API address')).toHaveValue('kafka:9092');
+    // Back on the default: kept, shown as unused.
+    await user.click(screen.getByLabelText('Use Default'));
+    expect(screen.getByLabelText('REST API address')).toBeDisabled();
+    expect(state().brokerAddress).toBe('kafka:9092');
+  });
+
+  it('starts with the form collapsed, and locks it while connected', async () => {
+    const { user } = renderStep(BrokerFlowStep, { state: { sourceStatus: SOURCE_STATUSES.CONNECTED }, ...props });
+    expect(screen.getByLabelText('Use Default')).not.toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Show connection form' }));
+    expect(screen.getByLabelText('Use Default')).toBeVisible();
+    expect(screen.getByLabelText('Use Default')).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Apache Kafka' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Disconnect' })).toBeEnabled();
+    expect(screen.getByText('No broker messages to show.')).toBeInTheDocument();
   });
 });
 

@@ -40,17 +40,28 @@ export const DEFAULT_REGISTERED_DOMAINS = ['bank', 'microfinance', 'cdr', 'insur
 
 export const getActiveDomainKey = (config) => String(config?.active_domain || config?.domain || 'bank').trim().toLowerCase();
 
-export const getRegisteredDomains = (config) => {
-  if (Array.isArray(config?.registered_domains) && config.registered_domains.length > 0) return config.registered_domains;
-  const keys = config?.domain_connections && typeof config.domain_connections === 'object' ? Object.keys(config.domain_connections) : [];
-  return keys.length ? keys : DEFAULT_REGISTERED_DOMAINS;
-};
-
 export const formatDomainPillarLabel = (domainKey) => {
   const cleanKey = String(domainKey || '').trim().toLowerCase();
   if (DOMAIN_PILLAR_LABELS[cleanKey]) return DOMAIN_PILLAR_LABELS[cleanKey];
   if (!cleanKey) return 'Banking';
   return cleanKey.charAt(0).toUpperCase() + cleanKey.slice(1).replace(/_/g, ' ');
+};
+
+// Every domain the Service names: its registry and the domains it sends
+// connections for (either list can be the shorter one), plus the active one.
+// Two keys with the same name ("bank", "banking") are one domain.
+export const getRegisteredDomains = (config) => {
+  const registered = Array.isArray(config?.registered_domains) ? config.registered_domains : [];
+  const connections = config?.domain_connections && typeof config.domain_connections === 'object' ? Object.keys(config.domain_connections) : [];
+  const named = [...registered, ...connections].filter((key) => typeof key === 'string' && key.trim());
+  if (!named.length) return DEFAULT_REGISTERED_DOMAINS;
+  const active = getActiveDomainKey(config);
+  const byLabel = new Map();
+  [...named, active].forEach((key) => {
+    const label = formatDomainPillarLabel(key);
+    if (!byLabel.has(label) || key === active) byLabel.set(label, key);
+  });
+  return [...byLabel.values()];
 };
 
 export const extractConfigurationPayload = (data) => (

@@ -15,7 +15,7 @@ export const STUDIO_AREAS = [
     id: 'windows',
     name: 'Windows',
     hint: 'The floating windows and what each one shows.',
-    categories: ['floating_windows', 'source_window', 'tasks_window', 'reports_window', 'graph-window', 'configuration_frame', 'configuration_pages', 'configuration_system', 'configuration_forms', 'configuration_tables', 'configuration_window', 'libraries_frame', 'libraries_pages', 'libraries_forms', 'libraries_parts', 'window_load_screen'],
+    categories: ['floating_windows', 'source_frame', 'source_flow', 'source_storage', 'source_table', 'source_broker', 'source_elastic', 'source_start', 'source_window', 'tasks_window', 'reports_window', 'graph-window', 'configuration_frame', 'configuration_pages', 'configuration_system', 'configuration_forms', 'configuration_tables', 'configuration_window', 'libraries_frame', 'libraries_pages', 'libraries_forms', 'libraries_parts', 'graph_benchmark', 'window_load_screen'],
   },
   {
     id: 'settings',

@@ -1,5 +1,5 @@
-// Synthetic graphs shaped like LinkX evidence graphs, for the G0 renderer
-// benchmark (graph-chart-plan §3.2). Deterministic (seeded) so two machines
+// Synthetic graphs shaped like LinkX evidence graphs, for the GPU benchmark
+// (gpuBenchmarkRun.js) and the developer one (src/dev/graphBench). Deterministic (seeded) so two machines
 // draw exactly the same graph.
 
 const mulberry32 = (seed) => () => {
@@ -96,4 +96,25 @@ export const makeStyleSample = () => {
     s1: { x: -220, y: -120 }, s2: { x: 0, y: -200 }, s3: { x: 220, y: -120 }, s4: { x: -220, y: 120 }, s5: { x: 0, y: 0 }, s6: { x: 220, y: 120 },
   };
   return { nodes, edges, positions };
+};
+
+// Rings around the most connected node (what layout.worker.js does), for
+// graphs drawn without the worker. -> { [id]: { x, y } }
+export const concentricPositions = ({ nodes, edges }) => {
+  const degree = new Map(nodes.map((node) => [node.id, 0]));
+  edges.forEach(({ source, target }) => {
+    degree.set(source, degree.get(source) + 1);
+    degree.set(target, degree.get(target) + 1);
+  });
+  const order = nodes.map((node) => node.id).sort((a, b) => degree.get(b) - degree.get(a));
+  const positions = {};
+  let placed = 0;
+  for (let ring = 0; placed < order.length; ring += 1) {
+    const capacity = ring === 0 ? 1 : Math.floor(2 * Math.PI * ring * 1.6);
+    for (let k = 0; k < capacity && placed < order.length; k += 1, placed += 1) {
+      const angle = (2 * Math.PI * k) / capacity;
+      positions[order[placed]] = { x: ring * 60 * Math.cos(angle), y: ring * 60 * Math.sin(angle) };
+    }
+  }
+  return positions;
 };

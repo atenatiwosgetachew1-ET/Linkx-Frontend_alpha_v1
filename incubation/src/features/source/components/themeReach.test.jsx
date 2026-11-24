@@ -13,9 +13,11 @@ import { stateFreeSelector } from '../../../shared/theme/pickerSelectors.js';
 import { DATAFRAME_STATUSES, defaultSourceState, SOURCE_MODES, SOURCE_STATUSES, STREAM_STATUSES, TOOL_STATUSES, UPLOAD_STATUSES } from '../lib/sourceModel.js';
 import { WorkflowBody } from './steps/WorkflowBody.jsx';
 import { ModeChooser } from './ModeChooser.jsx';
+import { connectionById } from '../lib/sourceConnections.js';
+import { SourceSteps } from './SourceSteps.jsx';
 import { WorkflowTimeline, SourceWindowHeading, SessionBadge } from './sourceUi.jsx';
 
-for (const f of ['src/styles/themes/tokens.css', 'src/styles/themes/nbe-daylight.css', 'src/main.css', 'src/styles/features/source.css', 'src/styles/features/loader.css', 'src/styles/features/window-controls.css']) {
+for (const f of ['src/styles/themes/tokens.css', 'src/styles/themes/nbe-daylight.css', 'src/main.css', 'src/styles/features/source.css', 'src/styles/features/source-restyle.css', 'src/styles/features/source-start-flow.css', 'src/styles/features/source-results.css', 'src/styles/features/source-storage.css', 'src/styles/features/source-broker.css', 'src/styles/features/source-elastic.css', 'src/styles/features/loader.css', 'src/styles/features/window-controls.css']) {
   const s = document.createElement('style'); s.textContent = readFileSync(f, 'utf8'); document.head.appendChild(s);
 }
 const COLOR = /^(color|background|background-color|background-image|border(-(top|right|bottom|left))?(-color)?|outline(-color)?|box-shadow|fill|stroke|accent-color|caret-color)$/;
@@ -57,19 +59,61 @@ const defaults = { ...resolveSourceDefaults({}), domain: 'bank', domains: [{ key
 const b = (p) => ({ ...defaultSourceState.batch, ...p });
 const handlers = { onSourceAction() {}, onToolAction() {}, onStorageSearch() {}, onElasticSearch() {}, onSwitchDomain() {} };
 const wb = (mode, modeState, extra = {}) => <WorkflowBody mode={mode} modeState={modeState} windowId="w" sessionId="s" streamLogLines={[]} defaults={defaults} validationMessage="Validation" toolValidationMessage="Tool validation" toolOptions={['neo4j']} handlers={handlers} onPatchModeState={() => {}} onOpenConfiguration={() => {}} onOpenLibrary={() => {}} {...extra} />;
+// The Storage page's table is styled inside the flow shell only.
+const flow = (ui) => <div className="source_window_workflow_shell source_window_flow is-steps">{ui}</div>;
 const info = { columns: ['x', 'y'], rules: ['r'], actions: [], totalRows: 1, totalColumns: 2, tool: 'neo4j' };
 
 it('every visible Source element exposes a Source-scoped colour variable to the style picker', () => {
-  audit('chooser', <ModeChooser sourceSessionId="s" onSelectMode={() => {}} onOpenConfiguration={() => {}} onCopySession={() => {}} />);
+  audit('chooser', <ModeChooser sourceSessionId="s" defaults={resolveSourceDefaults({})} onSetUpConnection={() => {}} onSelectMode={() => {}} onOpenConfiguration={() => {}} onCopySession={() => {}} />);
   audit('heading', <><header className="source_window_choose_header"><SourceWindowHeading icon="source" title="T" subtitle="S" tags={[{ label: 'Batch' }, { label: 'Step', tone: 'muted' }]}><SessionBadge sessionId="s" onCopySession={() => {}} /></SourceWindowHeading></header><WorkflowTimeline activeStep="dataframe" steps={[{ id: 'upload', label: 'U', value: 'u' }, { id: 'dataframe', label: 'D', value: 'd' }, { id: 'stream', label: 'S', value: 's' }]} accessibleSteps={new Set(['upload', 'dataframe'])} onStepChange={() => {}} /></>);
+  audit('steps', <div className="source_window_workflow_shell source_window_flow is-steps"><SourceSteps activeStep="dataframe" steps={[{ id: 'upload', label: 'U', value: 'u' }, { id: 'dataframe', label: 'D', value: 'd' }, { id: 'stream', label: 'S', value: 's' }]} accessibleSteps={new Set(['upload', 'dataframe'])} connection={connectionById('storage')} domainLabel="Banking" onStepChange={() => {}} /></div>);
   audit('upload', wb('batch', b({ selectedFiles: ['a.csv'], selectedFileDetails: [{ name: 'a.csv', extension: 'csv', size: 10, lastModified: 1 }], uploadStatus: UPLOAD_STATUSES.UPLOADED, sourceStatus: SOURCE_STATUSES.UPLOADED })));
-  audit('storage', wb('batch', b({ selectedConnectionType: 'storage', sourceStatus: SOURCE_STATUSES.CONNECTED, toolStatus: TOOL_STATUSES.FAILED, storageSearchStatus: 'done', storageSearchResults: [{ name: 'f', path: '/f', size: 1, date: 'd' }], selectedStorageFiles: [{ name: 'f', path: '/f', size: 1, date: 'd' }], storageSearchHasMore: true })));
-  audit('storage-idle', wb('batch', b({ selectedConnectionType: 'storage' })));
-  audit('search', wb('batch', b({ selectedConnectionType: 'search', sourceStatus: SOURCE_STATUSES.CONNECTED, searchMode: 'strict', elasticSearchStatus: 'done', elasticSearchResults: [{ name: 'r', size: 2 }] })));
-  audit('broker', wb('batch', b({ selectedConnectionType: 'broker' })));
-  audit('realtime', wb('realtime', { ...defaultSourceState.realtime }));
+  audit('storage', flow(wb('batch', b({ selectedConnectionType: 'storage', sourceStatus: SOURCE_STATUSES.CONNECTED, toolStatus: TOOL_STATUSES.FAILED, storageSearchStatus: 'done', storageSearchResults: [{ name: 'f', path: '/f', size: 1, date: 'd' }], selectedStorageFiles: [{ name: 'f', path: '/f', size: 1, date: 'd' }], storageSearchHasMore: true }))));
+  audit('storage-idle', flow(wb('batch', b({ selectedConnectionType: 'storage' }))));
+  audit('search', flow(wb('batch', b({ selectedConnectionType: 'search', sourceStatus: SOURCE_STATUSES.CONNECTED, searchMode: 'strict', elasticSearchStatus: 'done', elasticSearchResults: [{ name: 'r', size: 2 }] }))));
+  audit('broker', flow(wb('batch', b({ selectedConnectionType: 'broker' }))));
+  audit('realtime', flow(wb('realtime', { ...defaultSourceState.realtime })));
   audit('dataframe-map', wb('batch', b({ step: 'dataframe', dataframeStatus: DATAFRAME_STATUSES.READY, dataframeInfo: info, dataframeAction: 'Source / Target Mapping' })));
   audit('dataframe-link', wb('batch', b({ step: 'dataframe', dataframeStatus: DATAFRAME_STATUSES.READY, dataframeInfo: info })));
   audit('stream', wb('batch', b({ step: 'stream', streamStatus: STREAM_STATUSES.RUNNING }), { streamLogLines: [{ at: 't', level: 'info', message: 'x' }] }));
   expect([...report].map(([k, v]) => `${k}  (${v})`)).toEqual([]);
 });
+
+// Every element of the Storage, Message broker and Elasticsearch pages, wrappers and icons too, has a colour of
+// its own to pick: a rule that names the element itself (not `*`), whose
+// colour no !important rule of another sheet wins over.
+it('gives every element of the Storage, Message broker and Elasticsearch pages its own colour to pick', () => {
+  const state = (p) => b({ selectedConnectionType: 'storage', storageToolbarCollapsed: false, ...p });
+  const file = { name: 'f', path: '/f', size: 1, date: 'd' };
+  const pages = [
+    state({}),
+    state({ sourceStatus: SOURCE_STATUSES.CONNECTED, toolStatus: TOOL_STATUSES.FAILED, storageSearchStatus: 'done', storageSearchResults: [file, { ...file, name: 'g', path: '/g' }], selectedStorageFiles: [file], storageSearchHasMore: true }),
+    state({ selectedConnectionType: 'broker', brokerToolbarCollapsed: false, sourceStatus: SOURCE_STATUSES.CONNECTED, toolStatus: TOOL_STATUSES.FAILED }),
+    state({ selectedConnectionType: 'search', sourceStatus: SOURCE_STATUSES.CONNECTED, toolStatus: TOOL_STATUSES.FAILED, elasticSearchStatus: 'done', elasticSearchResults: [{ name: 'r', size: 2 }, { name: 's', size: 1 }], selectedSearchFiles: [{ name: 'r', size: 2 }], elasticSearchHasMore: true }),
+    state({ selectedConnectionType: 'search', searchMode: 'strict' }),
+    state({ selectedConnectionType: 'broker', sourceAddressType: 'api', brokerToolbarCollapsed: false }),
+  ];
+  const own = new Set();
+  const beaten = new Set();
+  const stateful = /:(?:hover|active|focus|checked|disabled|enabled|:)|::/;
+  pages.forEach((page) => {
+    const { container } = render(<div className="workspace_window"><div className="workspace_window_body source_window_body">{flow(wb('batch', page))}</div></div>);
+    container.querySelectorAll('.source_window_flow_storage, .source_window_flow_storage *').forEach((el) => {
+      if (el.parentElement.closest('svg') || /^(TABLE|THEAD|TBODY|TR|OPTION)$/.test(el.tagName)) return; // covered by their cells
+      const name = `${el.parentElement.className} > ${el.tagName.toLowerCase()}.${el.getAttribute('class') || ''}`;
+      if (!ownColorVar(el)) own.add(name);
+      const matching = colorVarRules.flatMap((rule) => rule.selectorText.split(',').filter((part) => !stateful.test(part.replace(/:not\([^)]*\)/g, ''))).map((part) => {
+        try { return el.matches(part) ? { part, rule } : null; } catch { return null; }
+      }).filter(Boolean));
+      ['color', 'background', 'border-color', 'stroke'].forEach((property) => {
+        const of = ({ rule }) => declsOf(rule).find(([p]) => p === property)?.[1] || '';
+        const mine = matching.filter((m) => /source_window_flow\b/.test(m.part) && /var\(--source-(?:storage|table|elastic|broker)-/.test(of(m)));
+        const theirs = matching.filter((m) => !/source_window_flow\b/.test(m.part) && /!important/.test(of(m)));
+        if (mine.length && theirs.length && !mine.some((m) => /!important/.test(of(m)))) beaten.add(`${name} ${property}: ${theirs[0].part}`);
+      });
+    });
+    cleanup();
+  });
+  expect([...own]).toEqual([]);
+  expect([...beaten]).toEqual([]);
+}, 30000);
