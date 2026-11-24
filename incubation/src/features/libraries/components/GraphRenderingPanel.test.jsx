@@ -108,12 +108,24 @@ describe('Libraries → Graph rendering', () => {
     expect(screen.getByText(/did not finish: the browser stopped at 10,000 nodes/)).toBeInTheDocument();
   });
 
+  it('Copy details: what support needs, as text', async () => {
+    const user = userEvent.setup();
+    saveGpuBenchmark(okResult);
+    render(<GraphRenderingPanel configuration={{}} />);
+    await user.click(screen.getByRole('button', { name: 'Copy details' }));
+    expect(await screen.findByRole('button', { name: 'Copied' })).toBeInTheDocument();
+    const text = await navigator.clipboard.readText();
+    expect(text).toContain('The browser draws with: Test GPU.');
+    expect(text).toContain('GPU limit: 5000 nodes');
+    expect(text).toContain('- 10000 nodes: 8 fps');
+  });
+
   it('cannot be turned on while the browser draws in software, and never says the card is missing', () => {
     capability.current = { verdict: 'not_capable', status: 'software', reasons: ['The browser draws with: SwiftShader.'], cautions: [] };
     const { container } = render(<GraphRenderingPanel configuration={{}} />);
     expect(screen.getByRole('switch', { name: /Use the GPU for graphs/ })).toBeDisabled();
     expect(screen.getAllByText(/does not mean the computer has none/).length).toBeGreaterThan(0);
-    expect(screen.getByText('The browser draws with: SwiftShader.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Check again' })).toBeInTheDocument();
     expect(screen.getByText(/turn on graphics \(hardware\) acceleration/)).toBeInTheDocument();
     expect(container).not.toHaveTextContent(/This device cannot/);
   });
@@ -153,7 +165,8 @@ describe('Libraries → Graph rendering', () => {
     capability.current = { verdict: 'capable', status: 'hardware', reasons: [], cautions: ['The draw test was slow.'] };
     render(<GraphRenderingPanel configuration={{}} />);
     expect(screen.getByRole('switch', { name: /Use the GPU for graphs/ })).toBeEnabled();
-    expect(screen.getByText('The draw test was slow.')).toBeInTheDocument();
+    expect(screen.queryByText('This browser')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Check again' })).not.toBeInTheDocument();
     expect(shouldSuggestGpu({})).toBe(false);
   });
 

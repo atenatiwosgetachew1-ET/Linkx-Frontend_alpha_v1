@@ -1,6 +1,7 @@
 import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 
 import { createGraph, releaseGraph } from '../lib/cytoscapeInstance.js';
+import { graphPicture, pictureScale } from '../lib/graphPicture.js';
 import { buildElements, buildStylesheet, edgeCurveFor } from '../lib/graphElements.js';
 import { GRAPH_LIMITS, layoutSignatureOf } from '../lib/graphSettings.js';
 import { requestLayout, startPhysics } from '../lib/layoutClient.js';
@@ -43,12 +44,7 @@ const capture = (cy, { full, scale, maxSide, format }) => {
     background = getComputedStyle(element).backgroundColor;
     element = element.parentElement;
   }
-  try {
-    const options = { output: 'base64uri', bg: background || '#ffffff', full, scale, maxWidth: maxSide, maxHeight: maxSide };
-    return format === 'jpg' ? cy.jpg({ ...options, quality: 0.9 }) : cy.png(options);
-  } catch {
-    return null;
-  }
+  return graphPicture(cy, { full, scale, maxSide, format, bg: background || '#ffffff' });
 };
 
 // A stable empty list (a default prop must not change every render).
@@ -168,9 +164,15 @@ const GraphCanvas = forwardRef(function GraphCanvas({ windowId, store, view, set
           });
         });
       }
+      // Drawn smaller than on screen: widths follow the picture's scale, so
+      // thin links do not vanish.
+      const pictured = full ? pictureScale(cy, { full, scale, maxSide }) : scale;
+      const restyled = full && pictured < cy.zoom();
       try {
+        if (restyled) cy.style(buildStylesheet(themeRef.current, { curve: curveRef.current, zoom: pictured }));
         return capture(cy, { full, scale, maxSide, format });
       } finally {
+        if (restyled) zoomStyleRef.current();
         if (restore.length) cy.batch(() => restore.forEach(([node, label]) => node.data('label', label)));
       }
     },

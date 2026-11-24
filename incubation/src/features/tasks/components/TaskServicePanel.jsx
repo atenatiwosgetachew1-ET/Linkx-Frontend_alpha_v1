@@ -5,10 +5,11 @@ import { useCan } from '../../../auth/useCan.js';
 import { useSession } from '../../../shared/session/useSession.js';
 import { useWorkspaceActions } from '../../../workspace/hooks/useWorkspace.js';
 import { WORKSPACE_WINDOW_TYPES } from '../../../workspace/state/workspaceTypes.js';
-import { getServiceRefusalCode, getServiceRefusalMessage } from '../../../services/apiErrors.js';
-import { reconfirmTask, saveTaskEvidence } from '../../../services/tasksApi.js';
+import { getServiceRefusalMessage } from '../../../services/apiErrors.js';
+import { reconfirmTask } from '../../../services/tasksApi.js';
 import TaskEvidenceDialog from './TaskEvidenceDialog.jsx';
-import { TASK_LIFECYCLES, TASK_STATUSES, applyServerTask, updateTask } from '../lib/taskRegistry.js';
+import { canSaveAsEvidence, saveRunAsEvidence } from '../lib/saveEvidence.js';
+import { TASK_LIFECYCLES, applyServerTask, releaseTaskSession } from '../lib/taskRegistry.js';
 import { formatDateTime } from '../lib/taskFormat.js';
 
 // A task's record on the Service (frontend alignment 2026-11-20): its
@@ -18,7 +19,8 @@ import { formatDateTime } from '../lib/taskFormat.js';
 //
 // dialogHost: the Tasks window's element the Save as evidence popup covers
 // (as the report popup covers its Graph window).
-export default function TaskServicePanel({ task, dialogHost = null }) {
+// graphMissing: why the run's graph cannot be kept ('' when it can).
+export default function TaskServicePanel({ task, dialogHost = null, graphMissing = '' }) {
   const can = useCan();
   const { apiFetch } = useSession();
   const { openWindow } = useWorkspaceActions();
@@ -28,7 +30,7 @@ export default function TaskServicePanel({ task, dialogHost = null }) {
   if (!task.serverId) return null;
 
   const expired = task.lifecycle === TASK_LIFECYCLES.EXPIRED || task.lifecycle === TASK_LIFECYCLES.ARCHIVED;
-  const canSave = can('evidence:create') && task.status === TASK_STATUSES.COMPLETED && !task.foreign;
+  const canSave = canSaveAsEvidence(task, can);
 
   const reconfirm = async () => {
     setBusy('reconfirm');
@@ -44,26 +46,20 @@ export default function TaskServicePanel({ task, dialogHost = null }) {
   };
 
   // From the popup. -> { ok, message?, offerWithoutGraph? }
-  const save = async (values, { includeGraph }) => {
-    try {
-      const { evidence } = await saveTaskEvidence(apiFetch, {
-        serverId: task.serverId, title: values.title, summary: values.summary, includeGraph,
-      });
-      if (evidence?.id) updateTask(task.id, { evidenceId: String(evidence.id) });
+  const save = async (values, options) => {
+    const result = await saveRunAsEvidence(apiFetch, task, values, options);
+    if (result.ok) {
       setDialogOpen(false);
-      setMessage('Saved as evidence (Reports ▸ Service evidence ▸ Analysts).');
-      return { ok: true };
-    } catch (error) {
-      return {
-        ok: false,
-        offerWithoutGraph: getServiceRefusalCode(error) === 'graph_unavailable',
-        message: getServiceRefusalMessage(error) || (error?.status === 404 ? 'The Service does not know this task.' : 'The run could not be saved as evidence.'),
-      };
+      // Its graph is in the record now: a background run's session is freed.
+      if (result.graphKept === true) releaseTaskSession(task.id);
+      setMessage(result.message);
     }
+    return result;
   };
   const dialog = dialogOpen ? (
     <TaskEvidenceDialog
       initial={{ title: `${task.title} #${task.number}`, summary: '', includeGraph: true }}
+      graphMissing={graphMissing}
       taskLabel={`${task.title} #${task.number}`}
       onSave={save}
       onCancel={() => setDialogOpen(false)}
@@ -77,7 +73,7 @@ export default function TaskServicePanel({ task, dialogHost = null }) {
   });
 
   return (
-    <div className={`tasks_service is-${task.lifecycle || 'active'}`} aria-label="Service record">
+    <div className={`tasks_service is-${task.lifecycle || 'active'}${task.evidenceId ? ' is-saved' : ''}`} aria-label="Service record">
       {task.lifecycle === TASK_LIFECYCLES.EXPIRING ? (
         <p className="tasks_service_note">Expires soon{task.expiresAt ? ` (${formatDateTime(task.expiresAt)})` : ''}. Save or report it before then.</p>
       ) : null}
@@ -98,7 +94,7 @@ export default function TaskServicePanel({ task, dialogHost = null }) {
           <span className="tasks_evidence_badge">Saved as evidence</span>
           <button type="button" className="tasks_action tasks_service_end" onClick={openEvidence}>Open in Reports</button>
         </p>
-      ) : canSave && !expired ? (
+      ) : canSave ? (
         <p className="tasks_service_note">
           Keep this run as a permanent record in Reports.
           <button type="button" className="tasks_action tasks_evidence_button tasks_service_end" onClick={() => { setMessage(''); setDialogOpen(true); }}>Save as evidence</button>

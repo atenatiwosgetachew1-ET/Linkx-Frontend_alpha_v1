@@ -1,5 +1,6 @@
 import { createGraph, releaseGraph } from './cytoscapeInstance.js';
 
+import { graphPicture, pictureScale } from './graphPicture.js';
 import { buildElements, buildStylesheet, edgeCurveFor } from './graphElements.js';
 import { compareNodeValues, getNodeValue } from './graphModel.js';
 import { nodeTypeOf } from './graphAnalysis.js';
@@ -178,12 +179,11 @@ export const renderOffscreenSnapshot = async (store, { isCdr = false, host = doc
     });
     // The capture's scale: the whole drawing fitted into maxSide (at most
     // 2x). Node borders and links are widened for it, so they print.
-    const box = cy.elements().boundingBox();
-    const scale = Math.min(2, maxSide / Math.max(box.w || 1, box.h || 1, 1));
+    const scale = pictureScale(cy, { full: true, scale: 2, maxSide });
     cy.style(buildStylesheet(theme, { curve: edgeCurveFor(view.nodeIds.length), zoom: scale }));
     cy.style().selector('edge').style('width', (edge) => Math.max(edge.data('width') || 1, EDGE_PRINT_PX / scale)).update();
     await nextFrames();
-    return cy.jpg({ output: 'base64uri', bg: readCanvasBackground(container), full: true, scale: 2, maxWidth: maxSide, maxHeight: maxSide, quality: 0.9 }) || null;
+    return graphPicture(cy, { full: true, scale: 2, maxSide, format: 'jpg', bg: readCanvasBackground(container) });
   } catch {
     return null;
   } finally {

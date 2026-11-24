@@ -642,3 +642,27 @@ and, on `create_DF` for a batch source, `limits: { "last_seconds": 3600, "time_c
 2. Keep it in the answers of `/init`, `/configuration` load and save.
 
 **Frontend once done:** nothing to change to honour it: `false` already turns GPU drawing off, and open graphs follow. A control to change it would be added to the Configuration window.
+
+### B-37. Open a finished run's graph without its Source session (`task_id` on `/get_graph`, P1)
+**Reported 2026-11-24:** Tasks ▸ Show graph on a completed run failed with "Neo4j tool_credentials missing for session 1_111378". On another run, with its Source window still open, the graph came back with no nodes.
+
+**What the frontend does (tested):**
+- A finished run's graph is asked for by its Source session only: `/get_graph { id: "relationship", source_id, relationship: "*" }`.
+- It sends `/close_source_window` when the Source window closes, and when a background run ends. That may end the session's credentials; please confirm.
+- Source session ids are `<window number>_<main session>`. Window numbers restart at 1 on every page load, while the main session is kept. So after a reload, or in a second tab, a new Source window sends `/init_source` for an id an earlier run already used. Production numbers its windows the same way.
+- Two runs with the same id send identical graph requests.
+
+**Changed in the frontend (2026-11-24):**
+- Show graph is offered only while the run is going in this page, or once it has completed while its Source window is open. It is not offered for tasks listed by the Service.
+- For a completed run it now sends `/graph_link { id: "link" }` first, then `/get_graph`. Production does too: it has no "completed" stream state, so a completed run stays linkable until it is terminated, fails or its window closes.
+
+**Request:**
+1. Accept `task_id` on `/get_graph`, and answer with that run's graph only, using the task owner's saved Neo4j login. It should work after the Source window is closed, after a reload, and until the task is archived. Same permissions as reading the task.
+2. Say what `/init_source` does to an id already in use: does it clear its credentials or its data? Please refuse it or return a new id instead.
+3. Say exactly when a session's `tool_credentials` are removed: `/close_source_window`, sign-out, idle timeout, a restart, or a time limit.
+4. Confirm that `/graph_link` is accepted for a completed run, and that `*` then returns its nodes even when it has no relationships (follow-up item 6).
+5. Confirm that a configuration save **merges**: the frontend, like production, leaves out masked passwords, their `*_ref` and `tool_credentials`. They must not be removed by a save that omits them.
+
+**Verify:** run an analysis, close its Source window, reload, and open its graph from Tasks. Then run a second analysis: the first task still opens the first run's graph.
+
+**Frontend once done:** send `task_id` and offer Show graph for every completed task again.

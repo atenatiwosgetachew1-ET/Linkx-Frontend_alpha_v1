@@ -3,7 +3,8 @@
 // Source window's "Open graph" and the Tasks window's "Show graph".
 //
 // Production rules kept:
-// - a link is only possible while that source is starting or streaming;
+// - a link is only possible while that source is starting or streaming (or
+//   has completed, for a run opened from Tasks: isRunGraphAvailable);
 // - POST /graph_link { id: "link", source_id, graph_window_id };
 // - on success the window follows the session's live status; relationships
 //   already known for the session show at once;
@@ -12,7 +13,7 @@
 
 import { isSuccessResponse } from '../../../services/apiClient.js';
 import { linkGraphWindow, sanitizeGraphEndpointId } from '../../../services/graphApi.js';
-import { TASK_ORIGINS, getTasks, isTaskActive } from '../../tasks/lib/taskRegistry.js';
+import { TASK_ORIGINS, TASK_STATUSES, getLatestTaskForWindow, getTasks, isTaskActive } from '../../tasks/lib/taskRegistry.js';
 import { WORKSPACE_WINDOW_TYPES } from '../../../workspace/state/workspaceTypes.js';
 import { getGraphStore } from './graphStore.js';
 
@@ -25,6 +26,34 @@ export const streamingSessionIds = (tasks = getTasks()) => new Set(
 );
 
 export const isSessionStreaming = (sessionId) => streamingSessionIds().has(String(sessionId || ''));
+
+// A run's graph can be shown (Tasks ▸ Show graph) while it runs, and once it
+// has completed for as long as its Source window is open. Production has no
+// "completed" stream state (src/App.jsx STREAM_STATUSES): a finished run stays
+// linkable until it is terminated, fails, or its window closes. Not for:
+// - a run of another page or tab (remote): its session may be gone, and after
+//   a reload its id is given to a new Source window;
+// - an earlier run of a window that has run again: both share one session,
+//   so the request would return the newer run's graph.
+export const isRunGraphAvailable = (task, windows = []) => {
+  if (!task || task.remote || task.origin !== TASK_ORIGINS.SOURCE || !task.sourceSessionId) return false;
+  if (isTaskActive(task)) return true;
+  // A background run that completed, its session held for its graph.
+  if (task.status === TASK_STATUSES.COMPLETED && task.heldSession) return true;
+  return task.status === TASK_STATUSES.COMPLETED
+    && getLatestTaskForWindow(task.windowId)?.id === task.id
+    && windows.some((item) => item.type === WORKSPACE_WINDOW_TYPES.SOURCE && item.id === task.windowId
+      && String(item.sourceSessionId || '') === String(task.sourceSessionId));
+};
+
+// Why a run's graph can no longer be had ('' when it can).
+export const runGraphMissingReason = (task, windows = []) => {
+  if (!task || isRunGraphAvailable(task, windows)) return '';
+  if (task.remote) return 'This run was not made in this page, so its graph can no longer be reached.';
+  if (task.windowId && getLatestTaskForWindow(task.windowId)?.id !== task.id) return 'Its Source window has run again since, so its graph can no longer be told apart.';
+  if (task.background) return 'Its session was released, so its graph can no longer be reached.';
+  return 'Its Source window is closed, so its graph can no longer be reached.';
+};
 
 // Source windows a Graph window can link to right now.
 export const linkableSources = (windows = [], tasks = getTasks()) => {
@@ -49,9 +78,10 @@ export const resolveSourceWindow = (input, windows = []) => {
   )) || null;
 };
 
-export const linkGraphToSession = async ({ apiFetch, updateWindowMetadata, notify, graphWindowId, sourceSessionId, action = '' }) => {
+// finishedRun: the caller checked isRunGraphAvailable.
+export const linkGraphToSession = async ({ apiFetch, updateWindowMetadata, notify, graphWindowId, sourceSessionId, action = '', finishedRun = false }) => {
   const sessionId = String(sourceSessionId || '').trim();
-  if (!isSessionStreaming(sessionId)) {
+  if (!finishedRun && !isSessionStreaming(sessionId)) {
     notify?.({
       title: 'Graph link blocked',
       message: 'The selected source is not actively ingesting or streaming. Start ingestion or streaming first, then try again.',
@@ -95,10 +125,10 @@ export const unlinkGraph = async ({ apiFetch, updateWindowMetadata, graphWindowI
 // Opens a new Graph window and links it (Source "Open graph", Tasks "Show
 // graph"). Production opened, then linked after a 150 ms timer; here the
 // window id is known up front, so no timer is needed.
-export const openLinkedGraphWindow = async ({ workspace, apiFetch, notify, sourceSessionId, title, customTitle, metadata = {}, action = '' }) => {
+export const openLinkedGraphWindow = async ({ workspace, apiFetch, notify, sourceSessionId, title, customTitle, metadata = {}, action = '', finishedRun = false }) => {
   const graphWindowId = workspace.nextWindowId(WORKSPACE_WINDOW_TYPES.GRAPH);
   const opened = workspace.openWindow(WORKSPACE_WINDOW_TYPES.GRAPH, { id: graphWindowId, title: title || 'Graph', customTitle, metadata });
   if (!opened) return null;
-  await linkGraphToSession({ apiFetch, updateWindowMetadata: workspace.updateWindowMetadata, notify, graphWindowId, sourceSessionId, action });
+  await linkGraphToSession({ apiFetch, updateWindowMetadata: workspace.updateWindowMetadata, notify, graphWindowId, sourceSessionId, action, finishedRun });
   return graphWindowId;
 };

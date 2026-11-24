@@ -2165,10 +2165,12 @@ export default function GraphWindowBody({ windowItem }) {
     let text = 'Open a graph from a report or a task, or link this window to a streaming Source session.';
     // Or start one here: adding anything makes this a new graph.
     let start = 'To create an instant graph, start by adding components from the canvas context menu.';
+    let again = false;
     if (source.kind === 'session' && emptySession === sessionId) {
       title = 'No graph data';
       text = `Session ${sessionId} returned no nodes and no relationships.`;
       start = '';
+      again = true;
     } else if (source.kind === 'session') {
       title = relationships.length ? 'Choose a relationship' : 'Waiting for the linked session';
       text = relationships.length
@@ -2181,6 +2183,7 @@ export default function GraphWindowBody({ windowItem }) {
         <h4>{title}</h4>
         <p>{text}</p>
         {start ? <p className="graph_window_state_start"><strong>Tip:</strong> {start}</p> : null}
+        {again ? <button type="button" className="graph_window_button" onClick={() => fetchRelationship(metadata.graphRelationship || '*')}>Load again</button> : null}
       </div>
     );
   }

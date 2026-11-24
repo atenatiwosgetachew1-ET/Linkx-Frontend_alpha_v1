@@ -47,13 +47,15 @@ export const initializeSourceWindow = async (apiFetch, { sessionId, windowId }) 
   return { data, sourceSessionId, parentSessionId: cleanSessionId, windowId: cleanWindowId };
 };
 
-export const closeSourceWindow = async (apiFetch, { sessionId, windowId, reason = 'user_closed_window' }) => {
+export const closeSourceWindow = async (apiFetch, { sessionId, windowId, reason = 'user_closed_window', keepalive = false }) => {
   const cleanSessionId = normalizeSessionId(sessionId);
   const cleanWindowId = String(windowId || '').trim();
   if (!cleanSessionId || !cleanWindowId) return null;
 
   return apiFetch('/close_source_window', {
     method: 'POST',
+    // Page gone or signed out: nobody is there for a sign-in notice.
+    ...(keepalive ? { keepalive: true, suppressUnauthorizedHandler: true } : {}),
     body: { id: 'close_source_window', session_id: cleanSessionId, window_id: toBackendWindowId(cleanWindowId), reason },
   });
 };

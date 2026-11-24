@@ -7,10 +7,13 @@ import { EVIDENCE_SUMMARY_MAX, EVIDENCE_TITLE_MAX } from '../../../services/task
 // header, flat section and footer. Escape, Cancel or a click outside
 // closes it.
 //
+// graphMissing: why the run's graph cannot be kept ('' when it can); the
+// graph is then not asked for.
+// overScreen: over the whole workspace (its Source window being closed).
 // initial: { title, summary, includeGraph }; onSave(values, { includeGraph })
 // -> Promise<{ ok, message?, offerWithoutGraph? }> (busy until it settles;
 // closed by the caller on success).
-export default function TaskEvidenceDialog({ initial, taskLabel, onSave, onCancel }) {
+export default function TaskEvidenceDialog({ initial, taskLabel, onSave, onCancel, graphMissing = '', overScreen = false }) {
   const [values, setValues] = useState(initial);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
@@ -31,7 +34,10 @@ export default function TaskEvidenceDialog({ initial, taskLabel, onSave, onCance
     return () => document.removeEventListener('keydown', onKey);
   }, [busy, onCancel]);
 
-  const save = async (includeGraph = values.includeGraph) => {
+  // Read again at the moment of saving: its Source window may have been
+  // closed while this was open.
+  const keepsGraph = values.includeGraph && !graphMissing;
+  const save = async (includeGraph = keepsGraph) => {
     if (busy) return;
     setBusy(true);
     setMessage('');
@@ -52,7 +58,7 @@ export default function TaskEvidenceDialog({ initial, taskLabel, onSave, onCance
   };
 
   return (
-    <div className="graph_customize_backdrop tasks_evidence_backdrop" onPointerDown={(event) => { if (event.target === event.currentTarget && !busy) onCancel(); }}>
+    <div className={`graph_customize_backdrop tasks_evidence_backdrop${overScreen ? ' is-over-screen' : ''}`} onPointerDown={(event) => { if (event.target === event.currentTarget && !busy) onCancel(); }}>
       <form ref={ref} className="graph_customize is-report tasks_evidence_dialog" role="dialog" aria-modal="true" aria-labelledby={titleId} onSubmit={submit}>
         <header className="graph_customize_header">
           <div className="graph_customize_heading">
@@ -80,12 +86,12 @@ export default function TaskEvidenceDialog({ initial, taskLabel, onSave, onCance
               <div className="graph_report_row">
                 <div className="graph_customize_field">
                   <span className="graph_customize_field_label">Graph</span>
-                  <label className="tasks_evidence_check">
-                    <input type="checkbox" checked={values.includeGraph} onChange={(event) => set('includeGraph', event.target.checked)} />
+                  <label className={`tasks_evidence_check${graphMissing ? ' is-disabled' : ''}`}>
+                    <input type="checkbox" checked={keepsGraph} disabled={Boolean(graphMissing)} aria-describedby={`${idBase}-graph`} onChange={(event) => set('includeGraph', event.target.checked)} />
                     <span>Keep a snapshot of the graph</span>
                   </label>
                 </div>
-                <small className="graph_customize_hint graph_report_hint">Up to 5,000 relationships; it opens from Reports after the run’s session is gone.</small>
+                <small id={`${idBase}-graph`} className={`graph_customize_hint graph_report_hint${graphMissing ? ' tasks_evidence_missing' : ''}`}>{graphMissing || 'Up to 5,000 relationships; it opens from Reports after the run’s session is gone.'}</small>
               </div>
             </fieldset>
             {message ? <p className="tasks_evidence_message" role="alert">{message}</p> : null}

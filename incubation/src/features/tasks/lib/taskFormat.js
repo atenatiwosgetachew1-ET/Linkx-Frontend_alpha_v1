@@ -5,12 +5,18 @@ export const TASK_FILTERS = Object.freeze([
   { id: 'active', label: 'Active' },
   { id: 'completed', label: 'Completed' },
   { id: 'stopped', label: 'Stopped / failed' },
+  // Analyst decision 2026-11-24: background runs whose session is kept for
+  // their graph, and runs saved as evidence.
+  { id: 'kept', label: 'Kept', hint: 'Background runs whose session is kept for their graph', empty: 'No session is kept. A background run that completes is listed here until you save it with its graph or release it.' },
+  { id: 'saved', label: 'Saved', hint: 'Runs saved as evidence', empty: 'No run in this list is saved as evidence.' },
 ]);
 
 export const matchesTaskFilter = (task, filter) => {
   if (filter === 'active') return task.status === TASK_STATUSES.STARTING || task.status === TASK_STATUSES.RUNNING;
   if (filter === 'completed') return task.status === TASK_STATUSES.COMPLETED;
   if (filter === 'stopped') return task.status === TASK_STATUSES.TERMINATED || task.status === TASK_STATUSES.FAILED;
+  if (filter === 'kept') return Boolean(task.heldSession);
+  if (filter === 'saved') return Boolean(task.evidenceId);
   return true;
 };
 

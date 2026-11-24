@@ -442,7 +442,7 @@
 }
 
 /* Theme Studio overrides sealed into NBE Daylight (2026-11-12 export,
-   updated with the 2026-11-21 and 2026-11-23 exports). */
+   updated with the 2026-11-21, 2026-11-23 and 2026-11-24 exports). */
 [data-theme="nbe-daylight"] {
   --window-active-close-bg: #7e2020;
   --window-active-close-hover-bg: #8d2525;
@@ -583,13 +583,13 @@
   --config-form-group-label-text: #131e2a;
   --config-form-label-icon: #ae874f;
   --config-form-group-line: #e8eff7;
-  --config-active-rule-border: #ffffff;
+  --config-active-rule-border: color-mix(in srgb, #AE874F 32%, #E8EFF7);
   --config-active-rule-shadow: #ffffff;
   --config-active-rule-tag-border: #8fbd96;
   --config-active-rule-tag-text: #7bb284;
   --config-form-info-icon: #ae874f;
   --config-form-info-icon-hover: #7f7566;
-  --libraries-set-open-border: #ffffff;
+  --libraries-set-open-border: color-mix(in srgb, #AE874F 32%, #E8EFF7);
   --source-choose-step-label-border: #dce4ee;
   --source-start-panel-bg: #ffffff;
   --source-start-timeline-bg: #f0f0f0;
@@ -611,6 +611,11 @@
   --source-table-check-on-bg: #1e2c3c;
   --source-elastic-select-bg: #ffffff;
   --source-storage-select-bg: #ffffff;
+  /* Added by the 2026-11-24 export. */
+  --libraries-page-option-focus-border: #AE874F;
+  --libraries-page-option-hover-border: color-mix(in srgb, #AE874F 45%, #E8EFF7);
+  --libraries-page-option-on-border: color-mix(in srgb, #AE874F 32%, #E8EFF7);
+  --config-form-card-border: #E8EFF7;
 }
 
 /* Settings window: this theme's values for the Settings tokens

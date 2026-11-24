@@ -514,7 +514,15 @@ export async function renderGraphReportPdf(report, { snapshot = null, logo = nul
   };
   const image = (dataUrl, caption, maxHeight = 150) => {
     if (!dataUrl) return;
-    const { width, height } = doc.getImageProperties(dataUrl);
+    let size;
+    try {
+      size = doc.getImageProperties(dataUrl);
+    } catch {
+      // A picture that cannot be read never costs the whole report.
+      paragraph('The picture of the graph could not be added.', { size: 9, color: COLOR.muted });
+      return;
+    }
+    const { width, height } = size;
     // The graph sits inside a padded frame (analyst decision 2026-11-17).
     const pad = 4;
     let w = CONTENT - pad * 2;

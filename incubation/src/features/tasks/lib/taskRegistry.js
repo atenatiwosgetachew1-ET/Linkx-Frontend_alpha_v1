@@ -10,7 +10,9 @@
 // Analysis sessions are capped at MAX_ANALYSIS_SESSIONS for backend resource
 // efficiency. A session is held by every open Source window, every running
 // background stream (its window closed, its backend session kept until the
-// stream ends) and every running quick-panel analysis. See getSessionUsage.
+// stream ends), every completed background run whose session is held for its
+// graph (holdTaskSession) and every running quick-panel analysis. See
+// getSessionUsage.
 //
 // The Service records every run as a task (frontend alignment 2026-11-20,
 // H-2): applyServerTask() merges its records (the list on load and each
@@ -52,6 +54,7 @@ let seq = 0;
 const listeners = new Set();
 const endListeners = new Set();
 const handlers = new Map(); // taskId -> { terminate }
+const heldReleases = new Map(); // taskId -> release({ keepalive })
 
 const emit = () => {
   snapshot = { tasks, focus };
@@ -62,9 +65,11 @@ const trim = (list) => {
   if (list.length <= MAX_TASKS) return list;
   const keep = [];
   let finishedKept = 0;
-  const finishedBudget = MAX_TASKS - list.filter(isTaskActive).length;
+  // (A run whose session is held is kept: dropping it would leak the session.)
+  const stays = (task) => isTaskActive(task) || task.heldSession;
+  const finishedBudget = MAX_TASKS - list.filter(stays).length;
   list.forEach((task) => {
-    if (isTaskActive(task)) keep.push(task);
+    if (stays(task)) keep.push(task);
     else if (finishedKept < finishedBudget) {
       keep.push(task);
       finishedKept += 1;
@@ -205,25 +210,51 @@ export const terminateTask = async (id) => {
   return true;
 };
 
+// A completed background run keeps its Service session until the analyst
+// saves it with its graph or releases it (analyst decision 2026-11-24), so
+// its graph can be shown and saved. Nothing is stored for it. It counts as
+// one of the analysis sessions meanwhile.
+export const holdTaskSession = (id, release) => {
+  if (!getTask(id)) {
+    release({});
+    return;
+  }
+  heldReleases.set(id, release);
+  updateTask(id, { heldSession: true });
+};
+
+export const releaseTaskSession = (id, options = {}) => {
+  const release = heldReleases.get(id);
+  if (!release) return false;
+  heldReleases.delete(id);
+  updateTask(id, { heldSession: false });
+  release(options);
+  return true;
+};
+
+// Page gone or signed out: nobody can reach their graphs any more.
+export const releaseAllTaskSessions = (options = {}) => [...heldReleases.keys()].forEach((id) => releaseTaskSession(id, options));
+
 export const getActiveTaskForWindow = (windowId) => tasks.find(
   (task) => String(task.windowId) === String(windowId) && isTaskActive(task),
 ) || null;
 
 export const getLatestTaskForWindow = (windowId) => tasks.find((task) => String(task.windowId) === String(windowId)) || null;
 
-// Running tasks that hold an analysis session without an open Source window.
-export const countDetachedSessions = (list = tasks) => list.filter((task) => isTaskActive(task) && isOwnTask(task)
-  && (task.origin === TASK_ORIGINS.QUICK || task.background)).length;
+// Tasks that hold an analysis session without an open Source window.
+export const countDetachedSessions = (list = tasks) => list.filter((task) => isOwnTask(task)
+  && (task.heldSession || (isTaskActive(task) && (task.origin === TASK_ORIGINS.QUICK || task.background)))).length;
 
 export const countActiveTasks = (list = tasks) => list.filter((task) => isTaskActive(task) && isOwnTask(task)).length;
 
-// { used, limit, available, openWindows, background, quick }.
+// { used, limit, available, openWindows, background, quick, held }.
 export const getSessionUsage = (openSourceWindows = 0, list = tasks) => {
   const own = list.filter(isOwnTask);
   const background = own.filter((task) => isTaskActive(task) && task.origin === TASK_ORIGINS.SOURCE && task.background).length;
   // Quick-panel runs and parent-alert runs each hold a session (H-8).
   const quick = own.filter((task) => isTaskActive(task) && (task.origin === TASK_ORIGINS.QUICK || task.origin === TASK_ORIGINS.PARENT)).length;
-  const used = openSourceWindows + background + quick;
+  const held = own.filter((task) => task.heldSession).length;
+  const used = openSourceWindows + background + quick + held;
   return {
     used,
     limit: MAX_ANALYSIS_SESSIONS,
@@ -231,6 +262,7 @@ export const getSessionUsage = (openSourceWindows = 0, list = tasks) => {
     openWindows: openSourceWindows,
     background,
     quick,
+    held,
   };
 };
 
@@ -239,8 +271,9 @@ export const sessionLimitMessage = (usage) => {
   if (usage.openWindows) parts.push(`${usage.openWindows} Source window${usage.openWindows === 1 ? '' : 's'}`);
   if (usage.background) parts.push(`${usage.background} background stream${usage.background === 1 ? '' : 's'}`);
   if (usage.quick) parts.push(`${usage.quick} quick analys${usage.quick === 1 ? 'is' : 'es'}`);
+  if (usage.held) parts.push(`${usage.held} finished background run${usage.held === 1 ? '' : 's'} kept for ${usage.held === 1 ? 'its graph' : 'their graphs'}`);
   return `All ${usage.limit} analysis sessions are in use (${parts.join(', ') || 'none free'}). `
-    + 'Wait for a task to finish, stop one in the Tasks window, or close a Source window.';
+    + `Wait for a task to finish, stop ${usage.held ? 'or release ' : ''}one in the Tasks window, or close a Source window.`;
 };
 
 // Asks the Tasks window to select a task (it may not be open yet).
@@ -250,9 +283,10 @@ export const requestTaskFocus = (id) => {
 };
 
 export const removeFinishedTasks = () => {
-  const next = tasks.filter(isTaskActive);
+  const stays = (task) => isTaskActive(task) || task.heldSession;
+  const next = tasks.filter(stays);
   if (next.length === tasks.length) return;
-  tasks.filter((task) => !isTaskActive(task)).forEach((task) => handlers.delete(task.id));
+  tasks.filter((task) => !stays(task)).forEach((task) => handlers.delete(task.id));
   tasks = next;
   emit();
 };
@@ -417,5 +451,6 @@ export const resetTasks = () => {
   tasks = [];
   focus = { taskId: null, seq: 0 };
   handlers.clear();
+  heldReleases.clear();
   emit();
 };

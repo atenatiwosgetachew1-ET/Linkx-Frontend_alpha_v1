@@ -1,5 +1,7 @@
 import cytoscape from 'cytoscape';
 
+import { drawDashes, patchShaders } from './gpuEdgeDashes.js';
+
 // Creating and releasing Cytoscape instances (GraphCanvas, offscreenSnapshot).
 //
 // Cytoscape 3.34 has two habits this works around, both at creation:
@@ -10,6 +12,8 @@ import cytoscape from 'cytoscape';
 //   (never used) WebGL context, until the page is reloaded. Browsers drop the
 //   oldest contexts past a limit, which would take a GPU graph down. A
 //   standard graph gets a plain 2d layer there instead.
+
+// GPU graphs also get their dashed links (gpuEdgeDashes.js).
 
 export const GPU_CONTEXT_OPTIONS = Object.freeze({ powerPreference: 'high-performance' });
 
@@ -27,17 +31,22 @@ export const withGpuContexts = (gpu, create) => {
   const original = prototype?.getContext;
   if (!original) return create([]);
   const contexts = [];
+  const undo = [];
   prototype.getContext = function getContext(type, ...rest) {
     if (!isWebgl(type)) return original.call(this, type, ...rest);
     if (!gpu) return original.call(this, '2d');
     const context = original.call(this, type, ...(rest.length ? rest : [GPU_CONTEXT_OPTIONS]));
-    if (context) contexts.push(context);
+    if (context) {
+      contexts.push(context);
+      undo.push(patchShaders(context));
+    }
     return context;
   };
   try {
     return create(contexts);
   } finally {
     prototype.getContext = original;
+    undo.forEach((stop) => stop());
   }
 };
 
@@ -47,7 +56,9 @@ export const createGraph = (options, { gpu = false } = {}) => withGpuContexts(gp
   const { container } = options;
   const before = new Set(container ? container.children : []);
   try {
-    return cytoscape({ ...options, ...(gpu ? { renderer: { name: 'canvas', webgl: true } } : {}) });
+    const cy = cytoscape({ ...options, ...(gpu ? { renderer: { name: 'canvas', webgl: true } } : {}) });
+    if (gpu) drawDashes(cy.renderer().drawing);
+    return cy;
   } catch (error) {
     try {
       container?._cyreg?.cy?.destroy(); // the half-made instance

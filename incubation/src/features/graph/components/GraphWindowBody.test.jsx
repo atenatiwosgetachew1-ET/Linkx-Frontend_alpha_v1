@@ -336,6 +336,16 @@ describe('GraphWindowBody linked to a session', () => {
     expect(screen.getByText('Session 3_17 returned no nodes and no relationships.')).toBeInTheDocument();
   });
 
+  it('an empty finished run can be loaded again', async () => {
+    statusSocket();
+    let graph = { nodes: [], edges: [] };
+    openLinked(vi.fn(async () => ({ results: { graph } })), { graphFinishedRun: true });
+    const again = await screen.findByRole('button', { name: 'Load again' });
+    graph = graphOf(3);
+    await userEvent.click(again);
+    await waitFor(() => expect(screen.getByTestId('canvas')).toHaveAttribute('data-nodes', '3'));
+  });
+
   it('keeps the window when a relationship has no data', async () => {
     const socket = statusSocket();
     openLinked(vi.fn(async () => ({ results: { graph: { nodes: [], edges: [] } } })));

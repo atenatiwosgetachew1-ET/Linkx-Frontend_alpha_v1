@@ -5,7 +5,8 @@ import { useCan } from '../../../auth/useCan.js';
 import { SOURCE_PERMISSIONS } from '../../../auth/permissions.js';
 import { useSession } from '../../../shared/session/useSession.js';
 import { useNotifications } from '../../../shared/notifications/useNotifications.js';
-import { isSessionStreaming, openLinkedGraphWindow } from '../../graph/lib/graphLinkFlow.js';
+import { isRunGraphAvailable, linkGraphToSession, openLinkedGraphWindow, runGraphMissingReason } from '../../graph/lib/graphLinkFlow.js';
+import { getGraphStore } from '../../graph/lib/graphStore.js';
 import { openAlertGraph } from '../../alerts/lib/alertRuntime.js';
 import { WORKSPACE_WINDOW_TYPES } from '../../../workspace/state/workspaceTypes.js';
 import { formatStreamLog } from '../../source/lib/sourceModel.js';
@@ -18,12 +19,14 @@ import {
   getSessionUsage,
   getTasksSnapshot,
   isTaskActive,
+  releaseTaskSession,
   removeFinishedTasks,
   subscribeTasks,
   terminateTask,
 } from '../lib/taskRegistry.js';
 import { FLAG_STATES, taskFlagVerdict } from '../lib/taskFlags.js';
 import { getServerTaskScope, loadServerTasks } from '../lib/serverTasks.js';
+import KeptSessionsDialog from './KeptSessionsDialog.jsx';
 import TaskServicePanel from './TaskServicePanel.jsx';
 import {
   TASK_FILTERS,
@@ -514,6 +517,7 @@ function SessionMeter({ usage }) {
     usage.openWindows ? `${usage.openWindows} Source window${usage.openWindows === 1 ? '' : 's'}` : '',
     usage.background ? `${usage.background} background` : '',
     usage.quick ? `${usage.quick} quick` : '',
+    usage.held ? `${usage.held} kept for graph` : '',
   ].filter(Boolean).join(' · ') || 'All free';
   return (
     <div
@@ -536,14 +540,15 @@ function SessionMeter({ usage }) {
   );
 }
 
-function TaskRow({ task, now, isSelected, onSelect }) {
+// isTabStop: the row the Tab key reaches (the selected one, or the first).
+function TaskRow({ task, now, isSelected, isTabStop, onSelect }) {
   return (
     <button
       type="button"
       role="option"
       aria-selected={isSelected}
       data-task-id={task.id}
-      tabIndex={isSelected ? 0 : -1}
+      tabIndex={isTabStop ? 0 : -1}
       className={`tasks_row is-${task.status}${isSelected ? ' is-selected' : ''}`}
       onClick={() => onSelect(task.id)}
     >
@@ -562,6 +567,7 @@ function TaskRow({ task, now, isSelected, onSelect }) {
         <span className="tasks_row_time">{taskDuration(task, now)}</span>
         <span className="tasks_row_chips">
           {task.background && isTaskActive(task) && <span className="tasks_chip">Background</span>}
+          {task.heldSession && <span className="tasks_chip">Session kept</span>}
           {task.lifecycle === 'expiring' || task.lifecycle === 'expired' || task.lifecycle === 'archived'
             ? <span className={`tasks_chip is-${task.lifecycle}`}>{{ expiring: 'Expires soon', expired: 'Expired', archived: 'Archived' }[task.lifecycle]}</span>
             : null}
@@ -586,6 +592,9 @@ function TaskDetail({ task, now, windows, workspace, dialogHost }) {
     ? windows.find((windowItem) => windowItem.id === task.windowId)
     : null;
   const canTerminate = isActive && canTerminateTask(task.id);
+  // Shown while the run's graph can be loaded (analyst decision 2026-11-24);
+  // an STR alert's run has its own graph and no Source window.
+  const canShowGraph = task.origin === TASK_ORIGINS.PARENT || isRunGraphAvailable(task, windows);
   const resultsHint = task.hasResults ? '' : 'Available once the analysis has started on the Service.';
   // Streams: only backend lines carry a verdict; quick tasks: their own log.
   const verdict = useMemo(
@@ -594,19 +603,27 @@ function TaskDetail({ task, now, windows, workspace, dialogHost }) {
   );
 
   // One Graph window per task: focus it when it is already open.
-  // While the run is streaming, a Graph window is linked to its session like
-  // production's Source "Open Graph" (/graph_link). Once it has finished the
-  // link is no longer possible (production rule), so the window is bound to
-  // the session without one and loads it from the relationships it knows.
+  // The window is linked to the run's session like production's Source "Open
+  // Graph" (/graph_link), while it runs and once it has completed; a completed
+  // run then loads its whole graph at once (graphFinishedRun).
   const openResultWindow = (type) => {
     // An STR alert's run: the alert's own graph (bound to the alert).
     if (task.origin === TASK_ORIGINS.PARENT && task.alertId && type === WORKSPACE_WINDOW_TYPES.GRAPH && openAlertGraph(task.alertId) != null) return;
     const existing = windows.find((windowItem) => windowItem.type === type && windowItem.metadata?.taskId === task.id);
     if (existing) {
       workspace.focusWindow(existing.id);
+      if (type !== WORKSPACE_WINDOW_TYPES.GRAPH || !isRunGraphAvailable(task, windows)) return;
+      // Opened while the run was going and still empty: it loads now. A link
+      // that failed is tried again.
+      if (!isActive) workspace.updateWindowMetadata(existing.id, { metadata: { graphFinishedRun: true } });
+      const { graphLinkSource, graphLinking } = existing.metadata || {};
+      if (!graphLinkSource && !graphLinking && getGraphStore(existing.id).getSnapshot().nodes === 0) {
+        linkGraphToSession({ apiFetch, updateWindowMetadata: workspace.updateWindowMetadata, notify, graphWindowId: existing.id, sourceSessionId: task.sourceSessionId, action: task.action, finishedRun: !isActive });
+      }
       return;
     }
-    if (type === WORKSPACE_WINDOW_TYPES.GRAPH && task.sourceSessionId && isSessionStreaming(task.sourceSessionId)) {
+    if (type === WORKSPACE_WINDOW_TYPES.GRAPH && isRunGraphAvailable(task, windows)) {
+      const finishedRun = !isActive;
       openLinkedGraphWindow({
         workspace,
         apiFetch,
@@ -614,11 +631,14 @@ function TaskDetail({ task, now, windows, workspace, dialogHost }) {
         sourceSessionId: task.sourceSessionId,
         title: 'Graph',
         customTitle: `${task.title} #${task.number}`,
-        metadata: { taskId: task.id },
+        metadata: { taskId: task.id, ...(finishedRun ? { graphFinishedRun: true } : {}) },
         action: task.action,
+        finishedRun,
       });
       return;
     }
+    // An STR alert's run whose alert has no graph yet: its own session.
+    if (task.origin !== TASK_ORIGINS.PARENT) return;
     workspace.openWindow(type, {
       title: 'Graph',
       customTitle: `${task.title} #${task.number}`,
@@ -690,15 +710,27 @@ function TaskDetail({ task, now, windows, workspace, dialogHost }) {
               <Icon d={ICONS.source} /> Go to source
             </button>
           )}
-          <button
-            type="button"
-            className="tasks_action is-primary linkx_tooltip_anchor"
-            disabled={!task.hasResults || !canCreateGraph}
-            data-tooltip={!canCreateGraph ? 'You need graph:create to open graphs.' : (resultsHint || 'Open the analysis graph')}
-            onClick={() => openResultWindow(WORKSPACE_WINDOW_TYPES.GRAPH)}
-          >
-            <Icon d={ICONS.graph} /> Show graph
-          </button>
+          {canShowGraph && (
+            <button
+              type="button"
+              className="tasks_action is-primary linkx_tooltip_anchor"
+              disabled={!task.hasResults || !canCreateGraph}
+              data-tooltip={!canCreateGraph ? 'You need graph:create to open graphs.' : (resultsHint || 'Open the analysis graph')}
+              onClick={() => openResultWindow(WORKSPACE_WINDOW_TYPES.GRAPH)}
+            >
+              <Icon d={ICONS.graph} /> Show graph
+            </button>
+          )}
+          {task.heldSession && (
+            <button
+              type="button"
+              className="tasks_action linkx_tooltip_anchor"
+              data-tooltip="Frees this run’s analysis session. Its graph can then no longer be shown or saved."
+              onClick={() => releaseTaskSession(task.id)}
+            >
+              <Icon d={ICONS.stop} /> Release session
+            </button>
+          )}
           {isActive && (
             <button
               type="button"
@@ -727,7 +759,7 @@ function TaskDetail({ task, now, windows, workspace, dialogHost }) {
 
       <FlagVerdict verdict={verdict} />
 
-      <TaskServicePanel task={task} dialogHost={dialogHost} />
+      <TaskServicePanel task={task} dialogHost={dialogHost} graphMissing={canShowGraph ? '' : runGraphMissingReason(task, windows)} />
 
       <TaskSummary task={task} />
 
@@ -752,6 +784,11 @@ export default function TasksWindowBody() {
   const { tasks, focus } = useSyncExternalStore(subscribeTasks, getTasksSnapshot);
   const [filter, setFilter] = useState('all');
   const [selectedId, setSelectedId] = useState(() => focus.taskId || tasks.find(isTaskActive)?.id || tasks[0]?.id || null);
+  // Another tab: no task is open until one is picked from its list (analyst
+  // decision 2026-11-24), so the details never belong to another tab's task.
+  const [nothingPicked, setNothingPicked] = useState(false);
+  const [keptNotice, setKeptNotice] = useState(false);
+  const closeKeptNotice = useCallback(() => setKeptNotice(false), []);
   const [now, setNow] = useState(() => Date.now());
   const listRef = useRef(null);
   // The element popups cover (Save as evidence), as a Graph window's report popup.
@@ -785,13 +822,23 @@ export default function TasksWindowBody() {
   const activeTasks = visible.filter(isTaskActive);
   const historyTasks = visible.filter((task) => !isTaskActive(task));
   const ordered = [...activeTasks, ...historyTasks];
-  const selected = tasks.find((task) => task.id === selectedId) || ordered[0] || null;
-  const finishedCount = tasks.length - tasks.filter(isTaskActive).length;
+  const selected = tasks.find((task) => task.id === selectedId) || (nothingPicked ? null : ordered[0]) || null;
+  // What Clear removes: not running, and no session kept for its graph.
+  const finishedCount = tasks.filter((task) => !isTaskActive(task) && !task.heldSession).length;
+
+  const tabStopId = ordered.some((task) => task.id === selected?.id) ? selected.id : ordered[0]?.id;
+  const changeFilter = (next) => {
+    if (next === filter) return;
+    setFilter(next);
+    setSelectedId(null);
+    setNothingPicked(true);
+    if (next === 'kept' && counts.kept) setKeptNotice(true);
+  };
 
   const handleListKeyDown = (event) => {
     if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key) || !ordered.length) return;
     event.preventDefault();
-    const index = Math.max(0, ordered.findIndex((task) => task.id === selected?.id));
+    const index = ordered.findIndex((task) => task.id === selected?.id); // -1: none picked yet
     const nextIndex = event.key === 'Home' ? 0
       : event.key === 'End' ? ordered.length - 1
         : Math.min(ordered.length - 1, Math.max(0, index + (event.key === 'ArrowDown' ? 1 : -1)));
@@ -804,7 +851,7 @@ export default function TasksWindowBody() {
     <div className="tasks_list_section" role="group" aria-label={title}>
       <h4 className="tasks_list_section_title">{title} <span>{items.length}</span></h4>
       {items.map((task) => (
-        <TaskRow key={task.id} task={task} now={clock} isSelected={selected?.id === task.id} onSelect={setSelectedId} />
+        <TaskRow key={task.id} task={task} now={clock} isSelected={selected?.id === task.id} isTabStop={tabStopId === task.id} onSelect={setSelectedId} />
       ))}
     </div>
   ) : null);
@@ -831,8 +878,9 @@ export default function TasksWindowBody() {
                 type="button"
                 role="radio"
                 aria-checked={filter === item.id}
+                title={item.hint}
                 className={filter === item.id ? 'is-active' : ''}
-                onClick={() => setFilter(item.id)}
+                onClick={() => changeFilter(item.id)}
               >
                 {item.label}
                 <span className="tasks_filter_count">{counts[item.id]}</span>
@@ -888,15 +936,22 @@ export default function TasksWindowBody() {
             >
               {renderSection('Active', activeTasks)}
               {renderSection('History', historyTasks)}
-              {!ordered.length && <p className="tasks_list_empty">No tasks match this filter.</p>}
+              {!ordered.length && <p className="tasks_list_empty">{TASK_FILTERS.find((item) => item.id === filter)?.empty || 'No tasks match this filter.'}</p>}
             </div>
             {selected ? (
               <TaskDetail key={selected.id} task={selected} now={clock} windows={workspace.windows} workspace={workspace} dialogHost={windowEl} />
             ) : (
-              <div className="tasks_detail is-empty"><p>Select a task to see its details.</p></div>
+              <div className="tasks_detail is-empty">
+                <div className="tasks_empty">
+                  <Icon d={ICONS.tasks} className="tasks_empty_icon" />
+                  <h4>{ordered.length ? 'No task selected' : 'Nothing to show'}</h4>
+                  <p>{ordered.length ? 'Pick a task from the list to see its details.' : 'This tab has no tasks.'}</p>
+                </div>
+              </div>
             )}
           </div>
         )}
+        {keptNotice ? <KeptSessionsDialog kept={usage.held} usage={usage} onClose={closeKeptNotice} /> : null}
       </div>
     </div>
   );

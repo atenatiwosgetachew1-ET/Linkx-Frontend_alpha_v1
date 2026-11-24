@@ -40,6 +40,7 @@ export default function CloseAnalysisDialog({ windowTitle, taskTitle, onKeep, on
         <div id="workspace-close-analysis-body" className="linkx_confirm_body">
           <strong>{taskTitle || 'The analysis'}</strong> in {windowTitle || 'this Source window'} has not finished.
           Keep it running as a background task (follow it in the Tasks window), or stop it now.
+          It keeps its analysis session after it completes, until you save it with its graph or release it.
         </div>
         <div className="linkx_confirm_footer">
           <button type="button" className="linkx_confirm_btn_cancel" onClick={onStop}>Stop analysis</button>

@@ -17,6 +17,7 @@ import '../../styles/features/benchmark.css';
 import { BenchmarkCard, BenchmarkFrame } from '../../features/graph/components/BenchmarkFrame.jsx';
 import { ThemeProvider } from '../../shared/theme/ThemeContext.jsx';
 import { getGpuCapability } from '../../shared/device/gpuCapability.js';
+import { createGraph } from '../../features/graph/lib/cytoscapeInstance.js';
 import { makeStyleSample, makeSyntheticGraph } from '../../features/graph/lib/syntheticGraph.js';
 
 const SIZES = [300, 1000, 5000, 20000];
@@ -26,7 +27,7 @@ const SIZES = [300, 1000, 5000, 20000];
 const MODE_OPTIONS = {
   canvas: {},
   'canvas-fast': { textureOnViewport: true, hideEdgesOnViewport: true, pixelRatio: 1, motionBlur: false },
-  webgl: { renderer: { name: 'canvas', webgl: true } },
+  webgl: {},
 };
 // Realistic export: the longest side is capped (report snapshots and PNG
 // downloads), unlike run 1's unbounded 2x full-graph export.
@@ -166,7 +167,7 @@ function GraphBenchPage() {
     await raf();
     const heapBefore = heapMb();
     const start = performance.now();
-    const cy = cytoscape({
+    const cy = createGraph({
       container: containerRef.current,
       elements: toElements(graph, positions),
       style: buildStyle({ labels: withLabels }),
@@ -174,7 +175,7 @@ function GraphBenchPage() {
       wheelSensitivity: 0.3,
       boxSelectionEnabled: true,
       ...(MODE_OPTIONS[renderMode] || {}),
-    });
+    }, { gpu: renderMode === 'webgl' });
     cy.on('tap', 'node', (event) => say(`Clicked ${event.target.id()} (${event.target.data('label')})`));
     cy.on('boxselect', 'node', () => {});
     cyRef.current = cy;

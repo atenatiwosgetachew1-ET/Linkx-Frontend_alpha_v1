@@ -14,12 +14,15 @@ import {
   TASK_ORIGINS,
   TASK_STATUSES,
   appendTaskLog,
+  applyServerTask,
   createTask,
   finishTask,
+  holdTaskSession,
   markTaskRunning,
   requestTaskFocus,
   resetTasks,
   setTaskHandlers,
+  updateTask,
 } from '../lib/taskRegistry.js';
 import TasksWindowBody from './TasksWindowBody.jsx';
 
@@ -40,10 +43,10 @@ const authWith = (permissions = null) => ({
   hasPermission: (permission) => (permissions ? permissions.includes(permission) : true),
 });
 
-const renderTasks = ({ permissions = null } = {}) => render(
+const renderTasks = ({ permissions = null, apiFetch = async () => ({ message: 'success' }) } = {}) => render(
   <AuthContext.Provider value={authWith(permissions)}>
     <NotificationProvider>
-      <SessionContext.Provider value={{ apiFetch: async () => ({ message: 'success' }), configuration: {} }}>
+      <SessionContext.Provider value={{ apiFetch, configuration: {} }}>
         <WorkspaceProvider>
           <Probe />
           <TasksWindowBody />
@@ -132,7 +135,8 @@ describe('TasksWindowBody', () => {
     renderTasks();
     const verdict = screen.getByRole('status', { name: /Analysis verdict: Suspicious: Smurfing \(2\), Dormant to Active/ });
     expect(verdict).toHaveTextContent('Smurfing2');
-    expect(within(screen.getByRole('group', { name: 'Task actions' })).getByRole('button', { name: /Show graph/ })).toBeInTheDocument();
+    // No Source window: no graph to show.
+    expect(within(screen.getByRole('group', { name: 'Task actions' })).queryByRole('button', { name: /Show graph/ })).not.toBeInTheDocument();
   });
 
   it('filters the log and collapses the run details', async () => {
@@ -177,5 +181,137 @@ describe('TasksWindowBody', () => {
     renderTasks();
     act(() => requestTaskFocus(first));
     expect(screen.getByRole('option', { name: /First run/ })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('lists kept sessions and saved runs in their own tabs', async () => {
+    const kept = createTask({ title: 'Kept run' });
+    const saved = createTask({ title: 'Saved run' });
+    const plain = createTask({ title: 'Plain run' });
+    [kept, saved, plain].forEach((id) => finishTask(id, TASK_STATUSES.COMPLETED));
+    holdTaskSession(kept, vi.fn());
+    updateTask(saved, { evidenceId: 'E1' });
+    renderTasks();
+    const tab = (name) => screen.getByRole('radio', { name });
+    // (The scope dropdown has options too.)
+    const listed = () => screen.queryAllByRole('option').map((row) => ['Kept run', 'Saved run', 'Plain run'].find((title) => row.textContent.includes(title))).filter(Boolean);
+    expect(tab(/^Kept/)).toHaveTextContent('1');
+    expect(tab(/^Saved/)).toHaveTextContent('1');
+    await userEvent.click(tab(/^Saved/));
+    expect(listed()).toEqual(['Saved run']);
+    // No task is open until one is picked from this tab's list.
+    expect(screen.getByText('No task selected')).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: /^Task / })).not.toBeInTheDocument();
+    // The keyboard still reaches the list.
+    expect(screen.getByRole('option', { name: /Saved run/ })).toHaveAttribute('tabindex', '0');
+    await userEvent.click(tab(/^Kept/));
+    // Opening Kept says its runs are using sessions.
+    expect(screen.getByRole('dialog', { name: 'This run is using a session' })).toHaveTextContent('1 of your 3 analysis sessions');
+    await userEvent.click(screen.getByRole('button', { name: 'Got it' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(listed()).toEqual(['Kept run']);
+    // Released: it leaves the tab, which then says what it is for.
+    await userEvent.click(screen.getByRole('option', { name: /Kept run/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Release session' }));
+    expect(listed()).toEqual([]);
+    expect(screen.getByText(/^No session is kept/)).toBeInTheDocument();
+    // Nothing kept: opening it again needs no notice.
+    await userEvent.click(tab(/^All/));
+    await userEvent.click(tab(/^Kept/));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.getByText('Nothing to show')).toBeInTheDocument();
+  });
+
+  describe('Show graph', () => {
+    const button = () => screen.queryByRole('button', { name: /Show graph/ });
+    const openSource = (id = 'source-1', session = '1_111378') => act(() => workspaceRef.openWindow('source', { id, sourceSessionId: session }));
+    const run = (fields = {}) => {
+      let id;
+      act(() => {
+        id = createTask({ title: 'Link Analysis', windowId: 'source-1', sourceSessionId: '1_111378', action: 'Link Analysis', ...fields });
+        markTaskRunning(id);
+        requestTaskFocus(id);
+      });
+      return id;
+    };
+    const end = (id, status = TASK_STATUSES.COMPLETED) => act(() => { finishTask(id, status); });
+
+    it('a completed run: shown while its Source window is open, gone when it closes', async () => {
+      const apiFetch = vi.fn(async () => ({ message: 'success' }));
+      renderTasks({ apiFetch });
+      openSource();
+      const id = run();
+      end(id);
+      await userEvent.click(button());
+      // Linked first, as production does, then loaded at once.
+      expect(apiFetch).toHaveBeenCalledWith('/graph_link', expect.objectContaining({ body: expect.objectContaining({ id: 'link', source_id: '1_111378' }) }));
+      const graph = workspaceRef.windows.find((item) => item.type === 'graph');
+      expect(graph.metadata).toMatchObject({ taskId: id, graphLinkSource: '1_111378', graphFinishedRun: true });
+      act(() => workspaceRef.closeWindow('source-1'));
+      expect(button()).not.toBeInTheDocument();
+    });
+
+    it('links again after a failed link, in the same Graph window', async () => {
+      let ok = false;
+      const apiFetch = vi.fn(async (path) => (path === '/graph_link' && !ok ? { message: 'failed!' } : { message: 'success' }));
+      renderTasks({ apiFetch });
+      openSource();
+      end(run());
+      await userEvent.click(button());
+      expect(workspaceRef.windows.find((item) => item.type === 'graph').metadata.graphLinkSource).toBeFalsy();
+      ok = true;
+      await userEvent.click(button());
+      const graphs = workspaceRef.windows.filter((item) => item.type === 'graph');
+      expect(graphs).toHaveLength(1);
+      expect(graphs[0].metadata.graphLinkSource).toBe('1_111378');
+    });
+
+    it('a Graph window opened during the run is told to load once it has completed', async () => {
+      renderTasks();
+      openSource();
+      const id = run();
+      await userEvent.click(button());
+      expect(workspaceRef.windows.find((item) => item.type === 'graph').metadata.graphFinishedRun).toBeUndefined();
+      end(id);
+      await userEvent.click(button());
+      expect(workspaceRef.windows.filter((item) => item.type === 'graph')).toHaveLength(1);
+      expect(workspaceRef.windows.find((item) => item.type === 'graph').metadata.graphFinishedRun).toBe(true);
+    });
+
+    it('a background run: shown while it runs, gone when it completes', () => {
+      renderTasks();
+      const id = run();
+      expect(button()).toBeInTheDocument();
+      end(id);
+      expect(button()).not.toBeInTheDocument();
+    });
+
+    it.each([TASK_STATUSES.TERMINATED, TASK_STATUSES.FAILED])('a run that ended as %s has none', (status) => {
+      renderTasks();
+      openSource();
+      end(run(), status);
+      expect(button()).not.toBeInTheDocument();
+    });
+
+    it('a run listed by the Service has none, even when a new Source window reuses its session id', () => {
+      renderTasks();
+      openSource();
+      act(() => {
+        const id = applyServerTask({ task_id: 'T1', origin: 'analyst', status: 'completed', source_session_id: '1_111378' });
+        requestTaskFocus(id);
+      });
+      expect(screen.getByRole('region', { name: /^Task / })).toBeInTheDocument();
+      expect(button()).not.toBeInTheDocument();
+    });
+
+    it('only the latest run of a window has one: they share the session', () => {
+      renderTasks();
+      openSource();
+      const first = run();
+      end(first);
+      end(run());
+      expect(button()).toBeInTheDocument();
+      act(() => requestTaskFocus(first));
+      expect(button()).not.toBeInTheDocument();
+    });
   });
 });

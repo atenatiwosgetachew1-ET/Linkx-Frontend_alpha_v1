@@ -1746,11 +1746,19 @@
 .tasks_service {
 	display: grid;
 	gap: 8px;
-	padding: 10px 12px;
-	border: 1px solid var(--tasks-border);
-	border-radius: var(--tasks-radius);
-	background: var(--tasks-surface-bg);
+	padding: 12px 14px;
+	/* As Libraries ▸ Graph rendering's "Use the GPU for graphs" card: its
+	   border and background, and its "on" look once saved as evidence. */
+	border: 1px solid var(--libraries-page-option-border);
+	border-radius: 4px;
+	background: var(--libraries-page-option-bg);
 	color: var(--tasks-text);
+}
+.tasks_service.is-saved {
+	border-color: var(--libraries-page-option-on-border);
+	background:
+		radial-gradient(120% 70px at 0 0, var(--libraries-page-option-on-bg), transparent 70%),
+		var(--libraries-page-option-on-bg-2);
 }
 .tasks_service:empty {
 	display: none;
@@ -1834,6 +1842,18 @@
 }
 .tasks_evidence_dialog .tasks_evidence_check input {
 	margin: 0;
+}
+.tasks_evidence_dialog .tasks_evidence_check.is-disabled {
+	opacity: 0.55;
+	cursor: not-allowed;
+}
+.tasks_evidence_dialog .tasks_evidence_missing {
+	color: var(--tasks-status-failed);
+}
+/* Opened while its Source window is being closed: over the workspace. */
+.tasks_evidence_backdrop.is-over-screen {
+	position: fixed;
+	z-index: 10001;
 }
 .tasks_evidence_message {
 	margin: 8px 0 0;

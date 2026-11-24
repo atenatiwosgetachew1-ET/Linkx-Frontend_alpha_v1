@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { createPortal } from 'react-dom';
 
 import WorkspaceHome from './WorkspaceHome.jsx';
 import NetworkBackground from './NetworkBackground.jsx';
@@ -19,8 +20,8 @@ import { clearKnownBuiltinRules } from '../../features/libraries/lib/rulesLibrar
 import { clearGraphStores, disposeGraphStore } from '../../features/graph/lib/graphStore.js';
 import { forgetGraphState } from '../../features/graph/lib/graphLinkBus.js';
 import { forgetLayoutOwner } from '../../features/graph/lib/layoutClient.js';
-import { bindGraphStatusSocket, clearGraphStatus, markGraphSessionClosed, retainGraphStatus, setGraphStatusNotifier } from '../../features/graph/lib/graphStatus.js';
-import { streamingSessionIds } from '../../features/graph/lib/graphLinkFlow.js';
+import { bindGraphStatusSocket, clearGraphStatus, markGraphSessionClosed, markGraphSessionTerminated, retainGraphStatus, setGraphStatusNotifier } from '../../features/graph/lib/graphStatus.js';
+import { isRunGraphAvailable, runGraphMissingReason, streamingSessionIds } from '../../features/graph/lib/graphLinkFlow.js';
 import { endAbandonedStream, endAllAbandonedStreams, getActiveStream } from '../../features/source/lib/activeStreams.js';
 import { continueStreamInBackground } from '../../features/source/lib/backgroundStreams.js';
 import {
@@ -30,6 +31,10 @@ import {
   finishTask,
   freezeWindowTaskLogs,
   getActiveTaskForWindow,
+  getLatestTaskForWindow,
+  getTask,
+  holdTaskSession,
+  releaseAllTaskSessions,
   getSessionUsage,
   getTasksSnapshot,
   onTaskEnded,
@@ -40,6 +45,9 @@ import {
 } from '../../features/tasks/lib/taskRegistry.js';
 import { useNotifications } from '../../shared/notifications/useNotifications.js';
 import CloseAnalysisDialog from './CloseAnalysisDialog.jsx';
+import SaveBeforeCloseDialog from './SaveBeforeCloseDialog.jsx';
+import TaskEvidenceDialog from '../../features/tasks/components/TaskEvidenceDialog.jsx';
+import { canSaveAsEvidence, saveRunAsEvidence } from '../../features/tasks/lib/saveEvidence.js';
 import { WORKSPACE_CONTEXT_TABS, WORKSPACE_ORIENTATIONS, WORKSPACE_WINDOW_TYPES, getWindowLimitBlock } from '../state/workspaceTypes.js';
 import { createLogger } from '../../shared/logger.js';
 import { useParentAlerts } from '../../features/alerts/hooks/useParentAlerts.js';
@@ -164,6 +172,9 @@ export default function WorkspaceFrame({ user, token, mainSessionId, sessionErro
     () => getSessionUsage(openSourceCount + (isOpeningSource ? 1 : 0), tasks),
     [openSourceCount, isOpeningSource, tasks],
   );
+  // Closing a Source window with a completed run nobody saved:
+  // { windowId, windowTitle, taskId, saving }.
+  const [pendingSave, setPendingSave] = useState(null);
   const [pendingClose, setPendingClose] = useState(null); // { windowId, windowTitle, taskTitle }
   // Unseen task/report counters shared by the quick analysis panel and the
   // sidebar. They clear when the Tasks/Reports window becomes the active
@@ -208,7 +219,8 @@ export default function WorkspaceFrame({ user, token, mainSessionId, sessionErro
     const view = { label: 'View task', onClick: () => openTask(task.id) };
     const source = task.background ? 'Background task' : (task.windowTitle || 'Tasks');
     if (task.status === TASK_STATUSES.COMPLETED) {
-      notify({ title: `${task.title} completed`, message: task.input || 'The results are ready.', level: 'success', source, action: view });
+      const kept = task.background && task.origin === TASK_ORIGINS.SOURCE ? ' Its session is kept for its graph: save it or release it in Tasks.' : '';
+      notify({ title: `${task.title} completed`, message: `${task.input || 'The results are ready.'}${kept}`, level: 'success', source, action: view });
     } else if (task.background && task.status === TASK_STATUSES.FAILED) {
       notify({ title: `${task.title} failed`, message: task.message || task.input || 'The analysis failed.', level: 'error', source, action: view });
     } else if (task.background && task.status === TASK_STATUSES.TERMINATED) {
@@ -244,11 +256,12 @@ export default function WorkspaceFrame({ user, token, mainSessionId, sessionErro
   apiFetchRef.current = token ? apiFetch : apiFetchRef.current;
   const latestApiFetch = useCallback((...args) => apiFetchRef.current(...args), []);
 
-  const releaseSourceSession = useCallback((targetWindow, reason) => {
+  const releaseSourceSession = useCallback((targetWindow, reason, { keepalive = false } = {}) => {
     closeSourceWindow(latestApiFetch, {
       sessionId: targetWindow.parentSessionId,
       windowId: targetWindow.backendWindowId,
       reason,
+      keepalive,
     }).catch((error) => {
       log.error('Source window cleanup failed', { status: error?.status, message: error?.message });
     });
@@ -275,7 +288,9 @@ export default function WorkspaceFrame({ user, token, mainSessionId, sessionErro
   }, [apiFetch, token, closeWindow, releaseSourceSession]);
 
   // Keeps the stream as a background task: the window leaves the workspace,
-  // its runtime and backend session are freed once the stream ends.
+  // its runtime is freed once the stream ends. Its backend session too, unless
+  // the run completed: it is then held until the analyst saves or releases it,
+  // so its graph can still be shown and saved (analyst decision 2026-11-24).
   const closeAndKeepRunning = useCallback((targetWindow) => {
     const windowId = targetWindow.id;
     const task = getActiveTaskForWindow(windowId);
@@ -283,10 +298,19 @@ export default function WorkspaceFrame({ user, token, mainSessionId, sessionErro
       windowId,
       taskId: task.id,
       apiFetch: latestApiFetch,
-      release: () => {
+      release: (ended) => {
         disposeSourceRuntime(windowId);
         disposeStreamLog(windowId);
-        if (apiFetchRef.current && hadTokenRef.current) releaseSourceSession(targetWindow, 'background_task_ended');
+        if (!apiFetchRef.current || !hadTokenRef.current) return;
+        if (ended?.status !== TASK_STATUSES.COMPLETED) {
+          releaseSourceSession(targetWindow, 'background_task_ended');
+          return;
+        }
+        holdTaskSession(ended.id, (options) => {
+          // Linked Graph windows unlink and keep what they show.
+          markGraphSessionTerminated(targetWindow.sourceSessionId);
+          releaseSourceSession(targetWindow, 'background_task_released', options);
+        });
       },
     });
     if (!detached) {
@@ -313,8 +337,35 @@ export default function WorkspaceFrame({ user, token, mainSessionId, sessionErro
       setPendingClose({ windowId, windowTitle: targetWindow.title, taskTitle: task.title });
       return;
     }
+    // A completed run nobody saved: its graph goes with the window.
+    const latest = getLatestTaskForWindow(windowId);
+    if (token && canSaveAsEvidence(latest, can) && isRunGraphAvailable(latest, windowsRef.current)) {
+      setPendingSave({ windowId, windowTitle: targetWindow.title, taskId: latest.id, saving: false });
+      return;
+    }
     closeAndStop(targetWindow);
-  }, [token, closeWindow, closeAndStop]);
+  }, [token, can, closeWindow, closeAndStop]);
+
+  const closePendingSave = () => {
+    const targetWindow = pendingSave && windowsRef.current.find((windowItem) => windowItem.id === pendingSave.windowId);
+    setPendingSave(null);
+    if (targetWindow) closeAndStop(targetWindow);
+  };
+  const pendingSaveTask = pendingSave ? getTask(pendingSave.taskId) : null;
+  const savePending = async (values, options) => {
+    const result = await saveRunAsEvidence(apiFetch, pendingSaveTask, values, options);
+    if (!result.ok) return result;
+    // Asked for a graph and none was kept: the window stays, so the graph
+    // can still be looked at.
+    if (result.graphLost) {
+      setPendingSave(null);
+      notify({ title: 'Saved without its graph', message: `${result.message} The Source window was left open.`, level: 'warning', source: pendingSave.windowTitle });
+      return result;
+    }
+    notify({ title: 'Saved as evidence', message: result.message, level: 'success', source: pendingSave.windowTitle });
+    closePendingSave();
+    return result;
+  };
 
   const resolvePendingClose = (choice) => {
     const pending = pendingClose;
@@ -332,6 +383,7 @@ export default function WorkspaceFrame({ user, token, mainSessionId, sessionErro
   useEffect(() => {
     const endAll = (reason) => {
       endAllAbandonedStreams(apiFetchRef.current, { reason, keepalive: true }).catch(() => null);
+      releaseAllTaskSessions({ keepalive: true });
     };
     const onPageHide = () => endAll('page_closed');
     window.addEventListener('pagehide', onPageHide);
@@ -347,6 +399,7 @@ export default function WorkspaceFrame({ user, token, mainSessionId, sessionErro
   useEffect(() => {
     if (hadTokenRef.current && !token) {
       endAllAbandonedStreams(apiFetchRef.current, { reason: 'signed_out', keepalive: true }).catch(() => null);
+      releaseAllTaskSessions({ keepalive: true });
       clearWorkspaceSessionData();
     }
     hadTokenRef.current = Boolean(token);
@@ -533,6 +586,26 @@ export default function WorkspaceFrame({ user, token, mainSessionId, sessionErro
                 onCancel={() => resolvePendingClose('cancel')}
               />
             )}
+            {pendingSaveTask && !pendingSave.saving ? (
+              <SaveBeforeCloseDialog
+                windowTitle={pendingSave.windowTitle}
+                taskTitle={`${pendingSaveTask.title} #${pendingSaveTask.number}`}
+                onSave={() => setPendingSave((current) => ({ ...current, saving: true }))}
+                onClose={closePendingSave}
+                onCancel={() => setPendingSave(null)}
+              />
+            ) : null}
+            {pendingSaveTask && pendingSave.saving ? createPortal(
+              <TaskEvidenceDialog
+                initial={{ title: `${pendingSaveTask.title} #${pendingSaveTask.number}`, summary: '', includeGraph: true }}
+                taskLabel={`${pendingSaveTask.title} #${pendingSaveTask.number}`}
+                graphMissing={runGraphMissingReason(pendingSaveTask, workspace.windows)}
+                overScreen
+                onSave={savePending}
+                onCancel={() => setPendingSave(null)}
+              />,
+              document.body,
+            ) : null}
           </section>
           <RightWorkspace
             displayName={displayName}

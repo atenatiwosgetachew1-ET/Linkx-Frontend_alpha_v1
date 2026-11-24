@@ -1,10 +1,10 @@
-import React, { useState, useSyncExternalStore } from 'react';
+import React, { useEffect, useState, useSyncExternalStore } from 'react';
 
 import { Block, Masthead, Option, PageHero, Pill, SettingsPage, Stat, Stats } from '../../settings/components/SettingsPage.jsx';
 import { GPU_STATUS, GPU_VERDICTS, getGpuCapability, gpuNameOf, recheckGpuCapability, subscribeGpuCapability } from '../../../shared/device/gpuCapability.js';
 import { BENCH_OUTCOMES, benchmarkChanges, getGpuBenchmark, getGpuLimits, getUnfinishedBenchmark, subscribeGpuBenchmark } from '../../graph/lib/gpuBenchmark.js';
 import { getGpuPreference, getSystemGpuSetting, isGpuAllowedBySystem, setGpuPreference, subscribeGpuPreference } from '../../graph/lib/rendererPreference.js';
-import { benchStepVerdict } from '../lib/benchmarkView.js';
+import { benchStepVerdict, gpuDetails } from '../lib/benchmarkView.js';
 import GpuBenchmarkPage from './GpuBenchmarkPage.jsx';
 
 // Libraries → Graph rendering (libraries-plan §3, graph-chart-plan §3.9).
@@ -62,6 +62,25 @@ const SYSTEM_SETTING = {
   not_set: { value: 'Not set', note: 'Not restricted' },
 };
 
+// What support needs, as plain text (no names, addresses or session).
+function CopyDetails({ text }) {
+  const [label, setLabel] = useState('Copy details');
+  useEffect(() => {
+    if (label === 'Copy details') return undefined;
+    const timer = setTimeout(() => setLabel('Copy details'), 2500);
+    return () => clearTimeout(timer);
+  }, [label]);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(text());
+      setLabel('Copied');
+    } catch {
+      setLabel('Could not copy');
+    }
+  };
+  return <button type="button" className="settings_button" onClick={copy} aria-live="polite">{label}</button>;
+}
+
 const formatTime = (value) => new Date(value).toLocaleString();
 
 export default function GraphRenderingPanel({ configuration }) {
@@ -117,7 +136,13 @@ export default function GraphRenderingPanel({ configuration }) {
         </Stats>
       </Masthead>
 
-      <Block title="Drawing" description="GPU drawing is off by default. It can be turned on when the system does not forbid it and the browser can use the graphics card.">
+      <Block
+        title="Drawing"
+        description="GPU drawing is off by default. It can be turned on when the system does not forbid it and the browser can use the graphics card."
+        actions={usable ? null : (
+          <button type="button" className="settings_button" onClick={recheckGpuCapability}>Check again</button>
+        )}
+      >
         <div className="settings_options libraries_gpu_option">
           <Option
             icon="motion"
@@ -129,6 +154,11 @@ export default function GraphRenderingPanel({ configuration }) {
           />
         </div>
         {reason ? <p className="settings_hint" role="status">{reason}</p> : null}
+        {allowedBySystem && status.steps ? (
+          <ul className="libraries_reasons" aria-label="What you can try">
+            {status.steps.map((item) => <li key={item}>{item}</li>)}
+          </ul>
+        ) : null}
         {preferGpu && !canEnable ? (
           <p className="settings_hint">You chose GPU drawing, but it cannot be used now, so standard drawing is used. You can leave the choice on or turn it off.</p>
         ) : null}
@@ -146,9 +176,12 @@ export default function GraphRenderingPanel({ configuration }) {
         title="Benchmark"
         description="Sets how many nodes a GPU graph may show on this computer. Kept in this browser; run it again whenever you like."
         actions={(
-          <button type="button" className="settings_button" disabled={!canEnable} onClick={() => setBenchmarking({ turnOn: false })}>
-            {benchmark ? 'Run again' : 'Run benchmark'}
-          </button>
+          <>
+            <CopyDetails text={() => gpuDetails({ capability, benchmark, limits, system: system.value, preferGpu, active })} />
+            <button type="button" className="settings_button" disabled={!canEnable} onClick={() => setBenchmarking({ turnOn: false })}>
+              {benchmark ? 'Run again' : 'Run benchmark'}
+            </button>
+          </>
         )}
       >
         <div className="config_card">
@@ -181,38 +214,12 @@ export default function GraphRenderingPanel({ configuration }) {
               </p>
             </>
           ) : null}
-        </div>
-      </Block>
-
-      <Block
-        title="This browser"
-        description="A web page cannot see the computer's graphics card, only what the browser lets it use."
-        actions={(
-          <button type="button" className="settings_button" onClick={recheckGpuCapability}>
-            Check again
-          </button>
-        )}
-      >
-        <div className="config_card">
-          <p className={`libraries_verdict is-${capability.verdict}`}>{status.text}</p>
-          <ul className="libraries_reasons">
-            {[...(capability.reasons || []), ...cautions].map((item) => <li key={item}>{item}</li>)}
-          </ul>
-          {status.steps ? (
-            <>
-              <p className="settings_hint">What you can try:</p>
-              <ul className="libraries_reasons">
-                {status.steps.map((item) => <li key={item}>{item}</li>)}
-              </ul>
-            </>
-          ) : null}
-          {capability.failedAt ? <p className="settings_hint">Stopped {formatTime(capability.failedAt)}.</p> : null}
-          {capability.checkedAt ? <p className="settings_hint">Checked {formatTime(capability.checkedAt)}.</p> : null}
           {import.meta.env.DEV ? (
             <a className="libraries_link" href="?graph-bench" target="_blank" rel="noopener noreferrer">Open the graph benchmark (developer build only)</a>
           ) : null}
         </div>
       </Block>
+
       {benchmarking ? (
         <GpuBenchmarkPage capability={capability} turnOn={benchmarking.turnOn} onClose={() => setBenchmarking(null)} />
       ) : null}

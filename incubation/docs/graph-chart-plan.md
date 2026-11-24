@@ -268,6 +268,7 @@ Production puts Filters / Infos / Settings inside every Graph window (a split pa
 > - `lib/cytoscapeInstance.js` creates and releases every instance: after one GPU graph, Cytoscape opened a WebGL context for each later standard graph and snapshot.
 > - **Benchmark (analyst decision 2026-11-24):** turning GPU drawing on runs a short benchmark (`lib/gpuBenchmarkRun.js`, page `GpuBenchmarkPage.jsx`): the sample graph at 1 000 / 2 000 / 5 000 / 10 000 / 20 000 nodes, stopping at the first size under 15 fps. The limit is the largest size at 15 fps or more, "may be slow" starts above the largest at 30; never under 2 000 (then GPU stays off) nor over 20 000. Kept in this browser (`lib/gpuBenchmark.js`) and can be run again. Without one, a temporary limit of 5 000. This replaces the fixed WebGL figures of §5.3.
 > - A new limit (or GPU on / off) keeps expanded, hidden and added nodes: the plain view stays at the size they were made on (`graphStore.editedCap`).
+> - **Dashed links:** GPU mode drew them solid (confirmed by the analyst 2026-11-24), which §5.1 listed as a risk. `lib/gpuEdgeDashes.js` adds the pattern to Cytoscape's shaders (pinned 3.34.4) and refuses a version it does not know. To be confirmed on screen.
 > Where the text below differs, this is what is built.
 
 - **Detection (`shared/device/gpuCapability.js`, run once per browser and cached):**

@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { createGraphStore } from '../lib/graphStore.js';
 import { layoutRequestOf, normalizeSnapshotOptions, snapshotView, topNodesView } from '../lib/offscreenSnapshot.js';
 import { evidenceReportContext, systemRuleText } from './graphReportExport.js';
+import { buildGraphReport } from './graphReportModel.js';
+import { renderGraphReportPdf } from './graphReportPdf.js';
 
 const graphData = {
   nodes: [{ id: 'a', label: 'A', full_name: 'Abebe' }, { id: 'b', label: 'B' }, { id: 'c', label: 'C' }, { id: 'd', label: 'D' }],
@@ -41,6 +43,16 @@ describe('evidenceReportContext', () => {
     store.replace(graphData);
     expect(systemRuleText(['FUND_FLOW', ' FUND_FLOW '], store.graph()).split(', ').filter((rule) => rule === 'FUND_FLOW')).toHaveLength(1);
     expect(systemRuleText(null, createGraphStore().graph())).toBe('');
+  });
+});
+
+describe('renderGraphReportPdf', () => {
+  it('a picture the PDF cannot read costs the picture, not the report', async () => {
+    const context = evidenceReportContext({ graphData, evidence: { traceId: 't' } });
+    const report = buildGraphReport({ ...context.input(''), hasSnapshot: true, cover: { ...context.initial({}), domain: '' }, analyst: { findings: '', assessment: '', actions: '' } });
+    const doc = await renderGraphReportPdf(report, { snapshot: 'data:,' });
+    expect(() => doc.getImageProperties('data:,')).toThrow();
+    expect(doc.output('arraybuffer').byteLength).toBeGreaterThan(1000);
   });
 });
 
