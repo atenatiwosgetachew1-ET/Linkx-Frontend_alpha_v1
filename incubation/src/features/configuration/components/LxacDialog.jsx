@@ -25,6 +25,15 @@ export default function LxacDialog({ mode, file, onSelectFile, onDropFile, onSub
       setError('Use at least 12 characters for the encryption password.');
       return;
     }
+    // The Service's policy (B-17), used exactly as typed.
+    if (isExport && new Set(value).size < 5) {
+      setError('Use at least 5 different characters.');
+      return;
+    }
+    if (isExport && value !== value.trim()) {
+      setError('The password cannot start or end with a space.');
+      return;
+    }
     if (isExport && value !== confirmPassword) {
       setError('Passwords do not match.');
       return;
@@ -84,7 +93,7 @@ export default function LxacDialog({ mode, file, onSelectFile, onDropFile, onSub
             onChange={(event) => { setPassword(event.target.value); setError(''); }}
           />
         </label>
-        {isExport ? <small className="config_window_field_hint">At least 12 characters. Spaces count, and the password cannot be recovered.</small> : null}
+        {isExport ? <small className="config_window_field_hint">At least 12 characters, 5 of them different, and no space at either end. It cannot be recovered.</small> : null}
         {isExport ? (
           <label className="config_window_field">
             <span className="config_window_field_label">Confirm encryption password</span>

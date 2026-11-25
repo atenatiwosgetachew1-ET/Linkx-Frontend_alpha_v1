@@ -21,6 +21,8 @@
 // task_id); a Service task with no local run (an earlier page load, a
 // supervisor's view of all tasks) is shown read-only.
 
+import { describeFilterPayload } from '../../source/lib/dataframeFilter.js';
+
 export const MAX_ANALYSIS_SESSIONS = 3;
 const MAX_TASKS = 50; // finished tasks beyond this are dropped, oldest first
 
@@ -109,6 +111,12 @@ export const createTask = (fields = {}) => {
     sourceColumn: '',
     targetColumn: '',
     relationship: '',
+    quick: false, // the quick analysis panel's (limits: the Service's, B-35)
+    domain: '', // the session's domain when it was sent
+    unattended: false, // the Service granted it a seat: it goes on without its owner (unattendedSeats.js)
+    jobFollowed: false, // its queued job is being polled: the job's end ends the run
+    rowsIn: false, // the log says it is over; the Service has not yet said how it ended
+    filter: [], // the dataframe filter it was sent with, in words
     dataframe: null, // { totalRows, totalColumns, columns, name, tool }
     ...fields,
     status: TASK_STATUSES.STARTING,
@@ -164,6 +172,24 @@ export const finishTask = (id, status, { message = '' } = {}) => {
   });
   return true;
 };
+
+// The log's "Injection finished" line: the run is over, but the line comes for
+// a failed or stopped run too (Service answer 2026-11-25, R2-17). A run the
+// Service has a task for, or whose job is followed, ends when those say how.
+// Only a run with neither ends at the line. -> true when the run ended
+export const rowsFinished = (id) => {
+  const task = getTask(id);
+  if (!task || !isTaskActive(task)) return false;
+  if (task.serverId || task.jobFollowed) {
+    if (!task.rowsIn) updateTask(id, { rowsIn: true, status: TASK_STATUSES.RUNNING, hasResults: true });
+    return false;
+  }
+  return finishTask(id, TASK_STATUSES.COMPLETED);
+};
+
+// Runs of this page that only the Service's task list can end (no job is
+// followed): the list is asked again while there are any.
+export const hasTaskAwaitingService = () => tasks.some((task) => !task.remote && isTaskActive(task) && task.serverId && !task.jobFollowed);
 
 export const appendTaskLog = (id, message, level = 'info') => {
   const task = getTask(id);
@@ -305,16 +331,35 @@ const time = (value) => {
   const ts = value ? new Date(value).getTime() : NaN;
   return Number.isFinite(ts) ? ts : null;
 };
-// { RULE: count | null } (older records name the rule without a count).
-const flagsOf = (value) => (value && typeof value === 'object' && !Array.isArray(value)
-  ? Object.fromEntries(Object.entries(value).map(([rule, count]) => [String(rule).slice(0, 80), count === null || count === undefined || !Number.isFinite(Number(count)) ? null : Number(count)]))
-  : null);
+// { RULE: count | null } (older records name the rule without a count, or
+// send a list of names).
+const flagsOf = (input) => {
+  const value = Array.isArray(input) ? Object.fromEntries(input.filter((rule) => typeof rule === 'string' && rule.trim()).map((rule) => [rule.trim(), null])) : input;
+  return value && typeof value === 'object' ? Object.fromEntries(Object.entries(value).map(([rule, count]) => [String(rule).slice(0, 80), count === null || count === undefined || !Number.isFinite(Number(count)) ? null : Number(count)])) : null;
+};
+
+const rowCountOf = (value) => (value === null || value === undefined || value === '' || !Number.isFinite(Number(value)) || Number(value) < 0 ? null : Number(value));
+// Rules that could not run, with the fields they lacked: [{ rule, fields }].
+const skippedRulesOf = (value) => Object.entries(value).slice(0, 200).map(([rule, fields]) => ({
+  rule: String(rule).slice(0, 80),
+  fields: (Array.isArray(fields) ? fields : [fields]).filter((field) => typeof field === 'string' && field).map((field) => field.slice(0, 80)).slice(0, 40),
+}));
+
+// { thresholds, preset, mapping, columns }: a version, or null for the built-in.
+const versionsOf = (value) => Object.fromEntries(['thresholds', 'preset', 'mapping', 'columns'].filter((key) => key in value).map((key) => [key, value[key] === null || value[key] === undefined ? null : String(value[key]).slice(0, 40)]));
 
 let serverOwner = { userId: '', username: '' };
 const pendingServer = new Map(); // serverId -> raw task that arrived before its local run was linked
 // Who is signed in, to tell their tasks from others' in "All tasks".
 export const setServerTaskOwner = ({ userId = '', username = '' } = {}) => {
   serverOwner = { userId: String(userId || ''), username: String(username || '') };
+};
+
+// The filter a Service task was run with (H-18), in words; a shape it does
+// not know is named rather than left out.
+const describeServiceFilter = (filter) => {
+  const lines = describeFilterPayload(filter);
+  return lines.length ? lines : ['A dataframe filter was applied.'];
 };
 
 // The Service fields every task carries once it is known there.
@@ -333,9 +378,24 @@ const serverFields = (raw) => {
     evidenceId: raw.evidence_id ? String(raw.evidence_id) : '',
     ...(VERDICTS.has(raw.verdict) ? { verdict: raw.verdict } : {}),
     ...(flagsOf(raw.flags) ? { flags: flagsOf(raw.flags) } : {}),
+    ...(typeof raw.domain === 'string' && raw.domain ? { domain: raw.domain } : {}),
+    ...(raw.dataframe_filter && typeof raw.dataframe_filter === 'object' ? { filter: describeServiceFilter(raw.dataframe_filter) } : {}),
+    ...(rowCountOf(raw.rows_done) !== null ? { rowsDone: rowCountOf(raw.rows_done) } : {}),
+    ...(rowCountOf(raw.rows_total) !== null ? { rowsTotal: rowCountOf(raw.rows_total) } : {}),
+    ...(raw.rules_not_applicable && typeof raw.rules_not_applicable === 'object' && !Array.isArray(raw.rules_not_applicable) ? { rulesSkipped: skippedRulesOf(raw.rules_not_applicable) } : {}),
     ...(raw.filter_result && typeof raw.filter_result === 'object' ? { filterResult: raw.filter_result } : {}),
+    ...(typeof raw.unattended === 'boolean' ? { unattended: raw.unattended, unattendedUntil: raw.unattended ? time(raw.unattended_until) : null } : {}),
+    // Its graph, kept by the Service for a while (B-37).
+    ...(typeof raw.graph_saved === 'boolean' ? { graphSaved: raw.graph_saved, graphExpiresAt: time(raw.graph_expires_at) } : {}),
+    ...(typeof raw.ended_reason === 'string' && raw.ended_reason ? { endedReason: raw.ended_reason.slice(0, 40) } : {}),
+    ...(rowCountOf(raw.limit_seconds) ? { limitSeconds: rowCountOf(raw.limit_seconds) } : {}),
+    ...(raw.config_versions && typeof raw.config_versions === 'object' && !Array.isArray(raw.config_versions) ? { configVersions: versionsOf(raw.config_versions) } : {}),
+    ...(raw.quick === true ? { quick: true, windowStart: time(raw.window_start), windowEnd: time(raw.window_end) } : {}),
+    // Not started by this page: what the Service has of it (R2-2).
+    ...(typeof raw.status === 'string' ? { serverStatus: raw.status } : {}),
     ownerName,
     foreign,
+    own: Boolean((owner && owner === serverOwner.userId) || (ownerName && ownerName === serverOwner.username)),
   };
 };
 
@@ -412,6 +472,11 @@ export const applyServerTask = (raw) => {
   // A run in this browser that the Service ended (failed, terminated).
   if (!local.remote && isTaskActive(local) && status && !ACTIVE_STATUSES.has(status)) {
     finishTask(local.id, status, { message: String(raw.message || '') });
+  } else if (!local.remote && !isTaskActive(local) && status && !ACTIVE_STATUSES.has(status) && status !== local.status
+    && local.status !== TASK_STATUSES.TERMINATED) {
+    // It had ended here otherwise (the job, or a lost connection): the
+    // Service's word stands. A run stopped here stays stopped.
+    updateTask(local.id, { status, message: String(raw.message || (status === TASK_STATUSES.COMPLETED ? '' : local.message) || ''), progress: status === TASK_STATUSES.COMPLETED ? 100 : local.progress });
   }
   return local.id;
 };
@@ -431,6 +496,23 @@ export const linkServerTask = (localId, serverId) => {
   const raw = pendingServer.get(id);
   pendingServer.delete(id);
   if (raw) applyServerTask(raw);
+};
+
+// The signed-in user's runs an earlier page (or another tab) started and that
+// still go on: they can be stopped from here. terminate(task) -> { ok, message }
+export const attachOwnRuns = (terminate) => {
+  tasks.filter((task) => task.remote && task.own && isTaskActive(task) && task.origin !== TASK_ORIGINS.PARENT && task.sourceSessionId && !handlers.get(task.id)?.terminate)
+    .forEach(({ id }) => {
+      handlers.set(id, {
+        terminate: async () => {
+          const task = getTask(id);
+          const result = await terminate(task);
+          if (result?.ok) finishTask(id, TASK_STATUSES.TERMINATED);
+          else updateTask(id, { message: result?.message || 'The run could not be stopped.' });
+        },
+      });
+      updateTask(id, {});
+    });
 };
 
 export const getTaskByServerId = (serverId) => tasks.find((task) => task.serverId === String(serverId)) || null;

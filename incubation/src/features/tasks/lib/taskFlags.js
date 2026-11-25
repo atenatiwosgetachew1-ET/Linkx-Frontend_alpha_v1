@@ -65,6 +65,11 @@ export const flagTokens = (name) => cleanFlagName(name)
 // Word order is kept: "Dormant to Active" and "Active to Dormant" differ.
 export const flagKey = (name) => flagTokens(name).join(' ');
 
+// A rule named by an identifier holding a digit ("RULE_2", "STRUCTURING_10K"):
+// taken as it is. Elsewhere words with digits are ids and amounts, not names.
+const IDENTIFIER_WITH_DIGIT = /^(?=.*\d)[A-Za-z]\w*_\w+$/;
+const exactKey = (name) => String(name).trim().toLowerCase();
+
 // Small typos / spelling variants ("Smurfng", "Dormant-Activ").
 const editDistance = (a, b) => {
   if (Math.abs(a.length - b.length) > 2) return 3;
@@ -81,6 +86,8 @@ const editDistance = (a, b) => {
 
 const isSameFlag = (a, b) => {
   if (a.key === b.key) return true;
+  // RULE_2 and RULE_3 differ by one character and are two rules.
+  if (a.exact || b.exact) return false;
   const joinedA = a.key.replace(/ /g, '');
   const joinedB = b.key.replace(/ /g, '');
   if (joinedA === joinedB) return true; // "high degree hub" vs "highdegree hub"
@@ -128,10 +135,12 @@ export const scanFlagLines = (lines = [], { backendOnly = true } = {}) => {
   let count = 0;
   let cleanSeen = false;
 
-  const groupFor = (name) => {
-    const key = flagKey(name);
+  // isRule: the name is a rule's (a flags dict), whatever it looks like.
+  const groupFor = (name, isRule = false) => {
+    const exact = /\d/.test(name) && (isRule || IDENTIFIER_WITH_DIGIT.test(String(name).trim()));
+    const key = exact ? exactKey(name) : flagKey(name);
     if (!key) return null;
-    const candidate = { key, tokens: new Set(key.split(' ')) };
+    const candidate = { key, exact, tokens: new Set(key.split(' ')) };
     let group = groups.find((item) => isSameFlag(item, candidate));
     if (!group) {
       group = { ...candidate, spellings: new Map(), count: 0, order: groups.length };
@@ -156,9 +165,9 @@ export const scanFlagLines = (lines = [], { backendOnly = true } = {}) => {
       pairs.forEach(([, name, value]) => {
         const total = Number(value);
         if (!total) return;
-        const group = groupFor(name);
+        const group = groupFor(name, true);
         if (!group) return;
-        const spelling = displaySpelling(name);
+        const spelling = group.exact ? String(name).trim() : displaySpelling(name);
         group.spellings.set(spelling, (group.spellings.get(spelling) || 0) + 1);
         group.total = Math.max(group.total || 0, total);
       });
@@ -182,7 +191,7 @@ export const scanFlagLines = (lines = [], { backendOnly = true } = {}) => {
     names.forEach((name) => {
       const group = groupFor(name);
       if (!group) return;
-      const spelling = displaySpelling(name);
+      const spelling = group.exact ? String(name).trim() : displaySpelling(name);
       group.spellings.set(spelling, (group.spellings.get(spelling) || 0) + 1);
       if (counted.has(group)) return;
       counted.add(group);
@@ -193,7 +202,7 @@ export const scanFlagLines = (lines = [], { backendOnly = true } = {}) => {
   const flags = groups
     .map((group) => ({ ...group, count: Math.max(group.count, group.total || 0) }))
     .sort((a, b) => b.count - a.count || a.order - b.order)
-    .map((group) => ({ name: prettyName(group.spellings, group.tokens.size), count: group.count }));
+    .map((group) => ({ name: group.exact ? [...group.spellings.keys()][0] : prettyName(group.spellings, group.tokens.size), count: group.count }));
   return { flags, count, cleanSeen };
 };
 
@@ -203,6 +212,12 @@ export const FLAG_STATES = Object.freeze({
   PENDING: 'pending',
   UNDETERMINED: 'undetermined',
 });
+
+// "2 rules could not run" ('' when all could).
+const skippedText = (task) => {
+  const count = task.rulesSkipped?.length || 0;
+  return count ? `${count} ${count === 1 ? 'rule' : 'rules'} could not run` : '';
+};
 
 // The Service's verdict and flags (H-7: on the task, provisional per batch,
 // final at the end), when it has them; the log is not a contract.
@@ -218,18 +233,41 @@ const serverVerdict = (task) => {
   const isActive = task.status === TASK_STATUSES.STARTING || task.status === TASK_STATUSES.RUNNING;
   if (flags.length) return { state: FLAG_STATES.SUSPICIOUS, flags, count, label: 'Suspicious', detail: isActive ? 'Provisional' : '' };
   if (isActive) return { state: FLAG_STATES.PENDING, flags, count, label: 'Analysing', detail: 'No flags so far' };
-  if (task.verdict === 'clean') return { state: FLAG_STATES.CLEAN, flags, count, label: 'Clean', detail: 'No flags raised' };
-  if (task.verdict === 'undetermined') {
-    return { state: FLAG_STATES.UNDETERMINED, flags, count, label: 'Not determined', detail: task.status === TASK_STATUSES.FAILED ? 'The run failed before a verdict' : 'Stopped before a verdict' };
+  // The Service's word, with or without a list of flags.
+  if (task.verdict === 'suspicious') return { state: FLAG_STATES.SUSPICIOUS, flags, count, label: 'Suspicious', detail: 'The Service named no rule' };
+  // Recorded before the Service noted why a run ends (`ended_reason`, 2026-11-25),
+  // when a run none of whose rules could run was recorded clean too: the record
+  // stands, but it is not shown as a proven Clean.
+  if (task.verdict === 'clean' && task.status === TASK_STATUSES.COMPLETED && !task.endedReason) {
+    return { state: FLAG_STATES.UNDETERMINED, flags, count, label: 'Clean (unconfirmed)', detail: 'Recorded before the Service noted which rules could not run. Run it again to confirm.' };
   }
+  if (task.verdict === 'clean' && task.status === TASK_STATUSES.COMPLETED) return { state: FLAG_STATES.CLEAN, flags, count, label: 'Clean', detail: [task.endedReason === 'time_limit' ? 'No flags on the rows received before its time limit' : 'No flags raised', skippedText(task)].filter(Boolean).join('; ') };
+  // A quick run is never Clean: a short window cannot show patterns over time.
+  if (task.quick && task.verdict === 'undetermined' && task.status === TASK_STATUSES.COMPLETED && !task.rulesSkipped?.length) {
+    return { state: FLAG_STATES.UNDETERMINED, flags, count, label: 'No flags raised', detail: 'In this short run only; it cannot show patterns over time' };
+  }
+  if (task.verdict) return notDetermined(task, flags, count, skippedText(task) || 'The Service could not determine it');
   return null;
 };
+
+// Why there is no verdict. "Clean" is never assumed from silence.
+const NO_ANALYSIS = new Set(['Store data', 'Source / Target Mapping']);
+const notDetermined = (task, flags, count, detail = '') => ({
+  state: FLAG_STATES.UNDETERMINED,
+  flags,
+  count,
+  label: 'Not determined',
+  detail: task.status === TASK_STATUSES.FAILED ? 'The run failed before a verdict'
+    : task.status === TASK_STATUSES.TERMINATED ? 'Stopped before a verdict'
+      : NO_ANALYSIS.has(task.action) ? 'This run analyses nothing'
+        : detail || 'The Service gave no verdict',
+});
 
 // -> { state, flags, count, label, detail }
 export const taskFlagVerdict = (task, lines = [], { backendOnly = true } = {}) => {
   const fromService = serverVerdict(task);
   if (fromService) return fromService;
-  const { flags, count, cleanSeen } = scanFlagLines(lines, { backendOnly });
+  const { flags, count } = scanFlagLines(lines, { backendOnly });
   if (flags.length || count > 0) {
     return {
       state: FLAG_STATES.SUSPICIOUS,
@@ -243,20 +281,7 @@ export const taskFlagVerdict = (task, lines = [], { backendOnly = true } = {}) =
   if (isActive) {
     return { state: FLAG_STATES.PENDING, flags, count, label: 'Analysing', detail: 'No flags so far' };
   }
-  if (task.status === TASK_STATUSES.COMPLETED || cleanSeen) {
-    return {
-      state: FLAG_STATES.CLEAN,
-      flags,
-      count,
-      label: 'Clean',
-      detail: cleanSeen ? 'No flags raised' : 'No flags reported in the log',
-    };
-  }
-  return {
-    state: FLAG_STATES.UNDETERMINED,
-    flags,
-    count,
-    label: 'Not determined',
-    detail: task.status === TASK_STATUSES.FAILED ? 'The run failed before a verdict' : 'Stopped before a verdict',
-  };
+  // Never Clean from the log: a run none of whose rules could run logs no
+  // flags either (Service answer 2026-11-25). Only the Service says Clean.
+  return notDetermined(task, flags, count);
 };

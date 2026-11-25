@@ -8,9 +8,9 @@ import { useCallback, useMemo, useSyncExternalStore } from 'react';
 import { WORKSPACE_WINDOW_TYPES } from '../../../workspace/state/workspaceTypes.js';
 import { normalizeGraphSettings } from './graphSettings.js';
 import { getGraphDefaults, subscribeGraphDefaults } from './graphDefaults.js';
-import { getGraphStore } from './graphStore.js';
+import { EMPTY_VIEW_STATS, getGraphStore } from './graphStore.js';
 
-const EMPTY_SNAPSHOT = { version: 0, nodes: 0, edges: 0, danglingEdges: 0, selection: [], status: { state: 'idle' }, viewStats: { nodes: 0, edges: 0, searched: false } };
+const EMPTY_SNAPSHOT = { version: 0, nodes: 0, edges: 0, danglingEdges: 0, selection: [], status: { state: 'idle' }, viewStats: EMPTY_VIEW_STATS, alertReport: null };
 const noopSubscribe = () => () => {};
 
 export const DEFAULT_GRAPH_SEARCH = Object.freeze({ keyword: '', includeLinked: false, keys: [] });

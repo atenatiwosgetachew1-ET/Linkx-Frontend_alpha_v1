@@ -49,7 +49,7 @@ export const SOURCE_PERMISSIONS = Object.freeze({
 // { groups, all, displayGroups, descriptions }: the known groups with only
 // the keys the Service has, plus "Other" for keys this UI does not group
 // (custom permissions; a null description shows the key).
-const PERMISSION_KEY = /^[a-z][a-z0-9_]*:[a-z][a-z0-9_]*$/;
+const PERMISSION_KEY = /^[a-z][a-z0-9_]*(?::[a-z][a-z0-9_]*)+$/;
 const buildCatalog = (keys = null, descriptions = {}) => {
   const known = new Set(ALL_PERMISSIONS);
   const has = (item) => !keys || keys.has(item);

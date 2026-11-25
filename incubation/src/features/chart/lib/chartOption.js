@@ -1,3 +1,4 @@
+import { formatFigure } from '../../../shared/numbers/values.js';
 import { colorForValue, valueRange } from './chartColors.js';
 
 // A computed metric (chartMetrics.js) as an ECharts option, in production's
@@ -230,10 +231,7 @@ const heatmapOption = (result, { base, muted, colorful, schema, selectedColors, 
   };
 };
 
-const formatValue = (value) => {
-  if (typeof value !== 'number' || !Number.isFinite(value)) return '—';
-  return Number.isInteger(value) ? value.toLocaleString('en-GB') : Number(value.toPrecision(4)).toLocaleString('en-GB', { maximumFractionDigits: 6 });
-};
+const formatValue = formatFigure;
 
 // The entities largest first (dual bars: by their sum; ties by id), worked
 // out once per result: a recolouring (a selection, a schema) rebuilds the

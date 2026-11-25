@@ -7,6 +7,9 @@ import { useNotifications } from '../shared/notifications/useNotifications.js';
 import { useSession } from '../shared/session/useSession.js';
 import { useWorkspace } from '../workspace/hooks/useWorkspace.js';
 import { WORKSPACE_WINDOW_TYPES } from '../workspace/state/workspaceTypes.js';
+import { getTasks } from '../features/tasks/lib/taskRegistry.js';
+import { isTaskUnattended } from '../features/tasks/lib/unattendedSeats.js';
+import { isRunGoing } from '../workspace/lib/leaveReasons.js';
 import { createLogger } from '../shared/logger.js';
 
 const log = createLogger('session');
@@ -81,6 +84,12 @@ export default function SessionLifecycle({ isLocked, setLocked, loginLogo, child
     }
   };
 
+  // Runs that end with the sign-out.
+  const stopNotice = () => {
+    const ending = getTasks().filter((task) => isRunGoing(task) && !isTaskUnattended(task)).length;
+    return ending ? ` Signing out stops ${ending === 1 ? 'your running analysis' : `${ending} running analyses`}.` : '';
+  };
+
   useIdleTimeout({
     enabled: Boolean(token) && idleSettings.enabled,
     warningMs: idleSettings.warningMs,
@@ -90,16 +99,17 @@ export default function SessionLifecycle({ isLocked, setLocked, loginLogo, child
     resetKey: idleResetSeq,
     onWarn: () => {
       const minutes = Math.max(1, Math.ceil((idleSettings.lockMs - idleSettings.warningMs) / 60000));
-      notify({ title: 'Inactivity warning', message: `Your session will lock in about ${minutesLabel(minutes)} if it stays inactive.`, source: 'Auth', level: 'warning', durationMs: 9000 });
+      notify({ title: 'Inactivity warning', message: `Your session will lock in about ${minutesLabel(minutes)} if it stays inactive.${stopNotice()}`, source: 'Auth', level: 'warning', durationMs: 9000 });
     },
     onLock: () => {
       if (isLockedRef.current) return;
       setLocked(true);
       lockBackendSession();
       const minutes = Math.max(1, Math.ceil((idleSettings.timeoutMs - idleSettings.lockMs) / 60000));
-      notify({ title: 'Workspace locked', message: `Your workspace is preserved. It will sign out in about ${minutesLabel(minutes)} if it remains locked.`, source: 'Auth', level: 'warning', durationMs: 10000 });
+      notify({ title: 'Workspace locked', message: `Your workspace is preserved. It will sign out in about ${minutesLabel(minutes)} if it remains locked.${stopNotice()}`, source: 'Auth', level: 'warning', durationMs: 10000 });
     },
     onTimeout: async () => {
+      // The Service leaves the session of a run with a seat alone.
       await notifyIdleTimeout();
       notify({ title: 'Signed out', message: 'You were signed out after inactivity.', source: 'Auth', level: 'warning', durationMs: 8000 });
       performLogout('idle_timeout');

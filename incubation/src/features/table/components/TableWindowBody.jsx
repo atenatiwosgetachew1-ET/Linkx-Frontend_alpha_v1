@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 
 import { useWorkspace } from '../../../workspace/hooks/useWorkspace.js';
 import { WORKSPACE_WINDOW_TYPES, getWindowLimitBlock } from '../../../workspace/state/workspaceTypes.js';
+import { graphDataNotice } from '../../graph/lib/graphDataNotice.js';
 import { getGraphStore, hasGraphStore } from '../../graph/lib/graphStore.js';
 import { getGraphState, requestGraphAction, subscribeGraphState } from '../../graph/lib/graphLinkBus.js';
 import StrokeIcon from '../../../shared/icons/StrokeIcon.jsx';
@@ -159,6 +160,7 @@ export default function TableWindowBody({ windowItem }) {
   const snapshot = useSyncExternalStore(store ? store.subscribe : noopSubscribe, store ? store.getSnapshot : () => NO_SNAPSHOT);
   const subscribeLink = useCallback((listener) => (graphId ? subscribeGraphState(graphId, listener) : () => {}), [graphId]);
   const link = useSyncExternalStore(subscribeLink, () => getGraphState(graphId));
+  const dataNotice = graphDataNotice(snapshot, link, state.scope);
 
   // Refresh (just in case, analyst decision 2026-11-18): the rows are read
   // again from the linked graph, and the list goes back to its top.
@@ -175,7 +177,7 @@ export default function TableWindowBody({ windowItem }) {
     if (state.scope === 'all') ids = nodesTab ? graph.nodes() : graph.edges();
     else if (state.scope === 'selected') ids = nodesTab ? selectedNodes : selectedEdges;
     else ids = nodesTab ? link.nodeIds : link.edgeIds;
-    return nodesTab ? buildNodeRows(graph, ids, markers) : buildLinkRows(graph, ids, markers);
+    return nodesTab ? buildNodeRows(graph, ids, markers, { edgeKeys: state.scope === 'all' ? graph.edges() : link.edgeIds }) : buildLinkRows(graph, ids, markers);
     // The graph changes with the store version; Refresh reads it again.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [store, snapshot.version, state.scope, nodesTab, link, selectedNodes, selectedEdges, refreshCount]);
@@ -247,7 +249,7 @@ export default function TableWindowBody({ windowItem }) {
       if (!store) return [];
       const graph = store.graph();
       const ids = nodesTab ? selectedNodes : selectedEdges;
-      return sortRows((nodesTab ? buildNodeRows(graph, ids, store.getMarkers()) : buildLinkRows(graph, ids, store.getMarkers())).rows, sort);
+      return sortRows((nodesTab ? buildNodeRows(graph, ids, store.getMarkers(), { edgeKeys: state.scope === 'all' ? graph.edges() : link.edgeIds }) : buildLinkRows(graph, ids, store.getMarkers())).rows, sort);
     }
     return rows;
   };
@@ -409,6 +411,7 @@ export default function TableWindowBody({ windowItem }) {
             <strong>{counts.nodes.toLocaleString()}</strong> {counts.nodes === 1 ? 'node' : 'nodes'} · <strong>{counts.links.toLocaleString()}</strong> {counts.links === 1 ? 'link' : 'links'}
             <span className="graph_window_hint"> · {TABLE_SCOPES.find((entry) => entry.id === state.scope)?.label.toLowerCase()}</span>
           </p>
+          {dataNotice ? <span className="graph_window_flag is-warning linkx_tooltip_anchor" role="status" data-tooltip-placement="bottom" data-tooltip={dataNotice.detail}>{dataNotice.label}</span> : null}
           <LinkedGraphMenu icon={TABLE_ICON} graphs={graphs} graphId={graphId} onLink={linkTo} onShow={() => focusWindow(graphId)} />
           <div className="table_tabs" role="tablist" aria-label="Rows">
             {['nodes', 'links'].map((tab) => (

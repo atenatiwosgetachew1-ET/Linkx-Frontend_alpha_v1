@@ -298,7 +298,9 @@ const communityRelationship = (edge) => {
   const value = edge?.rel_type ?? edge?.relationship ?? edge?.type ?? edge?.label ?? 'Unspecified';
   return String(value == null ? '' : value).trim() || 'Unspecified';
 };
-const isCommunityNode = (attributes) => String(attributes?.annotationType || '').trim() === '';
+// The analyst's own text notes, frames and labels on the graph.
+export const isAnnotation = (attributes) => String(attributes?.annotationType || '').trim() !== '';
+const isCommunityNode = (attributes) => !isAnnotation(attributes);
 
 // Relationship-weighted label propagation, 14 rounds; communities largest
 // first. -> [[nodeId, …], …]

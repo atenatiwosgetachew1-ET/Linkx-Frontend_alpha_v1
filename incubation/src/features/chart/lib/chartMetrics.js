@@ -1,5 +1,6 @@
+import { formatFigure, looksLikeId, parseAmount } from '../../../shared/numbers/values.js';
 import { computeMeasure } from '../../graph/lib/networkMeasures.js';
-import { MAX_BUCKETS, TIME_UNITS, bucketStart, chooseUnit, formatBucket, nextBucket, parseTimelineDate } from '../../graph/lib/graphTimeline.js';
+import { MAX_BUCKETS, TIME_UNITS, unitFits, bucketStart, chooseUnit, formatBucket, nextBucket, parseTimelineDate } from '../../graph/lib/graphTimeline.js';
 
 // Chart window metrics (G5; production's Chart window menu, A:10577-10614,
 // whose values were mostly Math.random(); analyst decisions 2026-11-18):
@@ -369,7 +370,9 @@ const edgeWeight = (input) => {
   input.edges.forEach(({ key, weight }) => {
     if (typeof weight === 'number' && Number.isFinite(weight)) values[key] = weight;
   });
-  return edgeResult('bar', [{ name: input.weightLabel ? `Weight (${input.weightLabel})` : 'Weight', values }]);
+  const missing = input.edges.length - Object.keys(values).length;
+  const result = edgeResult('bar', [{ name: input.weightLabel ? `Weight (${input.weightLabel})` : 'Weight', values }]);
+  return missing && Object.keys(values).length ? { ...result, note: `${missing.toLocaleString('en-GB')} ${missing === 1 ? 'link' : 'links'} without a readable amount left out.` } : result;
 };
 
 /* ── G5.4 global metrics ── */
@@ -629,6 +632,9 @@ const cohesion = (input) => {
 // defined (null) where a period has nothing to measure.
 // -> { kind: 'time', form: 'time', unit, periods: [{ start, label }],
 //      series: [{ name, values: [number | null], axis? }], undated }
+// Links without a date of their own take their entities' date: said.
+const borrowedNote = ({ borrowedTimes }, before) => (borrowedTimes ? `${before}${borrowedTimes.toLocaleString('en-GB')} ${borrowedTimes === 1 ? 'link takes' : 'links take'} the date of an entity` : '');
+
 const temporal = (input) => {
   const dated = input.edges.filter((edge) => typeof edge.time === 'number' && Number.isFinite(edge.time));
   if (!dated.length) throw new Error('No dated links in this scope: the Graph window\u2019s timeline finds no date field on them.');
@@ -638,7 +644,9 @@ const temporal = (input) => {
     if (time < min) min = time;
     if (time > max) max = time;
   });
-  const unit = TIME_UNITS.includes(input.timeUnit) ? input.timeUnit : chooseUnit(min, max);
+  // A unit too fine for the span is widened until every period fits.
+  const asked = TIME_UNITS.includes(input.timeUnit) ? input.timeUnit : chooseUnit(min, max);
+  const unit = TIME_UNITS.slice(TIME_UNITS.indexOf(asked)).find((candidate) => unitFits(min, max, candidate)) || 'year';
   const periods = [];
   const index = new Map();
   for (let start = bucketStart(min, unit); start <= max && periods.length < MAX_BUCKETS; start = nextBucket(start, unit)) {
@@ -695,7 +703,7 @@ const temporal = (input) => {
     kind: 'time',
     form: 'time',
     unit,
-    note: `${unitLabel} periods${input.timeKey ? ` of ${input.timeKey}` : ''}${input.edges.length > dated.length ? ` · ${(input.edges.length - dated.length).toLocaleString('en-GB')} undated links left out` : ''}`,
+    note: `${unitLabel} periods${input.timeKey ? ` of ${input.timeKey}` : ''}${input.edges.length > dated.length ? ` · ${(input.edges.length - dated.length).toLocaleString('en-GB')} links without a readable date left out` : ''}${borrowedNote(input, ' · ')}${unit === asked ? '' : ' · wider periods than asked, to fit every link'}`,
     periods: periods.map(({ start, label }) => ({ start, label })),
     undated: input.edges.length - dated.length,
     series: [
@@ -741,7 +749,7 @@ const moneyFlow = ({ nodeIds, edges, weightLabel }) => {
     series: [{ name: 'In', values: flowIn }, { name: 'Out', values: flowOut }, { name: 'Net', values: net }],
     note: weighted
       ? `Amounts from ${weightLabel || 'the links’ weight'}${unweighted ? `; ${unweighted.toLocaleString('en-GB')} ${unweighted === 1 ? 'link' : 'links'} without one left out` : ''}.`
-      : `No link has an amount (${weightLabel || 'weight / value'}): set the Graph window’s weight (link aggregation total or edge weight).`,
+      : `No link has an amount (${weightLabel || 'weight / value'}): set the Graph window’s weight (link aggregation total).`,
   };
 };
 
@@ -792,7 +800,7 @@ const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 // Links by weekday x hour (local time) from their dates; when no dated link
 // has a time of day (all at midnight), by weekday only.
 // -> { kind: 'edge', form: 'heatmap', days, hours, cells: [{ day, hour, value, members }], dateOnly, undated }
-const heatMatrix = ({ edges, timeKey }) => {
+const heatMatrix = ({ edges, timeKey, borrowedTimes = 0 }) => {
   const dated = edges.filter((edge) => typeof edge.time === 'number');
   const dateOnly = dated.length > 0 && dated.every((edge) => {
     const at = new Date(edge.time);
@@ -815,6 +823,7 @@ const heatMatrix = ({ edges, timeKey }) => {
   if (timeKey) notes.push(`From ${timeKey}`);
   if (dateOnly) notes.push('dates have no time of day: by weekday only');
   if (undated) notes.push(`${undated.toLocaleString('en-GB')} undated ${undated === 1 ? 'link' : 'links'} left out`);
+  if (borrowedTimes) notes.push(borrowedNote({ borrowedTimes }, ''));
   if (!dated.length) notes.push(timeKey ? 'no dated links in this scope' : 'no date field found on these links');
   return { kind: 'edge', form: 'heatmap', days: WEEKDAYS, hours, cells: [...cells.values()], dateOnly, undated, note: `${notes.join('; ')}.`.replace(/^./, (c) => c.toUpperCase()) };
 };
@@ -826,7 +835,11 @@ const niceStep = (span, count) => {
   return [1, 2, 5, 10].map((m) => m * power).find((step) => step >= raw) || raw;
 };
 const HISTOGRAM_TOP = 25;
-const formatNumber = (value) => Number(value.toPrecision(6)).toLocaleString('en-GB', { maximumFractionDigits: 6 });
+const formatNumber = formatFigure;
+// Account numbers and other ids are counted by value, not in ranges: text
+// with a leading zero or 16+ digits, or a column of nothing but long digits.
+const areIds = (filled) => filled.some(([, raw]) => looksLikeId(raw))
+  || (filled.length > 1 && filled.every(([, raw]) => /^\d{10,}$/.test(String(raw).trim())));
 
 // input.values: [[id, raw value]] of the chosen property; input.subject:
 // 'node' | 'edge'. Numbers (most values numeric) in ranges, dates by month
@@ -836,22 +849,28 @@ const histogram = ({ values = [], subject = 'node', paramLabel = '' }) => {
   const kind = subject === 'edge' ? 'edge' : 'node';
   const filled = values.filter(([, raw]) => raw != null && String(raw).trim() !== '');
   const empty = values.filter(([, raw]) => raw == null || String(raw).trim() === '').map(([id]) => id);
-  const numbers = filled.map(([id, raw]) => [id, typeof raw === 'number' ? raw : Number(String(raw).replace(/[,\s]/g, ''))]).filter(([, n]) => Number.isFinite(n));
+  const ids = areIds(filled);
+  const numbers = filled.map(([id, raw]) => [id, ids ? null : parseAmount(raw)]).filter(([, n]) => n !== null);
   const dates = numbers.length >= filled.length * 0.8 ? [] : filled.map(([id, raw]) => [id, parseTimelineDate(raw)]).filter(([, ms]) => ms != null);
   const named = paramLabel ? ` by ${paramLabel}` : '';
   const yName = kind === 'edge' ? 'Links' : 'Entities';
   const withEmpty = (bins) => (empty.length ? [...bins, { label: '(empty)', value: empty.length, members: empty }] : bins);
   if (filled.length && numbers.length >= filled.length * 0.8) {
-    const all = numbers.map(([, n]) => n);
-    const low = Math.min(...all);
-    const high = Math.max(...all);
+    // (No spread: large scopes pass the argument limit.)
+    const low = numbers.reduce((least, [, n]) => Math.min(least, n), Infinity);
+    const high = numbers.reduce((most, [, n]) => Math.max(most, n), -Infinity);
     if (low === high) return binsResult(kind, withEmpty([{ label: formatNumber(low), value: numbers.length, members: numbers.map(([id]) => id) }]), { xName: paramLabel, yName, note: `Every value${named} is ${formatNumber(low)}.` });
     const step = niceStep(high - low, Math.min(20, Math.max(5, Math.ceil(Math.sqrt(numbers.length)))));
-    const start = Math.floor(low / step) * step;
-    const count = Math.max(1, Math.floor((high - start) / step) + 1);
-    const bins = Array.from({ length: count }, (_, index) => ({ label: `${formatNumber(start + index * step)} – ${formatNumber(start + (index + 1) * step)}`, value: 0, members: [] }));
+    // Edges as whole multiples of the step, written out (0.1 + 0.2 is not 0.3).
+    const first = Math.floor(low / step + 1e-9);
+    const edgeAt = (index) => Number(((first + index) * step).toPrecision(12));
+    const count = Math.max(1, Math.floor(high / step + 1e-9) - first + 1);
+    const bins = Array.from({ length: count }, (_, index) => ({ label: `${formatNumber(edgeAt(index))} – ${formatNumber(edgeAt(index + 1))}`, value: 0, members: [] }));
     numbers.forEach(([id, n]) => {
-      const bin = bins[Math.min(count - 1, Math.floor((n - start) / step))];
+      let at = Math.max(0, Math.min(count - 1, Math.floor(n / step) - first));
+      while (at > 0 && n < edgeAt(at)) at -= 1;
+      while (at < count - 1 && n >= edgeAt(at + 1)) at += 1;
+      const bin = bins[at];
       bin.value += 1;
       bin.members.push(id);
     });
@@ -859,7 +878,7 @@ const histogram = ({ values = [], subject = 'node', paramLabel = '' }) => {
     return binsResult(kind, withEmpty(bins), { xName: paramLabel, yName, note: `Ranges of ${formatNumber(step)}${skipped ? `; ${skipped.toLocaleString('en-GB')} non-numeric ${skipped === 1 ? 'value' : 'values'} left out` : ''}.` });
   }
   if (filled.length && dates.length >= filled.length * 0.8) {
-    const span = Math.max(...dates.map(([, ms]) => ms)) - Math.min(...dates.map(([, ms]) => ms));
+    const span = dates.reduce((most, [, ms]) => Math.max(most, ms), -Infinity) - dates.reduce((least, [, ms]) => Math.min(least, ms), Infinity);
     const byDay = span <= 62 * 864e5;
     const labelOf = (ms) => {
       const at = new Date(ms);
@@ -874,7 +893,8 @@ const histogram = ({ values = [], subject = 'node', paramLabel = '' }) => {
       map.get(label).members.push(id);
     });
     const bins = [...map.values()].sort((a, b) => a.label.localeCompare(b.label));
-    return binsResult(kind, withEmpty(bins), { xName: paramLabel, yName, note: `By ${byDay ? 'day' : 'month'}.` });
+    const unread = filled.length - dates.length;
+    return binsResult(kind, withEmpty(bins), { xName: paramLabel, yName, note: `By ${byDay ? 'day' : 'month'}${unread ? `; ${unread.toLocaleString('en-GB')} ${unread === 1 ? 'value' : 'values'} not read as a date left out` : ''}.` });
   }
   const map = new Map();
   filled.forEach(([id, raw]) => {
@@ -942,6 +962,7 @@ export const computeChartMetric = (metricId, input) => {
     weightLabel: typeof input?.weightLabel === 'string' ? input.weightLabel.slice(0, 80) : '',
     communities: Array.isArray(input?.communities) ? input.communities.filter(Array.isArray) : [],
     timeUnit: typeof input?.timeUnit === 'string' ? input.timeUnit : 'auto',
+    borrowedTimes: Number.isInteger(input?.borrowedTimes) ? input.borrowedTimes : 0,
     timeKey: typeof input?.timeKey === 'string' ? input.timeKey.slice(0, 80) : '',
     // Histogram: the chosen property's values ([[id, value]]) and subject.
     values: Array.isArray(input?.values) ? input.values.filter((entry) => Array.isArray(entry) && entry.length === 2).map(([id, value]) => [String(id), value]) : [],

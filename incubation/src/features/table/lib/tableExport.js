@@ -8,9 +8,10 @@
 // A cell a spreadsheet would read as a formula is kept as text (a leading
 // apostrophe), so an exported value is never run.
 const FORMULA_START = /^[=+\-@\t\r]/;
+const PLAIN_NUMBER = /^[+-]?\d[\d,]*(\.\d+)?$/;
 const safeCell = (value) => {
   const text = value == null ? '' : String(value);
-  return FORMULA_START.test(text) ? `'${text}` : text;
+  return FORMULA_START.test(text) && !PLAIN_NUMBER.test(text) ? `'${text}` : text;
 };
 
 const csvCell = (value) => {

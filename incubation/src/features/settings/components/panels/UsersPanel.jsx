@@ -18,30 +18,24 @@ import {
   normalizeAdminUserList,
   userDraftFrom,
 } from '../../lib/settingsModel.js';
+import { normalizeUserRules } from '../../lib/userRules.js';
 import { Masthead, PageHero, Pill, SettingsPage, SettingsPopup, Stat, Stats } from '../SettingsPage.jsx';
 
 // The privileges matrix is hidden for now (analyst decision 2026-11-20:
 // its presentation is to be redone); set to true to show it again.
 const SHOW_PRIVILEGES = false;
 
-// Access levels: a role and the privileges a new account of that level
-// starts with. Only privileges the Service's catalog lists are sent.
-const SERVICE_ONLY_PERMISSIONS = ['alerts:ingest', 'auth:verify'];
-const VIEWER_PERMISSIONS = ['session:create', 'session:read', 'config:read', 'graph:read', 'reports:read'];
-const ANALYST_PERMISSIONS = [
-  ...VIEWER_PERMISSIONS,
-  'source:create', 'source:connect', 'source:disconnect',
-  'batch:upload', 'batch:query', 'analysis:run',
-  'graph:create', 'graph:link',
-  'evidence:create', 'alerts:feedback',
-];
+// Access levels: the Service's roles. What each gives is the Service's to say
+// (lib/userRules.js); privileges are never sent with a user (B-33).
 const ACCESS_LEVELS = [
-  { role: 'viewer', label: 'Viewer', note: 'Reads graphs and reports; changes nothing.', permissions: () => VIEWER_PERMISSIONS },
-  { role: 'analyst', label: 'Analyst', note: 'Connects sources, runs analyses, builds graphs and evidence.', permissions: () => ANALYST_PERMISSIONS },
-  { role: 'admin', label: 'Admin', note: 'Everything an analyst does, plus configuration and user management.', permissions: (all) => all.filter((permission) => !SERVICE_ONLY_PERMISSIONS.includes(permission)) },
-  { role: 'superuser', label: 'Superuser', note: 'Every privilege, including the service-level ones.', permissions: (all) => all },
+  { role: 'viewer', label: 'Viewer', note: 'Reads graphs and reports; changes nothing.' },
+  { role: 'analyst', label: 'Analyst', note: 'Connects sources, runs analyses, builds graphs and evidence.' },
+  { role: 'manager', label: 'Manager', note: 'Defined by the Service; its privileges show once chosen.' },
+  { role: 'admin', label: 'Admin', note: 'Everything an analyst does, plus configuration and user management.' },
+  { role: 'superuser', label: 'Superuser', note: 'Every privilege, including the service-level ones.' },
 ];
 const LEVEL_ICONS = {
+  manager: 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM17 11l2 2 4-4',
   viewer: 'M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
   analyst: 'M22 12h-4l-3 9L9 3l-3 9H2',
   admin: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z',
@@ -73,20 +67,16 @@ const FIELD_ICONS = {
 // Create user, step by step.
 const CREATE_STEPS = [
   { label: 'Account', hint: 'Who the account is for and how it signs in.', reset: 'Clear the account fields' },
-  { label: 'Access level', hint: 'The level sets the role and privileges. Create the user now, or open Privileges to adjust them first.', reset: 'Back to the default level' },
-  { label: 'Privileges', hint: 'Optional: the level’s privileges, adjusted for this account.', reset: 'Reset the privileges to the level’s' },
+  { label: 'Access level', hint: 'The level is the account’s role, and the role sets its privileges. Open Privileges to see them.', reset: 'Back to the level it started with' },
+  { label: 'Privileges', hint: 'What the role gives. They cannot be given one by one.', reset: '' },
 ];
 // The same steps when an existing account is being modified.
 const MODIFY_HINTS = [
   'What the account is called and whether it may sign in.',
-  'The account’s level, which is fixed. Its access is managed in the privileges step.',
-  'The account’s privileges; adjust them as needed.',
+  'The account’s level: its role, which sets its privileges.',
+  'What the account’s roles give it.',
 ];
 const DEFAULT_LEVEL = 'analyst';
-const levelPermissions = (role, all) => {
-  const level = ACCESS_LEVELS.find((item) => item.role === role);
-  return level ? level.permissions(all).filter((permission) => all.includes(permission)) : [];
-};
 
 const AREA_LABELS = { config: 'Configuration', auth: 'Auth', users: 'Users', batch: 'Batch', analysis: 'Analysis' };
 const splitPermission = (permission) => {
@@ -219,17 +209,18 @@ const ACTION_ICONS = [
 const DEFAULT_ACTION_ICON = 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zM12 8v8M8 12h8';
 const actionIcon = (action) => (ACTION_ICONS.find(([word]) => action.includes(word)) || [null, DEFAULT_ACTION_ICON])[1];
 
-// Custom privileges: each area with its privileges as on/off pills. An
-// area's name toggles the whole area.
+// Privileges: each area with its privileges as on/off pills. An area's name
+// toggles the whole area. readOnly: shown only, nothing toggles.
 // canGrant(permission): the actor holds it, so may grant or remove it (the
 // Service refuses escalation, B-1). Others are shown locked, as they are.
-export function PrivilegePicker({ groups, all, value = [], onChange, canGrant = () => true }) {
+export function PrivilegePicker({ groups, all, value = [], onChange, canGrant = () => true, readOnly = false }) {
   const selected = new Set(value);
   const emit = (next) => onChange(sanitizePermissionList(Array.from(next)));
   const grouped = new Set(groups.flatMap((group) => group.items));
   const other = all.filter((permission) => !grouped.has(permission));
   const rows = other.length ? [...groups, { label: 'Other', items: other }] : groups;
   const toggle = (allItems) => {
+    if (readOnly) return;
     const items = allItems.filter(canGrant);
     if (!items.length) return;
     const next = new Set(selected);
@@ -244,7 +235,7 @@ export function PrivilegePicker({ groups, all, value = [], onChange, canGrant = 
         const count = group.items.filter((item) => selected.has(item)).length;
         return (
           <div className="users_picker_area" key={group.label}>
-            <button type="button" className="users_picker_name" title="Toggle the whole area" onClick={() => toggle(group.items)}>
+            <button type="button" className="users_picker_name" title={readOnly ? undefined : 'Toggle the whole area'} aria-disabled={readOnly || undefined} onClick={() => toggle(group.items)}>
               {group.label}
               <small>{count}/{group.items.length}</small>
             </button>
@@ -252,7 +243,7 @@ export function PrivilegePicker({ groups, all, value = [], onChange, canGrant = 
               {group.items.map((permission) => {
                 const [scope, action] = splitPermission(permission);
                 const on = selected.has(permission);
-                const locked = !canGrant(permission);
+                const locked = readOnly || !canGrant(permission);
                 return (
                   <button
                     key={permission}
@@ -260,9 +251,9 @@ export function PrivilegePicker({ groups, all, value = [], onChange, canGrant = 
                     role="switch"
                     aria-checked={on}
                     aria-label={permission}
-                    title={locked ? `${permission}: your account does not hold it, so it cannot grant or remove it.` : permission}
+                    title={readOnly ? permission : locked ? `${permission}: your account does not hold it, so it cannot grant or remove it.` : permission}
                     aria-disabled={locked || undefined}
-                    className={'users_pill' + (on ? ' is-on' : '') + (locked ? ' is-locked' : '')}
+                    className={'users_pill' + (on ? ' is-on' : '') + (locked && !readOnly ? ' is-locked' : '')}
                     onClick={() => toggle([permission])}
                   >
                     <LevelIcon d={actionIcon(action)} size={11} />
@@ -317,7 +308,7 @@ export function UsersPanel({ apiFetch, canManageUsers, canManageSuperusers, curr
   // The Service's permission list once loaded (§4e), else the built-in one.
   const { all: allPermissions, displayGroups: userPermissionDisplayGroups } = usePermissionCatalog();
   const [users, setUsers] = useState([]);
-  const [draft, setDraft] = useState(() => initialUiState.draft || { username: '', password: '', display_name: '', roles: ['analyst'], is_active: true, permissions: [] });
+  const [draft, setDraft] = useState(() => initialUiState.draft || { username: '', password: '', display_name: '', roles: ['analyst'], is_active: true });
   const [editDrafts, setEditDrafts] = useState(() => initialUiState.editDrafts || {});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -347,21 +338,39 @@ export function UsersPanel({ apiFetch, canManageUsers, canManageSuperusers, curr
   const [selectedUserId, setSelectedUserId] = useState(() => initialUiState.selectedUserId || '');
   const [expandedUserId, setExpandedUserId] = useState(() => initialUiState.expandedUserId || '');
   const lastPersistedUiRef = useRef('');
-  // As production's create form: superuser and admin only for those who manage superusers.
-  const creatableRoles = useMemo(() => (canManageSuperusers ? ['superuser', 'admin', 'analyst', 'viewer'] : ['analyst', 'viewer']), [canManageSuperusers]);
+  // The Service's rules (GET /auth/admin/user-rules, B-33); until it answers,
+  // only those who manage superusers may give more than analyst and viewer.
+  const [assignableRoles, setAssignableRoles] = useState(null);
+  const creatableRoles = useMemo(() => assignableRoles || (canManageSuperusers ? ['superuser', 'admin', 'manager', 'analyst', 'viewer'] : ['analyst', 'viewer']), [assignableRoles, canManageSuperusers]);
   const defaultRole = creatableRoles.includes(DEFAULT_LEVEL) ? DEFAULT_LEVEL : creatableRoles[0];
   // Roles this actor may assign (production availableRoles). Other roles a
   // user already holds are shown locked and kept as they are on save.
-  const editableRoles = useMemo(() => (canManageSuperusers ? ['superuser', 'admin', 'analyst', 'viewer'] : ['analyst', 'viewer']), [canManageSuperusers]);
-  // What this actor may grant: the permissions it holds itself (B-1). An
-  // actor list that is missing (older Service) locks nothing.
-  const actorPermissions = useMemo(() => new Set(Array.isArray(currentActor?.permissions) ? currentActor.permissions : []), [currentActor]);
-  const canGrant = useCallback((permission) => !actorPermissions.size || actorPermissions.has(permission), [actorPermissions]);
-  const presetFor = useCallback((role) => levelPermissions(role, allPermissions).filter(canGrant), [allPermissions, canGrant]);
+  const editableRoles = creatableRoles;
+  // What each role gives, as the Service says it: null until it has.
+  const [rolePermissions, setRolePermissions] = useState(null);
+  useEffect(() => {
+    if (!canManageUsers) return undefined;
+    let current = true;
+    Promise.resolve(apiFetch('/auth/admin/user-rules', { method: 'GET', suppressForbiddenHandler: true }))
+      .then((data) => {
+        if (!current) return;
+        const rules = normalizeUserRules(data);
+        setRolePermissions(rules.permissions);
+        // Only levels this screen knows; empty: what it assumed stands.
+        const known = (rules.assignable || []).filter((role) => ACCESS_LEVELS.some((item) => item.role === role));
+        setAssignableRoles(known.length ? known : null);
+      })
+      .catch(() => {});
+    return () => { current = false; };
+  }, [apiFetch, canManageUsers, refreshSignal]);
+  const permissionsOf = (roles = []) => {
+    const known = roles.filter((role) => rolePermissions?.[role]);
+    return known.length ? [...new Set(known.flatMap((role) => rolePermissions[role]))].sort() : null;
+  };
   // An account holding a role this actor may not assign (admin, superuser
   // without superuser:manage) cannot be changed from here: saving it would
   // send that role back, which the Service refuses.
-  const outranks = (user) => (user.roles || []).some((role) => ['superuser', 'admin'].includes(role) && !editableRoles.includes(role));
+  const outranks = (user) => (user.roles || []).some((role) => ['superuser', 'admin', 'manager'].includes(role) && !editableRoles.includes(role));
   const currentActorUser = useMemo(() => {
     if (!currentActor?.username) return null;
     return {
@@ -415,8 +424,6 @@ export function UsersPanel({ apiFetch, canManageUsers, canManageSuperusers, curr
     setCreateStep(0);
     setAccountChecked(false);
     setPasswordConfirm('');
-    // The privileges start as the chosen level's.
-    setDraft((current) => ({ ...current, permissions: presetFor((current.roles || [])[0]) }));
     setIsExistingOpen(false);
     setIsCreateOpen(true);
   };
@@ -442,7 +449,7 @@ export function UsersPanel({ apiFetch, canManageUsers, canManageSuperusers, curr
     const roles = user.roles || [];
     const initialRole = [...ACCESS_LEVELS].reverse().find((item) => roles.includes(item.role))?.role || roles[0] || defaultRole;
     createDraftStashRef.current = draft;
-    setDraft({ username: user.username || '', password: '', display_name: user.display_name || '', roles: [initialRole], is_active: user.is_active !== false, permissions: [...(user.permissions || [])] });
+    setDraft({ username: user.username || '', password: '', display_name: user.display_name || '', roles: [initialRole], is_active: user.is_active !== false });
     setModifying({ user, initialRole });
     setError('');
     setCreateStep(0);
@@ -502,8 +509,8 @@ export function UsersPanel({ apiFetch, canManageUsers, canManageSuperusers, curr
   const saveUser = async (user) => {
     const userId = String(user.id);
     const edit = editDrafts[userId] || {};
-    if (isSelf(user) && (!edit.is_active || !(edit.permissions || []).includes('users:manage'))) {
-      setError('You cannot deactivate yourself or remove your own users:manage permission.');
+    if (isSelf(user) && !edit.is_active) {
+      setError('You cannot deactivate yourself.');
       return;
     }
     const patch = {
@@ -512,7 +519,6 @@ export function UsersPanel({ apiFetch, canManageUsers, canManageSuperusers, curr
         ...(user.roles || []).filter((role) => !editableRoles.includes(role)),
         ...(edit.roles || []).filter((role) => editableRoles.includes(role)),
       ])),
-      permissions: sanitizePermissionList(edit.permissions || []),
       is_active: !!edit.is_active,
     };
     if (edit.password) patch.password = sanitizeSecret(edit.password, { maxLength: 256 });
@@ -557,7 +563,7 @@ export function UsersPanel({ apiFetch, canManageUsers, canManageSuperusers, curr
     try {
       await apiFetch('/auth/admin/users/' + encodeURIComponent(user.id), {
         method: 'PATCH',
-        body: { display_name: user.display_name || '', roles: user.roles || [], permissions: sanitizePermissionList(user.permissions || []), is_active: next },
+        body: { display_name: user.display_name || '', roles: user.roles || [], is_active: next },
       });
       onNotice?.({ title: next ? 'User activated' : 'User deactivated', message: user.username + (next ? ' can sign in again.' : ' can no longer sign in.'), source: 'Admin', level: next ? 'success' : 'warning' });
       // An open draft for this account follows the saved state.
@@ -590,15 +596,22 @@ export function UsersPanel({ apiFetch, canManageUsers, canManageSuperusers, curr
     }
   };
 
+  // The account's roles with its level as chosen: exactly as saved when the
+  // level is the same, else the new level in place of the old one (roles that
+  // are not levels are kept).
+  const modifiedRoles = () => {
+    const saved = modifying?.user.roles || [];
+    const chosen = (draft.roles || [])[0];
+    if (!chosen || chosen === modifying.initialRole) return [...saved];
+    return [chosen, ...saved.filter((role) => !ACCESS_LEVELS.some((item) => item.role === role))];
+  };
   // PATCH /auth/admin/users/:id from the Modify User form.
   const updateUser = async () => {
     if (!modifying) return;
     const { user } = modifying;
     const patch = {
       display_name: sanitizeText(draft.display_name, { maxLength: 120 }).trim(),
-      // The level is not changed here: the account keeps its roles.
-      roles: [...(user.roles || [])],
-      permissions: sanitizePermissionList(draft.permissions || []),
+      roles: modifiedRoles(),
       is_active: !!draft.is_active,
     };
     if (draft.password) patch.password = sanitizeSecret(draft.password, { maxLength: 256 });
@@ -608,8 +621,8 @@ export function UsersPanel({ apiFetch, canManageUsers, canManageSuperusers, curr
       setCreateStep(0);
       return;
     }
-    if (isSelf(user) && (!patch.is_active || !patch.permissions.includes('users:manage'))) {
-      setError('You cannot deactivate yourself or remove your own users:manage permission.');
+    if (isSelf(user) && !patch.is_active) {
+      setError('You cannot deactivate yourself.');
       return;
     }
     setSaving(true);
@@ -633,9 +646,7 @@ export function UsersPanel({ apiFetch, canManageUsers, canManageSuperusers, curr
       password: sanitizeSecret(draft.password, { maxLength: 256 }),
       display_name: sanitizeText(draft.display_name, { maxLength: 120 }).trim(),
       roles: Array.from(new Set((draft.roles || []).filter((role) => creatableRoles.includes(role)))),
-      // The access level's privileges, as adjusted in the last step (only
-      // what this actor may grant).
-      permissions: sanitizePermissionList(draft.permissions).filter(canGrant),
+      // (Privileges come from the role; the Service refuses them here.)
       is_active: !!draft.is_active,
     };
     const validationError = compactValidationErrors(
@@ -660,7 +671,7 @@ export function UsersPanel({ apiFetch, canManageUsers, canManageSuperusers, curr
     setError('');
     try {
       await apiFetch('/auth/admin/users', { method: 'POST', body: payload });
-      setDraft({ username: '', password: '', display_name: '', roles: [defaultRole], is_active: true, permissions: [] });
+      setDraft({ username: '', password: '', display_name: '', roles: [defaultRole], is_active: true });
       setPasswordConfirm('');
       onNotice?.({ title: 'User created', message: payload.username + ' was created.', source: 'Admin', level: 'success' });
       await loadUsers();
@@ -778,13 +789,13 @@ export function UsersPanel({ apiFetch, canManageUsers, canManageSuperusers, curr
         const role = (draft.roles || [])[0];
         const modifyingSelf = Boolean(modifying) && isSelf(modifying.user);
         const level = ACCESS_LEVELS.find((item) => item.role === role);
-        const granted = new Set(draft.permissions || []);
+        const given = permissionsOf(modifying ? modifiedRoles() : draft.roles);
         const username = draft.username.trim();
         // What each step holds, shown beside its name once it is behind you.
         const summaries = [
           [username, draft.display_name.trim(), draft.is_active ? 'active' : 'switched off'].filter(Boolean).join(' · '),
           level ? level.label : '',
-          `${granted.size} of ${allPermissions.length}`,
+          given ? `${given.length} of ${allPermissions.length}` : '',
         ];
         // Each step's reset: back to how the step starts.
         const resetCreateStep = [
@@ -796,10 +807,8 @@ export function UsersPanel({ apiFetch, canManageUsers, canManageSuperusers, curr
               : { ...current, username: '', display_name: '', password: '', is_active: true }));
           },
           () => setDraft((current) => (modifying
-            ? { ...current, roles: [modifying.initialRole], permissions: [...(modifying.user.permissions || [])] }
-            : { ...current, roles: [defaultRole], permissions: presetFor(defaultRole) })),
-          // (Modify User: back to the account's saved privileges, not the level's.)
-          () => setDraft((current) => ({ ...current, permissions: modifying ? [...(modifying.user.permissions || [])] : presetFor((current.roles || [])[0]) })),
+            ? { ...current, roles: [modifying.initialRole] }
+            : { ...current, roles: [defaultRole] })),
         ];
         const stepBodies = [
           <div className="users_wizard_fields" key="account">
@@ -873,27 +882,25 @@ export function UsersPanel({ apiFetch, canManageUsers, canManageSuperusers, curr
             {/* Every level stays visible; the ones this account may not
                 assign are locked and say why. */}
             {ACCESS_LEVELS.map((item) => {
-              const preset = presetFor(item.role);
-              // An existing account's level is fixed: it shows which one the
-              // account has, and nothing here can be chosen (its access is
-              // managed in the privileges step).
-              const fixed = Boolean(modifying);
-              const isCurrent = fixed ? role === item.role : creatableRoles.includes(item.role) && role === item.role;
-              const allowed = fixed ? isCurrent : creatableRoles.includes(item.role);
-              const why = fixed ? 'The access level of an existing account cannot be changed. Adjust its privileges instead.' : 'Assigning this level needs the superuser:manage permission.';
+              const preset = permissionsOf([item.role]);
+              // One's own level is fixed: changing it could lock one out.
+              const fixed = modifyingSelf;
+              const isCurrent = modifying ? role === item.role : creatableRoles.includes(item.role) && role === item.role;
+              const allowed = fixed ? isCurrent : creatableRoles.includes(item.role) || (Boolean(modifying) && item.role === modifying.initialRole);
+              const why = fixed ? 'You cannot change your own access level.' : 'Assigning this level needs the superuser:manage permission.';
               return (
                 <label
                   key={item.role}
                   className={'users_level' + (isCurrent ? ' is-current' : '') + (allowed ? '' : ' is-locked') + (fixed ? ' is-fixed' : '')}
                   title={fixed || !allowed ? why : undefined}
                 >
-                  <input type="radio" name="new_user_access_level" checked={isCurrent} disabled={fixed || !allowed} onChange={() => setDraft((current) => ({ ...current, roles: [item.role], permissions: preset }))} />
+                  <input type="radio" name="new_user_access_level" checked={isCurrent} disabled={fixed || !allowed} onChange={() => setDraft((current) => ({ ...current, roles: [item.role] }))} />
                   <span className="users_level_icon"><LevelIcon d={allowed ? LEVEL_ICONS[item.role] : LOCK_ICON} /></span>
                   <span className="users_level_text">
                     <strong>{item.label}</strong>
-                    <small>{allowed ? item.note : fixed ? 'Not this account’s level.' : 'Needs superuser:manage to assign.'}</small>
+                    <small>{allowed ? item.note : fixed ? 'Not your level.' : 'Needs superuser:manage to assign.'}</small>
                   </span>
-                  <span className="users_level_count" title={fixed ? undefined : preset.join(', ')}>{fixed ? (isCurrent ? 'Current' : 'Locked') : allowed ? `${preset.length} privileges` : 'Locked'}</span>
+                  <span className="users_level_count" title={fixed || !preset ? undefined : preset.join(', ')}>{fixed ? (isCurrent ? 'Current' : 'Locked') : modifying && item.role === modifying.initialRole ? 'Current' : allowed ? (preset ? `${preset.length} privileges` : '') : 'Locked'}</span>
                   <span className="users_level_mark" aria-hidden="true"><LevelIcon d="M5 12l5 5L20 7" size={11} /></span>
                 </label>
               );
@@ -913,8 +920,7 @@ export function UsersPanel({ apiFetch, canManageUsers, canManageSuperusers, curr
             footer={(
               <>
                 {createStep > 0 ? <button type="button" className="graph_customize_button" disabled={saving} onClick={() => goToCreateStep(createStep - 1)}>Back</button> : null}
-                {/* The privileges step is optional: once a level is chosen the
-                    account can be created with that level's privileges. */}
+                {/* Once a level is chosen the account can be created. */}
                 {/* A modified account can be saved from any step; Cancel goes
                     back to Existing users. */}
                 {modifying ? <button type="button" className="graph_customize_button" disabled={saving} onClick={closeCreate}>Cancel</button> : null}
@@ -959,9 +965,11 @@ export function UsersPanel({ apiFetch, canManageUsers, canManageSuperusers, curr
                             {state !== 'current' && (state === 'done' || index >= 1) && summaries[index] ? <small>{summaries[index]}</small> : null}
                             {opensPopup ? <span className="users_wizard_open" aria-hidden="true"><LevelIcon d="M9 6l6 6-6 6" size={13} /></span> : null}
                           </button>
-                          <button type="button" className="users_wizard_reset linkx_tooltip_anchor" data-tooltip={step.reset} aria-label={step.reset} disabled={saving || (Boolean(modifying) && index === 1)} onClick={resetCreateStep[index]}>
-                            <LevelIcon d="M1 4v6h6M3.51 15a9 9 0 1 0 2.13-9.36L1 10" size={13} />
-                          </button>
+                          {step.reset ? (
+                            <button type="button" className="users_wizard_reset linkx_tooltip_anchor" data-tooltip={step.reset} aria-label={step.reset} disabled={saving || (modifyingSelf && index === 1)} onClick={resetCreateStep[index]}>
+                              <LevelIcon d="M1 4v6h6M3.51 15a9 9 0 1 0 2.13-9.36L1 10" size={13} />
+                            </button>
+                          ) : null}
                         </div>
                         {opensPopup ? null : <div className="users_wizard_body" inert={state !== 'current'}>{stepBodies[index]}</div>}
                       </li>
@@ -974,23 +982,18 @@ export function UsersPanel({ apiFetch, canManageUsers, canManageSuperusers, curr
             <SettingsPopup
               title="Privileges"
               subtitle={[username, level ? level.label : ''].filter(Boolean).join(' · ')}
-              hint={`${granted.size} of ${allPermissions.length} granted. Kept with the account's form.`}
+              hint={given ? `${given.length} of ${allPermissions.length}, given by the role. They cannot be given one by one.` : 'Set by the role.'}
               onClose={() => setPrivilegesOpen(false)}
               footer={(
-                <>
-                  <button type="button" className="graph_customize_button" title={CREATE_STEPS[2].reset} onClick={resetCreateStep[2]}>Reset to the level’s</button>
-                  <button type="button" className="graph_customize_button is-primary" onClick={() => setPrivilegesOpen(false)}>Done</button>
-                </>
+                <button type="button" className="graph_customize_button is-primary" onClick={() => setPrivilegesOpen(false)}>Done</button>
               )}
             >
           <section className="users_wizard_privileges" aria-label="Privileges">
-            <PrivilegePicker
-              groups={userPermissionDisplayGroups}
-              all={allPermissions}
-              canGrant={canGrant}
-              value={draft.permissions}
-              onChange={(permissions) => setDraft((current) => ({ ...current, permissions }))}
-            />
+            {given ? (
+              <PrivilegePicker readOnly groups={userPermissionDisplayGroups} all={allPermissions} value={given} />
+            ) : (
+              <p className="users_empty" role="status">The Service has not said which privileges this role gives.</p>
+            )}
           </section>
             </SettingsPopup>
           ) : null}

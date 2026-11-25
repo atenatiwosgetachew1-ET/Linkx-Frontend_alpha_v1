@@ -4314,24 +4314,14 @@ div.service_target_advanced_toggle {
 	outline-offset: 3px;
 }
 
-/* The new secret, shown in the list popup: stacked, to fit its width. */
+/* The new secret, shown in the list popup. */
 .settings_popup .settings_secret_notice {
-	grid-template-columns: minmax(0, 1fr) auto auto;
 	gap: 8px;
 	padding: 10px 12px;
 	border-color: var(--settings-popup-secret-notice-border);
 	border-radius: 6px;
 	background: var(--settings-popup-secret-notice-bg);
 	font-size: 11.5px;
-}
-
-.settings_popup .settings_secret_notice > div {
-	grid-column: 1 / -1;
-}
-
-.settings_popup .settings_secret_notice code {
-	min-width: 0;
-	overflow-wrap: anywhere;
 }
 
 /* A field that cannot be changed (the username of an existing account). */

@@ -5,6 +5,7 @@
 // Chart window's cards (its charts, colours and scope) or an automatic set.
 
 import { COLOR_SCHEMAS, DEFAULT_SCHEMA } from './chartColors.js';
+import { DEFAULT_HISTOGRAM, histogramValues } from './chartHistogram.js';
 import { metricById } from './chartMetrics.js';
 import { buildChartOption } from './chartOption.js';
 import { CELLS, SNAP_THEME, chartCell, figuresCell, loadImage } from './chartSnaps.js';
@@ -75,13 +76,25 @@ export async function reportChartCells({
   const engine = await import('./echarts.js').then((module) => module.default).catch(() => null);
   const cells = [];
   const skipped = [];
+  // The Histogram is asked with its property's values (as its window does).
+  const inputFor = (card) => {
+    if (card.metric !== 'histogram') return input;
+    const param = card.param || DEFAULT_HISTOGRAM;
+    return {
+      nodeIds: [],
+      edges: [],
+      values: histogramValues(store.graph(), input.nodeIds, input.edges.map((edge) => edge.key), param),
+      subject: param.subject,
+      paramLabel: param.key === '@type' ? 'Type' : param.key,
+    };
+  };
   // One after another (each picture is large).
   for (const card of cards) {
     const metric = metricById(card.metric);
     if (!metric) continue;
     let result;
     try {
-      result = await compute(card.metric, input);
+      result = await compute(card.metric, inputFor(card));
     } catch (error) {
       skipped.push(`${metric.label}: ${error?.message || error}`);
       continue;
@@ -99,7 +112,7 @@ export async function reportChartCells({
       // A chart of nothing but zeros says nothing (every entity at 0 links,
       // say): named, not drawn.
       const series = result.series || [];
-      if (series.length && series.every((entry) => Object.values(entry.values || {}).every((value) => !Number(value)))) {
+      if (series.length && series.every((entry) => Object.values(entry.values || {}).flat().every((value) => !Number(value)))) {
         skipped.push(`${metric.label}: ${result.note || 'every value is 0 in this scope.'}`);
         continue;
       }

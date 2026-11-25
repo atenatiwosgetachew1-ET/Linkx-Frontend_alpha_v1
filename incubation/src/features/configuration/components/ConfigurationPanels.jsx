@@ -15,6 +15,7 @@ import {
   normalizeElasticScrollLimit,
   normalizeLargeSearchBackend,
   readClassifiedEntities,
+  isRiskCategory,
 } from '../lib/configModel.js';
 import { sanitizeText } from '../../../utils/inputSecurity.js';
 import { CONFIG_PROFILE_KEY, PROFILE_FIELDS, profileToConfiguration, resolveProfileSettings } from '../../graph/lib/nodeProfile.js';
@@ -26,7 +27,7 @@ const truthy = (value) => value === true || value === 'true';
 
 /* ── System ─────────────────────────────────────────────────────────── */
 
-export function SystemPanel({ draft, onChange, onSwitchDomain, isSwitchingDomain, canWrite, idleSettings, idlePolicyMeta, onIdleSettingsChange }) {
+export function SystemPanel({ draft, onChange, onSwitchDomain, isSwitchingDomain, canWrite, canSwitchDomain = canWrite, idleSettings, idlePolicyMeta, onIdleSettingsChange }) {
   const activeDomain = getActiveDomainKey(draft);
   const registeredDomains = getRegisteredDomains(draft);
   const domainConnections = draft?.domain_connections && typeof draft.domain_connections === 'object' ? draft.domain_connections : {};
@@ -37,9 +38,10 @@ export function SystemPanel({ draft, onChange, onSwitchDomain, isSwitchingDomain
   const targetCol = activeConn.default_target_col || draft?.default_target_col || '';
   const tablesText = tables.join(', ');
 
+  // [] from the Service: nothing may be edited (B-15).
   const editable = Array.isArray(idlePolicyMeta?.editableFields) ? idlePolicyMeta.editableFields : [];
   const policyBusy = idlePolicyMeta?.isLoading || idlePolicyMeta?.isSaving;
-  const canEditPolicy = (field) => !policyBusy && (editable.length === 0 || editable.includes(field));
+  const canEditPolicy = (field) => !policyBusy && editable.includes(field);
   const minutes = (ms, min) => Math.max(min, Math.round((Number(ms) || 0) / 60000));
   const updateMinutes = (key, value) => {
     const min = key === 'warningMs' ? 0 : 1;
@@ -108,8 +110,8 @@ export function SystemPanel({ draft, onChange, onSwitchDomain, isSwitchingDomain
                 role="radio"
                 aria-checked={key === activeDomain}
                 className={`config_system_domain${key === activeDomain ? ' is-on' : ''}${ready ? '' : ' is-unready'}`}
-                disabled={isSwitchingDomain || !canWrite}
-                title={canWrite ? (ready ? 'Ready' : 'Unconfigured') : 'You need config:write to switch the domain pillar.'}
+                disabled={isSwitchingDomain || !canSwitchDomain}
+                title={canSwitchDomain ? (ready ? 'Ready' : 'Unconfigured') : 'You need analysis:run or config:write to switch the domain pillar.'}
                 onClick={() => { if (key !== activeDomain) onSwitchDomain(key); }}
               >
                 <i aria-hidden="true" />
@@ -550,7 +552,8 @@ export function RulesPanel({
   const activeRuleItem = ruleNames.find((ruleItem) => getRuleItemName(ruleItem) === activeRule);
   const activeIsBuiltin = Boolean(activeRuleItem) && checkIsBuiltinRule(activeRuleItem, draft, knownBuiltinRules);
   const mappedCount = columnMapping.filter((entry) => String(entry.key || '').trim() && String(entry.value || '').trim()).length;
-  const passingCount = entities.filter((entry) => entry.pass_through === true).length;
+  const passes = (entry) => entry.pass_through === true && !isRiskCategory(entry.category);
+  const passingCount = entities.filter(passes).length;
   const profile = resolveProfileSettings(draft, domain);
   const shownFields = profile.fields.filter((field) => field.shown).length;
   const formattingRules = resolveDomainFormatting(draft, domain);
@@ -664,7 +667,7 @@ export function RulesPanel({
 
       <Block
         title={isCdr ? 'Classified entities (telecom whitelist / watchlist)' : 'Classified entities'}
-        description={canEditEntities ? 'Trusted entries are passed through; risk entries are flagged.' : 'You need config:write to edit classified entities.'}
+        description={canEditEntities ? 'The category decides the list: one that names a risk (Risk, PEP, Sanction, SIM_BOX, WANGIRI…) is a risk, any other is trusted. A trusted entry is passed through when its switch is on.' : 'Only an administrator (users:manage) can edit classified entities.'}
         actions={canEditEntities ? (
           <>
             {isCdr ? <button type="button" className="settings_button" onClick={addEmergencyPresets}>Load emergency presets</button> : null}
@@ -694,11 +697,11 @@ export function RulesPanel({
                   <td><input className="settings_input" value={entry.name || ''} disabled={!canEditEntities} onChange={(event) => editEntity(index, 'name', event.target.value)} /></td>
                   <td><input className="settings_input" value={entry.key || ''} disabled={!canEditEntities} onChange={(event) => editEntity(index, 'key', event.target.value)} /></td>
                   <td><input className="settings_input" value={entry.value || ''} disabled={!canEditEntities} onChange={(event) => editEntity(index, 'value', event.target.value)} /></td>
-                  <td><input className="settings_input" list="config-window-category-options" value={entry.category || 'Trusted'} disabled={!canEditEntities} onChange={(event) => editEntity(index, 'category', event.target.value)} /></td>
+                  <td><EntityCategory label={`Category, row ${index + 1}`} value={entry.category || 'Trusted'} options={categoryOptions} disabled={!canEditEntities} onChange={(category) => editEntity(index, 'category', category)} /></td>
                   <td>
-                    <label className={`settings_switch config_window_pass ${entry.pass_through ? 'is-passing' : 'is-restricted'}`}>
-                      <input type="checkbox" role="switch" aria-label={`Pass through, row ${index + 1}`} checked={entry.pass_through === true} disabled={!canEditEntities} onChange={(event) => editEntity(index, 'pass_through', event.target.checked)} />
-                      <span aria-hidden="true">{entry.pass_through ? 'Passing' : 'Restricted'}</span>
+                    <label className={`settings_switch config_window_pass ${passes(entry) ? 'is-passing' : 'is-restricted'}`} title={isRiskCategory(entry.category) ? 'A risk is never passed through.' : undefined}>
+                      <input type="checkbox" role="switch" aria-label={`Pass through, row ${index + 1}`} checked={passes(entry)} disabled={!canEditEntities || isRiskCategory(entry.category)} onChange={(event) => editEntity(index, 'pass_through', event.target.checked)} />
+                      <span aria-hidden="true">{passes(entry) ? 'Passing' : 'Restricted'}</span>
                     </label>
                   </td>
                   {canEditEntities ? (
@@ -711,15 +714,43 @@ export function RulesPanel({
             </tbody>
           </table>
         </div>
-        <datalist id="config-window-category-options">
-          {categoryOptions.map((option) => <option key={option} value={option} />)}
-        </datalist>
       </Block>
 
       <ProfileMappingSection draft={draft} onChange={onChange} />
       <FormattingRulesSection draft={draft} onChange={onChange} />
       </fieldset>
     </SettingsPage>
+  );
+}
+
+// An entity's category: the domain's, the one it has, or another typed. (A text
+// field with suggestions offered only those matching what it already held, so
+// the others could not be reached.)
+const OTHER_CATEGORY = '\u0000other';
+function EntityCategory({ label, value, options, disabled, onChange }) {
+  const [typing, setTyping] = useState(false);
+  if (typing) {
+    return (
+      <DraftInput
+        autoFocus
+        aria-label={label}
+        maxLength={80}
+        placeholder="Category name"
+        value=""
+        onCommit={(_name, text) => {
+          setTyping(false);
+          const category = sanitizeText(text, { maxLength: 80 }).trim();
+          if (category) onChange(category);
+        }}
+      />
+    );
+  }
+  const listed = options.includes(value) ? options : [value, ...options];
+  return (
+    <select className="settings_input" aria-label={label} value={value} disabled={disabled} onChange={(event) => (event.target.value === OTHER_CATEGORY ? setTyping(true) : onChange(event.target.value))}>
+      {listed.map((option) => <option key={option} value={option}>{option}{isRiskCategory(option) ? ' (risk)' : ''}</option>)}
+      <option value={OTHER_CATEGORY}>Other…</option>
+    </select>
   );
 }
 

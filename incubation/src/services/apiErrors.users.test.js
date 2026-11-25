@@ -24,4 +24,11 @@ describe('getUserAdminErrorMessage', () => {
     expect(getUserAdminErrorMessage({ status: 409, data: { message: 'conflict' } })).toBe('That username is already taken.');
     expect(getUserAdminErrorMessage({ status: 403, data: { message: 'forbidden', permission: 'users:manage' } })).toMatch(/users:manage/);
   });
+
+  it('words the Service’s codes, with its reason (B-33)', () => {
+    expect(getUserAdminErrorMessage({ status: 409, data: { code: 'self_lockout', message: 'conflict' } })).toMatch(/lock you out/);
+    expect(getUserAdminErrorMessage(refused({ code: 'permissions_not_assignable', detail: 'x y' }))).toMatch(/come from the role/);
+    expect(getUserAdminErrorMessage(refused({ code: 'password_policy', detail: 'At least 8 characters.' }))).toMatch(/password rules\. At least 8 characters\./);
+    expect(getUserAdminErrorMessage({ status: 403, data: { code: 'role_scope_exceeded', message: 'forbidden' } })).toBe('Your account cannot give that role.');
+  });
 });

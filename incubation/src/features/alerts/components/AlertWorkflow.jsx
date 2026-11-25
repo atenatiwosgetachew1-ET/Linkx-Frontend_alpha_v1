@@ -138,7 +138,7 @@ export default function AlertWorkflow({ alertId, mockControls = false }) {
               <b>Summary of findings</b>
               <label className="reports_alert_line">
                 <span>Verdict</span>
-                <select className="reports_select" value={draft.verdict || ''} disabled={sent} onChange={(event) => setDraft({ verdict: event.target.value })}>
+                <select className="reports_select" value={draft.verdict || ''} disabled={sent} onChange={(event) => setDraft({ verdict: event.target.value, verdictEdited: true })}>
                   <option value="">Choose…</option>
                   {VERDICTS.map((entry) => <option key={entry.id} value={entry.id}>{entry.label}</option>)}
                 </select>

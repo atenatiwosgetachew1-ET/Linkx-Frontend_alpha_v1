@@ -1,4 +1,5 @@
 import { formatPropertyValue } from './graphFormat.js';
+import { createDomainStore } from './domainStore.js';
 
 // Actor profile (analyst decision 2026-11-16; not in production): clicking a
 // node shows who it stands for, a portrait beside the person's details.
@@ -96,73 +97,19 @@ export const profileToConfiguration = (settings) => {
   };
 };
 
-// The domain's profile settings: the configuration's, else the device copy.
+// The domain's profile settings: the configuration's, else the domain's own.
 export const resolveProfileSettings = (configuration, domain) => (
   configuration?.[CONFIG_PROFILE_KEY] && typeof configuration[CONFIG_PROFILE_KEY] === 'object'
     ? profileFromConfiguration(configuration[CONFIG_PROFILE_KEY])
     : getProfileSettings(domain)
 );
 
-/* ── Device copy (interim, until B-23) ──────────────────────────────────────── */
+/* ── Per domain ─────────────────────────────────────────────────────── */
 
 export const PROFILE_PREFS_KEY = 'linkx_actor_profile_v1';
-
-let cache = null;
-const listeners = new Set();
-
-const read = () => {
-  try {
-    const value = JSON.parse(localStorage.getItem(PROFILE_PREFS_KEY) || 'null');
-    return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
-  } catch {
-    return {};
-  }
-};
-const all = () => {
-  if (!cache) cache = read();
-  return cache;
-};
-const normalized = new Map();
-
-// The domain's settings (the same object until they change).
-export const getProfileSettings = (domain) => {
-  const key = String(domain || 'bank');
-  const raw = all()[key];
-  const kept = normalized.get(key);
-  if (kept && kept.raw === raw) return kept.value;
-  const value = normalizeProfileSettings(raw);
-  normalized.set(key, { raw, value });
-  return value;
-};
-
-export const setProfileSettings = (domain, settings) => {
-  const key = String(domain || 'bank');
-  cache = { ...all(), [key]: normalizeProfileSettings(settings) };
-  try {
-    localStorage.setItem(PROFILE_PREFS_KEY, JSON.stringify(cache));
-  } catch {
-    // Storage unavailable: the choice applies to this session only.
-  }
-  listeners.forEach((listener) => listener());
-};
-
-export const subscribeProfileSettings = (listener) => {
-  listeners.add(listener);
-  // Other browser tabs.
-  const onStorage = (event) => {
-    if (event.key !== PROFILE_PREFS_KEY) return;
-    cache = read();
-    listener();
-  };
-  window.addEventListener('storage', onStorage);
-  return () => {
-    listeners.delete(listener);
-    window.removeEventListener('storage', onStorage);
-  };
-};
-
-// Tests.
-export const resetProfileSettingsCache = () => {
-  cache = null;
-  normalized.clear();
-};
+const deviceProfiles = createDomainStore(PROFILE_PREFS_KEY, normalizeProfileSettings);
+export const getProfileSettings = deviceProfiles.get;
+export const setProfileSettings = deviceProfiles.set;
+export const adoptProfileSettings = deviceProfiles.adopt;
+export const subscribeProfileSettings = deviceProfiles.subscribe;
+export const resetProfileSettingsCache = deviceProfiles.reset;

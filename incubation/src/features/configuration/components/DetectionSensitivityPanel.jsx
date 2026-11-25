@@ -4,6 +4,7 @@ import WindowLoadScreen from '../../../shared/components/WindowLoadScreen.jsx';
 import { InfoTip } from '../../../shared/components/form/FormFields.jsx';
 import { Block, Masthead, PageHero, Pill, SettingsPage, Stat, Stats } from '../../settings/components/SettingsPage.jsx';
 import {
+  formatDomainPillarLabel,
   BANK_THRESHOLD_GROUPS,
   CDR_THRESHOLD_GROUPS,
   DEFAULT_BANK_MONEY_THRESHOLDS,
@@ -44,7 +45,7 @@ const pickKnown = (source, defaults) => Object.keys(defaults).reduce((acc, key) 
 
 /* ── Rule thresholds (production RuleThresholdsPanel) ───────────────── */
 
-function RuleThresholds({ apiFetch, isCdr, canManage, notify, onFigures }) {
+function RuleThresholds({ apiFetch, domain, isCdr, canManage, notify, onFigures }) {
   const defaults = isCdr ? DEFAULT_CDR_THRESHOLDS : DEFAULT_BANK_THRESHOLDS;
   const groups = isCdr ? CDR_THRESHOLD_GROUPS : BANK_THRESHOLD_GROUPS;
   const [values, setValues] = useState(defaults);
@@ -59,10 +60,10 @@ function RuleThresholds({ apiFetch, isCdr, canManage, notify, onFigures }) {
     const activeDefaults = isCdr ? DEFAULT_CDR_THRESHOLDS : DEFAULT_BANK_THRESHOLDS;
     setValues(activeDefaults);
     try {
-      const res = await fetchRuleThresholds(apiFetch, isCdr);
+      const res = await fetchRuleThresholds(apiFetch, domain);
       if (res?.results?.config) setValues((prev) => ({ ...prev, ...pickKnown(res.results.config, activeDefaults) }));
       if (canManage) {
-        const hist = await fetchRuleThresholdHistory(apiFetch, isCdr).catch(() => null);
+        const hist = await fetchRuleThresholdHistory(apiFetch, domain).catch(() => null);
         setHistory(Array.isArray(hist?.results) ? hist.results : []);
       }
     } catch (error) {
@@ -71,7 +72,7 @@ function RuleThresholds({ apiFetch, isCdr, canManage, notify, onFigures }) {
     } finally {
       setLoading(false);
     }
-  }, [apiFetch, canManage, isCdr]);
+  }, [apiFetch, canManage, domain, isCdr]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -101,7 +102,7 @@ function RuleThresholds({ apiFetch, isCdr, canManage, notify, onFigures }) {
         }
         return acc;
       }, {});
-      await saveRuleThresholds(apiFetch, isCdr, clean);
+      await saveRuleThresholds(apiFetch, domain, clean);
       notify({ title: 'Detection thresholds saved', message: isCdr ? 'CDR telecom detection thresholds saved.' : 'Rule thresholds saved.', level: 'success', source: 'Configuration' });
       load();
     } catch (error) {
@@ -197,7 +198,7 @@ function RuleThresholds({ apiFetch, isCdr, canManage, notify, onFigures }) {
 
 const cloneRows = (rows) => rows.map((row) => ({ ...row }));
 
-function ScoreLineage({ apiFetch, isCdr, canManage, notify, onFigures }) {
+function ScoreLineage({ apiFetch, domain, isCdr, canManage, notify, onFigures }) {
   const typologyDefaults = isCdr ? DEFAULT_CDR_TYPOLOGIES : DEFAULT_BANK_TYPOLOGIES;
   const [baseScores, setBaseScores] = useState(typologyDefaults);
   const [nodeThresholds, setNodeThresholds] = useState(cloneRows(isCdr ? DEFAULT_CDR_NODE_THRESHOLDS : DEFAULT_BANK_NODE_THRESHOLDS));
@@ -213,7 +214,7 @@ function ScoreLineage({ apiFetch, isCdr, canManage, notify, onFigures }) {
     setBaseScores(typologies);
     setNodeThresholds(cloneRows(isCdr ? DEFAULT_CDR_NODE_THRESHOLDS : DEFAULT_BANK_NODE_THRESHOLDS));
     setValueThresholds(cloneRows(isCdr ? DEFAULT_CDR_DURATION_THRESHOLDS : DEFAULT_BANK_MONEY_THRESHOLDS));
-    fetchScoreLineage(apiFetch, isCdr).then((res) => {
+    fetchScoreLineage(apiFetch, domain).then((res) => {
       if (cancelled) return;
       setLoadState('ready');
       const cfg = res?.results?.config;
@@ -228,7 +229,7 @@ function ScoreLineage({ apiFetch, isCdr, canManage, notify, onFigures }) {
       if (!isCdr && Array.isArray(cfg.money_thresholds) && cfg.money_thresholds.length) setValueThresholds(cloneRows(cfg.money_thresholds));
     }).catch(() => { if (!cancelled) setLoadState('error'); });
     return () => { cancelled = true; };
-  }, [apiFetch, isCdr, reloadKey]);
+  }, [apiFetch, domain, isCdr, reloadKey]);
 
   const handleSave = async () => {
     if (!canManage || loadState !== 'ready') return;
@@ -238,8 +239,8 @@ function ScoreLineage({ apiFetch, isCdr, canManage, notify, onFigures }) {
         acc[key] = Number(baseScores[key] ?? typologyDefaults[key]);
         return acc;
       }, {});
-      await saveScoreLineage(apiFetch, isCdr, {
-        domain_id: isCdr ? 'cdr' : 'bank',
+      await saveScoreLineage(apiFetch, domain, {
+        domain_id: domain,
         base_scores: cleanScores,
         node_thresholds: nodeThresholds.map((row) => ({ min_nodes: Number(row.min_nodes), add_points: Number(row.add_points) })),
         money_thresholds: valueThresholds.map((row) => ({ min_amount: Number(row.min_amount), add_points: Number(row.add_points) })),
@@ -333,7 +334,7 @@ function ScoreLineage({ apiFetch, isCdr, canManage, notify, onFigures }) {
   );
 }
 
-export default function DetectionSensitivityPanel({ apiFetch, isCdr, canManage, notify }) {
+export default function DetectionSensitivityPanel({ apiFetch, isCdr, domain = isCdr ? 'cdr' : 'bank', canManage, notify }) {
   // The two parts load and save on their own; each reports its figures here.
   const [figures, setFigures] = useState({});
   const mergeFigures = useCallback((patch) => setFigures((current) => ({ ...current, ...patch })), []);
@@ -342,7 +343,7 @@ export default function DetectionSensitivityPanel({ apiFetch, isCdr, canManage, 
       <Masthead>
         <PageHero
           eyebrow="Detection sensitivity"
-          title={isCdr ? 'CDR telecom detection' : 'Banking detection'}
+          title={isCdr ? 'CDR telecom detection' : `${formatDomainPillarLabel(domain)} detection`}
           pill={canManage ? null : <Pill tone="neutral">Read-only</Pill>}
           meta="Rule thresholds and the points behind the risk score. Each part is saved on its own, not with the configuration."
           media={(
@@ -363,8 +364,8 @@ export default function DetectionSensitivityPanel({ apiFetch, isCdr, canManage, 
       {figures.thresholdsLoading !== false || figures.lineageLoading !== false ? (
         <WindowLoadScreen className="is-block" label="Loading detection sensitivity…" />
       ) : null}
-      <RuleThresholds apiFetch={apiFetch} isCdr={isCdr} canManage={canManage} notify={notify} onFigures={mergeFigures} />
-      <ScoreLineage apiFetch={apiFetch} isCdr={isCdr} canManage={canManage} notify={notify} onFigures={mergeFigures} />
+      <RuleThresholds apiFetch={apiFetch} domain={domain} isCdr={isCdr} canManage={canManage} notify={notify} onFigures={mergeFigures} />
+      <ScoreLineage apiFetch={apiFetch} domain={domain} isCdr={isCdr} canManage={canManage} notify={notify} onFigures={mergeFigures} />
     </SettingsPage>
   );
 }

@@ -6,7 +6,8 @@
 // preview of its effect is asked of the Service when it offers one (B-28).
 // Pure: tests run these directly.
 
-export const FILTER_LIMITS = Object.freeze({ conditions: 20, value: 200, values: 50 });
+// list: the whole text of an "is one of" list (its values: `values`, each `value`).
+export const FILTER_LIMITS = Object.freeze({ conditions: 20, value: 200, values: 50, list: 12000 });
 
 // Operators, with what they need: none, one value, two (between) or a list.
 export const FILTER_OPERATORS = Object.freeze([
@@ -40,14 +41,26 @@ export const newCondition = (column = '') => ({ column, operator: 'equals', valu
 
 // eslint-disable-next-line no-control-regex
 const text = (value, max = FILTER_LIMITS.value) => String(value ?? '').replace(/[\u0000-\u001F\u007F]/g, ' ').slice(0, max);
-// "a, b, c" -> ['a', 'b', 'c'] (trimmed, no blanks, at most FILTER_LIMITS.values).
-export const listValues = (value) => [...new Set(String(value ?? '').split(',').map((entry) => entry.trim()).filter(Boolean))].slice(0, FILTER_LIMITS.values);
-// A number, or an ISO date (both compare in order on the Service).
+// "a, b, c" -> ['a', 'b', 'c'] (trimmed, no blanks, no repeats). A value that
+// holds a comma is written in quotes: "5,000". Too many, or one too long, is a
+// problem (filterProblems), never cut.
+export const listValues = (value) => {
+  const entries = String(value ?? '').match(/"[^"]*"|[^,]+/g) || [];
+  return [...new Set(entries.map((entry) => entry.trim().replace(/^"(.*)"$/, '$1').trim()).filter(Boolean))];
+};
+// A number, or an ISO date (both compare in order on the Service), as
+// { kind: 'number' | 'date', at } to compare two of them; null for neither.
 const orderedValue = (value) => {
   const raw = String(value ?? '').trim();
-  if (!raw) return false;
-  if (Number.isFinite(Number(raw.replace(/,/g, '')))) return true;
-  return /^\d{4}-\d{2}-\d{2}([T ]\d{2}:\d{2}(:\d{2})?)?$/.test(raw);
+  const digits = raw.replace(/,/g, '');
+  if (/\d/.test(digits) && Number.isFinite(Number(digits))) return { kind: 'number', at: Number(digits) };
+  const date = /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2}))?)?$/.exec(raw);
+  if (!date) return null;
+  const [year, month, day, hour, minute, second] = date.slice(1).map((part) => Number(part || 0));
+  const at = new Date(Date.UTC(year, month - 1, day, hour, minute, second));
+  // "2026-13-45" rolls over to another day: not a date.
+  if (at.getUTCMonth() !== month - 1 || at.getUTCDate() !== day || hour > 23 || minute > 59 || second > 59) return null;
+  return { kind: 'date', at: at.getTime() };
 };
 
 // Any input -> the filter's shape, bounded; columns the dataframe does not
@@ -61,7 +74,7 @@ export const normalizeFilter = (input, columns = null) => {
     .map((entry) => ({
       column: keep(entry?.column) ? entry.column : '',
       operator: operatorById(entry?.operator) ? entry.operator : 'equals',
-      value: text(entry?.value),
+      value: text(entry?.value, operatorById(entry?.operator)?.needs === 'list' ? FILTER_LIMITS.list : FILTER_LIMITS.value),
       value2: text(entry?.value2),
     }));
   return {
@@ -103,9 +116,20 @@ export const filterProblems = (filter, { columns = [], used = [] } = {}) => {
     if (f.dropColumns.includes(condition.column)) problems.push(`${n}: "${condition.column}" is stripped; keep it or remove the condition.`);
     if (operator.needs === 'one' && !condition.value.trim()) problems.push(`${n}: enter a value.`);
     if (operator.needs === 'two' && (!condition.value.trim() || !condition.value2.trim())) problems.push(`${n}: enter both values.`);
-    if (operator.needs === 'list' && !listValues(condition.value).length) problems.push(`${n}: enter one or more values, separated by commas.`);
+    if (operator.needs === 'list') {
+      const values = listValues(condition.value);
+      if (!values.length) problems.push(`${n}: enter one or more values, separated by commas.`);
+      if (values.length > FILTER_LIMITS.values) problems.push(`${n}: ${values.length} values; at most ${FILTER_LIMITS.values} can be sent. Split them over several conditions (match any).`);
+      if (values.some((value) => value.length > FILTER_LIMITS.value)) problems.push(`${n}: a value is longer than ${FILTER_LIMITS.value} characters.`);
+    }
     if (operator.ordered && condition.value.trim() && !orderedValue(condition.value)) problems.push(`${n}: "${condition.value.trim()}" is not a number or a date (YYYY-MM-DD).`);
     if (operator.needs === 'two' && condition.value2.trim() && !orderedValue(condition.value2)) problems.push(`${n}: "${condition.value2.trim()}" is not a number or a date (YYYY-MM-DD).`);
+    if (operator.needs === 'two') {
+      const low = orderedValue(condition.value);
+      const high = orderedValue(condition.value2);
+      if (low && high && low.kind !== high.kind) problems.push(`${n}: both values must be numbers, or both dates.`);
+      else if (low && high && low.at > high.at) problems.push(`${n}: the first value is larger than the second, so no row can match.`);
+    }
   });
   f.dropEmptyIn.forEach((column) => {
     if (f.dropColumns.includes(column)) problems.push(`"${column}" is stripped; it cannot also be checked for empty values.`);
@@ -138,6 +162,32 @@ export const describeFilter = (filter) => {
   if (f.trimWhitespace) lines.push('Trim spaces around every value.');
   if (f.dropDuplicates) lines.push('Remove duplicate rows (all kept columns alike).');
   return lines;
+};
+
+// The filter as it was sent (filterPayload's shape, or the Service's record of
+// it), in plain lines. [] for none.
+export const describeFilterPayload = (payload) => {
+  if (!payload || typeof payload !== 'object') return [];
+  return describeFilter({
+    dropColumns: payload.drop_columns,
+    rows: {
+      match: payload.row_filter?.match,
+      action: payload.row_filter?.action,
+      conditions: (Array.isArray(payload.row_filter?.conditions) ? payload.row_filter.conditions : []).map((condition) => {
+        const list = (Array.isArray(condition?.values) ? condition.values : []).map(String);
+        const operator = operatorById(condition?.operator);
+        return {
+          column: condition?.column,
+          operator: condition?.operator,
+          value: operator?.needs === 'list' ? list.map((value) => (value.includes(',') ? `"${value}"` : value)).join(', ') : String(condition?.value ?? list[0] ?? ''),
+          value2: String(list[1] ?? ''),
+        };
+      }),
+    },
+    trimWhitespace: payload.trim_whitespace,
+    dropEmptyIn: payload.drop_empty,
+    dropDuplicates: payload.drop_duplicates,
+  });
 };
 
 // How many filters are applied (the Dataframe page's button counts them):

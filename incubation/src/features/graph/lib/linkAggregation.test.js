@@ -21,7 +21,7 @@ describe('link aggregation (i2 #2)', () => {
   it('combined: one drawn link with the count and the total; theme lines and single links untouched', () => {
     const result = aggregateLinks(links, { totalKey: 'amount' });
     expect(result.groups.get('a<->b')).toMatchObject({ key: 'e1', members: ['e1', 'e2', 'e3'], count: 3, total: 2600, forward: 2, backward: 1 });
-    expect(result.primary.get('e1')).toMatchObject({ label: 'pays ×3 · 2,600', aggregated: 3, bothWays: 1 });
+    expect(result.primary.get('e1')).toMatchObject({ label: 'pays ×3 · 2,600 (2 of 3)', aggregated: 3, bothWays: 1 });
     expect([...result.hidden]).toEqual(['e2', 'e3']);
     expect(result.memberOf.has('e4')).toBe(false);
     expect(result.memberOf.has('t1')).toBe(false);
@@ -39,6 +39,13 @@ describe('link aggregation (i2 #2)', () => {
     expect(open.memberOf.get('e2')).toBe('a->b');
   });
 
+  it('never adds what it cannot read, and says so (audit E3)', () => {
+    const of = (...amounts) => aggregateLinks(amounts.map((amount, i) => [`e${i}`, { id: `e${i}`, from: 'a', to: 'b', amount }]), { totalKey: 'amount' }).primary.get('e0').label;
+    expect(of('1.234,56', '100')).toBe('×2 · 100 (1 of 2)');
+    expect(of('$1,200', 'ETB 500', '300')).toBe('×3 · 300 (1 of 3)');
+    expect(of('(50)', '200')).toBe('×2 · 150');
+  });
+
   it('normalizes its setting', () => {
     expect(normalizeLinkAggregation({ on: 'true', mode: 'x', totalKey: ' amount ' })).toEqual({ on: true, mode: 'combined', totalKey: 'amount' });
     expect(normalizeLinkAggregation(undefined)).toEqual({ on: false, mode: 'combined', totalKey: '' });
@@ -50,7 +57,7 @@ describe('link aggregation (i2 #2)', () => {
     const view = { nodeIds: ['a', 'b', 'c'], edgeIds: store.graph().edges(), viewKey: 'v' };
     const { edges } = buildElements(store, view, { edgeBundling: true, aggregation: { on: true, mode: 'combined', totalKey: 'amount', expanded: [] } });
     const drawn = edges.find((edge) => edge.data.aggregated);
-    expect(drawn.data).toMatchObject({ label: 'pays ×3 · 2,600', aggregated: 3 });
+    expect(drawn.data).toMatchObject({ label: 'pays ×3 · 2,600 (2 of 3)', aggregated: 3 });
     expect(drawn.data.bundled).toBeUndefined();
     expect(edges).toHaveLength(3); // the aggregate, a->c and the theme line
   });

@@ -10,7 +10,7 @@ import { AuthContext } from './authContext.js';
 // admin bypass is dropped for that reason.
 //
 // Permission per action:
-//   config:read    view Configuration, export encrypted configuration
+//   config:read    view Configuration
 //   config:write   save, reset, import, domain switch, rules, classified
 //                  entities, session timeout policy
 //   users:manage   Users, Service accounts, Activity log, detection

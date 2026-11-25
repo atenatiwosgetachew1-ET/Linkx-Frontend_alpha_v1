@@ -3,6 +3,8 @@
 // (401/403/413/423/429 + security-policy rejections). Feature services call
 // the returned `apiFetch` instead of assembling fetch() calls themselves.
 
+import { parseJsonExact } from '../shared/numbers/values.js';
+
 export class ApiError extends Error {
   constructor(message, { status, data } = {}) {
     super(message);
@@ -31,7 +33,7 @@ const parseResponse = async (response) => {
   const text = await response.text();
   if (!text) return null;
   try {
-    return JSON.parse(text);
+    return parseJsonExact(text);
   } catch {
     return text;
   }
@@ -125,8 +127,12 @@ export const createApiClient = ({
 };
 
 // Shared success check used by the production app (isSuccessResponse).
+// A refusal answered as HTTP 200 also carries `results` (the reason): what it
+// says of itself comes first (production took it as success).
+const FAILED = new Set(['failed', 'failed!', 'failure', 'error', 'error!']);
 export const isSuccessResponse = (data) => {
   const message = String(data?.message || '').trim().toLowerCase();
+  if (FAILED.has(message) || FAILED.has(String(data?.status || '').trim().toLowerCase()) || data?.success === false) return false;
   return message === 'success' ||
     message === 'success!' ||
     data?.status === 'success' ||

@@ -63,3 +63,21 @@ describe('report charts (Measures)', () => {
     expect(skipped).toEqual(['Degree Centrality: every value is 0 in this scope.', 'Betweenness Centrality: every value is 0 in this scope.']);
   });
 });
+
+it('Assortativity and Histogram are in a report (audit E7)', async () => {
+  const store = createGraphStore();
+  store.replace({
+    nodes: ['a', 'b', 'c', 'd'].map((id) => ({ id, city: id < 'c' ? 'Adama' : 'Mekelle' })),
+    edges: [['a', 'b'], ['b', 'c'], ['c', 'd'], ['b', 'd']].map(([from, to], id) => ({ id, from, to })),
+  });
+  const link = { nodeIds: store.graph().nodes(), edgeIds: store.graph().edges(), selection: { nodes: [], edges: [] } };
+  const { computeChartMetric } = await import('./chartMetrics.js');
+  const asked = [];
+  const result = await reportChartCells({
+    store, link, cards: [{ metric: 'assortativity' }, { metric: 'histogram', param: { subject: 'node', key: 'city' } }],
+    compute: async (metric, input) => { asked.push(computeChartMetric(metric, input)); return asked[asked.length - 1]; },
+  });
+  expect(result.skipped).toEqual([]);
+  expect(result.cells.map((cell) => cell.title)).toEqual(['Assortativity', 'Histogram']);
+  expect(asked[1].bins.map((bin) => [bin.label, bin.value])).toEqual([['Adama', 2], ['Mekelle', 2]]);
+});

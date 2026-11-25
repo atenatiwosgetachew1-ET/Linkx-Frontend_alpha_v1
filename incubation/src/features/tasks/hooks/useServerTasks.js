@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 
 import { useSession } from '../../../shared/session/useSession.js';
-import { setServerTaskOwner } from '../lib/taskRegistry.js';
+import { hasTaskAwaitingService, setServerTaskOwner } from '../lib/taskRegistry.js';
 import { getServerTaskScope, handleTaskUpdated, loadServerTasks } from '../lib/serverTasks.js';
 
 // The signed-in user's tasks from the Service (H-2): loaded once per
@@ -23,7 +23,11 @@ export function useServerTasks({ user }) {
     // A new socket (token renewal): what changed meanwhile.
     const reload = () => loadServerTasks(apiFetch, getServerTaskScope());
     socket.on('connect', reload);
+    // A run waiting for the Service's word is asked about too, in case an
+    // event was missed.
+    const timer = setInterval(() => { if (hasTaskAwaitingService()) reload(); }, 30000);
     return () => {
+      clearInterval(timer);
       socket.off('task_updated', handleTaskUpdated);
       socket.off('connect', reload);
     };

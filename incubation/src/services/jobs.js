@@ -128,3 +128,11 @@ export const fetchMaybeQueued = async (apiFetch, path, options = {}, pollOptions
   pollOptions.onQueued?.({ path, pollPath, jobId: getQueuedJobId(response), response });
   return pollJob(apiFetch, pollPath, { ...pollOptions, signal: pollOptions.signal ?? options.signal });
 };
+
+// Asks the Service to stop a search, dataframe or graph job (B-7). Nothing
+// waits for it: the answer is ignored, and so is a refusal.
+export const cancelJob = (apiFetch, jobIdOrPath) => {
+  const id = decodeURIComponent(String(jobIdOrPath || '').replace(/^.*\/jobs\//, '').replace(/[?/].*$/, ''));
+  if (!id) return Promise.resolve(null);
+  return Promise.resolve(apiFetch(`/jobs/${encodeURIComponent(id)}/cancel`, { method: 'POST', body: {}, suppressForbiddenHandler: true })).catch(() => null);
+};

@@ -14,7 +14,7 @@ export default function WorkspaceRightCollapsedRail({ activeTab, onSelectTab, is
           if (isPanelDisabled) {
             tooltipText = `${tab.tooltip || tab.label} (Disabled)`;
           } else if (isTabDisabled) {
-            tooltipText = `${tab.tooltip || tab.label} (Requires Graph or Chart active window)`;
+            tooltipText = `${tab.tooltip || tab.label} (select a Graph, Chart or Table window)`;
           }
 
           return (
@@ -27,7 +27,7 @@ export default function WorkspaceRightCollapsedRail({ activeTab, onSelectTab, is
               aria-disabled={isTabDisabled}
               disabled={isTabDisabled}
               aria-controls={tab.panelId}
-              className={`workspace_collapsed_rail_btn${isTabDisabled ? ' is-disabled' : ''} linkx_tooltip_anchor`}
+              className={`workspace_collapsed_rail_btn${activeTab === tab.id && !isTabDisabled ? ' is-active' : ''}${isTabDisabled ? ' is-disabled' : ''} linkx_tooltip_anchor`}
               data-tooltip={tooltipText}
               aria-label={tooltipText}
               onClick={() => {

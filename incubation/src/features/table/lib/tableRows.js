@@ -3,8 +3,9 @@
 // to a Graph window). Pure: built from the graph store's graph and the ids
 // in scope, so tests run them directly. Nothing here changes the graph.
 
-import { compareNodeValues, PROPERTY_KEY_HIDDEN } from '../../graph/lib/graphModel.js';
-import { nodeTypeOf } from '../../graph/lib/graphAnalysis.js';
+import { sortByValue } from '../../../shared/numbers/values.js';
+import { PROPERTY_KEY_HIDDEN } from '../../graph/lib/graphModel.js';
+import { isAnnotation, isThemeLineEdge, nodeTypeOf } from '../../graph/lib/graphAnalysis.js';
 
 export const TABLE_TABS = Object.freeze(['nodes', 'links']);
 export const TABLE_SCOPES = Object.freeze([
@@ -18,7 +19,7 @@ export const NODE_BUILT_INS = Object.freeze([
   { key: '@label', label: 'Label' },
   { key: '@id', label: 'ID' },
   { key: '@type', label: 'Type' },
-  { key: '@degree', label: 'Links', numeric: true },
+  { key: '@degree', label: 'Links', numeric: true, hint: 'Links in this scope' },
   { key: '@flags', label: 'Flags' },
 ]);
 export const LINK_BUILT_INS = Object.freeze([
@@ -68,8 +69,16 @@ const flagsOf = (kind, id, attributes, markers) => {
 };
 
 // -> { rows: [{ id, values: { key: shown text }, sort: { key: raw } }], columns }
-export const buildNodeRows = (graph, ids, markers) => {
-  const present = ids.filter((id) => graph.hasNode(id));
+// Entities only: the analyst's text notes are not rows. edgeKeys: the links
+// in scope, for the Links column (the whole graph's when not given); theme
+// lines never count.
+export const buildNodeRows = (graph, ids, markers, { edgeKeys = null } = {}) => {
+  const present = ids.filter((id) => graph.hasNode(id) && !isAnnotation(graph.getNodeAttributes(id)));
+  const links = new Map();
+  (edgeKeys || graph.edges()).forEach((key) => {
+    if (!graph.hasEdge(key) || isThemeLineEdge(graph.getEdgeAttributes(key))) return;
+    [graph.source(key), graph.target(key)].forEach((id) => links.set(id, (links.get(id) || 0) + 1));
+  });
   const attributesList = present.map((id) => graph.getNodeAttributes(id));
   const columns = [...NODE_BUILT_INS, ...propertyColumns(attributesList, new Set([...PROPERTY_KEY_HIDDEN, 'id']))];
   const rows = present.map((id, index) => {
@@ -79,7 +88,7 @@ export const buildNodeRows = (graph, ids, markers) => {
       '@label': nameOf(id, attributes),
       '@id': id,
       '@type': nodeTypeOf(attributes) || '',
-      '@degree': graph.degree(id),
+      '@degree': links.get(id) || 0,
       '@flags': flags.join(', '),
     };
     columns.forEach(({ key }) => {
@@ -92,7 +101,8 @@ export const buildNodeRows = (graph, ids, markers) => {
 };
 
 export const buildLinkRows = (graph, keys, markers) => {
-  const present = keys.filter((key) => graph.hasEdge(key));
+  // Theme lines are drawing, not links (as the Chart window and reports).
+  const present = keys.filter((key) => graph.hasEdge(key) && !isThemeLineEdge(graph.getEdgeAttributes(key)));
   const attributesList = present.map((key) => graph.getEdgeAttributes(key));
   const columns = [...LINK_BUILT_INS, ...propertyColumns(attributesList, LINK_KEY_HIDDEN)];
   const rows = present.map((key, index) => {
@@ -116,28 +126,11 @@ export const buildLinkRows = (graph, keys, markers) => {
   return { rows, columns };
 };
 
-// Numbers as numbers ("2,500" too), empty last, else natural order.
-const numeric = (value) => {
-  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
-  if (typeof value !== 'string' || !value.trim()) return null;
-  const parsed = Number(value.replace(/[,\s]/g, ''));
-  return Number.isFinite(parsed) ? parsed : null;
-};
-
+// By the shared rules (numbers, dates, amounts, text), empty last either way.
 export const sortRows = (rows, sort) => {
   if (!sort?.key) return rows;
   const direction = sort.dir === 'desc' ? 'desc' : 'asc';
-  return [...rows].sort((a, b) => {
-    const left = a.sort[sort.key];
-    const right = b.sort[sort.key];
-    const blankLeft = left == null || left === '';
-    const blankRight = right == null || right === '';
-    if (blankLeft || blankRight) return blankLeft === blankRight ? 0 : (blankLeft ? 1 : -1); // empty last either way
-    const x = numeric(left);
-    const y = numeric(right);
-    if (x !== null && y !== null) return direction === 'asc' ? x - y : y - x;
-    return compareNodeValues(plain(left), plain(right), direction);
-  });
+  return sortByValue(rows, (row) => row.sort[sort.key], direction);
 };
 
 // Rows with the text in any of the shown columns (any case).

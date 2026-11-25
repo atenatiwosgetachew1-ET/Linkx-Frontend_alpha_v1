@@ -3,7 +3,7 @@ import React, { useEffect, useState, useSyncExternalStore } from 'react';
 import { Block, Masthead, Option, PageHero, Pill, SettingsPage, Stat, Stats } from '../../settings/components/SettingsPage.jsx';
 import { GPU_STATUS, GPU_VERDICTS, getGpuCapability, gpuNameOf, recheckGpuCapability, subscribeGpuCapability } from '../../../shared/device/gpuCapability.js';
 import { BENCH_OUTCOMES, benchmarkChanges, getGpuBenchmark, getGpuLimits, getUnfinishedBenchmark, subscribeGpuBenchmark } from '../../graph/lib/gpuBenchmark.js';
-import { getGpuPreference, getSystemGpuSetting, isGpuAllowedBySystem, setGpuPreference, subscribeGpuPreference } from '../../graph/lib/rendererPreference.js';
+import { getGpuPreference, setGpuPreference, subscribeGpuPreference } from '../../graph/lib/rendererPreference.js';
 import { benchStepVerdict, gpuDetails } from '../lib/benchmarkView.js';
 import GpuBenchmarkPage from './GpuBenchmarkPage.jsx';
 
@@ -56,12 +56,6 @@ const STATUS = {
 const statusOf = (capability) => STATUS[capability.status]
   || STATUS[capability.verdict === GPU_VERDICTS.CAPABLE ? GPU_STATUS.UNNAMED : GPU_STATUS.UNCONFIRMED];
 
-const SYSTEM_SETTING = {
-  off: { value: 'Turned off', note: 'graph_gpu_allowed' },
-  allowed: { value: 'Allowed', note: 'graph_gpu_allowed' },
-  not_set: { value: 'Not set', note: 'Not restricted' },
-};
-
 // What support needs, as plain text (no names, addresses or session).
 function CopyDetails({ text }) {
   const [label, setLabel] = useState('Copy details');
@@ -83,17 +77,15 @@ function CopyDetails({ text }) {
 
 const formatTime = (value) => new Date(value).toLocaleString();
 
-export default function GraphRenderingPanel({ configuration }) {
+export default function GraphRenderingPanel() {
   const preferGpu = useSyncExternalStore(subscribeGpuPreference, getGpuPreference);
   // Checking creates a short-lived WebGL context; the result is kept for this
   // browser tab. A failure in a graph shows here at once.
   const capability = useSyncExternalStore(subscribeGpuCapability, getGpuCapability);
-  const allowedBySystem = isGpuAllowedBySystem(configuration);
   const usable = capability.verdict === GPU_VERDICTS.CAPABLE;
-  const canEnable = allowedBySystem && usable;
+  const canEnable = usable;
   const active = preferGpu && canEnable;
   const status = statusOf(capability);
-  const system = SYSTEM_SETTING[getSystemGpuSetting(configuration)];
   const cautions = capability.cautions || [];
   const benchmark = useSyncExternalStore(subscribeGpuBenchmark, getGpuBenchmark);
   const limits = useSyncExternalStore(subscribeGpuBenchmark, getGpuLimits);
@@ -107,8 +99,7 @@ export default function GraphRenderingPanel({ configuration }) {
   };
 
   let reason = '';
-  if (!allowedBySystem) reason = 'GPU rendering is turned off for everyone by the system configuration (graph_gpu_allowed).';
-  else if (!usable) reason = status.text;
+  if (!usable) reason = status.text;
 
   let pill = 'GPU off';
   if (active) pill = 'GPU on';
@@ -129,16 +120,15 @@ export default function GraphRenderingPanel({ configuration }) {
             </svg>
           )}
         />
-        <Stats label="Rendering figures" columns={3}>
+        <Stats label="Rendering figures" columns={2}>
           <Stat text icon="bolt" label="GPU drawing" value={status.word} wrap tone={usable && !cautions.length ? 'success' : ''} note="in this browser" />
-          <Stat text icon="shield" label="System setting" value={system.value} note={system.note} />
           <Stat text icon="clock" label="Last checked" value={capability.checkedAt ? formatTime(capability.checkedAt) : '—'} wrap note="kept for this browser tab" />
         </Stats>
       </Masthead>
 
       <Block
         title="Drawing"
-        description="GPU drawing is off by default. It can be turned on when the system does not forbid it and the browser can use the graphics card."
+        description="GPU drawing is off by default. It can be turned on when the browser can use the graphics card."
         actions={usable ? null : (
           <button type="button" className="settings_button" onClick={recheckGpuCapability}>Check again</button>
         )}
@@ -154,7 +144,7 @@ export default function GraphRenderingPanel({ configuration }) {
           />
         </div>
         {reason ? <p className="settings_hint" role="status">{reason}</p> : null}
-        {allowedBySystem && status.steps ? (
+        {status.steps ? (
           <ul className="libraries_reasons" aria-label="What you can try">
             {status.steps.map((item) => <li key={item}>{item}</li>)}
           </ul>
@@ -177,7 +167,7 @@ export default function GraphRenderingPanel({ configuration }) {
         description="Sets how many nodes a GPU graph may show on this computer. Kept in this browser; run it again whenever you like."
         actions={(
           <>
-            <CopyDetails text={() => gpuDetails({ capability, benchmark, limits, system: system.value, preferGpu, active })} />
+            <CopyDetails text={() => gpuDetails({ capability, benchmark, limits, preferGpu, active })} />
             <button type="button" className="settings_button" disabled={!canEnable} onClick={() => setBenchmarking({ turnOn: false })}>
               {benchmark ? 'Run again' : 'Run benchmark'}
             </button>

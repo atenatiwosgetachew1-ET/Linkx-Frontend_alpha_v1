@@ -8,14 +8,13 @@ import { tn } from '../../../shared/i18n/index.js';
 import {
   DOMAIN_SCHEMA_TEMPLATES,
   STANDARD_FORENSIC_DOMAINS,
+  canonicalDomain,
   buildServiceConfigPayload,
   cloneServiceConfig,
   defaultDomainConfig,
   defaultServiceConfig,
   extractServiceSecret,
   formatServiceAccountError,
-  generateClientSecret,
-  tryGenerateClientSecret,
   getCanonicalColumns,
   getDomainMeta,
   normalizeServiceAccountList,
@@ -28,12 +27,11 @@ import {
   sanitizePermissionList,
   sanitizeSecret,
   sanitizeText,
-  validateClientSecret,
   validateDisplayName,
   validateRequiredIdentifier,
 } from '../../../utils/inputSecurity.js';
 
-const VALID_PERMISSION = /^[a-z]+:[a-z_]+$/;
+const VALID_PERMISSION = /^[a-z][a-z0-9_]*(?::[a-z][a-z0-9_]*)+$/;
 
 // The form's three steps (create, and modify an existing account).
 const FORM_STEPS = [
@@ -72,8 +70,10 @@ function ServiceSecretNotice({ secret, onClear }) {
         <p>Copy this secret now and update client applications. It cannot be retrieved again.</p>
       </div>
       <code>{secret}</code>
-      <button type="button" className="settings_button" onClick={copy}>{copied ? '✓ Copied' : 'Copy'}</button>
-      <button type="button" className="settings_button is-danger" onClick={onClear}>Dismiss</button>
+      <div className="settings_secret_notice_actions">
+        <button type="button" className="settings_button" onClick={copy}>{copied ? '✓ Copied' : 'Copy'}</button>
+        <button type="button" className="settings_button is-danger" onClick={onClear}>Dismiss</button>
+      </div>
     </div>
   );
 }
@@ -154,7 +154,7 @@ function StorageTargetEditor({ config, onChange, catalogDomains, catalogState, o
   };
 
   const addCustomDomain = () => {
-    const clean = customDomain.trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
+    const clean = canonicalDomain(customDomain.trim().toLowerCase().replace(/[^a-z0-9_]/g, ''));
     if (!clean) return;
     if (!registered.includes(clean)) toggleRegistration(clean);
     else setActiveDomain(clean);
@@ -162,7 +162,7 @@ function StorageTargetEditor({ config, onChange, catalogDomains, catalogState, o
   };
 
   const catalogList = useMemo(() => {
-    const base = catalogDomains.length ? catalogDomains : STANDARD_FORENSIC_DOMAINS;
+    const base = catalogDomains.length ? Array.from(new Set(catalogDomains.map(canonicalDomain))) : STANDARD_FORENSIC_DOMAINS;
     return Array.from(new Set([...base, ...registered.map((item) => String(item).toLowerCase())]));
   }, [catalogDomains, registered]);
 
@@ -431,36 +431,9 @@ function StorageTargetEditor({ config, onChange, catalogDomains, catalogState, o
 
 /* ── Service accounts panel ── */
 
-const emptyDraft = () => ({ client_id: '', client_secret: tryGenerateClientSecret(), display_name: '', permissions: [], config: defaultServiceConfig() });
+const emptyDraft = () => ({ client_id: '', display_name: '', permissions: [], config: defaultServiceConfig() });
 
-// PATCH, falling back to PUT only when the backend says the method is not
-// allowed (405). A 404 means the account is gone and must not become a PUT
-// (which could recreate it). Backend request B-9 removes the fallback.
-const patchAccount = async (apiFetch, id, body) => {
-  const path = `/auth/admin/service-accounts/${encodeURIComponent(id)}`;
-  try {
-    return await apiFetch(path, { method: 'PATCH', body });
-  } catch (error) {
-    if (error?.status !== 405) throw error;
-    try {
-      return await apiFetch(path, { method: 'PUT', body });
-    } catch (putError) {
-      if (putError?.status !== 405) throw putError;
-      return apiFetch(`/auth/service-accounts/${encodeURIComponent(id)}`, { method: 'PUT', body });
-    }
-  }
-};
-
-// True only when the backend rejects the `config` field itself (older
-// schema), never for ordinary validation errors inside the config.
-const isConfigSchemaError = (error) => {
-  const data = error?.data || {};
-  if (data.code === 'unknown_field' && (data.field === 'config' || !data.field)) return true;
-  const text = String(data.detail || data.message || data.error || error?.message || '');
-  return [400, 422].includes(error?.status)
-    && /\bconfig\b/i.test(text)
-    && /(unknown|unexpected|extra|not (permitted|allowed)|additional propert)/i.test(text);
-};
+const patchAccount = (apiFetch, id, body) => apiFetch(`/auth/admin/service-accounts/${encodeURIComponent(id)}`, { method: 'PATCH', body });
 
 export default function ServiceAccountsPanel({ apiFetch, canManageUsers, onNotice, requestConfirmation, refreshSignal, isCdr }) {
   const confirmAction = (options) => requestConfirmation(options);
@@ -534,23 +507,14 @@ export default function ServiceAccountsPanel({ apiFetch, canManageUsers, onNotic
   };
 
   const createAccount = async () => {
-    let clientSecret;
-    try {
-      clientSecret = sanitizeSecret(draft.client_secret || generateClientSecret(), { maxLength: 128 });
-    } catch (err) {
-      setError(err.message);
-      return;
-    }
     const payload = {
       client_id: sanitizeIdentifier(draft.client_id, { maxLength: 80 }).trim(),
-      client_secret: clientSecret,
       display_name: sanitizeText(draft.display_name, { maxLength: 120 }).trim(),
       permissions: sanitizePermissionList(draft.permissions).filter((permission) => VALID_PERMISSION.test(permission)),
     };
     if (draft.config?.registered_domains?.length) payload.config = buildServiceConfigPayload(draft.config);
     const validationError = compactValidationErrors(
       validateRequiredIdentifier(payload.client_id, 'Client ID', { minLength: 3, maxLength: 80 }),
-      validateClientSecret(payload.client_secret),
       validateDisplayName(payload.display_name),
     );
     if (validationError) {
@@ -562,31 +526,23 @@ export default function ServiceAccountsPanel({ apiFetch, canManageUsers, onNotic
     }
     setSaving(true);
     setError('');
-    const finish = async (data, warning) => {
-      setNewSecret(extractServiceSecret(data) || clientSecret);
+    try {
+      // The Service makes the secret and gives it once (B-3).
+      const secret = extractServiceSecret(await apiFetch('/auth/admin/service-accounts', { method: 'POST', body: payload }));
+      setNewSecret(secret);
       setDraft(emptyDraft());
       setIsCreateOpen(false);
       setStep(0);
       setChecked(false);
       onNotice?.({
         title: 'Service account created',
-        message: warning || 'Copy the generated secret before closing this panel.',
+        message: secret ? 'Copy the secret before closing this panel. It is shown once.' : 'The Service returned no secret. Rotate it to get one.',
         source: 'Admin',
-        level: warning ? 'warning' : 'success',
+        level: secret ? 'success' : 'warning',
       });
       await loadAccounts();
-    };
-    try {
-      await finish(await apiFetch('/auth/admin/service-accounts', { method: 'POST', body: payload }));
     } catch (err) {
-      if (payload.config && isConfigSchemaError(err)) {
-        try {
-          const { config: _config, ...fallback } = payload;
-          await finish(await apiFetch('/auth/admin/service-accounts', { method: 'POST', body: fallback }), "Account created, but the Service does not accept 'config' yet, so storage targets were not saved.");
-          return;
-        } catch { /* show the original error */ }
-      }
-      setError(err?.message || 'Failed to create service account.');
+      setError(formatServiceAccountError(err, 'Failed to create service account.'));
     } finally {
       setSaving(false);
     }
@@ -611,16 +567,6 @@ export default function ServiceAccountsPanel({ apiFetch, canManageUsers, onNotic
       await loadAccounts();
       return true;
     } catch (err) {
-      if (isConfigSchemaError(err)) {
-        try {
-          const { config: _config, ...fallback } = patch;
-          await patchAccount(apiFetch, account.id, fallback);
-          onNotice?.({ title: 'Service account updated', message: `${account.client_id} was updated, but the Service does not accept 'config' yet.`, source: 'Admin', level: 'warning' });
-          setExpandedId('');
-          await loadAccounts();
-          return true;
-        } catch { /* fall through */ }
-      }
       restricted(formatServiceAccountError(err, 'Failed to update service account.'));
       return false;
     } finally {
@@ -631,21 +577,12 @@ export default function ServiceAccountsPanel({ apiFetch, canManageUsers, onNotic
   const rotateSecret = async (account) => {
     if (account.is_system) { restricted('Protected system account secret cannot be modified.'); return; }
     if (!(await confirmAction({ title: 'Rotate secret', message: `Rotate secret for "${account.client_id}"? Sibling services must be updated with the new secret immediately.`, confirmText: 'Rotate secret', icon: 'key' }))) return;
-    let rotated;
-    try {
-      rotated = sanitizeSecret(generateClientSecret(), { maxLength: 128 });
-    } catch (err) {
-      setError(err.message);
-      return;
-    }
-    const secretError = validateClientSecret(rotated);
-    if (secretError) { setError(secretError); return; }
     setSaving(true);
     setError('');
     try {
-      const data = await apiFetch(`/auth/admin/service-accounts/${encodeURIComponent(account.id)}`, { method: 'PATCH', body: { client_secret: rotated } });
-      setNewSecret(extractServiceSecret(data) || rotated);
-      onNotice?.({ title: 'Secret rotated', message: 'Copy the new secret now. It will not be shown again.', source: 'Admin', level: 'warning' });
+      const secret = extractServiceSecret(await apiFetch(`/auth/admin/service-accounts/${encodeURIComponent(account.id)}/rotate-secret`, { method: 'POST', body: {} }));
+      setNewSecret(secret);
+      onNotice?.({ title: 'Secret rotated', message: secret ? 'Copy the new secret now. It will not be shown again.' : 'The Service rotated it but returned no secret. Rotate it again.', source: 'Admin', level: 'warning' });
       await loadAccounts();
     } catch (err) {
       restricted(formatServiceAccountError(err, 'Failed to rotate secret.'));
@@ -753,7 +690,6 @@ export default function ServiceAccountsPanel({ apiFetch, canManageUsers, onNotic
     : {
       client_id: validateRequiredIdentifier(String(draft.client_id || '').trim(), 'Client ID', { minLength: 3, maxLength: 80 }),
       display_name: validateDisplayName(String(draft.display_name || '').trim()),
-      client_secret: validateClientSecret(draft.client_secret || ''),
     };
   const goToStep = (next) => {
     if (next > 0 && Object.values(fieldProblems).some(Boolean)) {
@@ -820,30 +756,7 @@ export default function ServiceAccountsPanel({ apiFetch, canManageUsers, onNotic
             <span className="graph_customize_hint">{system ? 'Always active (system account).' : form.is_active !== false ? 'Can authenticate.' : 'Cannot authenticate.'}</span>
           </span>
         </label>
-      ) : field({
-        key: 'client_secret',
-        label: 'Client secret',
-        icon: ICONS.key,
-        value: draft.client_secret,
-        problem: fieldProblems.client_secret,
-        hint: 'Shown once after the account is created. Copy it then.',
-        input: { autoComplete: 'off', spellCheck: false, maxLength: 128, onChange: (event) => setForm({ client_secret: sanitizeSecret(event.target.value, { maxLength: 128 }) }) },
-        after: (
-          <button
-            type="button"
-            className="users_input_action linkx_tooltip_anchor"
-            data-tooltip="Generate a new secret"
-            aria-label="Generate a new secret"
-            onClick={() => {
-              const secret = tryGenerateClientSecret();
-              if (!secret) { setError('Secure random generation is unavailable in this browser; a client secret cannot be generated.'); return; }
-              setForm({ client_secret: secret });
-            }}
-          >
-            <LevelIcon d={ICONS.refresh} size={13} />
-          </button>
-        ),
-      })}
+      ) : <p className="graph_customize_hint">The Service makes the client secret. It is shown once, after the account is created.</p>}
     </div>,
     <div className="service_storage_step" key="storage">
       <StorageTargetEditor

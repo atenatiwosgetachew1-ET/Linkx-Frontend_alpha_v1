@@ -1,6 +1,7 @@
 // Service account model (ported from the production app): per-account
 // multi-domain storage targets, schema templates and payload cleaning.
 
+import { getUserAdminErrorMessage } from '../../../services/apiErrors.js';
 import { sanitizeConnectionValue, sanitizeSecret } from '../../../utils/inputSecurity.js';
 
 const defaultPortFor = (domainKey) => (domainKey === 'microfinance' ? '5007' : '5000');
@@ -21,7 +22,13 @@ export const defaultServiceConfig = () => ({
   domains: {},
 });
 
-export const STANDARD_FORENSIC_DOMAINS = ['banking', 'microfinance', 'cdr', 'insurance', 'social_media'];
+// The Service's own names; its aliases are read and never sent (R2-22).
+const DOMAIN_ALIASES = { banking: 'bank', mfi: 'microfinance', mobile_banking: 'microfinance', telecom: 'cdr', telecoms: 'cdr', call_data_records: 'cdr', insurances: 'insurance', social: 'social_media', tweeter: 'social_media' };
+export const canonicalDomain = (key) => {
+  const name = String(key || '').trim().toLowerCase();
+  return DOMAIN_ALIASES[name] || name;
+};
+export const STANDARD_FORENSIC_DOMAINS = ['bank', 'microfinance', 'cdr', 'insurance', 'social_media'];
 
 const DOMAIN_META = {
   banking: { label: 'Banking', tag: 'Core banking' },
@@ -112,8 +119,11 @@ export const normalizeServiceAccountList = (data) => {
       : Array.isArray(rawCfg.registered_domains) ? rawCfg.registered_domains : [];
     const rawDomains = isPlainObject(account.domains) ? account.domains : isPlainObject(rawCfg.domains) ? rawCfg.domains : {};
     const domains = {};
-    Object.entries(rawDomains).forEach(([key, cfg]) => {
-      if (!key || !isPlainObject(cfg)) return;
+    // An alias's settings first, so the canonical name's own win.
+    registeredDomains = Array.from(new Set(registeredDomains.map(canonicalDomain).filter(Boolean)));
+    Object.entries(rawDomains).sort(([a], [b]) => Number(canonicalDomain(a) === a) - Number(canonicalDomain(b) === b)).forEach(([rawKey, cfg]) => {
+      if (!rawKey || !isPlainObject(cfg)) return;
+      const key = canonicalDomain(rawKey);
       domains[key] = {
         storage_host: cfg.storage_host || '',
         storage_port: cfg.storage_port ? String(cfg.storage_port) : defaultPortFor(key),
@@ -180,10 +190,11 @@ export const buildServiceConfigPayload = (config, existingDomains = {}) => {
   const registered = Array.isArray(config?.registered_domains) ? config.registered_domains : [];
   const keys = Array.from(new Set([...registered, ...Object.keys(existingDomains)]));
   const domains = {};
-  keys.forEach((key) => {
-    domains[key] = cleanDomain(key, config?.domains?.[key] || existingDomains[key]);
+  // The canonical key's own settings win over its alias's.
+  keys.sort((a, b) => Number(canonicalDomain(a) === a) - Number(canonicalDomain(b) === b)).forEach((key) => {
+    domains[canonicalDomain(key)] = cleanDomain(key, config?.domains?.[key] || existingDomains[key]);
   });
-  return { registered_domains: registered, domains };
+  return { registered_domains: Array.from(new Set(registered.map(canonicalDomain))), domains };
 };
 
 export const parseCatalogDomains = (data) => {
@@ -226,6 +237,9 @@ export const tryGenerateClientSecret = () => {
 };
 
 export const formatServiceAccountError = (error, fallback = 'An error occurred.') => {
+  // The Service's codes (B-33), but the ones worded below.
+  const code = String(error?.data?.code || '');
+  if (code && !code.startsWith('cannot_modify_system') && !code.startsWith('cannot_delete_system')) return getUserAdminErrorMessage(error, fallback);
   const raw = String(error?.data?.error || error?.data?.detail || error?.data?.message || error?.message || '');
   if (raw.includes('cannot_modify_system_service_account_permissions')) return 'Protected system account permissions cannot be modified.';
   if (raw.includes('cannot_delete_system_service_account')) return 'Protected system accounts cannot be deleted.';

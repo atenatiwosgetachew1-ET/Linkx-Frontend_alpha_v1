@@ -35,7 +35,7 @@ describe('progressive graph fetch (production pollGraphJob)', () => {
     expect(apiFetch.mock.calls[2][0]).toBe('/jobs/j1?include_chunks=1&after_event_id=3');
     expect(chunks.map((chunk) => chunk.nodes.length)).toEqual([2, 1]);
     expect(progress[0]).toEqual({ current: 3, total: 5 });
-    expect(result).toEqual({ nodes: 3, edges: 2, chunked: true });
+    expect(result).toMatchObject({ nodes: 3, edges: 2, chunked: true, partial: false, expected: { nodes: 3, edges: 2 } });
   });
 
   it('uses a finished job without chunks as one chunk, and answers direct graphs at once', async () => {

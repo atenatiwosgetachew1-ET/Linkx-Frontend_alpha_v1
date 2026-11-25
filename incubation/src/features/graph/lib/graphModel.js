@@ -2,6 +2,8 @@
 // functions (docs/graph-chart-plan.md §2.2). References: graphs_basic.html (GB)
 // and graphs_adjuster.js (GA) under the production public/temp_placeholders.
 
+import { compareValues, parseAmount } from '../../../shared/numbers/values.js';
+
 // GA:2767 normalizeGraphId: numeric strings become numbers, so "12" and 12 are
 // the same node. Kept as strings here (graph keys), canonicalised the same way.
 export const normalizeGraphId = (rawId) => {
@@ -33,19 +35,9 @@ export const getNodeValue = (node, key) => {
   return actual ? node[actual] : null;
 };
 
-// GA:5480 sort comparator: nulls last, numbers numerically, numeric strings
-// numerically, otherwise natural (numeric-aware) string order.
-export const compareNodeValues = (a, b, sort = 'asc') => {
-  if (a == null && b == null) return 0;
-  if (a == null) return 1;
-  if (b == null) return -1;
-  const sign = sort === 'desc' ? -1 : 1;
-  if (typeof a === 'number' && typeof b === 'number') return sign * (a - b);
-  const aNum = parseFloat(String(a));
-  const bNum = parseFloat(String(b));
-  if (!Number.isNaN(aNum) && !Number.isNaN(bNum)) return sign * (aNum - bNum);
-  return sign * String(a).localeCompare(String(b), undefined, { numeric: true });
-};
+// GA:5480 sort comparator, by the shared rules (production read only the
+// leading number of a text, so dates and "900 ETB" were out of order).
+export const compareNodeValues = compareValues;
 
 export const nodeInfoProperties = (node) => {
   const result = {};
@@ -127,14 +119,7 @@ export const resolveEdgeStyle = (edge, { isCdr = false } = {}) => {
 
 /* ── Edge weights (GA:5977 weightEdges, ~1006 EdgeWeightToWidth) ───── */
 
-const finiteNumber = (value) => {
-  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
-  if (typeof value === 'string' && value.trim()) {
-    const numeric = Number(value.trim().replace(/,/g, ''));
-    return Number.isFinite(numeric) ? numeric : null;
-  }
-  return null;
-};
+const finiteNumber = parseAmount;
 
 // "Default": the edge's own width / weight / value, at least 1 (GA:1558).
 export const defaultEdgeWidth = (edge) => Math.max(1, finiteNumber(edge?.width ?? edge?.weight ?? edge?.value) ?? 1);

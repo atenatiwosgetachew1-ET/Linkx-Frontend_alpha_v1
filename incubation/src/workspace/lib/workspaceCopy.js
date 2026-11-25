@@ -22,7 +22,7 @@ const TYPES = new Set(Object.values(WORKSPACE_WINDOW_TYPES));
 const { SOURCE, GRAPH, CHART, TABLE, REPORTS, LIBRARIES, CONFIGURATION, SETTINGS } = WORKSPACE_WINDOW_TYPES;
 
 // What a Graph window held.
-export const GRAPH_CONTENT = Object.freeze({ EVIDENCE: 'evidence', SESSION: 'session', DRAWN: 'drawn', EMPTY: 'empty' });
+export const GRAPH_CONTENT = Object.freeze({ EVIDENCE: 'evidence', SESSION: 'session', DRAWN: 'drawn', EMPTY: 'empty', RUN: 'run' });
 
 const isObject = (value) => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 // eslint-disable-next-line no-control-regex
@@ -121,6 +121,8 @@ const metadataOf = (type, metadata) => {
   };
   if (type === GRAPH) {
     kept.evidence = evidenceOf(metadata.evidence);
+    // A finished run's graph, kept by the Service (its id only).
+    if (!kept.evidence) kept.graphTaskId = text(metadata.graphTaskId, 128) || undefined;
     kept.graphSettings = only(metadata.graphSettings, GRAPH_SETTINGS);
     kept.alert = kept.evidence && isObject(metadata.alert) ? clean({ id: idOf(metadata.alert.id), reference: text(metadata.alert.reference) }) : undefined;
   } else if (type === TABLE) {
@@ -155,9 +157,14 @@ const metadataOf = (type, metadata) => {
 
 const graphContent = (windowItem, hasNodes) => {
   const metadata = windowItem.metadata || {};
-  if (Object.values(GRAPH_CONTENT).includes(windowItem.graph)) return windowItem.graph === GRAPH_CONTENT.EVIDENCE && !evidenceOf(metadata.evidence) ? GRAPH_CONTENT.EMPTY : windowItem.graph;
+  if (Object.values(GRAPH_CONTENT).includes(windowItem.graph)) {
+    if (windowItem.graph === GRAPH_CONTENT.EVIDENCE && !evidenceOf(metadata.evidence)) return GRAPH_CONTENT.EMPTY;
+    if (windowItem.graph === GRAPH_CONTENT.RUN && !text(metadata.graphTaskId)) return GRAPH_CONTENT.EMPTY;
+    return windowItem.graph;
+  }
   if (metadata.graphBlank || metadata.graphImported) return hasNodes(windowItem.id) ? GRAPH_CONTENT.DRAWN : GRAPH_CONTENT.EMPTY;
   if (evidenceOf(metadata.evidence)) return GRAPH_CONTENT.EVIDENCE;
+  if (text(metadata.graphTaskId)) return GRAPH_CONTENT.RUN;
   if (metadata.graphLinkSource) return GRAPH_CONTENT.SESSION;
   return hasNodes(windowItem.id) ? GRAPH_CONTENT.DRAWN : GRAPH_CONTENT.EMPTY;
 };
@@ -192,13 +199,14 @@ export const windowOutcome = (windowItem, copy) => {
   if (windowItem.type === GRAPH) {
     if (windowItem.graph === GRAPH_CONTENT.SESSION) return { state: 'lost', note: 'It showed a run whose session has ended.' };
     if (windowItem.graph === GRAPH_CONTENT.DRAWN) return { state: 'lost', note: 'Its graph was not saved or exported.' };
+    if (windowItem.graph === GRAPH_CONTENT.RUN) return { state: 'full', note: 'Loaded again from the Service while it keeps it (24 hours), without changes made here.' };
     if (windowItem.graph === GRAPH_CONTENT.EVIDENCE) return { state: 'full', note: 'Loaded again from the saved evidence, without its search, filters or changes made here.' };
     return { state: 'full', note: 'Empty, as it was.' };
   }
   const linked = windowItem.metadata?.tableGraph || windowItem.metadata?.chartGraph;
   if (linked) {
     const graph = copy?.windows?.find((item) => item.id === linked);
-    if (graph?.graph !== GRAPH_CONTENT.EVIDENCE) return { state: 'partial', note: 'The graph it was linked to does not come back.' };
+    if (![GRAPH_CONTENT.EVIDENCE, GRAPH_CONTENT.RUN].includes(graph?.graph)) return { state: 'partial', note: 'The graph it was linked to does not come back.' };
   }
   if (windowItem.type === REPORTS || windowItem.type === TABLE) return { state: 'full', note: 'Where it was, without its search.' };
   return { state: 'full', note: 'Where it was, as it was.' };

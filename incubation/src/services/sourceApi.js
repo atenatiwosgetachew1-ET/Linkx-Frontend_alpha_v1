@@ -224,6 +224,9 @@ const normalizeCompletedDataframeJob = (data) => {
 };
 
 export const formatDataframeFailureMessage = (errorOrData, fallback) => {
+  // A coded refusal (B-5, B-6; also on a failed job).
+  const coded = getServiceRefusalMessage(errorOrData?.jobResponse?.code ? errorOrData.jobResponse : errorOrData);
+  if (coded) return coded;
   const data = errorOrData?.jobResult ?? errorOrData?.data ?? errorOrData;
   const results = data?.results ?? data?.result ?? data;
   const failedSources = Array.isArray(results?.failed_sources) ? results.failed_sources
@@ -257,12 +260,14 @@ export const buildAddressDataframePayload = ({ sourceSessionId, addressType, add
 };
 
 // Uploaded files ('files'), storage picks ('hdfs') or Elastic picks ('hybrid').
-export const buildArrayDataframePayload = ({ sourceSessionId, kind, items }) => ({
+// dateFrom / dateTo: the range the items were searched with (B-19).
+export const buildArrayDataframePayload = ({ sourceSessionId, kind, items, dateFrom = '', dateTo = '' }) => ({
   id: 'create_DF',
   type: 'array',
   kind,
   session_id: normalizeSessionId(sourceSessionId),
   value: items,
+  ...(dateFrom || dateTo ? { start_date: dateFrom || null, end_date: dateTo || null } : {}),
 });
 
 // POST /live_batch_files {id:'create_DF'}; follows a queued job when needed.
@@ -273,7 +278,9 @@ export const createDataframe = async (apiFetch, payload, { signal, onQueued } = 
     const result = await pollJob(apiFetch, getQueuedPollPath(data), { intervalMs: 2000, label: 'dataframe', signal });
     data = normalizeCompletedDataframeJob(result);
   }
-  return { data, ok: isSuccessResponse(data), info: normalizeDataframeInfo(data?.results) };
+  // Sources it could not read, though the rest made a dataframe.
+  const failedSources = [data?.results?.failed_sources, data?.results?.failedSources].find(Array.isArray) || [];
+  return { data, ok: isSuccessResponse(data), info: normalizeDataframeInfo(data?.results), failedSources };
 };
 
 // ---------------------------------------------------------------- search ---
@@ -502,7 +509,41 @@ export const startStreamRequest = async (apiFetch, payload, { signal } = {}) => 
 };
 
 // Follows a queued stream job until the ingestion is running/finished.
-export const waitForStreamJob = (apiFetch, pollPath, { signal } = {}) => pollJob(apiFetch, pollPath, { intervalMs: 1000, label: 'ingestion', signal });
+// Follows the job to its end. A dropped network, a slow or restarting Service
+// is not the job's failure: it is asked again for up to 45 seconds without an
+// answer (analyst, 2026-11-25). The Service's own 2 minutes are for a run
+// whose owner's last browser is gone.
+const JOB_CONTACT_MS = 45 * 1000;
+export const waitForStreamJob = async (apiFetch, pollPath, { signal, retryMs = 5000 } = {}) => {
+  let lostAt = null;
+  const fetchJob = async (...args) => {
+    const answer = await apiFetch(...args);
+    lostAt = null;
+    return answer;
+  };
+  for (;;) {
+    try {
+      return await pollJob(fetchJob, pollPath, { intervalMs: 1000, label: 'ingestion', signal });
+    } catch (error) {
+      if (signal?.aborted || error?.name === 'AbortError' || error?.jobStatus) throw error;
+      // The poll's own time limit: the job still answers, so it goes on.
+      const timedOut = Boolean(error?.pollPath);
+      if (!timedOut) {
+        const status = Number(error?.status) || 0;
+        // The screen is locked (idle): asked again until it is unlocked.
+        if (status === 423) lostAt = null;
+        else if (status >= 400 && status < 500 && ![408, 425, 429].includes(status)) throw error;
+        else lostAt = lostAt ?? Date.now();
+        if (lostAt !== null && Date.now() - lostAt > JOB_CONTACT_MS) throw error;
+      }
+      await new Promise((resolve) => {
+        const timer = setTimeout(resolve, retryMs);
+        signal?.addEventListener('abort', () => { clearTimeout(timer); resolve(); }, { once: true });
+      });
+      if (signal?.aborted) throw new DOMException('Job request was cancelled', 'AbortError');
+    }
+  }
+};
 
 // /live_batch_files {id:'end_session'}: stops the stream on the backend
 // (production Terminate payload). `keepalive` lets the request finish after

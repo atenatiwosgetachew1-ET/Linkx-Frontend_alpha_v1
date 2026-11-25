@@ -13,6 +13,7 @@
 // one wins; different styles from several rules combine. Manual edits
 // (Customize) win over rules, per style; highlights (alerts, pinned, paths)
 // are drawn over them.
+import { parseAmount, sameValue } from '../../../shared/numbers/values.js';
 import { createDomainStore } from './domainStore.js';
 import { getNodeValue } from './graphModel.js';
 import { parseTimelineDate } from './graphTimeline.js';
@@ -60,14 +61,7 @@ export const EDGE_STYLE_KEYS = Object.freeze(['color', 'width', 'lineStyle', 'hi
 const text = (value, maxLength = 200) => (typeof value === 'string' ? value.trim().slice(0, maxLength) : (value == null ? '' : String(value).slice(0, maxLength)));
 const hex = (value) => (/^#[0-9a-f]{6}$/i.test(String(value || '')) ? String(value) : '');
 
-const numberOf = (value) => {
-  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
-  if (typeof value === 'boolean' || value == null) return null;
-  const textValue = String(value).trim();
-  if (!textValue) return null;
-  const parsed = Number(textValue.replace(/[,\s]/g, ''));
-  return Number.isFinite(parsed) ? parsed : null;
-};
+const numberOf = parseAmount;
 // Dates: as the timeline reads them, numbers as epoch (s or ms) too.
 const dateOf = (value) => parseTimelineDate(value, { numeric: true });
 
@@ -137,6 +131,8 @@ const valueFor = (target, id, item, key, ctx) => {
 const isEmpty = (value) => value == null || (typeof value === 'string' && value.trim() === '') || (Array.isArray(value) && !value.length);
 const asText = (value) => (value !== null && typeof value === 'object' ? JSON.stringify(value) : String(value ?? '')).toLowerCase();
 
+const sameAs = (value, wanted) => sameValue(value !== null && typeof value === 'object' ? asText(value) : value, wanted);
+
 export const testCondition = (condition, value) => {
   const { op } = condition;
   if (op === 'exists') return !isEmpty(value);
@@ -145,21 +141,15 @@ export const testCondition = (condition, value) => {
   const want = String(condition.value ?? '').trim().toLowerCase();
   switch (OPERATOR_KINDS[op]) {
     case 'text': {
-      // Numbers compare as numbers ("2,500" equals 2500).
-      const a = numberOf(value);
-      const b = numberOf(condition.value);
-      const same = a !== null && b !== null ? a === b : asText(value) === want;
+      // Numbers compare as numbers ("2,500" equals 2500), ids as text.
+      const same = sameAs(value, condition.value);
       if (op === 'eq') return same;
       if (op === 'neq') return !same;
       if (op === 'contains') return asText(value).includes(want);
       return asText(value).startsWith(want);
     }
     case 'list':
-      return want.split(',').map((entry) => entry.trim()).filter(Boolean).some((entry) => {
-        const a = numberOf(value);
-        const b = numberOf(entry);
-        return a !== null && b !== null ? a === b : asText(value) === entry;
-      });
+      return want.split(',').map((entry) => entry.trim()).filter(Boolean).some((entry) => sameAs(value, entry));
     case 'number':
     case 'range': {
       const a = numberOf(value);
@@ -266,11 +256,11 @@ export const DOMAIN_FORMATTING_KEY = 'linkx_domain_formatting_v1';
 
 const normalizeRuleList = (value) => normalizeFormatting({ rules: Array.isArray(value) ? value : [] }).rules;
 
-// Until the backend keeps `formatting_rules` (B-24), a successful save also
-// keeps a copy on the device, per domain.
+// Per domain; the Service's own once read (domainPresentation.js).
 const deviceRules = createDomainStore(DOMAIN_FORMATTING_KEY, normalizeRuleList);
 export const getDomainFormatting = deviceRules.get;
 export const setDomainFormatting = deviceRules.set;
+export const adoptDomainFormatting = deviceRules.adopt;
 export const subscribeDomainFormatting = deviceRules.subscribe;
 export const resetDomainFormattingCache = deviceRules.reset;
 

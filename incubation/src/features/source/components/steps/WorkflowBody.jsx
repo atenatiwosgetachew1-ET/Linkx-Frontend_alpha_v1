@@ -17,7 +17,7 @@ import { StreamStep } from './StreamStep.jsx';
 import { ToolConnectionPanel } from './ToolConnectionPanel.jsx';
 import { UploadStep } from './UploadStep.jsx';
 
-export function WorkflowBody({ mode, modeState, windowId, sessionId, streamLogLines, defaults, validationMessage, toolValidationMessage, toolOptions, handlers, onPatchModeState, onOpenConfiguration, onOpenLibrary, onOpenFilter }) {
+export function WorkflowBody({ mode, modeState, windowId, sessionId, streamLogLines, defaults, validationMessage, toolValidationMessage, toolOptions, handlers, onPatchModeState, onOpenConfiguration, onOpenLibrary, onOpenFilter, keepRunning, dataframeNotice = '' }) {
   // Upload flow connects the tool automatically; the panel only appears when
   // that failed so the analyst can correct the details.
   const uploadToolPanel = modeState.uploadStatus === UPLOAD_STATUSES.UPLOADED && modeState.toolStatus !== TOOL_STATUSES.CONNECTED ? (
@@ -45,27 +45,14 @@ export function WorkflowBody({ mode, modeState, windowId, sessionId, streamLogLi
           onToolAction={handlers.onToolAction}
         />
       ) : null;
-  // The broker page works the same way. Realtime also needs the credentials
-  // saved to this session: if saving them failed, the panel is there to
-  // reconnect the tool (which saves them again).
-  const realtimeNotSaved = mode === SOURCE_MODES.REALTIME && modeState.toolStatus === TOOL_STATUSES.CONNECTED && modeState.realtimeConfigMessage;
+  // The broker page works the same way.
   const brokerStep = SOURCE_FLOW ? (
     <BrokerFlowStep
       state={modeState}
       defaults={defaults}
       windowId={windowId}
       validationMessage={validationMessage}
-      toolPanel={storageToolPanel || (realtimeNotSaved && modeState.sourceStatus === SOURCE_STATUSES.CONNECTED ? (
-        <ToolConnectionPanel
-          state={modeState}
-          windowId={windowId}
-          mode={mode}
-          toolOptions={toolOptions}
-          validationMessage={toolValidationMessage || modeState.realtimeConfigMessage}
-          onPatchModeState={onPatchModeState}
-          onToolAction={handlers.onToolAction}
-        />
-      ) : null)}
+      toolPanel={storageToolPanel}
       onPatchModeState={onPatchModeState}
       onSourceAction={handlers.onSourceAction}
     />
@@ -120,8 +107,8 @@ export function WorkflowBody({ mode, modeState, windowId, sessionId, streamLogLi
   if (mode === SOURCE_MODES.BATCH && modeState.step === 'upload') {
     return <UploadStep state={modeState} windowId={windowId} validationMessage={validationMessage} toolPanel={uploadToolPanel} onPatchModeState={onPatchModeState} />;
   }
-  if (modeState.step === 'dataframe') return <DataframeStep mode={mode} state={modeState} defaults={defaults} validationMessage={validationMessage} onPatchModeState={onPatchModeState} onOpenConfiguration={onOpenConfiguration} onOpenLibrary={onOpenLibrary} onOpenFilter={onOpenFilter} />;
-  if (modeState.step === 'stream') return <StreamStep state={modeState} sessionId={sessionId} logLines={streamLogLines} validationMessage={validationMessage} />;
+  if (modeState.step === 'dataframe') return <DataframeStep mode={mode} state={modeState} defaults={defaults} validationMessage={validationMessage || dataframeNotice} onPatchModeState={onPatchModeState} onOpenConfiguration={onOpenConfiguration} onOpenLibrary={onOpenLibrary} onOpenFilter={onOpenFilter} />;
+  if (modeState.step === 'stream') return <StreamStep state={modeState} sessionId={sessionId} logLines={streamLogLines} validationMessage={validationMessage} keepRunning={keepRunning} />;
   return (
     <ConnectStep
       mode={mode}

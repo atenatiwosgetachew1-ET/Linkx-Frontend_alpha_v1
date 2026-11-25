@@ -12,6 +12,7 @@ import { WorkspaceProvider } from '../../../workspace/state/WorkspaceContext.jsx
 import { WORKSPACE_WINDOW_TYPES } from '../../../workspace/state/workspaceTypes.js';
 import { clearConfigurationDrafts } from '../lib/configDraft.js';
 import ConfigurationWindowBody from './ConfigurationWindowBody.jsx';
+import { adoptPresentation, getPresentationVersion, resetPresentation } from '../../graph/lib/domainPresentation.js';
 import { getProfileSettings, resetProfileSettingsCache } from '../../graph/lib/nodeProfile.js';
 import { getDomainFormatting, resetDomainFormattingCache } from '../../graph/lib/conditionalFormatting.js';
 
@@ -30,8 +31,8 @@ const auth = { hasRole: () => true, hasPermission: () => true, user: { username:
 const windowItem = { id: 'configuration-1', type: WORKSPACE_WINDOW_TYPES.CONFIGURATION, title: 'Configuration', metadata: { configurationUi: { activeTab: 'tools' } } };
 
 let sessionApi;
-function Harness({ apiFetch, mounted = true, item = windowItem }) {
-  const [configuration, setConfiguration] = useState(BANK);
+function Harness({ apiFetch, mounted = true, item = windowItem, initial = BANK }) {
+  const [configuration, setConfiguration] = useState(initial);
   sessionApi = { configuration, setConfiguration };
   const session = {
     apiFetch,
@@ -101,6 +102,15 @@ describe('ConfigurationWindowBody unsaved draft', () => {
   });
 });
 
+it('never saves a configuration that was not loaded (audit C3)', async () => {
+  const apiFetch = vi.fn(async () => ({ status: 'success' }));
+  render(<Harness apiFetch={apiFetch} initial={{}} />);
+  await editToolUrl('bolt://edited');
+  await userEvent.click(screen.getByRole('button', { name: /^save/i }));
+  expect(await screen.findByText(/has not been loaded, so it cannot be saved/i)).toBeInTheDocument();
+  expect(apiFetch.mock.calls.filter(([, options]) => options?.body?.id === 'save')).toEqual([]);
+});
+
 describe('ConfigurationWindowBody profile mapping fields (Rules)', () => {
   it('maps the portrait and details to node properties; saved as actor_profile and kept on the device', async () => {
     const apiFetch = vi.fn(async (path, options) => ({ status: 'success', configuration: options?.body?.configuration || BANK }));
@@ -142,5 +152,96 @@ describe('ConfigurationWindowBody formatting rules (Rules)', () => {
     const body = apiFetch.mock.calls.find(([, options]) => options?.body?.id === 'save')[1].body;
     expect(body.configuration.formatting_rules).toEqual([expect.objectContaining({ target: 'node', conditions: [{ key: 'CATEGORY', op: 'eq', value: 'PEP', value2: '' }], style: { fill: '#e74c3c' } })]);
     await waitFor(() => expect(getDomainFormatting('bank')).toHaveLength(1));
+  });
+});
+
+describe('profile mapping on the Service (B-23, B-24)', () => {
+  const edit = async (post) => {
+    const calls = [];
+    const apiFetch = vi.fn(async (path, options) => {
+      calls.push([path, options?.body]);
+      if (path === '/domain-config') return post(calls.filter(([name]) => name === path).length, options.body);
+      return { status: 'success', configuration: options?.body?.configuration || BANK };
+    });
+    adoptPresentation('bank', { versionId: 4, actorProfile: null, formattingRules: null, updatedBy: '' });
+    render(<Harness apiFetch={apiFetch} item={{ ...windowItem, metadata: { configurationUi: { activeTab: 'rules' } } }} />);
+    await userEvent.type(screen.getByLabelText('Portrait property'), 'PHOTO');
+    await userEvent.click(screen.getByRole('button', { name: /^save/i }));
+    const of = (path) => calls.filter(([name]) => name === path).map(([, body]) => body);
+    return { shared: () => of('/domain-config'), config: () => of('/configuration').filter((body) => body.id === 'save') };
+  };
+  afterEach(resetPresentation);
+  const answer = (version) => ({ state: { version_id: version, actor_profile: { enabled: true, portrait_property: 'PHOTO', fields: [] }, formatting_rules: null } });
+  const conflict = { status: 409, data: { code: 'version_conflict', current: { version_id: 9, updated_by: 'sam', actor_profile: { enabled: true, portrait_property: 'THEIRS', fields: [] }, formatting_rules: null } } };
+
+  it('is saved there, with its version, and not with the configuration or in the browser', async () => {
+    const service = await edit(() => answer(5));
+    await waitFor(() => expect(service.config()).toHaveLength(1));
+    expect(service.shared()).toEqual([expect.objectContaining({ domain: 'bank', section: 'presentation', version_id: 4, actor_profile: expect.objectContaining({ portrait_property: 'PHOTO' }) })]);
+    expect(service.config()[0].configuration).not.toHaveProperty('actor_profile');
+    expect(getPresentationVersion('bank')).toBe(5);
+    expect(localStorage.getItem('linkx_actor_profile_v1')).toBeNull();
+  });
+
+  it('someone else saved meanwhile: theirs are taken, and nothing else is saved', async () => {
+    const service = await edit(() => { throw Object.assign(new Error('x'), conflict); });
+    await userEvent.click(await screen.findByRole('button', { name: 'Take theirs' }));
+    await waitFor(() => expect(screen.getByLabelText('Portrait property')).toHaveValue('THEIRS'));
+    expect(service.config()).toEqual([]);
+  });
+
+  it('someone else saved meanwhile: mine replace theirs, on their version', async () => {
+    const service = await edit((attempt) => { if (attempt === 1) throw Object.assign(new Error('x'), conflict); return answer(10); });
+    await userEvent.click(await screen.findByRole('button', { name: 'Keep mine' }));
+    await waitFor(() => expect(service.config()).toHaveLength(1));
+    expect(service.shared().map((body) => body.version_id)).toEqual([4, 9]);
+  });
+
+  it('settings that arrive after the window opened are shown; an edit made meanwhile stays', async () => {
+    const apiFetch = vi.fn(async () => ({ status: 'success' }));
+    const stale = { ...BANK, actor_profile: { enabled: true, portrait_property: 'STALE', fields: [] } };
+    render(<Harness apiFetch={apiFetch} initial={stale} item={{ ...windowItem, metadata: { configurationUi: { activeTab: 'rules' } } }} />);
+    expect(screen.getByLabelText('Portrait property')).toHaveValue('STALE');
+    const theirs = (portrait, versionId) => act(() => { adoptPresentation('bank', { versionId, actorProfile: { enabled: true, portrait_property: portrait, fields: [] }, formattingRules: null, updatedBy: '' }); });
+    theirs('SERVICE', 1);
+    expect(screen.getByLabelText('Portrait property')).toHaveValue('SERVICE');
+    await userEvent.type(screen.getByLabelText('Portrait property'), '_MINE');
+    theirs('NEWER', 2);
+    expect(screen.getByLabelText('Portrait property')).toHaveValue('SERVICE_MINE');
+  });
+});
+
+describe('what only an administrator may save (R2-18)', () => {
+  const other = () => {
+    auth.hasPermission = (permission) => permission !== 'users:manage';
+    auth.hasRole = () => false;
+  };
+  afterEach(() => {
+    auth.hasPermission = () => true;
+    auth.hasRole = () => true;
+  });
+  it('an edit that cannot be saved is named, and the rest is saved', async () => {
+    other();
+    const apiFetch = vi.fn(async (path, options) => ({ status: 'success', configuration: options?.body?.configuration || BANK }));
+    render(<Harness apiFetch={apiFetch} />);
+    await editToolUrl('bolt://edited');
+    const password = screen.getByLabelText('Tool password');
+    await userEvent.type(password, 'S3cret!');
+    fireEvent.blur(password);
+    await userEvent.click(screen.getByRole('button', { name: /^save/i }));
+    expect(await screen.findByText(/Only an administrator can change: active tool password/)).toBeInTheDocument();
+    const body = apiFetch.mock.calls.find(([, options]) => options?.body?.id === 'save')[1].body;
+    expect(body.configuration.active_tool_url).toBe('bolt://edited');
+    expect(body.configuration).not.toHaveProperty('active_tool_password');
+  });
+  it('the entity lists are not editable for others', async () => {
+    auth.hasPermission = (permission) => permission !== 'users:manage';
+    auth.hasRole = () => false;
+    const apiFetch = vi.fn(async (path, options) => ({ status: 'success', configuration: options?.body?.configuration || BANK }));
+    render(<Harness apiFetch={apiFetch} initial={{ ...BANK, trusted_entities: [{ key: 'ACCOUNT', value: '1', category: 'Trusted' }] }} item={{ ...windowItem, metadata: { configurationUi: { activeTab: 'rules' } } }} />);
+    expect(screen.getByRole('combobox', { name: 'Category, row 1' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Remove entity row 1' })).not.toBeInTheDocument();
+    auth.hasPermission = () => true;
+    auth.hasRole = () => true;
   });
 });

@@ -1,3 +1,4 @@
+import { formatFigure } from '../../../shared/numbers/values.js';
 import React, { memo, useEffect, useMemo, useRef, useState } from 'react';
 
 import { SCHEMA_NAMES } from '../lib/chartColors.js';
@@ -73,13 +74,6 @@ const FORM_LABEL = { bar: 'Bars', line: 'Line', scatter: 'Scatter', dualbar: 'Se
 // schema }; state: { status: 'loading' |
 // 'ready' | 'error', result, error }; onReady(id, chart | null) hands the
 // ECharts instance up for snapshots and printing.
-// A figure: whole numbers grouped, others to 4 significant digits; "—"
-// when not defined for this graph.
-const formatFigure = (value) => {
-  if (typeof value !== 'number' || !Number.isFinite(value)) return '—';
-  if (Number.isInteger(value)) return value.toLocaleString('en-GB');
-  return Number(value.toPrecision(4)).toLocaleString('en-GB', { maximumFractionDigits: 6 });
-};
 
 // tone: the card's colour (from the active schema, a different one per
 // card), washing its header from the top-left corner.

@@ -9,9 +9,11 @@ describe('search expressions (production parseSearchExpression)', () => {
   it('recognises range, comparisons, exact numbers and text', () => {
     expect(parseSearchExpression('10 - 20')).toEqual({ mode: 'range', min: 10, max: 20 });
     expect(parseSearchExpression('20-10')).toEqual({ mode: 'range', min: 10, max: 20 });
-    expect(parseSearchExpression('>= 1,5')).toEqual({ mode: 'compare', op: '>=', target: 15 });
+    expect(parseSearchExpression('>= 1,500')).toEqual({ mode: 'compare', op: '>=', target: 1500 });
+    // Could be 1.5 or 15: never guessed (production took 15).
+    expect(parseSearchExpression('>= 1,5').mode).toBe('text');
     expect(parseSearchExpression('==3')).toEqual({ mode: 'compare', op: '=', target: 3 });
-    expect(parseSearchExpression('42')).toEqual({ mode: 'number_exact', target: 42 });
+    expect(parseSearchExpression('42')).toEqual({ mode: 'number_exact', target: 42, text: '42' });
     expect(parseSearchExpression('  Abebe ')).toEqual({ mode: 'text', textLower: 'abebe' });
   });
 
@@ -21,6 +23,18 @@ describe('search expressions (production parseSearchExpression)', () => {
     expect(valueMatchesSearchExpression('n/a', parseSearchExpression('>1000'))).toBe(false);
     expect(valueMatchesSearchExpression(15, parseSearchExpression('10-20'))).toBe(true);
     expect(valueMatchesSearchExpression(null, parseSearchExpression('x'))).toBe(false);
+  });
+});
+
+describe('accounts and amounts (audit E1)', () => {
+  const matches = (typed, value) => valueMatchesSearchExpression(value, parseSearchExpression(typed));
+  it('finds the account typed, not another', () => {
+    expect(matches('12345', '0012345')).toBe(false);
+    expect(matches('0012345', '0012345')).toBe(true);
+    expect(matches('1000123456789012345', '1000123456789012346')).toBe(false);
+    expect(matches('1000123456789012345', '1000123456789012345')).toBe(true);
+    expect(matches('=16', '0x10')).toBe(false);
+    expect(matches('1,000,000', 1000000)).toBe(true);
   });
 });
 

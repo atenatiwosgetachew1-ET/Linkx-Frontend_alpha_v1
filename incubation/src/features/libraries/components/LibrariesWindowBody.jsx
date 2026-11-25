@@ -8,7 +8,7 @@ import { WORKSPACE_WINDOW_TYPES } from '../../../workspace/state/workspaceTypes.
 import WindowLoadScreen from '../../../shared/components/WindowLoadScreen.jsx';
 import { loadConfiguration, removeRule, uploadRule } from '../../../services/configurationApi.js';
 import { getConfigurationErrorMessage } from '../../configuration/lib/configModel.js';
-import {
+import { RULE_TEMPLATE_FILE, RULE_TEMPLATE_PATH,
   buildRuleUploadFields,
   builtinNamesFromMessage,
   hasRuleCatalogue,
@@ -148,6 +148,20 @@ export default function LibrariesWindowBody({ windowItem }) {
     }
   };
 
+  // The Service's rule template (B-16).
+  const downloadTemplate = async () => {
+    try {
+      const blob = await apiFetch(RULE_TEMPLATE_PATH, { responseType: 'blob' });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = RULE_TEMPLATE_FILE;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      notify({ title: 'Rule template', message: error?.status === 404 ? 'The Service has no rule template.' : 'The rule template could not be downloaded.', level: 'warning', source: 'Libraries' });
+    }
+  };
   const openConfigurationRules = () => {
     workspace.openWindow(WORKSPACE_WINDOW_TYPES.CONFIGURATION, {
       metadata: { configurationUi: { activeTab: 'rules' }, configurationRequest: { tab: 'rules', seq: Date.now() } },
@@ -204,6 +218,7 @@ export default function LibrariesWindowBody({ windowItem }) {
         onUpload={handleUpload}
         onRemove={handleRemove}
         onOpenConfiguration={openConfigurationRules}
+        onTemplate={downloadTemplate}
       />
     );
   }

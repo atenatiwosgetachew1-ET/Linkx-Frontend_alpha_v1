@@ -3,10 +3,12 @@
 // A stream is "active" from the moment /live_batch_files {id:'stream'} is sent
 // until it completes, fails or is terminated. Any other way out of the window
 // abandons it: the window closes, the analyst signs out (or the idle timeout
-// does), the tab is closed or reloaded, the start request is cancelled, or the
-// domain changes under it. Each of those sends the same closing request the
-// production Terminate button sends (log_stream_unplug + end_session), so the
-// backend never keeps ingesting for a window nobody is watching.
+// does), or the start request is cancelled. Each sends the same closing
+// request the production Terminate button sends (log_stream_unplug +
+// end_session), unless the Service granted the run a seat to go on without its
+// owner (tasks/lib/unattendedSeats.js). A closed or reloaded page sends
+// nothing: the Service stops a run without a seat 2 minutes after its owner's
+// last browser is gone (R2-19).
 //
 // Kept outside React/window state so it is readable from the workspace frame
 // (close, sign-out, pagehide) without the Source window being mounted.
@@ -50,7 +52,11 @@ export const endAbandonedStream = async (apiFetch, windowId, { reason, keepalive
   return result;
 };
 
-// Every running stream at once (sign-out, tab closed).
-export const endAllAbandonedStreams = (apiFetch, { reason, keepalive = true } = {}) => Promise.all(
-  [...active.keys()].map((windowId) => endAbandonedStream(apiFetch, windowId, { reason, keepalive })),
+// Signed out: runs with a seat go on at the Service; this page is done with them.
+export const forgetActiveStreams = () => active.clear();
+
+// Every running stream at once (sign-out, tab closed), but those of the
+// windows in `except` (they have a seat).
+export const endAllAbandonedStreams = (apiFetch, { reason, keepalive = true, except = new Set() } = {}) => Promise.all(
+  [...active.keys()].filter((windowId) => !except.has(windowId)).map((windowId) => endAbandonedStream(apiFetch, windowId, { reason, keepalive })),
 );

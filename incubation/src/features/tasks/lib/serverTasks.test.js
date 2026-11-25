@@ -43,7 +43,7 @@ describe('the Service’s tasks (H-2, H-7)', () => {
     const verdict = (fields) => taskFlagVerdict({ status: TASK_STATUSES.COMPLETED, ...fields }, ['[Info] … flags: {}']);
     expect(verdict({ verdict: 'suspicious', flags: { FUND_FLOW: 3, STRUCTURING: 0 } })).toMatchObject({ state: 'suspicious', flags: [{ name: 'FUND_FLOW', count: 3 }] });
     expect(verdict({ verdict: 'suspicious', flags: { SMURFING: null } }).flags).toEqual([{ name: 'SMURFING', count: 0 }]);
-    expect(verdict({ verdict: 'clean', flags: {} }).state).toBe('clean');
+    expect(verdict({ verdict: 'clean', flags: {}, endedReason: 'finished' }).state).toBe('clean');
     expect(taskFlagVerdict({ status: TASK_STATUSES.RUNNING, flags: { FUND_FLOW: 1 } }).detail).toBe('Provisional');
   });
 

@@ -122,17 +122,25 @@ describe('Source window numbers', () => {
   });
 });
 
+it('a finished run’s kept graph comes back by its id (B-37)', () => {
+  const copy = buildWorkspaceCopy({ windows: [{ id: 'g', type: 'graph', metadata: { graphTaskId: 'T5', taskId: 'local' } }, { id: 't', type: 'table', metadata: { tableGraph: 'g' } }], activeWindowId: 'g' }, { hasNodes: () => true });
+  expect(copy.windows[0]).toMatchObject({ graph: 'run', metadata: { graphTaskId: 'T5' } });
+  expect(copy.windows[0].metadata).not.toHaveProperty('taskId');
+  expect(copy.windows.map((item) => windowOutcome(item, copy).state)).toEqual(['full', 'full']);
+});
+
 describe('leaveReasons', () => {
   const task = (fields) => ({ origin: 'source', status: 'completed', ...fields });
   it('lists what would be lost, and nothing else', () => {
     expect(leaveReasons({ tasks: [task({ remote: true, status: 'running' }), task({ origin: 'parent', status: 'running' }), task({ foreign: true, heldSession: true })] })).toEqual([]);
     const reasons = leaveReasons({
-      tasks: [task({ status: 'running' }), task({ status: 'starting' }), task({ heldSession: true })],
+      tasks: [task({ status: 'running' }), task({ status: 'starting' }), task({ status: 'running', unattended: true }), task({ heldSession: true })],
       windows: [{ id: 'g', type: 'graph' }],
       graphChanged: () => true,
     });
     expect(reasons).toEqual([
       '2 running analyses will be stopped.',
+      '1 running analysis keeps running (it has a seat).',
       '1 finished background run keeps its session: its graph will be lost.',
       '1 graph was drawn or changed here: those changes will be lost.',
     ]);

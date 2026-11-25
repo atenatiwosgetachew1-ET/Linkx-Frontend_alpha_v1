@@ -630,7 +630,9 @@ and, on `create_DF` for a batch source, `limits: { "last_seconds": 3600, "time_c
 1. Start a realtime quick run and close the browser. It ends by itself after 15 minutes as `completed`, and its session is free.
 2. A batch quick run ingests only rows from the last hour, and the log gives the time range.
 
-**Frontend once done:** build the run in the panel on the existing upload, `create_DF` and `stream` calls.
+**Built by the Service (round 1, section D), and in the frontend 2026-11-25** (`src/features/quick/lib/quickRun.js`, `WorkspaceHome.jsx`): file, Kafka last hour, Kafka and REST live. Not run on the live Service yet.
+- `create_DF` carries top-level `quick: true`; `stream` carries `value.quick: true`, and `listen_realtime: true` when live. No limits are sent. A live run makes no `create_DF`.
+- Result wording: "No flags raised, in this short run only", never Clean.
 
 ### B-36. Send the "GPU drawing allowed" setting (`graph_gpu_allowed` in the configuration, P3)
 **Found 2026-11-24.** Libraries ▸ Graph rendering reads `graph_gpu_allowed` from the session configuration, so an administrator can turn GPU drawing off for everyone (L-B2 in `libraries-plan.md`). We found no request to the Service for it, and do not know that it sends it.
@@ -670,3 +672,50 @@ and, on `create_DF` for a batch source, `limits: { "last_seconds": 3600, "time_c
 **Verify:** run an analysis, close its Source window, reload, and open its graph from Tasks. Then run a second analysis: the first task still opens the first run's graph.
 
 **Frontend once done:** send `task_id` and offer Show graph for every completed task again.
+
+### B-38. Seats for unattended runs ("Keep running while I'm away", P1)
+**Decided by the analyst (2026-11-25).** A run goes on without its owner's browser only with a seat granted by the Service; asked for on purpose, run by run; one run per user. The frontend is built and stays disabled until these exist.
+
+**Requests**
+1. `GET /api/v1/unattended-seats` (any signed-in analyst with `analysis:run`) -> `200 { seats: { total, available } }`, whole numbers. `404` means "not offered".
+2. `POST /api/v1/tasks/<task_id>/unattended { "on": true | false }` (the task's owner) -> `200 { task, seats }`, with `task.unattended` as it now is.
+   - Grant it atomically: two requests for the last seat give one seat.
+   - Turning off is always allowed, and asking twice for the same run changes nothing.
+   - Refusals: `409 { code: "unattended_no_seat" }`, `409 { code: "unattended_limit" }` (the user has another run with a seat), `409 { code: "unattended_not_allowed", detail }` (this kind of run), `409 { code: "task_not_running" }`, `403` for someone else's run.
+3. `unattended` (boolean) on every task, in `task_updated` and `GET /api/v1/tasks`. Send `task_updated` when a seat is given, turned off or taken back.
+4. A socket event `unattended_seats { seats: { total, available } }` when the numbers change (optional; the screens ask every 30 seconds while the switch is in sight).
+5. A run with a seat is not stopped by a disconnect, a closed tab, a token's end, `/auth/idle-timeout` or `/auth/logout`. Its source session is kept until it ends (and its graph, B-37).
+6. The seat is free when the run ends, is turned off, or reaches your maximum time.
+
+**Checks**
+1. Turn it on, close the browser for 5 minutes, sign in again: the run went on or ended by itself.
+2. The same without it: the run was stopped.
+3. With every seat taken: refused, and the switch says so.
+4. A second run of the same user: `unattended_limit`.
+
+### B-39. A live quick run analyses while it listens (Question, P2)
+**Analyst decision 2026-11-25:** a live quick run (Kafka or REST, 15 minutes) ingests and analyses at the same time, as a Source window's realtime run does, and not only at the end.
+
+- **What we found:** realtime runs log `Live analysis batch <n> flags: {…}`, and the task's `flags` are provisional per batch (H-7). Your round 1 answer says a live quick run ends "with the full analysis"; your round 2 table says "as batch or realtime". Neither says whether a **quick** live run does the per-batch analysis.
+- **Please confirm** that it does, with the same log lines and `task_updated` flags. If not, please build it.
+- **Please also say** whether a live quick run needs a `create_DF` first. We send none, as your table says; a Source window's realtime run makes one.
+
+**Verify:** start a live quick run on a topic with messages that match the active rule. Flags show in the panel before the 15 minutes are over.
+
+**Frontend:** built. The panel shows the rows and flags of each batch while the run goes on, from the task and, until it has them, the log.
+
+---
+
+**Status after the Service's response of 2026-11-25** (`service-response-2026-11-25.md`, reviewed in `service-response-review-2026-11-25.md`). "Built" is the Service's word and live once it is deployed; not tested by us.
+
+| Status | Items |
+|---|---|
+| Built | B-1, B-2, B-3, B-5, B-6 (Source routes), B-7, B-9, B-15, B-16, B-17, B-19, B-23 and B-24 (as `/domain-config` `presentation`), B-31, B-32, B-33, B-35 (narrowed) |
+| Refused | B-26, B-29, B-30, B-36 |
+| Later | B-4, B-8, B-10, B-11, B-12, B-13, B-14, B-25, B-34 |
+| Answered before | B-18 (H-11 to H-17) |
+| Built in round 2 | B-37, B-38 |
+
+**Round 2 answered 2026-11-25** (`service-response-round-2-2026-11-25.md`, reviewed in `service-response-review-round-2-2026-11-25.md`): B-37 **built** (24 hours), B-38 **built** with the Service's limits (a quarter of the workers' capacity, 60 minutes, batch only). Next free number: B-40.
+
+**Round 3 written 2026-11-25** (`backend-round-3-2026-11-25.md`): B-39 as R3-1, quick run questions, Phase 6 decisions (C0), requests and questions (C1 to C11; own column mapping and `settings_used` are new). Our plan: `phase6-plan.md`. Waiting for the answer.

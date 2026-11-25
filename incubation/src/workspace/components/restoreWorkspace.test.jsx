@@ -17,7 +17,8 @@ import { SessionContext } from '../../shared/session/sessionContext.js';
 import { NotificationProvider } from '../../shared/notifications/NotificationContext.jsx';
 import { useWorkspace } from '../hooks/useWorkspace.js';
 import { WorkspaceProvider } from '../state/WorkspaceContext.jsx';
-import { createTask, markTaskRunning, resetTasks } from '../../features/tasks/lib/taskRegistry.js';
+import { applyServerTask, createTask, linkServerTask, markTaskRunning, resetTasks } from '../../features/tasks/lib/taskRegistry.js';
+import { markStreamActive } from '../../features/source/lib/activeStreams.js';
 
 beforeEach(() => {
   localStorage.clear();
@@ -35,11 +36,12 @@ function Probe() {
 }
 const settle = (ms = 700) => act(async () => { await new Promise((resolve) => { setTimeout(resolve, ms); }); });
 
-const open = ({ user = { id: 1, username: 'ana' }, main = '9', refuse = null, permissions = null } = {}) => {
+const open = ({ user = { id: 1, username: 'ana' }, main = '9', refuse = null, permissions = null, init = null } = {}) => {
   const calls = [];
   const apiFetch = vi.fn(async (path, options = {}) => {
     calls.push([path, options.body]);
     if (path === '/init_source') {
+      if (init) return init(options.body);
       if (refuse) throw Object.assign(new Error('x'), refuse);
       return { results: { source_id: `${options.body.window_id}_${options.body.session_id}` } };
     }
@@ -208,5 +210,84 @@ describe('leaving', () => {
     await waitFor(() => expect(ws.windows).toHaveLength(1));
     act(() => { window.dispatchEvent(new Event('pagehide')); });
     expect(page.of('/close_source_window')).toEqual([expect.objectContaining({ window_id: 1, session_id: '9', reason: 'page_closed' })]);
+  });
+});
+
+describe('a run goes on without its owner only with a seat (analyst decision 2026-11-25)', () => {
+  const run = async ({ seat }) => {
+    await settle(400);
+    await userEvent.click(screen.getByRole('button', { name: 'Source' }));
+    await waitFor(() => expect(ws.windows).toHaveLength(1));
+    const id = ws.windows[0].id;
+    act(() => {
+      const taskId = createTask({ title: 'Link Analysis', windowId: id, sourceSessionId: '1_9' });
+      markTaskRunning(taskId);
+      linkServerTask(taskId, 'T1');
+      markStreamActive(id, { sourceSessionId: '1_9', logFile: 'x.log' });
+      applyServerTask({ task_id: 'T1', status: 'running', unattended: seat });
+    });
+  };
+  const stops = (page) => page.of('/live_batch_files').filter((body) => body.id === 'end_session');
+
+  it.each([[true], [false]])('closing or reloading the page stops nothing and keeps the session of a run (seat: %s): the Service has the 2 minutes', async (seat) => {
+    const page = open();
+    await run({ seat });
+    act(() => { window.dispatchEvent(new Event('pagehide')); });
+    expect(stops(page)).toEqual([]);
+    expect(page.of('/close_source_window')).toEqual([]);
+  });
+
+  it.each([[true, 0], [false, 1]])('an automatic sign-out, with a seat: %s', async (seat, stopped) => {
+    const page = open();
+    await run({ seat });
+    page.unmount();
+    expect(stops(page)).toHaveLength(stopped);
+  });
+
+  it('a window number still in use at the Service: the next one is taken', async () => {
+    let refused = 0;
+    const page = open({ refuse: null, init: (body) => { if (refused < 2) { refused += 1; throw Object.assign(new Error('x'), { status: 409, data: { code: 'session_id_in_use' } }); } return { results: { source_id: `${body.window_id}_9` } }; } });
+    await settle(400);
+    await userEvent.click(screen.getByRole('button', { name: 'Source' }));
+    await waitFor(() => expect(ws.windows).toHaveLength(1));
+    const numbers = page.of('/init_source').map((body) => Number(body.window_id));
+    expect(new Set(numbers).size).toBe(3);
+    expect(ws.windows[0].sourceSessionId).toBe(`${numbers[2]}_9`);
+  });
+
+  it('signing out asks about the run with a seat: keep it, or stop it', async () => {
+    const page = open();
+    await run({ seat: true });
+    await userEvent.click(screen.getByRole('button', { name: 'Sign out' }));
+    expect(screen.getByRole('dialog', { name: 'Sign out now?' })).toHaveTextContent('1 running analysis keeps running (it has a seat).');
+    await userEvent.click(screen.getByRole('button', { name: 'Keep running and sign out' }));
+    expect(stops(page)).toEqual([]);
+    await userEvent.click(screen.getByRole('button', { name: 'Sign out' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Stop it and sign out' }));
+    await waitFor(() => expect(page.onSignOut).toHaveBeenCalledTimes(2));
+    expect(stops(page)).toHaveLength(1);
+    page.unmount();
+    // Stopped on purpose: not told at the next sign-in.
+    expect(localStorage.getItem('linkx.runs.away.v1')).toBeNull();
+  });
+
+  it('a seat taken back is told', async () => {
+    open();
+    await run({ seat: true });
+    act(() => { applyServerTask({ task_id: 'T1', status: 'running', unattended: false }); });
+    expect(await screen.findByText('A run lost its seat')).toBeInTheDocument();
+  });
+
+  it('tells at the next sign-in how it ended, once; a run still going later', async () => {
+    const first = open();
+    await run({ seat: true });
+    first.unmount();
+    open();
+    await settle(400);
+    act(() => { applyServerTask({ task_id: 'T1', status: 'running', action: 'Link Analysis', username: 'ana', source_session_id: '1_9' }); });
+    expect(screen.queryByText(/while you were away/)).not.toBeInTheDocument();
+    act(() => { applyServerTask({ task_id: 'T1', status: 'completed', action: 'Link Analysis', username: 'ana', source_session_id: '1_9' }); });
+    expect(await screen.findByText('A run ended while you were away')).toBeInTheDocument();
+    expect(localStorage.getItem('linkx.runs.away.v1')).toBeNull();
   });
 });

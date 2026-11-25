@@ -1,3 +1,5 @@
+import { parseAmount } from '../../../shared/numbers/values.js';
+import { isAnnotation } from '../../graph/lib/graphAnalysis.js';
 import { DEFAULT_SCHEMA, SCHEMA_NAMES } from './chartColors.js';
 import { CHART_METRICS, metricById } from './chartMetrics.js';
 import { DEFAULT_HISTOGRAM } from './chartHistogram.js';
@@ -83,14 +85,8 @@ export const normalizeChartState = (input = {}, defaults = BUILTIN_CHART_DEFAULT
   };
 };
 
-// A number from a link property: numbers, and numeric text with thousands
-// separators ("2,500").
-export const numericValue = (value) => {
-  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
-  if (typeof value !== 'string' || !value.trim()) return null;
-  const parsed = Number(value.replace(/[,\s]/g, ''));
-  return Number.isFinite(parsed) ? parsed : null;
-};
+// A number from a link property (the shared rules).
+export const numericValue = parseAmount;
 const propertyOf = (item, key) => {
   if (!item || !key) return undefined;
   const actual = Object.keys(item).find((candidate) => candidate.toLowerCase() === String(key).toLowerCase());
@@ -101,22 +97,25 @@ const isThemeLine = (store, key) => String(store.getEdge(key)?.edge_kind || '').
 
 // The scope's entities and the links among them, as the metrics take them
 // ({ nodeIds, edges: [{ key, source, target, weight? }], weightLabel }). Drawn: what the Graph
-// window publishes; Selected: the selected entities and the links among
+// window publishes; Selected: the selected entities and the drawn links among
 // them; All: the whole graph. Theme lines are left out (as the Graph
 // window's measures).
 export const scopeInput = (store, link, scope, { communities = false, times = false } = {}) => {
   const graph = store.graph();
+  // The analyst's text notes are not entities.
+  const isEntity = (id) => !isAnnotation(graph.getNodeAttributes(id));
   let nodeIds;
   let edgeKeys;
   if (scope === 'all') {
-    nodeIds = graph.nodes();
+    nodeIds = graph.nodes().filter(isEntity);
     edgeKeys = graph.edges();
   } else if (scope === 'selected') {
-    nodeIds = link.selection.nodes.filter((id) => graph.hasNode(id));
+    nodeIds = link.selection.nodes.filter((id) => graph.hasNode(id) && isEntity(id));
     const chosen = new Set(nodeIds);
-    edgeKeys = graph.edges().filter((key) => chosen.has(graph.source(key)) && chosen.has(graph.target(key)));
+    // The drawn ones (a link out of sight is not part of what is selected).
+    edgeKeys = link.edgeIds.filter((key) => graph.hasEdge(key) && chosen.has(graph.source(key)) && chosen.has(graph.target(key)));
   } else {
-    nodeIds = link.nodeIds.filter((id) => graph.hasNode(id));
+    nodeIds = link.nodeIds.filter((id) => graph.hasNode(id) && isEntity(id));
     edgeKeys = link.edgeIds.filter((key) => graph.hasEdge(key));
   }
   // Each link's weight (Edge Weight): the Graph window's weight key, else
@@ -131,10 +130,13 @@ export const scopeInput = (store, link, scope, { communities = false, times = fa
   // own takes the later of its ends' dates.
   const timeKey = times ? (link.timeKey || timelineKeys(graph, { nodeIds, edgeIds: usedKeys })[0]?.key || '') : '';
   const dated = timeKey ? timelineItems(graph, { nodeIds, edgeIds: usedKeys }, timeKey) : null;
+  let borrowed = 0;
   const timeOf = (key) => {
     if (!dated) return null;
     if (dated.edges.has(key)) return dated.edges.get(key);
+    borrowed += 1;
     const ends = [dated.nodes.get(graph.source(key)), dated.nodes.get(graph.target(key))].filter((ms) => ms != null);
+    if (!ends.length) borrowed -= 1;
     return ends.length ? Math.max(...ends) : null;
   };
   const edges = usedKeys.map((key) => {
@@ -146,7 +148,7 @@ export const scopeInput = (store, link, scope, { communities = false, times = fa
     nodeIds,
     edges,
     weightLabel: weightKey || 'weight / value',
-    ...(times ? { timeKey, timeUnit: link.timeSlice || 'auto' } : {}),
+    ...(times ? { timeKey, timeUnit: link.timeSlice || 'auto', borrowedTimes: borrowed } : {}),
     // Cohesion: the communities Analyze ▸ Detect Communities finds over the
     // scope (on this side: it reads the graph's relationships).
     ...(communities ? { communities: detectCommunities(graph, nodeIds, edges.map((edge) => edge.key)) } : {}),

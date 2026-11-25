@@ -174,6 +174,8 @@ const normalizeTrustedListEntries = (value, { preserveEmpty = false } = {}) => p
       value: sanitizeText(item[1] ?? '', { maxLength: 500 }),
     };
   }
+  // A plain text entry is an account or number: as the Service reads it.
+  if (typeof item === 'string' || typeof item === 'number') return { key: 'CALLING_NO', value: sanitizeText(String(item), { maxLength: 500 }), name: '' };
   if (!item || typeof item !== 'object') return { key: '', value: '', name: '' };
   if (['key', 'value', 'name', 'data'].some((field) => Object.prototype.hasOwnProperty.call(item, field))) {
     return {
@@ -182,10 +184,11 @@ const normalizeTrustedListEntries = (value, { preserveEmpty = false } = {}) => p
       category: item.category,
       pass_through: item.pass_through,
       name: item.name || '',
+      ...(item.reason ? { reason: item.reason } : {}),
     };
   }
   const validEntry = Object.entries(item).find(([entryKey, entryValue]) => (
-    !['category', 'pass_through', 'name'].includes(entryKey) && ['string', 'number', 'boolean'].includes(typeof entryValue)
+    !['category', 'pass_through', 'name', 'reason'].includes(entryKey) && ['string', 'number', 'boolean'].includes(typeof entryValue)
   ));
   if (!validEntry) return { key: '', value: '', category: item.category, pass_through: item.pass_through, name: item.name || '' };
   return {
@@ -208,6 +211,7 @@ export const normalizeClassifiedEntityEntries = (trustedValue, riskValue, { valu
       category: item?.category ? String(item.category) : 'Trusted',
       pass_through: isTrue(item?.pass_through),
       name: item?.name ? String(item.name) : '',
+      ...(item?.reason ? { reason: sanitizeText(item.reason, { maxLength: 500 }) } : {}),
     })).filter((item) => preserveEmpty || item.key !== '' || item.value !== '');
   }
   const tag = (entries, fallbackCategory) => entries.map((item) => ({
@@ -228,12 +232,25 @@ export const readClassifiedEntities = (config) => normalizeClassifiedEntityEntri
   { value: config?.classified_entities ?? config?.classifiedEntities, preserveEmpty: true },
 );
 
+// A category that names a risk goes to the risk list, whatever it is called
+// (R2-8, the Service's own words, and WANGIRI, callback scams, which this
+// screen offers): a sanctioned account saved as trusted
+// suppressed rules.
+const RISK_WORDS = /\b(risks?|risky|sanction\w*|peps?|sim[ _-]?box\w*|black[ _-]?list\w*|watch[ _-]?list\w*|fraud\w*|suspicious|terror\w*|launder\w*|scam\w*|mules?|crim(e|es|inal\w*)|wangiri)\b/i;
+const NOT_A_RISK = /\b(low|no)[ _-]?risk\b/i;
+export const isRiskCategory = (category) => {
+  const text = String(category ?? '').replace(/_/g, ' ').trim();
+  return RISK_WORDS.test(text.replace(NOT_A_RISK, ' '));
+};
+
 const splitClassifiedEntityEntries = (entries) => normalizeClassifiedEntityEntries(null, null, { value: entries })
   .reduce((acc, item) => {
     if (!item.key) return acc;
-    const out = { key: item.key, value: item.value, category: item.category || 'Trusted', pass_through: item.pass_through === true };
+    const risk = isRiskCategory(item.category);
+    const out = { key: item.key, value: item.value, category: item.category || 'Trusted', pass_through: !risk && item.pass_through === true };
     if (item.name) out.name = item.name;
-    acc[item.category === 'Risk' ? 'risk_entities' : 'trusted_entities'].push(out);
+    if (item.reason) out.reason = item.reason;
+    acc[risk ? 'risk_entities' : 'trusted_entities'].push(out);
     return acc;
   }, { trusted_entities: [], risk_entities: [] });
 
@@ -325,6 +342,12 @@ export const preserveDomainRegistry = (prev, next) => {
 
 // Body for { id: 'save', configuration }: secrets that are still masked, secret
 // refs and the backend-owned domain registry are stripped.
+// What only an administrator (users:manage) may save (R2-18): keys named like
+// secrets, and the entity lists. Left out, the Service keeps its own.
+const ADMIN_KEYS = /password|secret|token|credential|authorization|x-api-key/i;
+const ADMIN_LISTS = ['trusted_entities', 'risk_entities', 'trusted_list', 'trusted_catalog'];
+export const withoutAdminKeys = (payload) => Object.fromEntries(Object.entries(payload).filter(([key]) => !ADMIN_KEYS.test(key) && !ADMIN_LISTS.includes(key)));
+
 export const buildConfigurationSavePayload = (configuration) => {
   const { value: _value, active_tool_password_clear: clearToolPassword, ...rest } = parseConfigurationValue(configuration);
   CONFIG_SECRET_FIELD_KEYS.forEach((key) => {

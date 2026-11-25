@@ -232,8 +232,6 @@ export const defaultSourceState = {
     preparing: '',
     streamStatus: STREAM_STATUSES.IDLE,
     streamLogFile: '',
-    realtimeConfigSavedFor: '',
-    realtimeConfigMessage: '',
   },
   realtime: {
     step: 'connect',
@@ -263,8 +261,6 @@ export const defaultSourceState = {
     preparing: '',
     streamStatus: STREAM_STATUSES.IDLE,
     streamLogFile: '',
-    realtimeConfigSavedFor: '',
-    realtimeConfigMessage: '',
   },
 };
 
@@ -460,6 +456,8 @@ export const STALE_DATAFRAME_PATCH = Object.freeze({
   dataframeInfo: null,
   dataframeFilter: null,
   dataframeMessage: '',
+  dataframeDomain: '',
+  dataframeMapping: '',
 });
 
 export const canStream = (state) => {

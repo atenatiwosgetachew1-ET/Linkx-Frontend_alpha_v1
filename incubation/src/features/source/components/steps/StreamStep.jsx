@@ -4,7 +4,8 @@ import { formatLogTimestamp, formatStreamLog, STREAM_STATUSES } from '../../lib/
 import { StatusPill } from '../sourceUi.jsx';
 import LogLines from '../../../../shared/logs/LogLines.jsx';
 
-export function StreamStep({ state, sessionId, logLines = [], validationMessage }) {
+// keepRunning: the run's "Keep running while I'm away" option.
+export function StreamStep({ state, sessionId, logLines = [], validationMessage, keepRunning = null }) {
   const isLive = state.streamStatus === STREAM_STATUSES.RUNNING;
   // Hot while the backend is ingesting (red dot), passive once it completed
   // (green dot); other states keep the neutral title.
@@ -81,6 +82,7 @@ export function StreamStep({ state, sessionId, logLines = [], validationMessage 
             emptyText="Session log will appear here once the analysis starts."
           />
         </div>
+        {keepRunning}
         {validationMessage ? <p className="source_window_validation" role="alert">{validationMessage}</p> : null}
       </section>
     </div>

@@ -14,8 +14,12 @@ const USERS = [
   { id: 2, username: 'vic', display_name: 'Vic Viewer', roles: ['viewer'], permissions: [], is_active: false },
 ];
 
-const renderUsers = ({ users = USERS, actor = { id: 9, username: 'boss' } } = {}) => {
-  const apiFetch = vi.fn(async (url, options) => (options?.method === 'POST' ? { id: 3 } : users));
+const RULES = { roles: { permissions: { viewer: ['graph:read', 'session:read'], analyst: ['graph:read', 'graph:create'] } } };
+const renderUsers = ({ users = USERS, actor = { id: 9, username: 'boss' }, rules = RULES } = {}) => {
+  const apiFetch = vi.fn(async (url, options) => {
+    if (url === '/auth/admin/user-rules') return rules;
+    return options?.method === 'POST' ? { id: 3 } : users;
+  });
   render(
     <div className="settings_window_workspace">
       <UsersPanel apiFetch={apiFetch} canManageUsers canManageSuperusers={false} currentActor={actor} onNotice={vi.fn()} requestConfirmation={vi.fn()} />
@@ -67,7 +71,7 @@ describe('UsersPanel', () => {
     await userEvent.click(within(modify).getByRole('button', { name: 'Update user' }));
     const patch = apiFetch.mock.calls.find(([, options]) => options?.method === 'PATCH');
     expect(patch[0]).toBe('/auth/admin/users/2');
-    expect(patch[1].body).toEqual({ display_name: 'Vic Viewer II', roles: ['viewer'], permissions: [], is_active: false });
+    expect(patch[1].body).toEqual({ display_name: 'Vic Viewer II', roles: ['viewer'], is_active: false });
     back = await screen.findByRole('dialog', { name: 'Existing users' });
     expect(within(back).getByRole('radio', { name: 'Inactive' })).toBeChecked();
     await userEvent.keyboard('{Escape}');
@@ -100,27 +104,23 @@ describe('UsersPanel', () => {
     // locked without superuser:manage.
     expect(dialog).toHaveTextContent('Step 2 of 2');
     const levels = within(dialog).getByRole('radiogroup', { name: 'Access level' });
-    expect(within(levels).getAllByRole('radio').map((radio) => radio.closest('label').querySelector('strong').textContent)).toEqual(['Viewer', 'Analyst', 'Admin', 'Superuser']);
+    expect(within(levels).getAllByRole('radio').map((radio) => radio.closest('label').querySelector('strong').textContent)).toEqual(['Viewer', 'Analyst', 'Manager', 'Admin', 'Superuser']);
     expect(within(levels).getByRole('radio', { name: /Analyst/ })).toBeChecked();
     expect(within(levels).getByRole('radio', { name: /Admin/ })).toBeDisabled();
     expect(within(levels).getByRole('radio', { name: /Superuser/ })).toBeDisabled();
     await userEvent.click(within(levels).getByRole('radio', { name: /Viewer/ }));
-    // The level is enough to create the account; the privileges step is
-    // optional and entered on purpose.
+    // The level is enough to create the account.
     expect(within(dialog).getByRole('button', { name: 'Create user' })).toBeInTheDocument();
     expect(within(dialog).queryByRole('button', { name: 'Next' })).not.toBeInTheDocument();
     await userEvent.click(within(dialog).getByRole('button', { name: /Privileges/ }));
 
-    // The privileges open in a popup of their own: the level's, adjustable.
+    // The privileges open in a popup of their own: the role's, as the Service
+    // says them, read-only (B-33).
     const privileges = screen.getByRole('dialog', { name: 'Privileges' });
     expect(within(privileges).getByRole('switch', { name: 'graph:read' })).toBeChecked();
     expect(within(privileges).getByRole('switch', { name: 'graph:create' })).not.toBeChecked();
     await userEvent.click(within(privileges).getByRole('switch', { name: 'graph:create' }));
-    // Its reset puts the level's privileges back.
-    await userEvent.click(within(privileges).getByRole('button', { name: 'Reset to the level’s' }));
     expect(within(privileges).getByRole('switch', { name: 'graph:create' })).not.toBeChecked();
-    await userEvent.click(within(privileges).getByRole('switch', { name: 'graph:create' }));
-    // Done closes it and keeps what was chosen with the form.
     await userEvent.click(within(privileges).getByRole('button', { name: 'Done' }));
     expect(screen.queryByRole('dialog', { name: 'Privileges' })).not.toBeInTheDocument();
     expect(dialog).toHaveTextContent('Step 2 of 2');
@@ -130,13 +130,12 @@ describe('UsersPanel', () => {
     expect(post?.[0]).toBe('/auth/admin/users');
     expect(post[1].body.username).toBe('newbie');
     expect(post[1].body.roles).toEqual(['viewer']);
-    expect(post[1].body.permissions).toEqual(['config:read', 'graph:create', 'graph:read', 'reports:read', 'session:create', 'session:read']);
+    expect(post[1].body).not.toHaveProperty('permissions');
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
-  it('grants only what the signed-in account holds (B-1); others are locked', async () => {
-    const actor = { id: 9, username: 'boss', permissions: ['users:manage', 'graph:read', 'session:read'] };
-    const { apiFetch } = renderUsers({ actor });
+  it('never guesses what a role gives', async () => {
+    renderUsers({ rules: {} });
     await userEvent.click(screen.getByRole('button', { name: /Create user/ }));
     const dialog = screen.getByRole('dialog', { name: 'Create user' });
     await userEvent.type(within(dialog).getByLabelText(/^Username/), 'newbie');
@@ -144,15 +143,7 @@ describe('UsersPanel', () => {
     await userEvent.type(within(dialog).getByLabelText(/^Confirm password/), 'Str0ng!Passw0rd#2026');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Next' }));
     await userEvent.click(within(dialog).getByRole('button', { name: /Privileges/ }));
-    const privileges = screen.getByRole('dialog', { name: 'Privileges' });
-    const create = within(privileges).getByRole('switch', { name: 'graph:create' });
-    expect(create).toHaveAttribute('aria-disabled', 'true');
-    await userEvent.click(create);
-    expect(create).not.toBeChecked();
-    await userEvent.click(within(privileges).getByRole('button', { name: 'Done' }));
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Create user' }));
-    const post = apiFetch.mock.calls.find(([, options]) => options?.method === 'POST');
-    expect(post[1].body.permissions).toEqual(['graph:read', 'session:read']);
+    expect(screen.getByRole('dialog', { name: 'Privileges' })).toHaveTextContent('has not said which privileges');
   });
 
   it('keeps an empty display name empty, and locks admins without superuser:manage', async () => {
@@ -167,6 +158,40 @@ describe('UsersPanel', () => {
     expect(within(list).getByRole('switch', { name: 'Deactivate adm' })).toBeDisabled();
     await userEvent.click(within(list).getByRole('switch', { name: 'Deactivate nodn' }));
     const patch = apiFetch.mock.calls.find(([, options]) => options?.method === 'PATCH');
-    expect(patch[1].body).toEqual({ display_name: '', roles: ['analyst'], permissions: [], is_active: false });
+    expect(patch[1].body).toEqual({ display_name: '', roles: ['analyst'], is_active: false });
+  });
+
+  const openLevel = async (username, options = {}) => {
+    const rendered = renderUsers(options);
+    await userEvent.click(screen.getByRole('button', { name: /Existing users/ }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Edit ' + username }));
+    const dialog = screen.getByRole('dialog', { name: 'Modify User' });
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Next' }));
+    return { ...rendered, dialog, levels: within(dialog).getByRole('radiogroup', { name: 'Access level' }) };
+  };
+  const patched = (apiFetch) => apiFetch.mock.calls.find(([, options]) => options?.method === 'PATCH')[1].body;
+
+  it('an existing account’s level can be changed, within what this account may give; its other roles stay', async () => {
+    const users = [{ id: 7, username: 'sam', roles: ['viewer', 'auditor'], is_active: true }];
+    const { apiFetch, dialog, levels } = await openLevel('sam', { users });
+    expect(within(levels).getByRole('radio', { name: /Viewer/ })).toBeChecked();
+    expect(within(levels).getByRole('radio', { name: /Admin/ })).toBeDisabled();
+    await userEvent.click(within(levels).getByRole('radio', { name: /Analyst/ }));
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Update user' }));
+    expect(patched(apiFetch)).toEqual({ display_name: '', roles: ['analyst', 'auditor'], is_active: true });
+  });
+
+  it('an unchanged level sends the roles exactly as saved', async () => {
+    const users = [{ id: 7, username: 'sam', roles: ['viewer', 'analyst', 'auditor'], is_active: true }];
+    const { apiFetch, dialog } = await openLevel('sam', { users });
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Update user' }));
+    expect(patched(apiFetch).roles).toEqual(['viewer', 'analyst', 'auditor']);
+  });
+
+  it('one’s own level cannot be changed', async () => {
+    const users = [{ id: 9, username: 'boss', roles: ['analyst'], is_active: true }];
+    const { levels } = await openLevel('boss', { users });
+    within(levels).getAllByRole('radio').forEach((radio) => expect(radio).toBeDisabled());
+    expect(within(levels).getByRole('radio', { name: /Analyst/ })).toBeChecked();
   });
 });

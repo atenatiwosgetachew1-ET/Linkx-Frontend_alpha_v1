@@ -364,12 +364,6 @@
   background: #202F3F;
 }
 
-[data-theme="nbe-daylight"] .workspace_assistant_summary_key_finding {
-  border: 1px solid #DCE4EE;
-  border-left: 3px solid #AE874F;
-  background: #F4F7FA;
-}
-
 [data-theme="nbe-daylight"] .workspace_panel_disabled_icon {
   background: #EFEFEF;
 }
@@ -552,6 +546,7 @@
   --settings-theme-studio-token-row-overridden-shadow: transparent;
   --settings-theme-studio-token-row-overridden-border: #e8e8e8;
   --settings-theme-studio-token-row-bg: #f4f7fa;
+  --settings-theme-studio-search-input-border: #e8e8e8;
   --settings-theme-studio-search-hint-text: #ae874f;
   --settings-theme-studio-cat-badge-text: #ffffff;
   --settings-theme-studio-category-tabs-border: #ffffff;

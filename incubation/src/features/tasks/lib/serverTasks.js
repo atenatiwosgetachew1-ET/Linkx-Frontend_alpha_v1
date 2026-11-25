@@ -2,7 +2,8 @@
 // and when the Tasks window changes scope; task_updated keeps it live.
 
 import { listTasks } from '../../../services/tasksApi.js';
-import { applyServerTask, dropRemoteTasks } from './taskRegistry.js';
+import { endStreamRequest } from '../../../services/sourceApi.js';
+import { applyServerTask, attachOwnRuns, dropRemoteTasks } from './taskRegistry.js';
 
 let lastLoad = null;
 let current = { scope: 'mine', archived: false };
@@ -23,6 +24,7 @@ export const loadServerTasks = async (apiFetch, { scope = 'mine', archived = fal
     // Oldest first, so the newest ends on top.
     [...tasks].reverse().forEach(applyServerTask);
     dropRemoteTasks(tasks.map((task) => task.task_id));
+    attachOwnRuns((task) => endStreamRequest(apiFetch, { sourceSessionId: task.sourceSessionId, logFile: task.logFile }));
     return { ok: true, count };
   } catch (error) {
     if (error?.name === 'AbortError') return { ok: false, count: 0 };

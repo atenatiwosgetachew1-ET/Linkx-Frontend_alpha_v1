@@ -49,6 +49,8 @@ const iso = (value) => {
 };
 const flagsOf = (value) => {
   if (!value || typeof value !== 'object') return {};
+  // A list of rule names has no counts: at least one each.
+  if (Array.isArray(value)) return Object.fromEntries(value.filter((rule) => typeof rule === 'string' && rule.trim()).map((rule) => [text(rule.trim(), 80), 1]));
   return Object.fromEntries(Object.entries(value).filter(([, count]) => Number.isFinite(Number(count))).map(([rule, count]) => [text(rule, 80), Number(count)]));
 };
 
@@ -198,6 +200,7 @@ export const feedbackPayload = (alert, draft) => ({
     analyst_comments: String(draft.comments || '').trim().slice(0, FEEDBACK_LIMITS.comments),
   },
   include: { graph: Boolean(draft.include?.graph), table: Boolean(draft.include?.table), charts: Boolean(draft.include?.charts), summary: true },
+  // The counts are the whole graph's, as the findings are.
   graph: draft.include?.graph ? { image: feedbackImage(draft.graphImage), nodes: draft.counts?.nodes ?? null, links: draft.counts?.links ?? null } : null,
   tables: draft.include?.table ? (draft.tables || []).slice(0, FEEDBACK_LIMITS.tables).map((table) => ({
     title: table.title, source: table.source, columns: table.columns.map((column) => column.label), rows: (table.rows || []).slice(0, FEEDBACK_LIMITS.rows), total: table.total,

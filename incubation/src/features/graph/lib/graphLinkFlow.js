@@ -46,9 +46,14 @@ export const isRunGraphAvailable = (task, windows = []) => {
       && String(item.sourceSessionId || '') === String(task.sourceSessionId));
 };
 
+// The Service keeps the finished run's graph (24 hours, by task id; B-37): it
+// needs no window, session or Neo4j login, and a second run does not touch it.
+export const isRunGraphKept = (task, now = Date.now()) => Boolean(task?.serverId) && !isTaskActive(task) && task.graphSaved === true && !(task.graphExpiresAt && task.graphExpiresAt <= now);
+
 // Why a run's graph can no longer be had ('' when it can).
 export const runGraphMissingReason = (task, windows = []) => {
-  if (!task || isRunGraphAvailable(task, windows)) return '';
+  if (!task || isRunGraphKept(task) || isRunGraphAvailable(task, windows)) return '';
+  if (task.graphSaved && task.graphExpiresAt) return 'The Service kept its graph for 24 hours, and no longer has it.';
   if (task.remote) return 'This run was not made in this page, so its graph can no longer be reached.';
   if (task.windowId && getLatestTaskForWindow(task.windowId)?.id !== task.id) return 'Its Source window has run again since, so its graph can no longer be told apart.';
   if (task.background) return 'Its session was released, so its graph can no longer be reached.';
@@ -93,8 +98,14 @@ export const linkGraphToSession = async ({ apiFetch, updateWindowMetadata, notif
   try {
     const data = await linkGraphWindow(apiFetch, { sourceSessionId: sessionId, graphWindowId });
     if (!isSuccessResponse(data)) throw new Error(data?.message || 'link rejected');
+    // A graph loaded for something else is not this session's (a graph the
+    // analyst started here is theirs, and stays until a relationship loads).
+    const store = getGraphStore(graphWindowId);
+    store.abortFetch();
+    if (['relationship', 'evidence', 'import', 'run'].includes(store.getStatus().source)) store.clear();
+    store.setStatus({ state: 'idle' });
     updateWindowMetadata(graphWindowId, {
-      metadata: { graphLinking: null, graphLinkSource: sessionId, graphLinkAction: action || null, graphRelationship: null, evidence: null },
+      metadata: { graphLinking: null, graphLinkSource: sessionId, graphLinkedAt: Date.now(), graphLinkAction: action || null, graphRelationship: null, graphImported: null, graphTaskId: null, evidence: null },
     });
     notify?.({ title: 'Graph linked', message: `Linked to session ${sessionId}.`, level: 'success' });
     return true;

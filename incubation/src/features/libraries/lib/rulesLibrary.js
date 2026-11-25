@@ -75,4 +75,5 @@ export const buildRuleUploadFields = (sessionConfiguration) => {
   return fields;
 };
 
-export const RULE_TEMPLATE_PATH = 'temp_rules/Linkx_Rules_Template.zip';
+export const RULE_TEMPLATE_PATH = '/api/v1/rules/template';
+export const RULE_TEMPLATE_FILE = 'Linkx_Rules_Template.zip';

@@ -22,7 +22,7 @@ describe('graphApi', () => {
       : { status: 'completed', result: { nodes: [{ id: 1 }, { id: 2 }], edges: [{ from: 1, to: 2 }] } }));
     const graph = await fetchGraph(apiFetch, {}, { onQueued });
     expect(onQueued).toHaveBeenCalled();
-    expect(apiFetch).toHaveBeenLastCalledWith('/jobs/j1', expect.anything());
+    expect(apiFetch).toHaveBeenLastCalledWith('/jobs/j1?include_chunks=1&after_event_id=0', expect.anything());
     expect(graph.edges).toHaveLength(1);
   });
 

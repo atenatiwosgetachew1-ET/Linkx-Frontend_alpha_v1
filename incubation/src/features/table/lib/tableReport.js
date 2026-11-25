@@ -6,6 +6,8 @@
 // report: the default tables (the entities and the relationships, flagged
 // ones first, with the columns most worth reading).
 
+import { isThemeLineEdge } from '../../graph/lib/graphAnalysis.js';
+import { parseAmount } from '../../../shared/numbers/values.js';
 import { arrangeColumns, buildLinkRows, buildNodeRows, filterRows, normalizeTableState, sortRows } from './tableRows.js';
 import { getTableDefaults } from './tableDefaults.js';
 
@@ -44,7 +46,7 @@ export const tableAppendix = ({ store, link, tableState, title = 'Table' }) => {
   const graph = store.graph();
   const nodes = state.tab === 'nodes';
   const ids = idsOf(graph, link, state.scope, nodes);
-  const built = nodes ? buildNodeRows(graph, ids, store.getMarkers()) : buildLinkRows(graph, ids, store.getMarkers());
+  const built = nodes ? buildNodeRows(graph, ids, store.getMarkers(), { edgeKeys: idsOf(graph, link, state.scope === 'all' ? 'all' : 'drawn', false) }) : buildLinkRows(graph, ids, store.getMarkers());
   const columns = arrangeColumns(built.columns, state.columns[state.tab]).filter((column) => !column.hidden);
   const filter = state.filter.trim();
   const rows = sortRows(filterRows(built.rows, filter, columns), state.sort[state.tab]);
@@ -64,8 +66,7 @@ const flaggedFirst = (rows, rank) => rows
   .sort((a, b) => (b.flagged - a.flagged) || (b.rank - a.rank) || (a.index - b.index))
   .map((entry) => entry.row);
 const amountOf = (value) => {
-  const parsed = typeof value === 'number' ? value : Number(String(value ?? '').replace(/[,\s]/g, ''));
-  return Number.isFinite(parsed) ? parsed : -Infinity;
+  return parseAmount(value) ?? -Infinity;
 };
 
 // The default tables: the entities (most connected first) and the
@@ -81,7 +82,7 @@ export const defaultTableAppendices = ({ store, link, weightKey = '', timeKey = 
   const drawn = new Set(link.nodeIds || []);
   const neighbours = new Map();
   (link.edgeIds || []).forEach((key) => {
-    if (!graph.hasEdge(key)) return;
+    if (!graph.hasEdge(key) || isThemeLineEdge(graph.getEdgeAttributes(key))) return;
     const a = graph.source(key);
     const b = graph.target(key);
     if (a === b || !drawn.has(a) || !drawn.has(b)) return;

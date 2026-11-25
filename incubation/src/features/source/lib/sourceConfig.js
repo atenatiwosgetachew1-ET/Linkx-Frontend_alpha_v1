@@ -117,6 +117,7 @@ export const resolveSourceDefaults = (configuration) => {
       dateColumn: pickDomainFirst('date_column'),
     },
     dataframe: {
+      activeRule: toStringList(config.active_rule)[0] || '',
       rules: uniq([...toStringList(config.active_rule), ...toStringList(config.rule_names)]),
       builtinRules: toStringList(config.builtin_rules),
       sourceColumn: pickDomainFirst('default_source_col'),

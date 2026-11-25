@@ -20,6 +20,7 @@ import '../styles/features/table.css';
 import '../styles/features/chart.css';
 import '../styles/features/benchmark.css';
 import '../styles/features/window-controls.css';
+import '../styles/features/right-panel.css';
 import { AuthProvider } from '../auth/AuthContext.jsx';
 import { useAuth } from '../auth/useAuth.js';
 import LoginPage from '../auth/LoginPage.jsx';

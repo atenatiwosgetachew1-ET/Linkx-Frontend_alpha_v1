@@ -5,13 +5,14 @@ import { useCan } from '../../../auth/useCan.js';
 import { SOURCE_PERMISSIONS } from '../../../auth/permissions.js';
 import { useSession } from '../../../shared/session/useSession.js';
 import { useNotifications } from '../../../shared/notifications/useNotifications.js';
-import { isRunGraphAvailable, linkGraphToSession, openLinkedGraphWindow, runGraphMissingReason } from '../../graph/lib/graphLinkFlow.js';
+import { isRunGraphAvailable, isRunGraphKept, linkGraphToSession, openLinkedGraphWindow, runGraphMissingReason } from '../../graph/lib/graphLinkFlow.js';
 import { getGraphStore } from '../../graph/lib/graphStore.js';
 import { openAlertGraph } from '../../alerts/lib/alertRuntime.js';
 import { WORKSPACE_WINDOW_TYPES } from '../../../workspace/state/workspaceTypes.js';
 import { formatStreamLog } from '../../source/lib/sourceModel.js';
 import LogLines from '../../../shared/logs/LogLines.jsx';
-import { getStreamLogLines, getStreamRowTally, subscribeStreamLog } from '../../source/lib/streamLogs.js';
+import { formatDomainPillarLabel } from '../../configuration/lib/configModel.js';
+import { disposeStreamLog, getStreamLogLines, getStreamRowTally, plugStreamLog, subscribeStreamLog } from '../../source/lib/streamLogs.js';
 import { formatRowProgress, rowProgress, tallyRowLines } from '../../source/lib/rowProgress.js';
 import {
   TASK_ORIGINS,
@@ -27,6 +28,7 @@ import {
 import { FLAG_STATES, taskFlagVerdict } from '../lib/taskFlags.js';
 import { getServerTaskScope, loadServerTasks } from '../lib/serverTasks.js';
 import KeptSessionsDialog from './KeptSessionsDialog.jsx';
+import UnattendedSwitch from './UnattendedSwitch.jsx';
 import TaskServicePanel from './TaskServicePanel.jsx';
 import {
   TASK_FILTERS,
@@ -37,6 +39,7 @@ import {
   taskLogFileName,
   taskOriginLabel,
   taskStatusLabel,
+  endedText,
 } from '../lib/taskFormat.js';
 
 const EMPTY_LINES = Object.freeze([]);
@@ -100,6 +103,20 @@ function CopyButton({ value, label }) {
     </button>
   );
 }
+
+// How many rows a run's filter kept, as the Service counted them ('' when not said).
+const keptRows = (task) => {
+  const kept = task.filterResult?.kept_rows ?? task.filterResult?.keptRows;
+  const total = task.filterResult?.total_rows ?? task.filterResult?.totalRows;
+  if (!Number.isFinite(Number(kept)) || kept === null || kept === '') return '';
+  return `${formatCount(kept)}${Number.isFinite(Number(total)) && total !== null && total !== '' ? ` of ${formatCount(total)}` : ''} rows analysed`;
+};
+
+// How long the Service keeps the run's graph (B-37).
+const graphNote = (task) => {
+  if (!task.graphSaved || !task.graphExpiresAt) return '';
+  return task.graphExpiresAt > Date.now() ? `Kept until ${formatDateTime(task.graphExpiresAt)}. Save it as evidence to keep it.` : 'No longer kept.';
+};
 
 const FLAG_ICONS = {
   [FLAG_STATES.SUSPICIOUS]: ['M12 3 2 20h20L12 3Z', 'M12 10v4', 'M12 17v.01'],
@@ -338,7 +355,7 @@ function TaskSummary({ task }) {
               {frame ? (
                 <section className="tasks_figures_group" aria-label="Dataframe figures">
                     <dl className="tasks_figures_row" aria-label="Dataframe">
-                    <Figure icon={ICONS.rows} label="Rows" value={formatCount(frame.totalRows)} />
+                    <Figure icon={ICONS.rows} label="Rows" value={formatCount(frame.totalRows)} hint={keptRows(task) || (task.filter?.length ? 'before the filter' : '')} />
                     <Figure
                       icon={ICONS.columns}
                       label="Columns"
@@ -351,8 +368,27 @@ function TaskSummary({ task }) {
               ) : null}
             </div>
             <dl className="tasks_props_tiles">
+              {task.filter?.length ? (
+                <PropTile icon={ICONS.rows} label="Filter">
+                  {task.filter.join(' ')}
+                  {keptRows(task) ? <span className="tasks_props_note"> · {keptRows(task)}</span> : null}
+                </PropTile>
+              ) : null}
+              {task.rulesSkipped?.length ? (
+                <PropTile icon={ICONS.rows} label="Rules that could not run">
+                  {task.rulesSkipped.map(({ rule, fields }) => (fields.length ? `${rule} (no ${fields.join(', ')})` : rule)).join('; ')}
+                </PropTile>
+              ) : null}
+              {task.domain ? <PropTile icon={ICONS.session} label="Domain">{formatDomainPillarLabel(task.domain)}</PropTile> : null}
+              {task.configVersions ? (
+                <PropTile icon={ICONS.tool} label="Settings it ran with">
+                  {Object.entries(task.configVersions).map(([key, version]) => `${key} ${version === null ? 'built-in' : /^\d+$/.test(version) ? `v${version}` : version}`).join(' · ')}
+                </PropTile>
+              ) : null}
+              {task.windowStart && task.windowEnd ? <PropTile icon={ICONS.rows} label="Covers">{`${formatDateTime(task.windowStart)} to ${formatDateTime(task.windowEnd)}`}</PropTile> : null}
+              {graphNote(task) ? <PropTile icon={ICONS.graph} label="Graph">{graphNote(task)}</PropTile> : null}
               <PropTile icon={ICONS.origin} label="Origin">
-                {task.origin === TASK_ORIGINS.QUICK ? 'Quick analysis panel' : task.origin === TASK_ORIGINS.PARENT ? `STR alert ${task.windowTitle || ''}`.trim() : (task.windowTitle || 'Source window')}
+                {task.origin === TASK_ORIGINS.QUICK || task.quick ? 'Quick analysis panel' : task.origin === TASK_ORIGINS.PARENT ? `STR alert ${task.windowTitle || ''}`.trim() : (task.windowTitle || 'Source window')}
                 {task.background ? <span className="tasks_props_note"> · closed</span> : null}
               </PropTile>
               <PropTile icon={ICONS.input} label="Input">{task.input || '—'}</PropTile>
@@ -494,8 +530,23 @@ function TaskLog({ task, lines, isActive }) {
 
 // The task's log: its own lines (quick tasks), the copy taken when its
 // window moved on, or the window's live stream log while the run is current.
+// A run of this user that goes on without this page: its log is followed from
+// here (the Service does not tie it to this browser; R2-19).
+const attachKey = (task) => (task?.remote && task.own && isTaskActive(task) && task.logFile && task.sourceSessionId ? `task-${task.serverId}` : '');
+function useAttachedLog(task) {
+  const { socket } = useSession();
+  const key = attachKey(task);
+  const sessionId = task?.sourceSessionId;
+  const filename = task?.logFile;
+  useEffect(() => {
+    if (!key || !socket) return undefined;
+    plugStreamLog(key, { socket, sessionId, filename });
+    return () => disposeStreamLog(key);
+  }, [key, socket, sessionId, filename]);
+}
 function useTaskLog(task) {
-  const liveWindowId = task && task.origin === TASK_ORIGINS.SOURCE && !task.frozenLog ? task.windowId : '';
+  useAttachedLog(task);
+  const liveWindowId = attachKey(task) || (task && task.origin === TASK_ORIGINS.SOURCE && !task.frozenLog ? task.windowId : '');
   const subscribe = useCallback(
     (listener) => (liveWindowId ? subscribeStreamLog(liveWindowId, listener) : noopSubscribe()),
     [liveWindowId],
@@ -594,7 +645,9 @@ function TaskDetail({ task, now, windows, workspace, dialogHost }) {
   const canTerminate = isActive && canTerminateTask(task.id);
   // Shown while the run's graph can be loaded (analyst decision 2026-11-24);
   // an STR alert's run has its own graph and no Source window.
-  const canShowGraph = task.origin === TASK_ORIGINS.PARENT || isRunGraphAvailable(task, windows);
+  // A finished run's graph the Service keeps (B-37) needs no window or session.
+  const graphKept = isRunGraphKept(task);
+  const canShowGraph = task.origin === TASK_ORIGINS.PARENT || graphKept || isRunGraphAvailable(task, windows);
   const resultsHint = task.hasResults ? '' : 'Available once the analysis has started on the Service.';
   // Streams: only backend lines carry a verdict; quick tasks: their own log.
   const verdict = useMemo(
@@ -612,6 +665,7 @@ function TaskDetail({ task, now, windows, workspace, dialogHost }) {
     const existing = windows.find((windowItem) => windowItem.type === type && windowItem.metadata?.taskId === task.id);
     if (existing) {
       workspace.focusWindow(existing.id);
+      if (existing.metadata?.graphTaskId) return;
       if (type !== WORKSPACE_WINDOW_TYPES.GRAPH || !isRunGraphAvailable(task, windows)) return;
       // Opened while the run was going and still empty: it loads now. A link
       // that failed is tried again.
@@ -620,6 +674,14 @@ function TaskDetail({ task, now, windows, workspace, dialogHost }) {
       if (!graphLinkSource && !graphLinking && getGraphStore(existing.id).getSnapshot().nodes === 0) {
         linkGraphToSession({ apiFetch, updateWindowMetadata: workspace.updateWindowMetadata, notify, graphWindowId: existing.id, sourceSessionId: task.sourceSessionId, action: task.action, finishedRun: !isActive });
       }
+      return;
+    }
+    if (type === WORKSPACE_WINDOW_TYPES.GRAPH && graphKept) {
+      workspace.openWindow(type, {
+        title: 'Graph',
+        customTitle: `${task.title} #${task.number}`,
+        metadata: { taskId: task.id, graphTaskId: task.serverId },
+      });
       return;
     }
     if (type === WORKSPACE_WINDOW_TYPES.GRAPH && isRunGraphAvailable(task, windows)) {
@@ -660,16 +722,21 @@ function TaskDetail({ task, now, windows, workspace, dialogHost }) {
     }
   };
 
-  // "In progress (400/10,000)": rows analysed / rows to analyse, from the log.
+  // "In progress (400/10,000)": rows ingested / rows to ingest, from the
+  // Service, else the log.
   // A live window log keeps its own tally (it outlives the line cap); a
   // copied or own log is counted from its lines.
   const rowCount = useMemo(() => {
     if (!isActive) return '';
+    // The Service's own count (B-32) when it has one.
+    if (Number.isFinite(task.rowsDone)) return formatRowProgress({ done: task.rowsDone, total: task.rowsTotal ?? null });
     const live = task.origin === TASK_ORIGINS.SOURCE && !task.frozenLog && task.windowId ? getStreamRowTally(task.windowId) : null;
     return formatRowProgress(rowProgress(live || tallyRowLines(lines), task.dataframe?.totalRows));
   }, [isActive, task, lines]);
-  const subtitle = task.statusText || task.message
-    || (isActive ? `In progress${rowCount ? ` (${rowCount})` : ''}` : `Finished ${formatDateTime(task.endedAt)}`);
+  // The rows are in; the full analysis goes on until the Service ends it.
+  const analysing = isActive && (Number.isFinite(task.rowsTotal) && task.rowsTotal > 0 && task.rowsDone >= task.rowsTotal);
+  const subtitle = task.statusText || endedText(task)
+    || (isActive && task.rowsIn ? 'Finishing' : isActive ? (analysing ? `Analysing${rowCount ? ` (${rowCount} rows in)` : ''}` : `In progress${rowCount ? ` (${rowCount})` : ''}`) : `Finished ${formatDateTime(task.endedAt)}`);
 
   return (
     <section className="tasks_detail" aria-label={`Task ${task.title} #${task.number}`}>
@@ -756,6 +823,8 @@ function TaskDetail({ task, now, windows, workspace, dialogHost }) {
           <span style={typeof task.progress === 'number' ? { width: `${task.progress}%` } : undefined} />
         </span>
       )}
+
+      <UnattendedSwitch taskId={task.id} />
 
       <FlagVerdict verdict={verdict} />
 

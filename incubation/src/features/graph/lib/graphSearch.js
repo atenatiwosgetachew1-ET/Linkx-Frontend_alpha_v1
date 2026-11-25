@@ -5,43 +5,36 @@
 // Keyword forms: "10-20" range, ">= 100" / "<5" / "=3" comparisons, "42"
 // exact number, anything else a case-insensitive "contains".
 
-// GA:1032
-export const toFiniteNumber = (value) => {
-  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
-  if (typeof value === 'string') {
-    const trimmed = value.trim();
-    if (!trimmed) return null;
-    const numeric = Number(trimmed.replace(/,/g, ''));
-    return Number.isFinite(numeric) ? numeric : null;
-  }
-  return null;
-};
+import { looksLikeId, parseAmount, sameValue } from '../../../shared/numbers/values.js';
 
-const parseNumericLiteral = (value) => {
-  const normalized = String(value).trim().replace(/,/g, '');
-  if (!normalized) return null;
-  const numeric = Number(normalized);
-  return Number.isFinite(numeric) ? numeric : null;
-};
+// GA:1032, by the shared rules.
+export const toFiniteNumber = parseAmount;
+
+// A typed id ("0012345", a 16-digit account) is text, not an amount.
+const parseNumericLiteral = (value) => (looksLikeId(value) ? null : parseAmount(value));
+const LITERAL = '-?\\d[\\d,]*(?:\\.\\d+)?';
+const RANGE = new RegExp(`^(${LITERAL})\\s*-\\s*(${LITERAL})$`);
+const COMPARE = new RegExp(`^(>=|<=|>|<|=|==)\\s*(${LITERAL})$`);
+const EXACT = new RegExp(`^${LITERAL}$`);
 
 export const parseSearchExpression = (rawKeyword) => {
   const raw = rawKeyword == null ? '' : String(rawKeyword).trim();
   if (!raw) return { mode: 'text', textLower: '' };
-  const range = raw.match(/^(-?\d+(?:[.,]\d+)?)\s*-\s*(-?\d+(?:[.,]\d+)?)$/);
+  const range = raw.match(RANGE);
   if (range) {
     const left = parseNumericLiteral(range[1]);
     const right = parseNumericLiteral(range[2]);
     if (left != null && right != null) return { mode: 'range', min: Math.min(left, right), max: Math.max(left, right) };
   }
-  const compare = raw.match(/^(>=|<=|>|<|=|==)\s*(-?\d+(?:[.,]\d+)?)$/);
+  const compare = raw.match(COMPARE);
   if (compare) {
     const target = parseNumericLiteral(compare[2]);
     if (target != null) return { mode: 'compare', op: compare[1] === '==' ? '=' : compare[1], target };
   }
-  const exact = raw.match(/^-?\d+(?:[.,]\d+)?$/);
+  const exact = raw.match(EXACT);
   if (exact) {
     const target = parseNumericLiteral(exact[0]);
-    if (target != null) return { mode: 'number_exact', target };
+    if (target != null) return { mode: 'number_exact', target, text: raw };
   }
   return { mode: 'text', textLower: raw.toLowerCase() };
 };
@@ -57,9 +50,9 @@ export const valueMatchesSearchExpression = (value, expression) => {
     if (expression.op === '>=') return numeric >= expression.target;
     if (expression.op === '<') return numeric < expression.target;
     if (expression.op === '<=') return numeric <= expression.target;
-    return numeric === expression.target;
+    return sameValue(value, expression.target);
   }
-  if (expression.mode === 'number_exact') return numeric === expression.target;
+  if (expression.mode === 'number_exact') return sameValue(value, expression.text ?? expression.target);
   return false;
 };
 
@@ -67,14 +60,16 @@ const SKIPPED_KEYS = new Set(['x', 'y', 'vx', 'vy', 'index']);
 
 // Production graphSearch: the matches (and, with "include linked", their
 // neighbours; not for range / comparison searches) REPLACE the visible view,
-// sliced by the current range. Matching stops at max(range max, 25) × 2
-// (× 4 with linked expansion). `neighbours(id)` returns an iterable of ids.
-export const searchNodeIds = ({ nodes, neighbours, keyword, includeLinked = false, keys = [], min = 0, max = 25 }) => {
+// sliced by the current range. At most max(range max, 25) × 2 are kept
+// (× 4 with linked expansion); all matches are counted. `neighbours(id)` returns an iterable of ids.
+// -> { ids: the shown ones, matches: how many match in all }
+export const searchNodes = ({ nodes, neighbours, keyword, includeLinked = false, keys = [], min = 0, max = 25 }) => {
   const expression = parseSearchExpression(keyword);
   const linked = Boolean(includeLinked) && expression.mode !== 'compare' && expression.mode !== 'range';
   const selectedKeys = [...new Set((keys || []).map((key) => String(key || '').trim()).filter(Boolean))];
   const cap = Math.max(max, 25) * (linked ? 4 : 2);
   const matched = [];
+  let matches = 0;
   for (const [id, node] of nodes) {
     let isMatch = false;
     if (selectedKeys.length) {
@@ -83,8 +78,8 @@ export const searchNodeIds = ({ nodes, neighbours, keyword, includeLinked = fals
       isMatch = Object.entries(node).some(([key, value]) => !key.startsWith('_') && !SKIPPED_KEYS.has(key) && valueMatchesSearchExpression(value, expression));
     }
     if (isMatch) {
-      matched.push(id);
-      if (matched.length >= cap) break;
+      matches += 1;
+      if (matched.length < cap) matched.push(id);
     }
   }
   let result = matched;
@@ -99,5 +94,6 @@ export const searchNodeIds = ({ nodes, neighbours, keyword, includeLinked = fals
     }
     result = [...expanded];
   }
-  return result.slice(min, Math.min(max, result.length));
+  return { ids: result.slice(min, Math.min(max, result.length)), matches };
 };
+export const searchNodeIds = (options) => searchNodes(options).ids;

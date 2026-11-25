@@ -1,3 +1,4 @@
+import { formatFigure } from '../../../shared/numbers/values.js';
 // The Chart window's pictures (Export ▸ Take snaps, Print charts; analyst
 // decisions 2026-11-18).
 //
@@ -141,10 +142,7 @@ export const chartCell = async ({ engine, live, option: given = null, title, lev
   return cell.canvas.toDataURL('image/png');
 };
 
-const figureText = (value) => {
-  if (typeof value !== 'number' || !Number.isFinite(value)) return '—';
-  return Number.isInteger(value) ? value.toLocaleString('en-GB') : Number(value.toPrecision(4)).toLocaleString('en-GB', { maximumFractionDigits: 6 });
-};
+const figureText = formatFigure;
 
 // A figures card (Global Metrics, Cohesion) as a cell: its label / value
 // items in two columns, fitted to the cell. -> a PNG data URL, or null.

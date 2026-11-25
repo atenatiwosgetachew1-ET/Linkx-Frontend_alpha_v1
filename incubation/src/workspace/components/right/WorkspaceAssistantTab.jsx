@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { Masthead, PageHero, Pill } from '../../../features/settings/components/SettingsPage.jsx';
 import { useNotifications } from '../../../shared/notifications/useNotifications.js';
 
 const defaultMessages = [
@@ -119,8 +120,8 @@ function ChevronDownIcon() {
   );
 }
 
-export default function WorkspaceAssistantTab({ displayName, logoSrc }) {
-  const [message, setMessage] = useState('');
+export default function WorkspaceAssistantTab({ displayName, logoSrc, initialMessage = '' }) {
+  const [message, setMessage] = useState(initialMessage);
   const [chatMessages, setChatMessages] = useState(defaultMessages);
   const [isAssistantResponding, setIsAssistantResponding] = useState(false);
   const [showScrollBottomBtn, setShowScrollBottomBtn] = useState(false);
@@ -417,17 +418,14 @@ export default function WorkspaceAssistantTab({ displayName, logoSrc }) {
   };
 
   return (
-    <div className="workspace_assistant_tab_wrapper">
-      <div className="workspace_assistant_header">
-        <div className="workspace_assistant_title_group">
-          <span
-            className="workspace_assistant_status_dot linkx_tooltip_anchor"
-            data-tooltip="Co-analyst Active"
-            aria-label="Co-analyst Active"
-          />
-          <h3>Linkx AI Co-analyst</h3>
-        </div>
-        <div className="workspace_assistant_actions">
+    <div className="workspace_assistant_tab_wrapper settings_page right_page">
+      <Masthead>
+        <PageHero
+          eyebrow="Assistant"
+          title="Linkx AI Co-analyst"
+          pill={<Pill tone="neutral">Preview</Pill>}
+          meta="Sample replies only: they are not read from your graph."
+        >
           {/* 1. Language Button (disabled) */}
           <button
             type="button"
@@ -449,8 +447,8 @@ export default function WorkspaceAssistantTab({ displayName, logoSrc }) {
           >
             <ResetIcon />
           </button>
-        </div>
-      </div>
+        </PageHero>
+      </Masthead>
 
       {/* Outer viewport container for chat body + floating scroll overlay */}
       <div className="workspace_context_chat_body_container">

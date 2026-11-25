@@ -207,6 +207,12 @@
   --right-tab-active-text: #131e2a;
   --right-tab-active-border: #FCC676;
   --right-section-title-color: #ae874f;
+  /* (Theme Studio search: as it was when it read the panel's colours.) */
+  --settings-theme-studio-search-input-bg: #FFFFFF;
+  --settings-theme-studio-search-input-border: rgba(174, 135, 79, 0.25);
+  --settings-theme-studio-search-input-text: #131e2a;
+  --settings-theme-studio-search-input-focus-border: #FCC676;
+  --settings-theme-studio-search-hint-text: #7f5523;
   --right-card-bg: #FFFFFF;
   --right-card-border: rgba(174, 135, 79, 0.25);
   --right-label-color: #7f5523;

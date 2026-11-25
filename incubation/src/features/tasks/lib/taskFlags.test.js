@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { TASK_STATUSES } from './taskRegistry.js';
+import { TASK_STATUSES, applyServerTask, getTask, resetTasks } from './taskRegistry.js';
 import { FLAG_STATES, scanFlagLines, taskFlagVerdict } from './taskFlags.js';
 
 const backend = (...messages) => messages.map((message) => ({ message, source: 'backend' }));
@@ -111,15 +111,65 @@ describe('taskFlagVerdict', () => {
     expect(taskFlagVerdict(completed, backend('flagged_accounts: 3')).detail).toBe('3 flagged');
   });
 
-  it('is pending while running, clean when finished without flags, undetermined when stopped', () => {
+  it('is pending while running, and never clean from silence', () => {
     expect(taskFlagVerdict(running, []).state).toBe(FLAG_STATES.PENDING);
-    expect(taskFlagVerdict(completed, []).state).toBe(FLAG_STATES.CLEAN);
+    expect(taskFlagVerdict(completed, []).state).toBe(FLAG_STATES.UNDETERMINED);
+    expect(taskFlagVerdict(completed, backend('No flags found')).state).toBe(FLAG_STATES.UNDETERMINED);
     expect(taskFlagVerdict({ status: TASK_STATUSES.TERMINATED }, []).state).toBe(FLAG_STATES.UNDETERMINED);
-    expect(taskFlagVerdict({ status: TASK_STATUSES.TERMINATED }, backend('No flags found')).state).toBe(FLAG_STATES.CLEAN);
+    expect(taskFlagVerdict({ status: TASK_STATUSES.TERMINATED }, backend('No flags found')).state).toBe(FLAG_STATES.UNDETERMINED);
   });
 
   it('reads all lines of quick-panel tasks', () => {
     const verdict = taskFlagVerdict(completed, [{ message: 'Analysis complete. Flagged rules: A, B' }], { backendOnly: false });
     expect(verdict.flags.map((flag) => flag.name)).toEqual(['A', 'B']);
   });
+});
+
+describe('"Clean" needs proof (audit A1)', () => {
+  const verdictOf = (raw) => {
+    resetTasks();
+    return taskFlagVerdict(getTask(applyServerTask({ task_id: 'T', origin: 'analyst', status: 'completed', ...raw })), []).state;
+  };
+  it.each([
+    [{ verdict: 'suspicious', flags: {} }, FLAG_STATES.SUSPICIOUS],
+    [{ verdict: 'suspicious', flags: null }, FLAG_STATES.SUSPICIOUS],
+    [{ verdict: 'suspicious', flags: ['SMURFING'] }, FLAG_STATES.SUSPICIOUS],
+    [{ verdict: null, flags: ['SMURFING'] }, FLAG_STATES.SUSPICIOUS],
+    [{ verdict: null }, FLAG_STATES.UNDETERMINED],
+    [{ verdict: 'undetermined', flags: {} }, FLAG_STATES.UNDETERMINED],
+    [{ verdict: 'clean', flags: {}, ended_reason: 'finished' }, FLAG_STATES.CLEAN],
+    // Recorded before the Service noted why a run ends: not a proven Clean.
+    [{ verdict: 'clean', flags: {} }, FLAG_STATES.UNDETERMINED],
+    [{ verdict: 'clean', flags: {}, ended_reason: null }, FLAG_STATES.UNDETERMINED],
+    [{ verdict: 'clean', flags: {}, status: 'failed' }, FLAG_STATES.UNDETERMINED],
+  ])('the Service says %j', (raw, state) => {
+    expect(verdictOf(raw)).toBe(state);
+  });
+
+  it('keeps rules named with digits apart, and counts them', () => {
+    const verdict = taskFlagVerdict(completed, backend("batch 1 flags: {'RULE_2': 44, 'RULE_3': 5, 'STRUCTURING_10K': 120}"));
+    expect(verdict.flags).toEqual([{ name: 'STRUCTURING_10K', count: 120 }, { name: 'RULE_2', count: 44 }, { name: 'RULE_3', count: 5 }]);
+  });
+
+  it('is not clean from an early empty batch of a failed run, a run that analyses nothing, or half a log', () => {
+    const empty = backend('batch 1 flags: {}');
+    expect(taskFlagVerdict({ status: TASK_STATUSES.FAILED }, empty).state).toBe(FLAG_STATES.UNDETERMINED);
+    expect(taskFlagVerdict({ ...completed, action: 'Store data' }, empty)).toMatchObject({ state: FLAG_STATES.UNDETERMINED, detail: 'This run analyses nothing' });
+    expect(taskFlagVerdict(completed, [...empty, ...Array.from({ length: 5000 }, () => backend('x')[0])]).state).toBe(FLAG_STATES.UNDETERMINED);
+  });
+});
+
+it('says which rules could not run, also beside Clean', () => {
+  resetTasks();
+  const id = applyServerTask({ task_id: 'R', status: 'completed', verdict: 'clean', ended_reason: 'finished', flags: {}, rules_not_applicable: { SMURFING: ['AMOUNT', 'DATE'], HUB: [] }, rows_done: 5, rows_total: 5 });
+  expect(getTask(id)).toMatchObject({ rulesSkipped: [{ rule: 'SMURFING', fields: ['AMOUNT', 'DATE'] }, { rule: 'HUB', fields: [] }], rowsDone: 5, rowsTotal: 5 });
+  expect(taskFlagVerdict(getTask(id), []).detail).toBe('No flags raised; 2 rules could not run');
+  applyServerTask({ task_id: 'R', status: 'completed', verdict: 'undetermined', flags: {}, rules_not_applicable: { SMURFING: ['AMOUNT'] } });
+  expect(taskFlagVerdict(getTask(id), []).detail).toBe('1 rule could not run');
+});
+
+it('an old Clean keeps its record and says it is unconfirmed', () => {
+  resetTasks();
+  const id = applyServerTask({ task_id: 'OLD', status: 'completed', verdict: 'clean', flags: {} });
+  expect(taskFlagVerdict(getTask(id), [])).toMatchObject({ label: 'Clean (unconfirmed)', detail: expect.stringContaining('Run it again to confirm') });
 });

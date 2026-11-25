@@ -9,6 +9,8 @@
 // Theme lines are never aggregated. With aggregation on, edge bundling is not
 // applied (one merge at a time).
 
+import { parseAmount } from '../../../shared/numbers/values.js';
+
 export const AGGREGATION_MODES = Object.freeze(['combined', 'direction']);
 
 const isThemeLine = (edge) => String(edge?.edge_kind || '').toLowerCase() === 'theme_line';
@@ -21,20 +23,18 @@ export const linkGroupOf = (edge, mode = 'combined') => {
   return from <= to ? `${from}<->${to}` : `${to}<->${from}`;
 };
 
-const numberOf = (value) => {
-  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
-  if (typeof value !== 'string' || !value.trim()) return null;
-  const parsed = Number(value.replace(/[,\s]/g, ''));
-  return Number.isFinite(parsed) ? parsed : null;
-};
+const numberOf = parseAmount;
 
 const totalFormat = new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 });
 export const formatLinkTotal = (value) => totalFormat.format(value);
+// A total, and from how many links when some have no readable amount.
+export const linkTotalText = ({ total, amounts, count }) => (total === null ? '' : `${formatLinkTotal(total)}${amounts < count ? ` (${amounts} of ${count})` : ''}`);
 
 // entries: [[key, edge]] (the drawn links); expanded: group ids opened back
 // into their links. -> {
 //   groups: Map(group -> { key (the drawn one), members: [keys], count,
-//           total (null without a numeric value), forward, backward }),
+//           total (null without a numeric value), amounts (how many links
+//           have one), forward, backward }),
 //   memberOf: Map(key -> group) for every link of a group of 2 or more,
 //   primary: Map(key -> data for the drawn link), hidden: Set(keys) }
 export const aggregateLinks = (entries, { mode = 'combined', totalKey = '', expanded = [] } = {}) => {
@@ -58,7 +58,7 @@ export const aggregateLinks = (entries, { mode = 'combined', totalKey = '', expa
     const total = values.length ? values.reduce((sum, value) => sum + value, 0) : null;
     const forward = members.filter(([, edge]) => String(edge.from) === String(first.from)).length;
     const entry = {
-      key: firstKey, members: members.map(([key]) => key), count: members.length, total, forward, backward: members.length - forward,
+      key: firstKey, members: members.map(([key]) => key), count: members.length, total, amounts: values.length, forward, backward: members.length - forward,
     };
     groups.set(group, entry);
     entry.members.forEach((key) => memberOf.set(key, group));
@@ -67,7 +67,7 @@ export const aggregateLinks = (entries, { mode = 'combined', totalKey = '', expa
     const labels = new Set(members.map(([, edge]) => String(edge.label ?? '').trim()));
     const shared = labels.size === 1 ? [...labels][0] : '';
     primary.set(firstKey, {
-      label: `${shared ? `${shared} ` : ''}×${members.length}${total !== null ? ` · ${formatLinkTotal(total)}` : ''}`,
+      label: `${shared ? `${shared} ` : ''}×${members.length}${total !== null ? ` · ${linkTotalText(entry)}` : ''}`,
       width: Math.max(1.5, Math.min(6, 1 + Math.log2(members.length + 1))),
       aggregated: members.length,
       // Combined, with links both ways: an arrow at each end.

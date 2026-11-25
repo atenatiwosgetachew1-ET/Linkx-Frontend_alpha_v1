@@ -109,10 +109,11 @@ const closeness = (adjacency) => {
 
 // Power iteration on A + I (the shift keeps bipartite graphs from
 // oscillating; same eigenvectors), scaled so the largest is 1.
-const eigenvector = (adjacency, { iterations = 200, tolerance = 1e-9 } = {}) => {
+const eigenvector = (adjacency, { iterations = 20000, tolerance = 1e-10 } = {}) => {
   const n = adjacency.length;
   if (!n) return [];
   let x = new Float64Array(n).fill(1 / Math.sqrt(n));
+  let settled = false;
   for (let step = 0; step < iterations; step += 1) {
     const next = new Float64Array(n);
     for (let v = 0; v < n; v += 1) {
@@ -130,8 +131,13 @@ const eigenvector = (adjacency, { iterations = 200, tolerance = 1e-9 } = {}) => 
       change += Math.abs(next[v] - x[v]);
     }
     x = next;
-    if (change < tolerance * n) break;
+    if (change < tolerance) {
+      settled = true;
+      break;
+    }
   }
+  // Never half-way figures (they can be out by a factor of two).
+  if (!settled) throw new Error('Eigenvector centrality does not settle on this graph; use another measure, or draw one connected part.');
   // Isolated nodes keep only their own share: count them as 0.
   const values = Array.from(x, (value, v) => (adjacency[v].length ? value : 0));
   const max = values.reduce((top, value) => (value > top ? value : top), 0);

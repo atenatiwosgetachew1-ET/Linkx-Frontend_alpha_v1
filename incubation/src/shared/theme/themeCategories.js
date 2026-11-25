@@ -12,6 +12,7 @@ import { CONFIGURATION_THEME_CATEGORIES } from './configurationThemeTokens.js';
 import { LIBRARIES_THEME_CATEGORIES } from './librariesThemeTokens.js';
 import { SOURCE_THEME_CATEGORIES } from './sourceThemeTokens.js';
 import { BENCHMARK_THEME_CATEGORIES } from './benchmarkThemeTokens.js';
+import { RIGHT_PANEL_THEME_TOKENS } from './rightPanelThemeTokens.js';
 
 export const THEME_COMPONENT_CATEGORIES = [
   {
@@ -431,6 +432,9 @@ export const THEME_COMPONENT_CATEGORIES = [
       { key: '--right-theme-card-name-color', label: 'Theme Card Name Text Color', type: 'color', default: '#131e2a', group: 'Appearance & Theme Studio Options' },
       { key: '--right-theme-card-badge-text', label: 'Theme Active Badge Text Color', type: 'color', default: '#059669', group: 'Appearance & Theme Studio Options' },
       { key: '--right-theme-card-desc-color', label: 'Theme Description Text Color', type: 'color', default: '#4a5568', group: 'Appearance & Theme Studio Options' },
+
+      // === Pages: the window pages' parts, in the panel's colours ===
+      ...RIGHT_PANEL_THEME_TOKENS,
     ],
   },
   {

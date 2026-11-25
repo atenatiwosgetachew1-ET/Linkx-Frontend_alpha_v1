@@ -3,33 +3,37 @@
 // extractNodesEdges, buildEvidencePayload). The Graph window port extends
 // this module; the Reports window uses the evidence fetch today.
 
-import { JOB_CANCEL_STATUSES, JOB_FAILURE_STATUSES, JOB_POLL_DEFAULT_INTERVAL_MS, JOB_SUCCESS_STATUSES, getJobErrorMessage, getJobStatus, getQueuedPollPath, isQueuedJobResponse, pollJob } from './jobs.js';
+import { JOB_CANCEL_STATUSES, JOB_FAILURE_STATUSES, JOB_POLL_DEFAULT_INTERVAL_MS, JOB_SUCCESS_STATUSES, getJobErrorMessage, getJobResult, getJobStatus, getQueuedPollPath, isQueuedJobResponse } from './jobs.js';
+import { parseJsonExact } from '../shared/numbers/values.js';
 
 const GRAPH_POLL_TIMEOUT_MS = 120 * 1000;
 
 const hasGraphArrays = (value) => Boolean(value) && (Array.isArray(value.nodes) || Array.isArray(value.edges));
 
 // Workers sometimes answer with a JSON string or a Python dict repr.
+// One pass over the text, so what is inside a string is never changed
+// ("None Trading", "it's").
+const PYTHON_TOKEN = /'((?:\\[\s\S]|[^'\\])*)'|"((?:\\[\s\S]|[^"\\])*)"|\b(?:neo4j\.time\.[A-Za-z_][\w.]*|(?:datetime\.)?(?:datetime|date|time|timedelta))\((?:[^()]|\([^()]*\))*\)|-?\s*\b(?:None|NaN|nan|Infinity|inf)\b|\b(?:True|False)\b/g;
+const PYTHON_ESCAPES = { n: '\n', t: '\t', r: '\r', b: '\b', f: '\f', v: '\v', a: '\u0007', 0: '\0', '\n': '' };
+const pythonText = (inner) => inner.replace(/\\(x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8}|[\s\S])/g, (_match, code) => (
+  code.length > 1 ? String.fromCodePoint(parseInt(code.slice(1), 16)) : PYTHON_ESCAPES[code] ?? code
+));
+const pythonToJson = (text) => text.replace(PYTHON_TOKEN, (match, single, double) => {
+  if (single !== undefined || double !== undefined) return JSON.stringify(pythonText(single ?? double));
+  if (match === 'True') return 'true';
+  if (match === 'False') return 'false';
+  return match.includes('(') ? JSON.stringify(match) : 'null';
+});
+
 export const parseMaybeSerializedGraphPayload = (value) => {
   if (typeof value !== 'string') return value;
   const trimmed = value.trim();
   if (!trimmed || !/^[{[]/.test(trimmed)) return value;
   try {
-    return JSON.parse(trimmed);
+    return parseJsonExact(trimmed);
   } catch { /* try the Python repr below */ }
   try {
-    const keepAsString = (match) => JSON.stringify(match);
-    const jsonish = trimmed
-      .replace(/\bNone\b/g, 'null')
-      .replace(/\bTrue\b/g, 'true')
-      .replace(/\bFalse\b/g, 'false')
-      .replace(/'([^'\\]*(?:\\.[^'\\]*)*)'/g, (_match, inner) => JSON.stringify(inner.replace(/\\'/g, "'").replace(/\\\\/g, '\\')))
-      .replace(/\bneo4j\.time\.[A-Za-z_][\w.]*\((?:[^()]|\([^()]*\))*\)/g, keepAsString)
-      .replace(/\b(?:datetime\.)?(?:datetime|date|time|timedelta)\((?:[^()]|\([^()]*\))*\)/g, keepAsString)
-      .replace(/\bNaN\b/g, 'null')
-      .replace(/\bInfinity\b/g, 'null')
-      .replace(/-\s*null\b/g, 'null');
-    return JSON.parse(jsonish);
+    return parseJsonExact(pythonToJson(trimmed));
   } catch {
     return value;
   }
@@ -80,30 +84,25 @@ export const buildEvidencePayload = (traceId, report) => ({
     : {}),
 });
 
-// POST /get_graph, following a queued job. Resolves with the raw response
-// plus its nodes and edges; rejects with the backend's message.
-export const fetchGraph = async (apiFetch, payload, { signal, onQueued } = {}) => {
-  const response = await apiFetch('/get_graph', { method: 'POST', body: payload, signal });
-  let data = response;
-  if (isQueuedJobResponse(response)) {
-    const pollPath = getQueuedPollPath(response);
-    onQueued?.({ pollPath, response });
-    data = await pollJob(apiFetch, pollPath, {
-      signal,
-      label: 'graph',
-      timeoutMs: GRAPH_POLL_TIMEOUT_MS,
-      timeoutMessage: 'Graph request timed out. Retry graph load.',
-      cancelledMessage: 'Graph request cancelled.',
-    });
-  }
-  const status = getJobStatus(data);
-  if (JOB_FAILURE_STATUSES.has(status) || data?.error || data?.results?.error || data?.result?.error) {
-    throw new Error(JOB_CANCEL_STATUSES.has(status) ? 'Graph request cancelled.' : getJobErrorMessage(data, 'Graph request failed'));
-  }
-  if (!hasGraphPayload(data)) throw new Error(getJobErrorMessage(data, 'Graph request failed'));
-  return { data, ...extractNodesEdges(data) };
+// POST /get_graph, following a queued job and its chunks (as the Graph window
+// reads them). -> { data, nodes, edges, partial, expected }; rejects with the
+// Service's message. partial: the Service announced more than it delivered.
+export const fetchGraph = async (apiFetch, payload, { signal, onQueued, intervalMs } = {}) => {
+  const nodes = [];
+  const edges = [];
+  const result = await fetchGraphProgressive(apiFetch, payload, {
+    signal,
+    onQueued,
+    ...(intervalMs === undefined ? {} : { intervalMs }),
+    onChunk: (chunk) => {
+      chunk.nodes.forEach((node) => nodes.push(node));
+      chunk.edges.forEach((edge) => edges.push(edge));
+    },
+  });
+  // Nothing that reads as a graph, not even an empty one.
+  if (!nodes.length && !edges.length && !result.readable) throw new Error(getJobErrorMessage(result.data, 'Graph request failed'));
+  return { data: result.data, nodes, edges, partial: result.partial, truncatedBy: result.truncatedBy, expected: result.expected };
 };
-
 
 /* ── Progressive fetch (production pollGraphJob, src/App.jsx ~3213) ────
    Queued graph jobs are polled with `include_chunks=1&after_event_id=N`
@@ -144,6 +143,18 @@ const failIfJobFailed = (data) => {
   return status;
 };
 
+// Whether the Service itself says the graph is not whole (R2-4): `complete`,
+// `partial` or `truncated_by` in its answer.
+const cutOf = (answer) => {
+  const result = [getJobResult(answer), answer?.results, answer].find((item) => item && typeof item === 'object' && ('complete' in item || 'truncated_by' in item || 'partial' in item)) || {};
+  const truncatedBy = typeof result.truncated_by === 'string' ? result.truncated_by.slice(0, 80) : result.truncated_by ? 'a limit' : '';
+  const partial = result.complete === false || result.partial === true || Boolean(truncatedBy);
+  const nodes = Number(result.total_nodes);
+  const edges = Number(result.total_edges);
+  const known = result.total_nodes != null && result.total_edges != null && Number.isFinite(nodes) && Number.isFinite(edges);
+  return { partial, truncatedBy, expected: partial && known ? { nodes, edges } : null };
+};
+
 export const fetchGraphProgressive = async (apiFetch, payload, {
   signal,
   onQueued,
@@ -159,7 +170,8 @@ export const fetchGraphProgressive = async (apiFetch, payload, {
     if (!hasGraphPayload(response)) throw new Error(getJobErrorMessage(response, 'Graph request failed'));
     const graph = extractNodesEdges(response);
     onChunk?.(graph);
-    return { nodes: graph.nodes.length, edges: graph.edges.length, chunked: false };
+    const cut = cutOf(response);
+    return { data: response, nodes: graph.nodes.length, edges: graph.edges.length, chunked: false, partial: cut.partial, truncatedBy: cut.truncatedBy, expected: cut.expected, readable: true };
   }
 
   const pollPath = getQueuedPollPath(response);
@@ -169,12 +181,34 @@ export const fetchGraphProgressive = async (apiFetch, payload, {
   let nodes = 0;
   let edges = 0;
   let chunks = 0;
+  // Chunks already taken: one sent again is not counted or drawn twice.
+  const seen = new Set();
+  // The finished job while its last chunks are still being collected.
+  let finished = null;
+  let expected = null;
+  const done = (job, { complete }) => {
+    const cut = cutOf(job);
+    const short = cut.partial || (expected ? nodes < expected.nodes || edges < expected.edges : !complete);
+    const readable = chunks > 0 || Array.isArray(job?.results?.chunks) || [job, getJobResult(job)].some(hasGraphPayload);
+    return { data: job, nodes, edges, chunked: chunks > 0, partial: short, truncatedBy: cut.truncatedBy, expected, readable };
+  };
   while (Date.now() - startedAt < timeoutMs) {
     if (signal?.aborted) throw abortError();
-    const job = await apiFetch(buildChunkPollPath(pollPath, afterEventId), { method: 'GET', signal });
+    let job;
+    try {
+      job = await apiFetch(buildChunkPollPath(pollPath, afterEventId), { method: 'GET', signal });
+    } catch (error) {
+      // The job was done; only the check for more chunks failed.
+      if (finished && error?.name !== 'AbortError' && !signal?.aborted) return done(finished, { complete: false });
+      throw error;
+    }
+    let fresh = 0;
     const results = job?.results && typeof job.results === 'object' ? job.results : {};
     (Array.isArray(results.chunks) ? results.chunks : []).forEach((chunk) => {
       const eventId = chunkEventId(chunk?.event_id ?? chunk?.eventId);
+      if (eventId ? seen.has(eventId) : finished) return;
+      if (eventId) seen.add(eventId);
+      fresh += 1;
       if (eventId > afterEventId) afterEventId = eventId;
       const chunkNodes = Array.isArray(chunk?.nodes) ? chunk.nodes.filter((node) => node && typeof node === 'object') : [];
       const chunkEdges = Array.isArray(chunk?.edges) ? chunk.edges.filter((edge) => edge && typeof edge === 'object') : [];
@@ -188,25 +222,39 @@ export const fetchGraphProgressive = async (apiFetch, payload, {
     const summary = results.result && typeof results.result === 'object' ? results.result : {};
     const totalNodes = Number(summary.total_nodes);
     const totalEdges = Number(summary.total_edges);
+    if (Number.isFinite(totalNodes) && Number.isFinite(totalEdges) && summary.total_nodes != null && summary.total_edges != null) expected = { nodes: totalNodes, edges: totalEdges };
     onProgress?.({
       current: nodes + edges,
-      total: Number.isFinite(totalNodes) && Number.isFinite(totalEdges) ? Math.max(1, totalNodes + totalEdges) : null,
+      total: expected ? Math.max(1, expected.nodes + expected.edges) : null,
     });
 
+    if (finished) {
+      // Until a check brings nothing new.
+      if (!fresh) return done(finished, { complete: true });
+      if (expected && nodes >= expected.nodes && edges >= expected.edges) return done(finished, { complete: true });
+      continue;
+    }
     const status = failIfJobFailed(job);
     if (JOB_SUCCESS_STATUSES.has(status)) {
-      // A job that finished without chunks but carries the whole graph in its
+      // A job that delivered nothing in chunks but carries the whole graph in its
       // result (non-chunked backend) is used as one final chunk.
-      if (chunks === 0 && hasGraphPayload(job)) {
-        const graph = extractNodesEdges(job);
+      const whole = [job, getJobResult(job)].find(hasGraphPayload);
+      if (!nodes && !edges && whole) {
+        const graph = extractNodesEdges(whole);
         nodes = graph.nodes.length;
         edges = graph.edges.length;
         onChunk?.(graph);
       }
-      return { nodes, edges, chunked: chunks > 0 };
+      // The last chunks may still be to come.
+      if (fresh && !(expected && nodes >= expected.nodes && edges >= expected.edges)) {
+        finished = job;
+        continue;
+      }
+      return done(job, { complete: true });
     }
     await wait(intervalMs, signal);
   }
+  if (finished) return done(finished, { complete: false });
   throw new Error('Graph request timed out. Retry graph load.');
 };
 
@@ -227,6 +275,8 @@ export const sanitizeRelationship = (value) => {
   return cleaned.replace(/[^a-zA-Z0-9_.:-]/g, '').slice(0, 128);
 };
 
+// A finished run's kept graph (B-37): 24 hours, by the Service's task id.
+export const buildTaskGraphPayload = (serverId) => ({ id: 'relationship', task_id: String(serverId).slice(0, 128) });
 export const buildRelationshipPayload = (sourceSessionId, relationship) => ({
   id: 'relationship',
   source_id: sanitizeGraphEndpointId(sourceSessionId),

@@ -293,7 +293,7 @@ describe('ChartWindowBody', () => {
     const links = lastChart().option.series.find((series) => series.name === 'Links');
     expect(links).toMatchObject({ type: 'bar', yAxisIndex: 1, data: [2, 0, 1] });
     expect(lastChart().option.series.filter((series) => series.type === 'line').map((series) => series.name)).toEqual(['Entity churn', 'Link churn', 'Density', 'Centralization', 'Modularity']);
-    expect(within(card).getByText('Daily periods of TRANSACTIONDATE · 1 undated links left out')).toBeInTheDocument();
+    expect(within(card).getByText('Daily periods of TRANSACTIONDATE · 1 links without a readable date left out')).toBeInTheDocument();
   });
 
   it('zoom and slide need Ctrl (a plain wheel scrolls the board, with a subtle hint); each card its own tone', async () => {

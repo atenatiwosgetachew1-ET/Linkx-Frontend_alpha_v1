@@ -7,6 +7,8 @@ import { useWorkspaceActions } from '../../../workspace/hooks/useWorkspace.js';
 import WindowLoadScreen from '../../../shared/components/WindowLoadScreen.jsx';
 import { ConnectionsPanel, RulesPanel, SystemPanel, ToolsPanel } from './ConfigurationPanels.jsx';
 import { CONFIG_PROFILE_KEY, profileFromConfiguration, setProfileSettings } from '../../graph/lib/nodeProfile.js';
+import { adoptPresentation, getPresentationSeq, getPresentationVersion, subscribePresentation, isPresentationLoaded, loadPresentation, withoutPresentation } from '../../graph/lib/domainPresentation.js';
+import { savePresentation } from '../../../services/domainConfigApi.js';
 import { CONFIG_FORMATTING_KEY, setDomainFormatting } from '../../graph/lib/conditionalFormatting.js';
 import DetectionSensitivityPanel from './DetectionSensitivityPanel.jsx';
 import ActivityLogPanel from './ActivityLogPanel.jsx';
@@ -14,6 +16,7 @@ import LxacDialog from './LxacDialog.jsx';
 import {
   applyConfigurationChange,
   buildConfigurationSavePayload,
+  withoutAdminKeys,
   formatDomainPillarLabel,
   getActiveDomainKey,
   getConfigurationErrorMessage,
@@ -74,6 +77,8 @@ export default function ConfigurationWindowBody({ windowItem }) {
   const canRead = canAccess('config:read');
   const canWrite = canAccess('config:write');
   const canManageUsers = canAccess('users:manage');
+  // Analysts may switch domain without config:write (R2-18).
+  const canSwitchDomain = canWrite || (canRead && canAccess('analysis:run'));
 
   // Every tab stays visible; tabs the account can't use explain why inside.
   const visibleTabs = TABS;
@@ -147,12 +152,26 @@ export default function ConfigurationWindowBody({ windowItem }) {
   // Adopts a configuration returned by the backend: becomes the clean draft and
   // the session configuration every Source window reads its defaults from.
   const adoptConfiguration = useCallback((normalized) => {
-    const merged = preserveDomainRegistry(draftRef.current, normalized);
+    const merged = withoutPresentation(preserveDomainRegistry(draftRef.current, normalized), getActiveDomainKey(normalized));
     baseRef.current = merged;
     setDraft(merged);
     setBaseline(payloadKey(merged));
     setConfiguration((current) => preserveDomainRegistry(current, merged));
   }, [setConfiguration]);
+
+  // The domain's shared settings arrived (or changed) after this window opened:
+  // shown now, unless they were edited here.
+  const presentationSeq = useSyncExternalStore(subscribePresentation, getPresentationSeq);
+  useEffect(() => {
+    const domainKey = getActiveDomainKey(draftRef.current);
+    if (!isPresentationLoaded(domainKey)) return;
+    const untouched = [CONFIG_PROFILE_KEY, CONFIG_FORMATTING_KEY].filter((key) => key in (draftRef.current || {}) && JSON.stringify(draftRef.current[key]) === JSON.stringify(baseRef.current?.[key]));
+    if (!untouched.length) return;
+    const strip = (config) => Object.fromEntries(Object.entries(config || {}).filter(([key]) => !untouched.includes(key)));
+    baseRef.current = strip(baseRef.current);
+    setBaseline(payloadKey(baseRef.current));
+    setDraft(strip);
+  }, [presentationSeq]);
 
   // Keep the draft in step with session changes made elsewhere (e.g. a Source
   // window domain switch). With unsaved edits, untouched keys and the domain
@@ -160,8 +179,9 @@ export default function ConfigurationWindowBody({ windowItem }) {
   // sensitivity and the next save never carry a stale domain (production edits
   // one shared configuration, so its save is always current).
   useEffect(() => {
-    const next = normalizeLoadedConfiguration(configuration);
-    if (!Object.keys(next).length) return;
+    const loadedConfig = normalizeLoadedConfiguration(configuration);
+    if (!Object.keys(loadedConfig).length) return;
+    const next = withoutPresentation(loadedConfig, getActiveDomainKey(loadedConfig));
     const merged = dirtyRef.current
       ? preserveDomainRegistry(draftRef.current, rebaseConfigurationDraft(draftRef.current, baseRef.current, next))
       : preserveDomainRegistry(draftRef.current, next);
@@ -243,16 +263,72 @@ export default function ConfigurationWindowBody({ windowItem }) {
     setDraft((current) => applyConfigurationChange(current, name, value));
   }, []);
 
+  // The edited profile mapping and formatting rules, if any. -> saved (or
+  // nothing to save)
+  const savePresentationEdits = useCallback(async (domainKey) => {
+    const draftNow = draftRef.current || {};
+    const changes = {
+      ...(draftNow[CONFIG_PROFILE_KEY] ? { [CONFIG_PROFILE_KEY]: draftNow[CONFIG_PROFILE_KEY] } : {}),
+      ...(Array.isArray(draftNow[CONFIG_FORMATTING_KEY]) ? { [CONFIG_FORMATTING_KEY]: draftNow[CONFIG_FORMATTING_KEY] } : {}),
+    };
+    if (!Object.keys(changes).length) return true;
+    const send = (version) => runBusy('Saving profile and formatting…', () => savePresentation(apiFetch, domainKey, changes, version), { cancellable: false });
+    let result = await send(getPresentationVersion(domainKey));
+    if (result?.conflict) {
+      const who = result.conflict.updatedBy || 'Someone else';
+      const keepMine = await requestConfirmation({
+        title: 'Changed meanwhile',
+        icon: 'warning',
+        message: `${who} saved this domain’s profile mapping or formatting rules since you opened them. Replace theirs with yours?`,
+        confirmText: 'Keep mine',
+        cancelText: 'Take theirs',
+      });
+      if (!keepMine) {
+        adoptPresentation(domainKey, result.conflict);
+        setDraft((current) => withoutPresentation(current, domainKey));
+        notify({ title: 'Configuration notice', message: 'Theirs were loaded. Save again to keep your other changes.', level: 'info', source: 'Configuration' });
+        return false;
+      }
+      result = await send(result.conflict.versionId);
+    }
+    if (!result?.ok) {
+      notify({ title: 'Profile and formatting not saved', message: result?.message || 'They were changed again meanwhile. Try once more.', level: 'warning', source: 'Configuration' });
+      return false;
+    }
+    if (!adoptPresentation(domainKey, result.presentation)) await loadPresentation(apiFetch, domainKey);
+    return true;
+  }, [apiFetch, notify, requestConfirmation, runBusy]);
+
   const handleSave = useCallback(async () => {
     if (!requirePermission('config:write', 'configuration changes') || !requireSession()) return;
+    // Nothing was loaded: the form's empty lists would replace the real ones.
+    if (!isLoaded && !Object.keys(configurationRef.current || {}).length) {
+      notify({ title: 'Configuration notice', message: 'The configuration has not been loaded, so it cannot be saved. Reload it first.', level: 'warning', source: 'Configuration' });
+      return;
+    }
     try {
-      const payload = buildConfigurationSavePayload(draftRef.current);
+      const built = buildConfigurationSavePayload(draftRef.current);
+      const payload = canManageUsers ? built : withoutAdminKeys(built);
+      // Never left out in silence: what was edited and only an administrator may save.
+      if (!canManageUsers) {
+        const before = buildConfigurationSavePayload(baseRef.current || {});
+        const refused = Object.keys(built).filter((key) => !(key in payload) && JSON.stringify(built[key]) !== JSON.stringify(before[key]));
+        if (refused.length) notify({ title: 'Not all of it can be saved', message: `Only an administrator can change: ${refused.map((key) => key.replace(/_/g, ' ')).join(', ')}. The rest is saved.`, level: 'warning', source: 'Configuration' });
+      }
       // The session domain is switched by its own request; a save never
       // sends an older domain back.
       const sessionConfig = normalizeLoadedConfiguration(configurationRef.current);
       ['domain', 'active_domain'].forEach((key) => {
         if (sessionConfig[key]) payload[key] = sessionConfig[key];
       });
+      // Profile mapping and formatting rules: the domain's own, on the Service
+      // (B-23, B-24). First, so a refusal loses nothing of the rest.
+      const domainKey = getActiveDomainKey(sessionConfig);
+      const shared = isPresentationLoaded(domainKey);
+      if (shared) {
+        [CONFIG_PROFILE_KEY, CONFIG_FORMATTING_KEY].forEach((key) => { delete payload[key]; });
+        if (!(await savePresentationEdits(domainKey))) return;
+      }
       // Saves are not cancellable: an abort could hide a committed change.
       const result = await runBusy('Saving configuration…', (signal) => mutateAndLoad(signal, () => saveConfiguration(apiFetch, mainSessionId, payload, { signal })), { cancellable: false });
       if (!result) return;
@@ -260,13 +336,11 @@ export default function ConfigurationWindowBody({ windowItem }) {
         notify({ title: 'Configuration notice', message: result.message, level: 'warning', source: 'Configuration' });
         return;
       }
-      // Profile mapping fields: a device copy until the backend keeps
-      // `actor_profile` (B-23), so the Graph windows keep the saved mapping.
-      if (draftRef.current?.[CONFIG_PROFILE_KEY]) {
+      // A Service without the shared settings: a copy in this browser.
+      if (!shared && draftRef.current?.[CONFIG_PROFILE_KEY]) {
         setProfileSettings(getActiveDomainKey(sessionConfig), profileFromConfiguration(draftRef.current[CONFIG_PROFILE_KEY]));
       }
-      // Formatting rules: the same until the backend keeps them (B-24).
-      if (Array.isArray(draftRef.current?.[CONFIG_FORMATTING_KEY])) {
+      if (!shared && Array.isArray(draftRef.current?.[CONFIG_FORMATTING_KEY])) {
         setDomainFormatting(getActiveDomainKey(sessionConfig), draftRef.current[CONFIG_FORMATTING_KEY]);
       }
       if (result.returned) {
@@ -277,7 +351,8 @@ export default function ConfigurationWindowBody({ windowItem }) {
         // draft (which may hold a typed raw password) never becomes the
         // session configuration: Source windows keep the last confirmed one
         // until a reload succeeds.
-        const saved = draftRef.current;
+        const saved = withoutPresentation(draftRef.current, domainKey);
+        setDraft(saved);
         baseRef.current = saved;
         setBaseline(payloadKey(saved));
         notify({
@@ -290,7 +365,7 @@ export default function ConfigurationWindowBody({ windowItem }) {
     } catch (error) {
       notify({ title: 'Configuration error', message: getConfigurationErrorMessage(error), level: 'error', source: 'Configuration' });
     }
-  }, [adoptConfiguration, apiFetch, mainSessionId, mutateAndLoad, notify, requirePermission, requireSession, runBusy]);
+  }, [adoptConfiguration, apiFetch, mainSessionId, mutateAndLoad, notify, requirePermission, requireSession, runBusy, isLoaded, canManageUsers, savePresentationEdits]);
 
   const handleReset = useCallback(async () => {
     // Reset replaces the session configuration every Source window uses.
@@ -319,7 +394,8 @@ export default function ConfigurationWindowBody({ windowItem }) {
   const handleSwitchDomain = useCallback(async (domain) => {
     const current = getActiveDomainKey(draftRef.current);
     if (!domain || domain === current) return;
-    if (!requirePermission('config:write', 'domain switching') || !requireSession()) return;
+    if (!canSwitchDomain && !requirePermission('config:write', 'domain switching')) return;
+    if (!requireSession()) return;
     if (dirtyRef.current && !(await requestConfirmation({
       title: 'Discard unsaved changes?',
       message: 'Switching the domain pillar discards unsaved configuration changes. Continue?',
@@ -354,12 +430,12 @@ export default function ConfigurationWindowBody({ windowItem }) {
     } catch (error) {
       notify({ title: 'Domain switch error', message: getConfigurationErrorMessage(error, 'Failed to switch domain pillar.'), level: 'error', source: 'Configuration' });
     }
-  }, [adoptConfiguration, apiFetch, mainSessionId, notify, reload, requestConfirmation, requirePermission, requireSession, runBusy]);
+  }, [adoptConfiguration, apiFetch, mainSessionId, notify, reload, canSwitchDomain, requestConfirmation, requirePermission, requireSession, runBusy]);
 
   /* ── Encrypted export / import ── */
 
   const openExport = () => {
-    if (!requirePermission('config:read', 'configuration export') || !requireSession()) return;
+    if (!requirePermission('config:write', 'configuration export') || !requireSession()) return;
     if (dirtyRef.current) notify({ title: 'Unsaved changes', message: 'Export uses the saved session configuration. Save first to include your edits.', level: 'info', source: 'Configuration' });
     setLxac({ mode: 'export', file: null });
   };
@@ -430,6 +506,7 @@ export default function ConfigurationWindowBody({ windowItem }) {
         onSwitchDomain={handleSwitchDomain}
         isSwitchingDomain={Boolean(busy?.label?.startsWith('Switching domain'))}
         canWrite={canWrite}
+        canSwitchDomain={canSwitchDomain}
         idleSettings={idleSettings}
         idlePolicyMeta={idlePolicyMeta}
         onIdleSettingsChange={updateIdleSettings}
@@ -444,7 +521,7 @@ export default function ConfigurationWindowBody({ windowItem }) {
       <RulesPanel
         draft={draft}
         onChange={handleChange}
-        canEditEntities={canWrite}
+        canEditEntities={canWrite && canManageUsers}
         canWrite={canWrite}
         knownBuiltinRules={knownBuiltinRules}
         onManageRules={() => workspace.openWindow(WORKSPACE_WINDOW_TYPES.LIBRARIES, { metadata: { librariesUi: { activeTab: 'rules' }, librariesRequest: { tab: 'rules', seq: Date.now() } } })}
@@ -452,7 +529,7 @@ export default function ConfigurationWindowBody({ windowItem }) {
       />
     );
   } else if (activeTab === 'sensitivity') {
-    content = <DetectionSensitivityPanel key={isCdr ? 'cdr' : 'bank'} apiFetch={apiFetch} isCdr={isCdr} canManage={canManageUsers} notify={notify} />;
+    content = <DetectionSensitivityPanel key={getActiveDomainKey(draft)} apiFetch={apiFetch} domain={getActiveDomainKey(draft)} isCdr={isCdr} canManage={canManageUsers} notify={notify} />;
   } else if (activeTab === 'activity') {
     content = <ActivityLogPanel apiFetch={apiFetch} canManage={canManageUsers} defaultSessionId={mainSessionId} />;
   }
@@ -521,7 +598,7 @@ export default function ConfigurationWindowBody({ windowItem }) {
           <div className="settings_window_footer_actions">
             <button type="button" className="settings_button" disabled={!canRead || Boolean(busy)} onClick={() => reload()} title="Reload the saved session configuration">Reload</button>
             <button type="button" className="settings_button" disabled={!canWrite || Boolean(busy)} onClick={handleReset} title="Load the default configuration">Reset</button>
-            <button type="button" className="settings_button" disabled={!canRead || Boolean(busy)} onClick={openExport} title="Export an encrypted configuration file">Export</button>
+            <button type="button" className="settings_button" disabled={!canWrite || Boolean(busy)} onClick={openExport} title={canWrite ? 'Export an encrypted configuration file' : 'You need config:write to export the configuration.'}>Export</button>
             <button type="button" className="settings_button" disabled={!canWrite || Boolean(busy)} onClick={pickImportFile} title="Import an encrypted configuration file">Import</button>
             {showDraftActions ? (
               <button type="button" className={`settings_button${isDirty ? ' is-primary' : ''}`} disabled={!canWrite || Boolean(busy)} onClick={handleSave}>Save</button>

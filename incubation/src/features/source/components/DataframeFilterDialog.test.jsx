@@ -58,4 +58,21 @@ describe('DataframeFilterDialog', () => {
     await userEvent.click(within(dialog).getByRole('button', { name: 'Apply filter' }));
     expect(onApply).toHaveBeenCalledWith(null);
   });
+
+  it('a pasted column is one value a line, whole, and never run into its neighbour (audit B7)', async () => {
+    const onApply = vi.fn();
+    render(<DataframeFilterDialog columns={columns} totalRows={50} initial={{ rows: { match: 'all', action: 'keep', conditions: [{ column: 'ACCOUNT', operator: 'in', value: '0012345', value2: '' }] } }} onApply={onApply} onCancel={() => {}} />);
+    const dialog = screen.getByRole('dialog', { name: 'Filter dataframe' });
+    await userEvent.click(within(dialog).getByRole('tab', { name: /Rows/ }));
+    const input = within(dialog).getByLabelText('Condition 1 value');
+    await userEvent.click(input);
+    input.setSelectionRange(7, 7);
+    const accounts = Array.from({ length: 20 }, (_, i) => String(1000123400000 + i));
+    await userEvent.paste(`${accounts.join('\r\n')}\r\n5,000\r\n`);
+    expect(input).toHaveValue(`0012345, ${accounts.join(', ')}, "5,000"`);
+    input.setSelectionRange(input.value.length, input.value.length);
+    await userEvent.paste(Array.from({ length: 60 }, (_, i) => `X${i}`).join('\n'));
+    expect(within(dialog).getByRole('button', { name: 'Apply filter' })).toBeDisabled();
+    expect(dialog).toHaveTextContent('at most 50');
+  });
 });

@@ -92,14 +92,17 @@ const visibleNeighbourCount = (graph, id, visible) => {
 export const generateGraphAlerts = (graph, { nodeIds = [], edgeIds = [] } = {}, config = DEFAULT_ALERT_RULES) => {
   const rules = normalizeAlertRules(config);
   const alerts = [];
+  let omitted = 0; // over a limit: raised, not listed (alerts.omitted)
   if (!nodeIds.length) return alerts;
 
   if (rules.enableHighDegree) {
     const visible = new Set(nodeIds);
-    nodeIds
+    const ranked = nodeIds
       .filter((id) => graph.hasNode(id))
       .map((nodeId) => ({ nodeId, degree: visibleNeighbourCount(graph, nodeId, visible) }))
-      .sort((a, b) => b.degree - a.degree)
+      .sort((a, b) => b.degree - a.degree);
+    omitted += ranked.slice(rules.maxHighDegreeAlerts).filter(({ degree }) => degree >= rules.highDegreeMin).length;
+    ranked
       .slice(0, rules.maxHighDegreeAlerts)
       .forEach(({ nodeId, degree }) => {
         if (degree < rules.highDegreeMin) return;
@@ -125,14 +128,17 @@ export const generateGraphAlerts = (graph, { nodeIds = [], edgeIds = [] } = {}, 
     if (weighted.length >= rules.heavyEdgeMinSamples) {
       const sorted = weighted.slice().sort((a, b) => a.value - b.value);
       const threshold = getPercentile(sorted.map((item) => item.value), rules.heavyEdgePercentile / 100);
-      sorted
-        .filter((item) => item.value >= threshold && item.value >= rules.heavyEdgeMinValue)
+      // Links that all weigh the same have none that stands out.
+      const heavy = sorted.filter((item) => item.value > sorted[0].value && item.value >= threshold && item.value >= rules.heavyEdgeMinValue);
+      omitted += Math.max(0, heavy.length - rules.maxHeavyEdgeAlerts);
+      heavy
         .slice(-rules.maxHeavyEdgeAlerts)
         .forEach(({ edgeId, value }) => {
           alerts.push({ type: 'heavy_edge', severity: 'medium', edgeId, value, message: `Edge ${edgeId} has high weight ${value}` });
         });
     }
   }
+  if (omitted) Object.defineProperty(alerts, 'omitted', { value: omitted });
   return alerts;
 };
 
@@ -237,14 +243,23 @@ export const describeGraphAlert = (graph, alert, nameKey = '') => {
   return { name: alert.message || 'Alert', category: 'Alert', severity, detail: '', short: '' };
 };
 
-// GA:4884 summary line.
-export const alertSummary = (alerts = []) => {
-  if (!alerts.length) return 'No alerts — graph looks clean.';
+// The summary line (GA:4884). It says what was looked at: no alert among the
+// drawn entities says nothing about the others, and these rules are not the
+// analysis (production said "graph looks clean").
+// scope: { drawn, total entities, scanned, rules (the alert configuration) }.
+export const alertSummary = (alerts = [], { drawn = null, total = null, scanned = true, rules = null } = {}) => {
+  const config = rules ? normalizeAlertRules(rules) : null;
+  if (config && !config.enableHighDegree && !config.enableHeavyEdge) return 'No alert rule is on.';
+  if (!scanned) return 'Not scanned: too many items are drawn. Press Rescan.';
+  const limited = drawn !== null && total !== null && drawn < total;
+  if (!alerts.length) return limited ? `No alerts among the ${drawn.toLocaleString('en-GB')} drawn of ${total.toLocaleString('en-GB')} entities.` : 'No alerts in this graph.';
   const high = alerts.filter((alert) => alert.severity === 'high').length;
   const medium = alerts.length - high;
   const parts = [`${alerts.length} alert${alerts.length === 1 ? '' : 's'}`];
   if (high) parts.push(`${high} high`);
   if (medium) parts.push(`${medium} medium`);
+  if (alerts.omitted) parts.push(`${alerts.omitted} more not listed`);
+  if (limited) parts.push(`${drawn.toLocaleString('en-GB')} of ${total.toLocaleString('en-GB')} entities checked`);
   return parts.join(' · ');
 };
 

@@ -1,0 +1,1093 @@
+/* Right workspace panel: the window pages' look (Settings, Configuration,
+   Libraries) at the panel's width. Imported last (src/app/App.jsx). */
+
+/* The pages' shared variables read the panel's own colours here, one to a
+   part, so restyling the panel touches no window and the other way round. */
+.right_page {
+	/* What the shared inputs and buttons start from */
+	--settings-text: var(--right-page-input-text);
+	--settings-text-secondary: var(--right-page-input-placeholder);
+	--settings-text-muted: var(--right-page-input-disabled-text);
+	--settings-accent: var(--right-page-btn-focus);
+	--settings-accent-text: var(--right-page-btn-focus);
+	--settings-card-bg: var(--right-page-input-bg);
+	--settings-card-border: var(--right-page-input-border);
+	--linkx-form-label: var(--right-page-field-label);
+	/* Header and its figures */
+	--settings-page-hairline: var(--right-page-head-line);
+	--settings-page-state-tone: var(--right-page-head-icon);
+	--settings-masthead-hairline: var(--right-page-head-line);
+	--settings-masthead-bg: var(--right-page-head-wash);
+	--settings-masthead-bg-2: var(--right-page-head-bg);
+	--settings-masthead-shadow: var(--right-page-head-shadow);
+	--settings-masthead-shadow-2: var(--right-page-head-shadow);
+	--settings-masthead-shadow-3: transparent;
+	--settings-masthead-shadow-4: transparent;
+	--settings-hero-border: transparent;
+	--settings-hero-bg: var(--right-page-head-bg);
+	--settings-eyebrow-text: var(--right-page-head-eyebrow);
+	--settings-hero-title-h4-text: var(--right-page-head-title);
+	--settings-hero-meta-text: var(--right-page-head-note);
+	--settings-hero-media-border: var(--right-page-head-icon-border);
+	--settings-hero-media-bg: var(--right-page-head-icon-bg);
+	--settings-hero-media-text: var(--right-page-head-icon);
+	--settings-stats-hairline: var(--right-page-stat-line);
+	--settings-stats-bg: transparent;
+	--settings-stats-bg-2: transparent;
+	--settings-stat-dt-text: var(--right-page-stat-label);
+	--settings-stat-dd-text: var(--right-page-stat-value);
+	--settings-stat-dd-empty-text: var(--right-page-stat-empty);
+	--settings-stat-small-text: var(--right-page-stat-note);
+	/* Status labels */
+	--settings-pill-border: var(--right-page-pill-alert-border);
+	--settings-pill-bg: var(--right-page-pill-alert-bg);
+	--settings-pill-text: var(--right-page-pill-alert-text);
+	--settings-pill-active-border: var(--right-page-pill-ok-border);
+	--settings-pill-active-bg: var(--right-page-pill-ok-bg);
+	--settings-pill-active-text: var(--right-page-pill-ok-text);
+	--settings-pill-paused-border: var(--right-page-pill-neutral-border);
+	--settings-pill-paused-bg: var(--right-page-pill-neutral-bg);
+	--settings-pill-paused-text: var(--right-page-pill-neutral-text);
+	/* Form cards */
+	--settings-block-header-h4-text: var(--right-page-form-title);
+	--config-form-card-border: var(--right-page-form-border);
+	--config-form-card-bg: var(--right-page-form-bg);
+	--config-form-label-text: var(--right-page-field-label);
+	--config-form-hint-text: var(--right-page-hint-text);
+	--config-form-input-bg: var(--right-page-input-bg);
+	--config-form-input-border: var(--right-page-input-border);
+	--config-form-input-text: var(--right-page-input-text);
+	--config-form-input-placeholder: var(--right-page-input-placeholder);
+	--config-form-input-hover-border: var(--right-page-input-hover-border);
+	--config-form-input-focus-border: var(--right-page-input-focus-border);
+	--config-form-input-focus-ring: var(--right-page-input-focus-ring);
+	--config-form-input-disabled-bg: var(--right-page-input-disabled-bg);
+	--config-form-input-disabled-text: var(--right-page-input-disabled-text);
+	--config-form-switch-row-text: var(--right-page-switch-label);
+	--config-form-switch-row-border: transparent;
+	--settings-switch-text: var(--right-page-switch-label);
+	--settings-switch-input-border: var(--right-page-switch-border);
+	--settings-switch-input-bg: var(--right-page-switch-bg);
+	--settings-switch-input-after-bg: var(--right-page-switch-knob);
+	--settings-switch-input-after-shadow: var(--right-page-switch-knob-shadow);
+	--settings-switch-input-checked-border: var(--right-page-switch-on-border);
+	--settings-switch-input-checked-bg: var(--right-page-switch-on-bg);
+	--settings-switch-input-focus-outline: var(--right-page-switch-focus);
+	/* Buttons */
+	--window-footer-btn-border: var(--right-page-btn-border);
+	--window-footer-btn-text: var(--right-page-btn-text);
+	--window-footer-btn-bg-angle: 180deg;
+	--window-footer-btn-bg-top: var(--right-page-btn-bg);
+	--window-footer-btn-bg-bottom: var(--right-page-btn-bg);
+	--window-footer-btn-hover-border: var(--right-page-btn-hover-border);
+	--window-footer-btn-hover-text: var(--right-page-btn-hover-text);
+	--window-footer-btn-hover-bg-angle: 180deg;
+	--window-footer-btn-hover-bg-top: var(--right-page-btn-hover-bg);
+	--window-footer-btn-hover-bg-bottom: var(--right-page-btn-hover-bg);
+	--window-footer-btn-hover-opacity: 1;
+	--window-footer-btn-pressed-border: var(--right-page-btn-pressed-border);
+	--window-footer-btn-pressed-text: var(--right-page-btn-pressed-text);
+	--window-footer-btn-pressed-bg-angle: 180deg;
+	--window-footer-btn-pressed-bg-top: var(--right-page-btn-pressed-bg);
+	--window-footer-btn-pressed-bg-bottom: var(--right-page-btn-pressed-bg);
+	--window-footer-btn-disabled-border: var(--right-page-btn-disabled-border);
+	--window-footer-btn-disabled-text: var(--right-page-btn-disabled-text);
+	--window-footer-btn-disabled-bg: var(--right-page-btn-disabled-bg);
+	--window-footer-btn-disabled-opacity: var(--right-page-btn-disabled-opacity);
+}
+
+/* ── The tab's space: pages start right under the tabs and use it all ── */
+.workspace_context_panel {
+	gap: 8px;
+	padding-bottom: 4px;
+}
+
+.workspace_context_tab_body {
+	padding: 6px 8px 8px;
+}
+
+.settings_page.right_page {
+	flex: 0 0 auto;
+	gap: 14px;
+	padding: 0;
+}
+
+/* As tall as the tab: the growing block takes what is left. When the tab is
+   too short for that, the page keeps its blocks' sizes and the tab scrolls. */
+.settings_page.right_page.is-filling {
+	display: flex;
+	flex: 1 0 auto;
+	flex-direction: column;
+	min-height: 100%;
+}
+
+.right_page.is-filling > * {
+	flex: none;
+}
+
+.right_page.is-filling > .right_block.is-growing {
+	display: flex;
+	flex: 1 0 auto;
+	flex-direction: column;
+	min-height: 140px;
+}
+
+.right_block.is-growing > .config_card,
+.right_block.is-growing > .right_card_body {
+	flex: 1 0 auto;
+	align-content: start;
+}
+
+/* A collapsible block folds to its heading. */
+.right_block.is-collapsible > .settings_block_header {
+	cursor: pointer;
+	user-select: none;
+}
+
+.right_block_body {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr);
+	grid-template-rows: 1fr;
+	transition: grid-template-rows 220ms ease, opacity 180ms ease, visibility 0s;
+}
+
+.right_block_inner {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+	min-height: 0;
+	overflow: hidden;
+}
+
+/* Room for the focus rings, which the folding would cut off. */
+.right_block:not(.is-collapsed) > .right_block_body > .right_block_inner {
+	margin: 0 -4px -4px;
+	padding: 0 4px 4px;
+}
+
+.right_block.is-collapsed > .right_block_body {
+	grid-template-rows: 0fr;
+	opacity: 0;
+	visibility: hidden;
+	transition: grid-template-rows 220ms ease, opacity 180ms ease, visibility 0s linear 220ms;
+}
+
+.right_block.is-growing > .right_block_body {
+	flex: 1 0 auto;
+}
+
+.right_block.is-growing .right_block_inner > .right_card_body {
+	flex: 1 0 auto;
+	align-content: start;
+}
+
+.right_page.is-filling > .right_block.is-growing.is-collapsed {
+	flex: none;
+	min-height: 0;
+}
+
+.right_block.is-growing.is-collapsed > .right_block_body {
+	flex: none;
+}
+
+.right_page .settings_block_actions {
+	flex-wrap: nowrap;
+	gap: 4px;
+}
+
+.right_toggle {
+	display: inline-grid;
+	place-items: center;
+	width: 28px;
+	height: 24px;
+	padding: 0;
+	border: 0;
+	border-radius: 4px;
+	background: var(--right-page-toggle-bg);
+	color: var(--right-page-toggle-icon);
+	cursor: pointer;
+	transition: background-color 140ms ease, color 140ms ease;
+}
+
+.right_toggle:hover {
+	background: var(--right-page-toggle-hover-bg);
+	color: var(--right-page-toggle-hover-icon);
+}
+
+.right_toggle svg {
+	width: 14px;
+	height: 14px;
+	transition: transform 220ms ease;
+}
+
+.right_block.is-collapsed .right_toggle svg {
+	transform: rotate(-90deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.right_block_body,
+	.right_block.is-collapsed > .right_block_body {
+		transition: none;
+	}
+}
+
+/* Filter: the properties to search in, all of them (the tab scrolls). */
+.right_key_list {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr);
+}
+
+.right_key_list .right_field + .right_field {
+	border-top: 1px solid var(--right-page-key-line);
+}
+
+/* The page's name, for screen readers: the tab shows it. */
+.right_page_name {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	margin: 0;
+	overflow: hidden;
+	clip-path: inset(50%);
+	white-space: nowrap;
+}
+
+/* ── Header ── */
+.right_page .settings_hero {
+	flex-direction: row;
+	align-items: center;
+	gap: 11px;
+	padding: 11px 12px;
+}
+
+.right_page .settings_hero_media {
+	width: 34px;
+	height: 34px;
+}
+
+.right_page .settings_hero_media svg {
+	width: 17px;
+	height: 17px;
+}
+
+.right_page .settings_hero_main {
+	gap: 2px;
+}
+
+.right_page .settings_eyebrow {
+	font-size: 10px;
+}
+
+.right_page .settings_hero_title {
+	flex-wrap: nowrap;
+	gap: 8px;
+}
+
+.right_page .settings_hero_title h4 {
+	font-size: 14px;
+}
+
+.right_page .settings_pill {
+	flex: none;
+	margin-left: auto;
+	padding: 1px 7px;
+	font-size: 9.5px;
+}
+
+.right_page .settings_hero_meta {
+	font-size: 11px;
+	line-height: 1.35;
+}
+
+.right_page .settings_stats {
+	grid-template-columns: var(--settings-stats-columns, repeat(3, minmax(0, 1fr)));
+}
+
+.right_page .settings_stat,
+.right_page .settings_stat.is-text {
+	gap: 1px;
+	padding: 8px 12px;
+	box-shadow: none;
+}
+
+.right_page .settings_stat dt {
+	font-size: 10px;
+}
+
+.right_page .settings_stat dd,
+.right_page .settings_stat.is-text dd {
+	font-size: 14px;
+	line-height: 1.3;
+}
+
+.right_page .settings_stat small {
+	font-size: 10px;
+}
+
+/* ── Blocks and form cards ── */
+.right_page .settings_block {
+	gap: 7px;
+}
+
+.right_page .settings_block_header {
+	align-items: center;
+	min-height: 26px;
+	padding: 0 2px;
+}
+
+.right_page .settings_block_header h4 {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 13px;
+}
+
+.right_block_icon {
+	flex: none;
+	width: 14px;
+	height: 14px;
+	fill: none;
+	stroke: var(--right-page-card-icon);
+	stroke-width: 1.9;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+
+.right_page .config_card {
+	gap: 10px;
+	padding: 12px;
+	border-radius: 6px;
+}
+
+.right_page .settings_masthead {
+	border-radius: 6px;
+}
+
+.right_page .config_card_grid {
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 10px;
+}
+
+.right_field {
+	display: grid;
+	gap: 4px;
+	min-width: 0;
+}
+
+.right_hint {
+	color: var(--right-page-hint-text);
+	font-size: 10.5px;
+	line-height: 1.4;
+}
+
+.right_note {
+	margin: 0;
+	color: var(--right-page-note-text);
+	font-size: 12px;
+}
+
+.right_hint.is-warning {
+	color: var(--right-page-warning-text);
+}
+
+.right_page .config_switch_row {
+	min-height: 32px;
+	padding: 0;
+	border: 0;
+}
+
+.right_page .config_switch_row input {
+	width: 32px;
+	height: 18px;
+}
+
+.right_page .config_switch_row input::after {
+	width: 12px;
+	height: 12px;
+}
+
+.right_page .config_switch_row input:checked::after {
+	transform: translateX(14px);
+}
+
+.right_page .config_switch_row span {
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+
+.right_page .config_switch_row.is-disabled,
+.right_page .config_switch_row.is-disabled input {
+	cursor: not-allowed;
+}
+
+.right_page .config_switch_row.is-disabled span {
+	opacity: 0.6;
+}
+
+/* ── Rows: a name and its value ── */
+.right_rows {
+	display: grid;
+	margin: 0;
+	font-size: 12px;
+}
+
+.right_rows > div {
+	display: grid;
+	grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+	gap: 10px;
+	padding: 6px 0;
+	border-bottom: 1px solid var(--right-page-row-line);
+	line-height: 1.4;
+}
+
+.right_rows > div:first-child {
+	padding-top: 0;
+}
+
+.right_rows > div:last-child {
+	padding-bottom: 0;
+	border-bottom: 0;
+}
+
+.right_rows dt {
+	color: var(--right-page-row-label);
+}
+
+.right_rows dd {
+	margin: 0;
+	color: var(--right-page-row-value);
+	text-align: right;
+}
+
+/* One line; the whole text is in its tooltip when cut. */
+.right_line {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.right_line:focus-visible {
+	outline: 2px solid var(--right-page-line-focus);
+	outline-offset: 1px;
+}
+
+.right_result {
+	margin: 0;
+	color: var(--right-page-form-result);
+	font-size: 12px;
+	line-height: 1.4;
+}
+
+/* ── Buttons ── */
+.right_page .settings_block_actions .settings_button.is-compact {
+	height: 26px !important;
+	min-height: 26px !important;
+	font-size: 11px;
+}
+
+/* ── Overview, Info and Filter: each block is one card, its heading inside, with a line
+   between one card and the next ── */
+.settings_page.right_page.right_cards {
+	--settings-block-header-h4-text: var(--right-page-card-title);
+	gap: 17px;
+}
+
+.right_page.right_cards > .right_block {
+	position: relative;
+	gap: 9px;
+	padding: 10px 12px 12px;
+	border: 1px solid var(--right-page-card-border);
+	border-radius: 6px;
+	background: var(--right-page-card-bg);
+}
+
+.right_page.right_cards > .right_block.is-collapsed {
+	gap: 0;
+	padding-bottom: 10px;
+}
+
+.right_cards > .right_block > .settings_block_header {
+	padding: 0;
+}
+
+
+.right_cards > * + .right_block::before {
+	content: "";
+	position: absolute;
+	top: -10px;
+	right: -1px;
+	left: -1px;
+	height: 1px;
+	background: var(--right-page-card-line);
+}
+
+.right_card_body {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr);
+	gap: 10px;
+}
+
+.right_card_body .settings_input {
+	min-height: 32px;
+	padding: 0 10px;
+	border-color: var(--right-page-input-border);
+	border-radius: 3px;
+	background: var(--right-page-input-bg);
+	color: var(--right-page-input-text);
+	font-size: 12px;
+	transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+
+.right_card_body .settings_input::placeholder {
+	color: var(--right-page-input-placeholder);
+}
+
+.right_card_body .settings_input:hover:not(:disabled) {
+	border-color: var(--right-page-input-hover-border);
+}
+
+.right_card_body .settings_input:focus {
+	border-color: var(--right-page-input-focus-border);
+	box-shadow: 0 0 0 3px var(--right-page-input-focus-ring);
+	outline: none;
+}
+
+.right_card_body .settings_input:disabled {
+	background: var(--right-page-input-disabled-bg);
+	color: var(--right-page-input-disabled-text);
+	cursor: not-allowed;
+}
+
+/* ── Filter: the search card ── */
+.right_search {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+	height: 40px;
+	padding: 0 8px 0 11px;
+	border: 1px solid var(--right-page-search-field-border);
+	border-radius: 6px;
+	background: var(--right-page-search-field-bg);
+	transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.right_search:focus-within {
+	border-color: var(--right-page-search-field-focus);
+	box-shadow: 0 0 0 3px var(--right-page-search-field-ring);
+}
+
+.right_search.is-disabled {
+	opacity: 0.6;
+}
+
+.right_search_icon,
+.right_search_clear svg,
+.right_search_submit svg {
+	flex: none;
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 2;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+
+.right_search_icon {
+	width: 17px;
+	height: 17px;
+	color: var(--right-page-search-icon);
+	transition: transform 200ms ease;
+}
+
+.right_search:focus-within .right_search_icon {
+	transform: scale(1.12);
+}
+
+.right_search_input {
+	flex: 1;
+	min-width: 0;
+	height: 100%;
+	padding: 0;
+	border: 0;
+	background: none;
+	color: var(--right-page-search-field-text);
+	font: inherit;
+	font-size: 13px;
+	outline: none;
+}
+
+.right_search_input::placeholder {
+	color: var(--right-page-search-field-placeholder);
+}
+
+.right_search_key {
+	flex: none;
+	padding: 1px 6px;
+	border: 1px solid var(--right-page-search-key-border);
+	border-radius: 3px;
+	background: var(--right-page-search-key-bg);
+	color: var(--right-page-search-key-text);
+	font: inherit;
+	font-size: 10px;
+	font-weight: 600;
+}
+
+.right_search_clear {
+	display: grid;
+	flex: none;
+	place-items: center;
+	width: 22px;
+	height: 22px;
+	padding: 0;
+	border: 0;
+	border-radius: 50%;
+	background: none;
+	color: var(--right-page-search-clear);
+	cursor: pointer;
+}
+
+.right_search_clear svg {
+	width: 12px;
+	height: 12px;
+}
+
+.right_search_clear:hover {
+	color: var(--right-page-search-clear-hover);
+}
+
+/* What will be looked for, in words. */
+.right_search_reading {
+	display: flex;
+	align-items: baseline;
+	gap: 7px;
+	min-width: 0;
+	margin: -2px 0 0;
+	overflow-wrap: anywhere;
+	color: var(--right-page-search-reading);
+	font-size: 11px;
+	line-height: 1.4;
+}
+
+.right_search_reading.is-on {
+	color: var(--right-page-search-reading-on);
+	font-weight: 500;
+}
+
+.right_search_reading::before {
+	content: "";
+	flex: none;
+	align-self: center;
+	width: 5px;
+	height: 5px;
+	border-radius: 50%;
+	background: var(--right-page-search-reading-mark);
+}
+
+/* Two handles on one line: 0 to the largest value searched in. */
+.right_range {
+	display: grid;
+	gap: 5px;
+}
+
+.right_range_head,
+.right_range_ends {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 10px;
+	font-size: 11px;
+	font-variant-numeric: tabular-nums;
+}
+
+.right_range_head > span {
+	min-width: 0;
+	overflow: hidden;
+	color: var(--right-page-range-label);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.right_range_head strong {
+	flex: none;
+	color: var(--right-page-range-value);
+	font-weight: 600;
+}
+
+.right_range_ends {
+	color: var(--right-page-range-ends);
+	font-size: 10px;
+}
+
+.right_range_track {
+	position: relative;
+	height: 18px;
+}
+
+/* The line, and the part of it between the handles' centres. */
+.right_range_track::before,
+.right_range_track::after {
+	content: "";
+	position: absolute;
+	top: 7px;
+	height: 4px;
+	border-radius: 999px;
+}
+
+.right_range_track::before {
+	right: 0;
+	left: 0;
+	background: var(--right-page-range-track);
+}
+
+.right_range_track::after {
+	right: calc(7px + (100% - 14px) * (1 - var(--range-to)));
+	left: calc(7px + (100% - 14px) * var(--range-from));
+	background: var(--right-page-range-fill);
+}
+
+.right_range_track input {
+	position: absolute;
+	z-index: 1;
+	inset: 0;
+	width: 100%;
+	height: 18px;
+	margin: 0;
+	background: none;
+	pointer-events: none;
+	appearance: none;
+	-webkit-appearance: none;
+}
+
+.right_range_track input.is-on-top {
+	z-index: 2;
+}
+
+.right_range_track input::-webkit-slider-runnable-track {
+	height: 18px;
+	background: none;
+}
+
+.right_range_track input::-webkit-slider-thumb {
+	margin-top: 2px;
+	-webkit-appearance: none;
+	appearance: none;
+	width: 14px;
+	height: 14px;
+	border: 2px solid var(--right-page-range-thumb-border);
+	border-radius: 50%;
+	background: var(--right-page-range-thumb);
+	box-shadow: 0 1px 3px var(--right-page-range-thumb-shadow);
+	box-sizing: border-box;
+	cursor: grab;
+	pointer-events: auto;
+}
+
+.right_range_track input::-moz-range-track {
+	background: none;
+}
+
+.right_range_track input::-moz-range-thumb {
+	width: 14px;
+	height: 14px;
+	border: 2px solid var(--right-page-range-thumb-border);
+	border-radius: 50%;
+	background: var(--right-page-range-thumb);
+	box-shadow: 0 1px 3px var(--right-page-range-thumb-shadow);
+	box-sizing: border-box;
+	cursor: grab;
+	pointer-events: auto;
+}
+
+.right_range_track input:focus-visible {
+	outline: none;
+}
+
+.right_range_track input:focus-visible::-webkit-slider-thumb {
+	box-shadow: 0 0 0 3px var(--right-page-range-focus);
+}
+
+.right_range_track input:focus-visible::-moz-range-thumb {
+	box-shadow: 0 0 0 3px var(--right-page-range-focus);
+}
+
+.right_range.is-disabled .right_range_track {
+	opacity: 0.45;
+}
+
+.right_range_track input:disabled::-webkit-slider-thumb {
+	cursor: not-allowed;
+}
+
+.right_range_track input:disabled::-moz-range-thumb {
+	cursor: not-allowed;
+}
+
+.right_search_submit {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 7px;
+	height: 36px;
+	border: 1px solid var(--right-page-btn-primary-border);
+	border-radius: 6px;
+	background: var(--right-page-btn-primary-bg);
+	color: var(--right-page-btn-primary-text);
+	font: inherit;
+	font-size: 12.5px;
+	font-weight: 600;
+	cursor: pointer;
+	transition: background-color 160ms ease, border-color 160ms ease;
+}
+
+.right_search_submit svg {
+	width: 14px;
+	height: 14px;
+}
+
+.right_search_submit:hover:not(:disabled) {
+	border-color: var(--right-page-btn-primary-hover-border);
+	background: var(--right-page-btn-primary-hover-bg);
+}
+
+.right_search_submit:disabled {
+	cursor: not-allowed;
+	opacity: 0.5;
+}
+
+.right_search_clear:focus-visible,
+.right_search_submit:focus-visible {
+	outline: 2px solid var(--right-page-search-field-focus);
+	outline-offset: 1px;
+}
+
+/* The result, and the share of the graph that matches. */
+.right_found {
+	display: grid;
+	gap: 6px;
+}
+
+.right_found.is-none .right_result {
+	color: var(--right-page-search-found-none);
+}
+
+.right_found_bar {
+	display: block;
+	height: 4px;
+	border-radius: 999px;
+	background: var(--right-page-search-found-track);
+	overflow: hidden;
+}
+
+.right_found_bar i {
+	display: block;
+	height: 100%;
+	border-radius: inherit;
+	background: var(--right-page-search-found-fill);
+	transition: width 360ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.right_search_icon,
+	.right_found_bar i {
+		transition: none;
+	}
+}
+
+/* ── Overview: recent analyses ── */
+.right_tasks {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr);
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.right_task {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 10px;
+	padding: 7px 0;
+	border-bottom: 1px solid var(--right-page-task-line);
+}
+
+.right_task:first-child {
+	padding-top: 0;
+}
+
+.right_task:last-child {
+	padding-bottom: 0;
+	border-bottom: 0;
+}
+
+.right_task span {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr);
+	min-width: 0;
+}
+
+.right_task strong {
+	color: var(--right-page-task-title);
+	font-size: 12px;
+	font-weight: 600;
+}
+
+.right_task small {
+	color: var(--right-page-task-detail);
+	font-size: 10.5px;
+}
+
+.right_task em {
+	flex: none;
+	color: var(--right-page-task-status);
+	font-size: 11px;
+	font-style: normal;
+	font-weight: 600;
+}
+
+.right_task.is-active em {
+	color: var(--right-page-task-status-active);
+}
+
+.right_task.is-failed em {
+	color: var(--right-page-task-status-failed);
+}
+
+/* ── Overview: the co-analyst's card, with the graph's alerts as the Graph
+   Alerts card's tooltip says them ── */
+.right_alert {
+	--alert-tone: var(--right-page-alert-quiet);
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+	padding: 8px 11px 8px 12px;
+	border: 1px solid color-mix(in srgb, var(--alert-tone) 30%, var(--right-page-alert-border));
+	border-left: 3px solid var(--alert-tone);
+	border-radius: 3px;
+	background: linear-gradient(90deg, color-mix(in srgb, var(--alert-tone) 10%, transparent), transparent 70%);
+}
+
+.right_alert.is-raised { --alert-tone: var(--right-page-alert-tone); }
+
+/* Nothing flagged: no edge at all. */
+.right_alert:not(.is-raised) {
+	border: 0;
+}
+
+.right_alert_title {
+	color: var(--alert-tone);
+	font-size: 9.5px;
+	font-weight: 800;
+	letter-spacing: 0.7px;
+	text-transform: uppercase;
+}
+
+.right_alert strong {
+	overflow-wrap: anywhere;
+	color: var(--right-page-alert-text);
+	font-size: 12px;
+	font-weight: 700;
+}
+
+.right_alert_chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+	margin-top: 2px;
+}
+
+.right_alert_chip {
+	--chip: var(--right-page-chip-high);
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 1px 7px 1px 5px;
+	border-radius: 999px;
+	background: color-mix(in srgb, var(--chip) 14%, transparent);
+	color: var(--chip);
+	font-size: 10px;
+	font-weight: 600;
+}
+
+.right_alert_chip.is-medium { --chip: var(--right-page-chip-medium); }
+
+.right_alert_chip::before {
+	content: "";
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: var(--chip);
+}
+
+.right_alert small {
+	margin-top: 2px;
+	color: var(--right-page-alert-hint);
+	font-size: 10px;
+	line-height: 1.4;
+}
+
+.right_assist_open {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	height: 32px;
+	padding: 0 12px;
+	border: 1px solid var(--right-page-assist-btn-border);
+	border-radius: 3px;
+	background: var(--right-page-assist-btn-bg);
+	color: var(--right-page-assist-btn-text);
+	font: inherit;
+	font-size: 12px;
+	font-weight: 600;
+	cursor: pointer;
+	transition: background-color 160ms ease, border-color 160ms ease;
+}
+
+.right_assist_open:hover:not(:disabled) {
+	border-color: var(--right-page-assist-btn-hover-border);
+	background: var(--right-page-assist-btn-hover-bg);
+}
+
+.right_assist_open:focus-visible {
+	outline: 2px solid var(--right-page-assist-btn-hover-border);
+	outline-offset: 2px;
+}
+
+.right_assist_open:disabled {
+	cursor: not-allowed;
+	opacity: 0.5;
+}
+
+/* ── Assistant: the header, then the chat takes the rest ── */
+.workspace_assistant_tab_wrapper.right_page {
+	display: flex;
+	flex: 1 1 0;
+	flex-direction: column;
+	gap: 10px;
+	padding: 0 0 8px;
+}
+
+.workspace_assistant_tab_wrapper.right_page > .settings_masthead {
+	flex: none;
+}
+
+.right_page .settings_hero_aside {
+	flex-wrap: nowrap;
+	gap: 4px;
+}
+
+.right_page .workspace_context_chat_form {
+	margin-top: 0;
+}
+
+.right_page .workspace_context_chat_form textarea {
+	border-radius: 3px;
+}
+
+/* ── Collapsed rail: the tab it opens on ── */
+.workspace_collapsed_rail_btn.is-active {
+	border-color: var(--right-collapsed-btn-active-border);
+	background: var(--right-collapsed-btn-active-bg);
+	color: var(--right-collapsed-btn-active-icon);
+}

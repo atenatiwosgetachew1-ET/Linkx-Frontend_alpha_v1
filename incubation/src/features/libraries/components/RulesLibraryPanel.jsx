@@ -4,7 +4,6 @@ import { Field } from '../../../shared/components/form/FormFields.jsx';
 import { Block, Masthead, PageHero, Pill, SettingsPage, Stat, Stats } from '../../settings/components/SettingsPage.jsx';
 import { sanitizeText } from '../../../utils/inputSecurity.js';
 import {
-  RULE_TEMPLATE_PATH,
   describeRules,
   getKnownBuiltinRules,
   subscribeKnownBuiltinRules,
@@ -36,7 +35,7 @@ const hero = ({ title, tone, pill }) => (
 
 // The rule sets loaded for this session (production Configuration > rules,
 // moved here). Choosing the *active* rule stays in Configuration.
-export default function RulesLibraryPanel({ configuration, canRead, canWrite, busy, onUpload, onRemove, onOpenConfiguration }) {
+export default function RulesLibraryPanel({ configuration, canRead, canWrite, busy, onUpload, onRemove, onOpenConfiguration, onTemplate }) {
   const known = useSyncExternalStore(subscribeKnownBuiltinRules, getKnownBuiltinRules);
   const rules = useMemo(() => describeRules(configuration, known), [configuration, known]);
   const [filter, setFilter] = useState('');
@@ -172,7 +171,7 @@ export default function RulesLibraryPanel({ configuration, canRead, canWrite, bu
               />
             </Field>
           </div>
-          <a className="libraries_link" href={`${import.meta.env.BASE_URL}${RULE_TEMPLATE_PATH}`} download>Get the latest rule template</a>
+          <button type="button" className="libraries_link settings_link_button" onClick={onTemplate}>Get the latest rule template</button>
         </div>
       </Block>
     </SettingsPage>

@@ -4,11 +4,12 @@ import WindowLoadScreen from '../../../shared/components/WindowLoadScreen.jsx';
 import { useSession } from '../../../shared/session/useSession.js';
 import { useNotifications } from '../../../shared/notifications/useNotifications.js';
 import { useWorkspace } from '../../../workspace/hooks/useWorkspace.js';
+import { isPresentationLoaded } from '../lib/domainPresentation.js';
 import { formatDomainPillarLabel, getActiveDomainKey } from '../../configuration/lib/configModel.js';
-import { buildEvidencePayload, buildRelationshipPayload } from '../../../services/graphApi.js';
+import { buildEvidencePayload, buildRelationshipPayload, buildTaskGraphPayload } from '../../../services/graphApi.js';
 import { getCachedEvidenceGraph, cacheEvidenceGraph } from '../../reports/lib/evidenceGraphs.js';
 import { markGpuFailed } from '../../../shared/device/gpuCapability.js';
-import { getTasksSnapshot, subscribeTasks } from '../../tasks/lib/taskRegistry.js';
+import { getLatestTaskForWindow, getTasksSnapshot, isTaskActive, subscribeTasks } from '../../tasks/lib/taskRegistry.js';
 import { disposeGraphStore, getGraphStore } from '../lib/graphStore.js';
 import { getGraphState, handleGraphActions, publishGraphState } from '../lib/graphLinkBus.js';
 import { graphReportExtras } from '../report/reportExtras.js';
@@ -20,9 +21,10 @@ import GraphFileMenu from './GraphFileMenu.jsx';
 import { forgetLayoutOwner, requestMeasure } from '../lib/layoutClient.js';
 import { runGraphFetch } from '../lib/graphFetchRunner.js';
 import { getGraphSession, subscribeGraphSession } from '../lib/graphStatus.js';
-import { linkGraphToSession, linkableSources, resolveSourceWindow, unlinkGraph } from '../lib/graphLinkFlow.js';
+import { isSessionStreaming, linkGraphToSession, linkableSources, resolveSourceWindow, unlinkGraph } from '../lib/graphLinkFlow.js';
 import {
   DEFAULT_GRAPH_SETTINGS, GRAPH_LIMITS, applyPerformancePolicy, layoutSignatureOf, normalizeGraphSettings, viewKeyOf, visibleCapFor,
+  warnAtFor,
 } from '../lib/graphSettings.js';
 import { getGraphDefaults, subscribeGraphDefaults } from '../lib/graphDefaults.js';
 import { getGpuLimits, shouldPromptBenchmark, subscribeGpuBenchmark } from '../lib/gpuBenchmark.js';
@@ -64,7 +66,7 @@ import GraphProfileCards from './GraphProfileCards.jsx';
 import GraphFormattingBox from './GraphFormattingBox.jsx';
 import { formattingContext } from '../lib/graphElements.js';
 import { describeRule, getDomainFormatting, resolveDomainFormatting, subscribeDomainFormatting } from '../lib/conditionalFormatting.js';
-import { aggregateLinks, formatLinkTotal } from '../lib/linkAggregation.js';
+import { aggregateLinks, linkTotalText } from '../lib/linkAggregation.js';
 import { MEASURES, topScores } from '../lib/networkMeasures.js';
 import { getProfileSettings, profileOf, resolveProfileSettings, subscribeProfileSettings } from '../lib/nodeProfile.js';
 import { AuthContext } from '../../../auth/authContext.js';
@@ -169,9 +171,14 @@ const noopSubscribe = () => () => {};
 // Source stream (its relationship chips load the graph), or nothing yet.
 const sourceOf = (metadata = {}) => {
   if (metadata.evidence?.traceId) return { kind: 'evidence', traceId: String(metadata.evidence.traceId), evidence: metadata.evidence };
+  if (metadata.graphTaskId) return { kind: 'run', serverId: String(metadata.graphTaskId) };
   if (metadata.graphLinkSource) return { kind: 'session', sessionId: String(metadata.graphLinkSource) };
   return { kind: 'none' };
 };
+
+const describePartial = ({ received, expected, truncatedBy }) => (truncatedBy ? `the Service cut it (${truncatedBy.replace(/_/g, ' ')})${received && expected ? `: ${received.nodes.toLocaleString('en-GB')} of ${expected.nodes.toLocaleString('en-GB')} entities and ${received.edges.toLocaleString('en-GB')} of ${expected.edges.toLocaleString('en-GB')} links` : ''}` : received && expected
+  ? `${received.nodes.toLocaleString('en-GB')} of ${expected.nodes.toLocaleString('en-GB')} entities and ${received.edges.toLocaleString('en-GB')} of ${expected.edges.toLocaleString('en-GB')} links came`
+  : 'the last parts did not come');
 
 export default function GraphWindowBody({ windowItem }) {
   const windowId = windowItem.id;
@@ -189,7 +196,7 @@ export default function GraphWindowBody({ windowItem }) {
   // mapping fields), else the device copy kept by the last save.
   const deviceProfile = useSyncExternalStore(subscribeProfileSettings, () => getProfileSettings(domainKey));
   const profileSettings = useMemo(
-    () => (configuration?.actor_profile ? resolveProfileSettings(configuration, domainKey) : deviceProfile),
+    () => (configuration?.actor_profile && !isPresentationLoaded(domainKey) ? resolveProfileSettings(configuration, domainKey) : deviceProfile),
     [configuration, deviceProfile, domainKey],
   );
   const canvasRef = useRef(null);
@@ -272,8 +279,17 @@ export default function GraphWindowBody({ windowItem }) {
     requestAnimationFrame(() => requestAnimationFrame(() => canvasRef.current?.focusOn?.(ids, options)));
   }, []);
   useEffect(() => {
-    store.setViewStats({ nodes: view.nodeIds.length, edges: view.edgeIds.length, searched: view.searched });
-  }, [store, view]);
+    store.setViewStats({
+      nodes: view.nodeIds.length,
+      edges: view.edgeIds.length,
+      searched: view.searched,
+      matches: view.matches ?? 0,
+      viewKey,
+      hiddenTypes: ELEMENT_TYPES.filter((type) => !elementFilters[type.id]).map((type) => type.label).join(', '),
+      hiddenNodes: store.hiddenCount(viewKey),
+      timeFiltered: Boolean(view.timeFiltered),
+    });
+  }, [elementFilters, store, view, viewKey]);
   const effective = useMemo(() => applyPerformancePolicy(settings, view.nodeIds.length), [settings, view.nodeIds.length]);
 
   // Once per device: a graph shown above the standard-drawing comfort limit
@@ -361,7 +377,8 @@ export default function GraphWindowBody({ windowItem }) {
         cacheEvidenceGraph(source.traceId, { data: null, nodes: [], edges: [] });
         closeAsEmpty();
       },
-      onLoaded: () => cacheEvidenceGraph(source.traceId, { data: null, ...store.toPayload() }),
+      // What the Service sent, whole: never this window's edits, nor a part.
+      onLoaded: (result) => { if (!result.partial) cacheEvidenceGraph(source.traceId, { data: null, ...result.raw() }); },
     });
   }, [apiFetch, closeAsEmpty, source, store]);
 
@@ -369,12 +386,45 @@ export default function GraphWindowBody({ windowItem }) {
     if (source.kind === 'evidence' && store.getStatus().state === 'idle' && store.getSnapshot().nodes === 0) loadEvidence();
   }, [loadEvidence, source.kind, store]);
 
+  /* ── A finished run's kept graph (B-37) ─────────────────────────────── */
+  const [emptyRun, setEmptyRun] = useState(false);
+  const loadRun = useCallback(() => {
+    if (source.kind !== 'run') return;
+    setEmptyRun(false);
+    runGraphFetch({
+      store,
+      apiFetch,
+      source: 'run',
+      label: 'the run\u2019s graph',
+      payload: buildTaskGraphPayload(source.serverId),
+      onFirstChunk: resetRange,
+      onEmpty: () => setEmptyRun(true),
+    });
+  }, [apiFetch, resetRange, source, store]);
+  useEffect(() => {
+    if (source.kind === 'run' && store.getStatus().state === 'idle' && store.getSnapshot().nodes === 0 && !emptyRun) loadRun();
+  }, [emptyRun, loadRun, source.kind, store]);
+
   /* ── Linked session: relationships load the graph ───────────────────── */
+  // The run this window shows (opened from Tasks, else the session's latest).
+  const runTask = useMemo(() => {
+    const byId = metadata.taskId ? tasks.find((task) => task.id === metadata.taskId) : null;
+    return byId || tasks.find((task) => sessionId && String(task.sourceSessionId || '') === sessionId) || null;
+  }, [metadata.taskId, sessionId, tasks]);
+  const replacedRun = Boolean(metadata.taskId && runTask?.id === metadata.taskId && runTask.windowId && !runTask.remote
+    && (getLatestTaskForWindow(runTask.windowId)?.id ?? runTask.id) !== runTask.id);
   // A session whose fetch came back with nothing (no nodes, no relationships).
   const [emptySession, setEmptySession] = useState('');
   const fetchRelationship = useCallback((relationship) => {
     if (!sessionId) return;
+    // Opened for a run whose Source window has run again: the session's graph
+    // is the newer run's.
+    if (replacedRun) {
+      notify({ title: 'Graph not loaded', message: 'This window shows an earlier run. Its Source window has run again since, so the session now holds the newer run\u2019s graph. Open that run\u2019s graph from Tasks.', level: 'warning', source: windowItem.title });
+      return;
+    }
     setEmptySession('');
+    const previous = metadataRef.current.graphRelationship ?? null;
     updateWindowMetadata(windowId, { metadata: { graphRelationship: relationship } });
     runGraphFetch({
       store,
@@ -383,6 +433,14 @@ export default function GraphWindowBody({ windowItem }) {
       label: relationship === '*' ? 'all relationships' : `“${relationship}”`,
       payload: buildRelationshipPayload(sessionId, relationship),
       onFirstChunk: resetRange,
+      extra: isSessionStreaming(sessionId) ? { midRun: true } : {},
+      // Nothing came: the graph that was there stays, under its own tab.
+      onFailed: (error) => {
+        if (!previous) return false;
+        updateWindowMetadata(windowId, { metadata: { graphRelationship: previous } });
+        notify({ title: 'Graph not loaded', message: `${error?.message || 'The graph could not be loaded.'} The graph shown before is kept.`, level: 'error', source: windowItem.title });
+        return true;
+      },
       // Production closes the window here too, with the evidence message; a
       // linked window is kept (closing it would drop the link).
       onEmpty: () => {
@@ -395,7 +453,7 @@ export default function GraphWindowBody({ windowItem }) {
         });
       },
     });
-  }, [apiFetch, notify, resetRange, sessionId, store, updateWindowMetadata, windowId, windowItem.title]);
+  }, [apiFetch, notify, replacedRun, resetRange, sessionId, store, updateWindowMetadata, windowId, windowItem.title]);
 
   // A linked session starts on All once its relationships arrive (analyst
   // decision 2026-11-16; production waited for a pick). Only when nothing
@@ -408,11 +466,12 @@ export default function GraphWindowBody({ windowItem }) {
   const finishedRun = Boolean(sessionId) && metadata.graphFinishedRun === true;
   useEffect(() => {
     if (!sessionId || (!hasRelationships && !finishedRun) || session.terminated || metadata.graphRelationship) return;
-    if (autoAllRef.current === sessionId) return;
+    const linkKey = `${sessionId}:${metadata.graphLinkedAt || ''}`;
+    if (autoAllRef.current === linkKey) return;
     if (store.getStatus().state !== 'idle' || store.getSnapshot().nodes > 0) return;
-    autoAllRef.current = sessionId;
+    autoAllRef.current = linkKey;
     fetchRelationship('*');
-  }, [fetchRelationship, finishedRun, hasRelationships, metadata.graphRelationship, session.terminated, sessionId, store]);
+  }, [fetchRelationship, finishedRun, hasRelationships, metadata.graphLinkedAt, metadata.graphRelationship, session.terminated, sessionId, store]);
 
   // Source terminated: production unlinks the windows and clears the
   // relationships, keeping what is drawn. Source closed: the window resets.
@@ -451,6 +510,7 @@ export default function GraphWindowBody({ windowItem }) {
 
   const retry = () => {
     if (snapshot.status.source === 'relationship' && metadata.graphRelationship) fetchRelationship(metadata.graphRelationship);
+    else if (source.kind === 'run') loadRun();
     else loadEvidence();
   };
 
@@ -578,7 +638,7 @@ export default function GraphWindowBody({ windowItem }) {
       group,
       mode: settings.linkAggregation.mode,
       totalKey: settings.linkAggregation.totalKey,
-      totalText: entry.total === null ? '' : formatLinkTotal(entry.total),
+      totalText: linkTotalText(entry),
       expanded: expandedLinks.includes(group),
     };
   }, [expandedLinks, linkGroups, settings.linkAggregation.mode, settings.linkAggregation.totalKey]);
@@ -597,6 +657,11 @@ export default function GraphWindowBody({ windowItem }) {
   const handleContextMenu = useCallback((request) => {
     if (!request) {
       setMenu(null);
+      return;
+    }
+    // Chunks still to come would overwrite or undo what is edited now.
+    if (['loading', 'queued'].includes(store.getStatus().state)) {
+      notify({ title: 'Graph loading', message: 'The graph can be edited once it has loaded.', level: 'info', source: windowItem.title });
       return;
     }
     const graph = store.graph();
@@ -636,7 +701,7 @@ export default function GraphWindowBody({ windowItem }) {
     });
     if (!content.header && !content.items.length) return;
     setMenu({ ...request, content });
-  }, [aggregateOf, clipboard.nodes.length, isCdr, pinned, settings.alertRules, settings.edgeBundling, store, view.nodeIds, viewKey, windowId, workspace.windows]);
+  }, [aggregateOf, clipboard.nodes.length, isCdr, notify, windowItem.title, pinned, settings.alertRules, settings.edgeBundling, store, view.nodeIds, viewKey, windowId, workspace.windows]);
 
   const notifyDrawingLimit = useCallback((skipped) => notify({
     title: 'Drawing limit reached',
@@ -806,7 +871,7 @@ export default function GraphWindowBody({ windowItem }) {
   // its last save; B-24) unless this graph turns them off.
   const deviceDomainRules = useSyncExternalStore(subscribeDomainFormatting, () => getDomainFormatting(domainKey));
   const domainRules = useMemo(
-    () => (Array.isArray(configuration?.formatting_rules) ? resolveDomainFormatting(configuration, domainKey) : deviceDomainRules),
+    () => (Array.isArray(configuration?.formatting_rules) && !isPresentationLoaded(domainKey) ? resolveDomainFormatting(configuration, domainKey) : deviceDomainRules),
     [configuration, deviceDomainRules, domainKey],
   );
   const activeRules = useMemo(
@@ -900,6 +965,7 @@ export default function GraphWindowBody({ windowItem }) {
   // A rescan cut short by a remount is not resumed: it shows the last results.
   const [alertsPanel, setAlertsPanel] = useWindowUiState(store, 'alertsPanel', { open: false, scanning: false }, (kept) => ({ ...kept, scanning: false }));
   const [alertNameKey, setAlertNameKey] = useWindowUiState(store, 'alertNameKey', '');
+  const [alertsScanned, setAlertsScanned] = useState(true);
   const alertMarkerKey = useRef('');
   // Both overlay cards start folded to their header (analyst decision 2026-11-15).
   const [alertsCollapsed, setAlertsCollapsed] = useWindowUiState(store, 'alertsCollapsed', true);
@@ -935,10 +1001,16 @@ export default function GraphWindowBody({ windowItem }) {
       applyAlerts([]);
       return undefined;
     }
-    if (view.nodeIds.length > ALERT_AUTO_SCAN_LIMITS.nodes || view.edgeIds.length > ALERT_AUTO_SCAN_LIMITS.edges) return undefined;
+    if (view.nodeIds.length > ALERT_AUTO_SCAN_LIMITS.nodes || view.edgeIds.length > ALERT_AUTO_SCAN_LIMITS.edges) {
+      // Too large to scan by itself: an earlier view's alerts are not this one's.
+      applyAlerts([]);
+      setAlertsScanned(false);
+      return undefined;
+    }
     const timer = setTimeout(() => {
       const found = scanAlerts();
       applyAlerts(found);
+      setAlertsScanned(true);
       if (loadStatus.state === 'ready' && view.nodeIds.length > 0 && !ALERTS_AUTO_OPENED.has(loadStatus)) {
         ALERTS_AUTO_OPENED.add(loadStatus);
         setAlertsPanel({ open: true, scanning: false });
@@ -958,6 +1030,7 @@ export default function GraphWindowBody({ windowItem }) {
     clearTimeout(rescanTimer.current);
     rescanTimer.current = setTimeout(() => {
       applyAlerts(scanAlerts());
+      setAlertsScanned(true);
       setAlertsPanel({ open: true, scanning: false });
     }, ALERT_SCAN_DELAY_MS);
   }, [applyAlerts, scanAlerts, setAlertsPanel, setFrontCard]);
@@ -1696,7 +1769,21 @@ export default function GraphWindowBody({ windowItem }) {
     else downloadDataUrl(snapshotFileName(), page);
     closeSnap();
   };
-  const runFileAction = (id) => {
+  // What is wrong with the data itself, said before it leaves the window.
+  const dataCaveat = () => {
+    const status = store.getStatus();
+    if (status.partial) return `The graph is incomplete: ${describePartial(status)}.`;
+    if (status.midRun) return 'The graph was loaded while its run was still going, so it may lack what came after.';
+    return '';
+  };
+  const runFileAction = async (id) => {
+    const { state } = store.getStatus();
+    if (state === 'loading' || state === 'queued' || state === 'error') {
+      notify({ title: 'Graph not ready', message: state === 'error' ? 'The graph could not be loaded completely. Load it again first.' : 'Wait until the graph has loaded.', level: 'warning', source: windowItem.title });
+      return;
+    }
+    const caveat = dataCaveat();
+    if (caveat && !(await requestConfirmation({ title: 'Incomplete graph', icon: 'warning', message: `${caveat} Continue?`, confirmText: 'Continue', cancelText: 'Cancel' }))) return;
     if (id === 'snapshot' || id === 'print') {
       openSnap(id === 'print' ? 'print' : 'snap');
     } else if (id === 'report') {
@@ -1725,7 +1812,7 @@ export default function GraphWindowBody({ windowItem }) {
     const graph = store.graph();
     const named = (id) => entityName(graph, id, nameKey);
     const markers = store.getMarkers(viewKey);
-    const weightKey = settings.linkAggregation?.totalKey || settings.edgeWeight || '';
+    const weightKey = settings.linkAggregation?.totalKey || '';
     return {
       // A Graph Report: the analyst may have changed this window's graph.
       kind: 'graph',
@@ -1753,7 +1840,7 @@ export default function GraphWindowBody({ windowItem }) {
         if (!profile.portrait && !profile.fields.some((entry) => entry.value)) return null;
         return { fields: profile.fields.map((entry) => [entry.label, entry.value]), portrait: profile.portrait };
       },
-      source: { kind: source.kind, evidence: source.evidence, sessionId, relationship: metadata.graphRelationship, fileName: metadata.graphImported },
+      source: { kind: source.kind, evidence: source.evidence, run: source.kind === 'run' || source.kind === 'session' ? runTask : null, sessionId, relationship: metadata.graphRelationship, fileName: metadata.graphImported },
       score: source.evidence?.score || null,
       scope: {
         searched: view.searched,
@@ -1787,7 +1874,7 @@ export default function GraphWindowBody({ windowItem }) {
       analyst: String(user?.display_name || user?.username || ''),
       systemRule: systemRuleText(source.evidence?.systemRules, store.graph()),
       graphAlert: describeAlertRules(alertRules, alertsEnabled, alerts.length),
-      purpose: `Link analysis of ${view.nodeIds.length.toLocaleString('en-GB')} entities and ${view.edgeIds.length.toLocaleString('en-GB')} relationships.`,
+      purpose: `Link analysis of ${view.nodeIds.length.toLocaleString('en-GB')} entities and ${view.edgeIds.length.toLocaleString('en-GB')} relationships.${dataCaveat() ? ` ${dataCaveat()}` : ''}`,
       findings: reportDraft(nameKey),
       assessment: '',
       actions: '',
@@ -1795,14 +1882,14 @@ export default function GraphWindowBody({ windowItem }) {
     });
   };
   // The cover's domain: an evidence graph's own domain (its report payload),
-  // else the active domain a session ran under; an imported file's domain is
-  // unknown, so it is left out.
+  // else the domain its run was made under (not today's); unknown for an
+  // imported file or a run that names none, so it is left out.
   // An evidence spanning several domains (e.g. "all") adds its
   // domain_distribution: "All (Banking 12 · Microfinance 3)".
   const evidenceDomain = source.kind === 'evidence'
     ? describeReportDomain(source.evidence?.domain, source.evidence?.domainDistribution, formatDomainPillarLabel)
     : '';
-  const reportDomain = evidenceDomain || (metadata.graphImported ? '' : formatDomainPillarLabel(domainKey));
+  const reportDomain = evidenceDomain || (metadata.graphImported || !runTask?.domain ? '' : formatDomainPillarLabel(runTask.domain));
   // This graph's linked Chart and Table windows: the report takes all of
   // their charts and tables (analyst decision 2026-11-19).
   const reportCompanions = () => ({
@@ -1849,7 +1936,7 @@ export default function GraphWindowBody({ windowItem }) {
     if (source.kind === 'session') await handleUnlink();
     store.abortFetch();
     updateWindowMetadata(windowId, {
-      metadata: { evidence: null, graphLinkSource: null, graphLinkAction: null, graphRelationship: null, graphSearch: null, graphBlank: true, graphImported: file.name.slice(0, 200) },
+      metadata: { evidence: null, graphLinkSource: null, graphTaskId: null, graphLinkAction: null, graphRelationship: null, graphSearch: null, graphBlank: true, graphImported: file.name.slice(0, 200) },
     });
     store.replace({ nodes: parsed.nodes, edges: parsed.edges });
     // A file with every position (ours) is drawn as it was.
@@ -1866,17 +1953,19 @@ export default function GraphWindowBody({ windowItem }) {
   // What this window draws and what is selected, for its Table and Chart
   // windows (lib/graphLinkBus.js); their row / bar clicks select / focus here.
   useEffect(() => {
-    // The weight key the window measures links by (link aggregation's
-    // total, else the edge weight property), for the Chart window's Edge
-    // Weight.
-    const weightKey = settings.linkAggregation?.totalKey || (settings.edgeWeight && settings.edgeWeight !== 'default' ? settings.edgeWeight : '');
+    // The link property the window totals (link aggregation's), for the
+    // Chart window's amounts. The edge weight setting is not one: it names
+    // a property of the entities.
+    const weightKey = settings.linkAggregation?.totalKey || '';
     publishGraphState(windowId, {
       nodeIds: view.nodeIds, edgeIds: view.edgeIds, selection: { nodes: snapshot.selection, edges: edgeSelection }, title: windowItem.title, weightKey,
       // The timeline's date field and slicing, for the Chart window's
       // Temporal Metrics.
       timeKey: timeline.key || '', timeSlice: timeline.slice || 'auto',
+      // Which data this is (a docked-away window publishes nothing new).
+      dataVersion: snapshot.dataVersion,
     });
-  }, [edgeSelection, snapshot.selection, view, windowId, windowItem.title, settings.linkAggregation?.totalKey, settings.edgeWeight, timeline.key, timeline.slice]);
+  }, [edgeSelection, snapshot.dataVersion, snapshot.selection, view, windowId, windowItem.title, settings.linkAggregation?.totalKey, timeline.key, timeline.slice]);
   const tableActionRef = useRef(null);
   tableActionRef.current = (action) => {
     const graph = store.graph();
@@ -2142,8 +2231,18 @@ export default function GraphWindowBody({ windowItem }) {
   // waits for that load's first scan, so it does not flash grey before
   // its count arrives.
   const alertsAwaitScan = hasData && status.state === 'ready' && !ALERTS_AUTO_OPENED.has(status);
+  // The right panel (Overview) says the same as the Graph Alerts card.
+  const alertText = alertsEnabled ? alertSummary(alerts, { drawn: view.nodeIds.length, total: snapshot.nodes, scanned: alertsScanned, rules: alertRules }) : 'Alert rules are off.';
+  const alertsKnown = hasData && status.state !== 'loading' && status.state !== 'queued' && (!alertsAwaitScan || !alertsScanned || !alertsEnabled);
+  useEffect(() => {
+    store.setAlertReport(alertsKnown ? {
+      summary: alertText,
+      total: describedAlerts.length,
+      high: describedAlerts.filter((item) => item.severity === 'high').length,
+    } : null);
+  }, [alertText, alertsKnown, describedAlerts, store]);
   const shown = view.nodeIds.length;
-  const warnAt = renderer === RENDERERS.WEBGL ? gpuLimits.warnAt : GRAPH_LIMITS.WARNING;
+  const warnAt = warnAtFor(renderer, gpuLimits);
   const busy = status.state === 'loading' || status.state === 'queued';
   const relationships = session.relationships || [];
 
@@ -2171,9 +2270,13 @@ export default function GraphWindowBody({ windowItem }) {
       title = 'This graph could not be restored';
       text = String(metadata.restoredNote);
     }
-    if (source.kind === 'session' && emptySession === sessionId) {
+    if (source.kind === 'run') {
       title = 'No graph data';
-      text = `Session ${sessionId} returned no nodes and no relationships.`;
+      text = 'This run has no relationships to draw. A run whose rows match no rule makes no network.';
+      start = '';
+    } else if (source.kind === 'session' && emptySession === sessionId) {
+      title = 'No graph data';
+      text = `Session ${sessionId} has no relationships to draw. A run whose rows match no rule makes no network.`;
       start = '';
       again = true;
     } else if (source.kind === 'session') {
@@ -2202,11 +2305,25 @@ export default function GraphWindowBody({ windowItem }) {
         <div className="graph_window_toolbar">
           <p className="graph_window_counts" aria-live="polite">
             {hasData
-              ? <>{view.searched ? 'Search: ' : 'Showing '}<strong>{formatCount(shown)}</strong> of {formatCount(snapshot.nodes)} nodes · {formatCount(view.edgeIds.length)} edges</>
+              ? <>{view.searched ? 'Search: ' : 'Showing '}<strong>{formatCount(shown)}</strong> of {formatCount(snapshot.nodes)} nodes{view.searched && view.matches !== undefined ? ` (${formatCount(view.matches)} ${view.matches === 1 ? 'match' : 'matches'})` : ''} · {formatCount(view.edgeIds.length)} of {formatCount(snapshot.edges)} edges</>
               : source.kind === 'none' && metadata.graphBlank ? 'New graph · 0 nodes' : 'No data'}
             {busy && hasData ? <span className="graph_window_hint"> · {status.message}</span> : null}
             {isLayingOut ? <span className="graph_window_hint"> · arranging…</span> : null}
           </p>
+          {status.state === 'ready' && status.partial ? (
+            <span className="graph_window_flag is-warning linkx_tooltip_anchor" role="status" data-tooltip-placement="bottom" data-tooltip={`The Service finished with part of the graph missing: ${describePartial(status)}. Load it again before relying on it.`}>
+              Incomplete
+            </span>
+          ) : status.state === 'ready' && status.midRun && sessionId ? (
+            <button type="button" className="graph_window_button is-compact linkx_tooltip_anchor" data-tooltip-placement="bottom" data-tooltip={runTask && isTaskActive(runTask) ? 'Loaded while the run is going: load it again for what came since.' : 'Loaded before the run finished: load it again for the whole graph. Edits made here are lost.'} onClick={() => fetchRelationship(metadata.graphRelationship || '*')}>
+              {runTask && isTaskActive(runTask) ? 'Run going: reload' : 'Run finished: reload'}
+            </button>
+          ) : null}
+          {!busy && snapshot.danglingEdges ? (
+            <span className="graph_window_flag is-warning linkx_tooltip_anchor" data-tooltip-placement="bottom" data-tooltip="Links whose entities were not in the data: they are not drawn nor counted.">
+              {formatCount(snapshot.danglingEdges)} links without ends
+            </span>
+          ) : null}
           {capped ? (
             <span className="graph_window_flag is-warning linkx_tooltip_anchor" data-tooltip-placement="bottom" data-tooltip={renderer !== RENDERERS.WEBGL ? `This renderer shows at most ${formatCount(cap)} nodes at once.` : gpuLimits.measured ? `This computer’s GPU benchmark allows ${formatCount(cap)} nodes at once (Libraries → Graph rendering).` : `A temporary limit of ${formatCount(cap)} nodes, until the GPU benchmark is run (Libraries → Graph rendering).`}>
               Limited to {formatCount(cap)}
@@ -2261,8 +2378,8 @@ export default function GraphWindowBody({ windowItem }) {
             </form>
           ) : null}
           <div className="graph_window_tools" role="group" aria-label="History">
-            <button type="button" className="graph_window_icon_button linkx_tooltip_anchor" aria-label="Undo" data-tooltip-placement="bottom" data-tooltip="Undo" disabled={!snapshot.history?.canUndo} onClick={() => stepHistory('undo')}><Icon d={ICONS.undo} /></button>
-            <button type="button" className="graph_window_icon_button linkx_tooltip_anchor" aria-label="Redo" data-tooltip-placement="bottom" data-tooltip="Redo" disabled={!snapshot.history?.canRedo} onClick={() => stepHistory('redo')}><Icon d={ICONS.redo} /></button>
+            <button type="button" className="graph_window_icon_button linkx_tooltip_anchor" aria-label="Undo" data-tooltip-placement="bottom" data-tooltip="Undo" disabled={busy || !snapshot.history?.canUndo} onClick={() => stepHistory('undo')}><Icon d={ICONS.undo} /></button>
+            <button type="button" className="graph_window_icon_button linkx_tooltip_anchor" aria-label="Redo" data-tooltip-placement="bottom" data-tooltip="Redo" disabled={busy || !snapshot.history?.canRedo} onClick={() => stepHistory('redo')}><Icon d={ICONS.redo} /></button>
           </div>
           <div className="graph_window_tools" role="group" aria-label="Edit">
             <button
@@ -2497,7 +2614,7 @@ export default function GraphWindowBody({ windowItem }) {
             {overlays.alerts && (alertsPanel.open || cardsLive) && !alertsAwaitScan ? (
               <GraphAlertsPanel
                 alerts={describedAlerts}
-                summary={alertsEnabled ? alertSummary(alerts) : 'Alert rules are off.'}
+                summary={alertText}
                 emptyText={alertsEnabled ? undefined : 'Alert rules are turned off. Turn them on from the right-click menu: Alert Rules ▸ Enable Alert Rules.'}
                 scanning={alertsPanel.scanning}
                 nameKey={activeNameKey}

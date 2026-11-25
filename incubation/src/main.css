@@ -3177,83 +3177,6 @@ body{
 	stroke: currentColor;
 }
 
-/* Assistant Summary Card on Overview Tab */
-.workspace_assistant_review_card {
-	display: flex;
-	flex-direction: column;
-	flex: 1 1 auto;
-	min-height: 160px;
-}
-
-.workspace_assistant_review_card:not(.is-collapsed) .workspace_section_body {
-	display: flex;
-	flex-direction: column;
-	flex: 1 1 auto;
-}
-
-.workspace_assistant_summary_content {
-	display: flex;
-	flex-direction: column;
-	justify-content: space-between;
-	flex: 1 1 auto;
-	gap: 10px;
-}
-
-.workspace_assistant_summary_text {
-	margin: 0;
-	color: var(--right-value-color, #131e2a);
-	font-size: 11px;
-	line-height: 1.45;
-}
-
-.workspace_assistant_summary_key_finding {
-	display: flex;
-	flex-direction: column;
-	gap: 2px;
-	padding: 8px 10px;
-	border-radius: 6px;
-	background: var(--right-chat-user-msg-bg, rgba(252, 198, 118, 0.18));
-	border: 1px solid var(--right-chat-user-msg-border, rgba(174, 135, 79, 0.3));
-}
-
-.workspace_assistant_finding_label {
-	color: var(--right-label-color, #7f5523);
-	font-size: 10px;
-	font-weight: 700;
-	text-transform: uppercase;
-	letter-spacing: 0.4px;
-}
-
-.workspace_assistant_finding_val {
-	color: var(--right-value-color, #131e2a);
-	font-size: 11px;
-	font-weight: 600;
-}
-
-.workspace_assistant_review_btn {
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	width: 100%;
-	padding: 7px 12px;
-	margin-top: 2px;
-	border-radius: 6px;
-	border: 1px solid var(--right-chat-send-btn-border, rgba(174, 135, 79, 0.4));
-	background: var(--right-chat-send-btn-bg, rgba(252, 198, 118, 0.35));
-	color: var(--right-chat-send-btn-icon, #131e2a);
-	font-size: 11px;
-	font-weight: 700;
-	cursor: pointer;
-	transition: background-color 140ms ease, border-color 140ms ease, transform 120ms ease;
-}
-
-.workspace_assistant_review_btn:hover {
-	background: var(--right-chat-send-btn-hover-bg, rgba(252, 198, 118, 0.65));
-	border-color: var(--right-chat-send-btn-hover-border, rgba(174, 135, 79, 0.6));
-	color: var(--right-chat-send-btn-hover-icon, #0d1520);
-	transform: translateY(-1px);
-}
-
 .workspace_context_chat {
 	display: flex;
 	flex-direction: column;
@@ -9478,10 +9401,9 @@ body{
 }
 
 .settings_secret_notice {
-	display: grid;
-	grid-template-columns: minmax(0, 1fr) auto auto auto;
+	display: flex;
+	flex-direction: column;
 	gap: 10px;
-	align-items: center;
 	padding: 12px 14px;
 	border: 1px solid var(--settings-secret-notice-border);
 	border-radius: 4px;
@@ -9501,7 +9423,14 @@ body{
 	background: var(--settings-secret-notice-code-bg);
 	color: var(--settings-secret-notice-code-text);
 	font-size: 12px;
-	word-break: break-all;
+	overflow-wrap: anywhere;
+	user-select: all;
+}
+
+.settings_secret_notice_actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
 }
 
 .settings_link {
@@ -12043,15 +11972,20 @@ html[data-glass="on"] .linkx_tooltip {
 }
 
 
-/* Quick panel: analysis session cap reached (max 3 sessions). */
-.workspace_home_session_limit {
+/* Quick panel: what it is doing, its result, or why it cannot start. */
+.workspace_home_quick_status {
+	min-width: 0;
+}
+
+.workspace_home_quick_status p {
 	margin: 8px 0 0;
 	color: var(--central-secondary-box-text, var(--muted-text));
 	font-size: 11.5px;
 	line-height: 1.45;
 }
 
-.workspace_home_session_limit button {
+.workspace_home_quick_status button {
+	margin-right: 10px;
 	padding: 0;
 	border: 0;
 	background: none;

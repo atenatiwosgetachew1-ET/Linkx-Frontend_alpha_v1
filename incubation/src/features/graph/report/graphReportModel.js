@@ -17,7 +17,8 @@
 // { type: 'bars', title, items: [{ label, value }] } | { type: 'signature',
 // name } | { type: 'subheading', text }.
 
-import { findCutPoints, nodeTypeOf } from '../lib/graphAnalysis.js';
+import { parseAmount } from '../../../shared/numbers/values.js';
+import { findCutPoints, isAnnotation, nodeTypeOf } from '../lib/graphAnalysis.js';
 import { TIME_UNITS, formatBucket, timelineBuckets, timelineItems, timelineKeys } from '../lib/graphTimeline.js';
 
 export const REPORT_TEMPLATE = Object.freeze({ id: 'linkx-graph-default', name: 'LinkX Graph Report', version: 1 });
@@ -77,13 +78,10 @@ export const entityName = (graph, id, nameKey = '') => {
 };
 const count = (value) => Number(value || 0).toLocaleString('en-GB');
 const percent = (part, whole) => (whole ? `${Math.round((part / whole) * 1000) / 10}%` : '0%');
-const numberOf = (value) => {
-  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
-  if (typeof value !== 'string' || !value.trim()) return null;
-  const parsed = Number(value.replace(/[,\s]/g, ''));
-  return Number.isFinite(parsed) ? parsed : null;
-};
+const numberOf = parseAmount;
 const total = new Intl.NumberFormat('en-GB', { maximumFractionDigits: 2 });
+// A pair's total; when some of its links have no readable amount, from how many.
+const pairTotal = (pair) => `${total.format(pair.total)}${pair.amounts < pair.count ? ` (${count(pair.amounts)} of ${count(pair.count)} links have an amount)` : ''}`;
 
 // dd/mm/yy HH:mm (the analyst's cover format).
 // The cover's domain text: the domain, then its distribution when the data
@@ -125,6 +123,20 @@ export const reportScore = (score) => {
   return { value, band };
 };
 
+// What the run behind a graph was made with, as the Service recorded it (R2-2):
+// its rule, filter, domain and settings versions; '' when unknown.
+export const runSettingsLine = (run) => {
+  if (!run) return '';
+  const versions = run.configVersions ? Object.entries(run.configVersions).map(([key, version]) => `${key} ${version === null ? 'built-in' : /^\d+$/.test(version) ? `version ${version}` : plainText(version, 40)}`).join(', ') : '';
+  const parts = [
+    run.rule ? `rule ${plainText(run.rule, 120)}` : '',
+    run.filter?.length ? `dataframe filter: ${plainText(run.filter.join(' '), 400)}` : '',
+    versions ? `settings: ${versions}` : '',
+    run.rulesSkipped?.length ? `rules that could not run: ${plainText(run.rulesSkipped.map((entry) => entry.rule).join(', '), 300)}` : '',
+  ].filter(Boolean);
+  return parts.length ? `Run: ${parts.join('; ')}.` : '';
+};
+
 export const reportDateTime = (date = new Date()) => {
   const two = (n) => String(n).padStart(2, '0');
   return `${two(date.getDate())}/${two(date.getMonth() + 1)}/${String(date.getFullYear()).slice(-2)} ${two(date.getHours())}:${two(date.getMinutes())}`;
@@ -137,7 +149,8 @@ const isThemeLine = (attributes) => String(attributes?.edge_kind || '').toLowerC
 
 // The drawn graph's facts. weightKey: a numeric link property to total.
 export const reportFacts = (graph, view, { weightKey = '', markers = null, groups = [] } = {}) => {
-  const nodeIds = view.nodeIds.filter((id) => graph.hasNode(id));
+  // The analyst's text notes are not entities.
+  const nodeIds = view.nodeIds.filter((id) => graph.hasNode(id) && !isAnnotation(graph.getNodeAttributes(id)));
   const drawn = new Set(nodeIds);
   const edgeIds = view.edgeIds.filter((key) => graph.hasEdge(key) && !isThemeLine(graph.getEdgeAttributes(key)));
   const degree = new Map(nodeIds.map((id) => [id, 0]));
@@ -193,12 +206,15 @@ export const reportFacts = (graph, view, { weightKey = '', markers = null, group
     if (a === b) return;
     const [x, y] = String(a) <= String(b) ? [a, b] : [b, a];
     const id = `${x}\u0000${y}`;
-    if (!pairs.has(id)) pairs.set(id, { a: x, b: y, count: 0, total: null, types: new Set() });
+    if (!pairs.has(id)) pairs.set(id, { a: x, b: y, count: 0, total: null, amounts: 0, types: new Set() });
     const pair = pairs.get(id);
     pair.count += 1;
     pair.types.add(typeOfLink(graph.getEdgeAttributes(key)));
     const amount = weightKey ? numberOf(graph.getEdgeAttribute(key, weightKey)) : null;
-    if (amount !== null) pair.total = (pair.total ?? 0) + amount;
+    if (amount !== null) {
+      pair.total = (pair.total ?? 0) + amount;
+      pair.amounts += 1;
+    }
   });
   const flags = (id) => {
     const out = [];
@@ -253,7 +269,7 @@ export const draftFindings = ({ graph, facts, alerts = [], timeline = null, name
   if (strongest && strongest.count > 1) {
     const tied = pairs.filter((pair) => pair.count === strongest.count && (pair.total ?? 0) === (strongest.total ?? 0));
     out.push(tied.length === 1
-      ? `The strongest relationship is between ${nameOf(graph, strongest.a)} and ${nameOf(graph, strongest.b)}: ${count(strongest.count)} links${strongest.total !== null ? `, totalling ${total.format(strongest.total)}` : ''}.`
+      ? `The strongest relationship is between ${nameOf(graph, strongest.a)} and ${nameOf(graph, strongest.b)}: ${count(strongest.count)} links${strongest.total !== null ? `, totalling ${pairTotal(strongest)}` : ''}.`
       : `${count(tied.length)} pairs share the strongest relationship, ${count(strongest.count)} links each${strongest.total !== null ? `, totalling ${total.format(strongest.total)}` : ''}: ${nameList(tied.map((pair) => `${nameOf(graph, pair.a)} and ${nameOf(graph, pair.b)}`), 3)}.`);
   }
   if (facts.bridges.size) out.push(`${count(facts.bridges.size)} ${facts.bridges.size === 1 ? 'entity bridges' : 'entities bridge'} otherwise separate parts of the network.`);
@@ -522,7 +538,7 @@ export const buildGraphReport = (input) => {
         widths: input.weightKey ? [0.28, 0.28, 0.2, 0.09, 0.15] : [0.32, 0.32, 0.24, 0.12],
         rows: strongest.map((pair) => [
           plainText(nameOf(graph, pair.a)), plainText(nameOf(graph, pair.b)), plainText([...pair.types].join(', ')), count(pair.count),
-          ...(input.weightKey ? [pair.total === null ? '—' : total.format(pair.total)] : []),
+          ...(input.weightKey ? [pair.total === null ? '—' : pairTotal(pair)] : []),
         ]),
       },
     );
@@ -623,6 +639,7 @@ export const buildGraphReport = (input) => {
   const source = input.source || {};
   const sourceLine = (() => {
     if (source.kind === 'evidence') return `Evidence graph of report ${plainText(source.evidence?.reportId) || '—'}${source.evidence?.externalReferenceId ? ` (reference ${plainText(source.evidence.externalReferenceId)})` : ''}.`;
+    if (source.kind === 'run') return `The graph kept of analysis run ${plainText(source.run?.serverId) || '—'}.`;
     if (source.kind === 'session') return `Source session ${plainText(source.sessionId)}${source.relationship ? `, relationship ${plainText(source.relationship === '*' ? 'All' : source.relationship)}` : ''}.`;
     if (source.fileName) return `Imported graph file ${plainText(source.fileName)}.`;
     return 'A graph built by the analyst in this window.';
@@ -631,6 +648,7 @@ export const buildGraphReport = (input) => {
   sections.push({ id: 'method', appendix: 'A', eyebrow: 'Appendix · Method', title: 'Method, sources and limitations', blocks: [
     { type: 'bullets', items: [
       `Source: ${sourceLine}`,
+      ...(runSettingsLine(source.run) ? [runSettingsLine(source.run)] : []),
       reportKindOf(input.kind).provenance,
       `Generated ${reportDateTime(generatedAt)} with the ${REPORT_TEMPLATE.name} template (version ${REPORT_TEMPLATE.version}).`,
       shownAll

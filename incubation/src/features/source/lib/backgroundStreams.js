@@ -4,8 +4,8 @@
 // the stream ends; the task then copies the log and `release` frees the rest
 // (runtime, log buffer, /close_source_window).
 //
-// Sign-out and closing the tab still end background streams: they stay in
-// activeStreams.js, which those paths drain.
+// Sign-out and closing the tab still end background streams (they stay in
+// activeStreams.js), but the one with a seat (tasks/lib/unattendedSeats.js).
 
 import {
   TASK_STATUSES,
@@ -15,6 +15,7 @@ import {
   isTaskActive,
   markTaskRunning,
   onTaskEnded,
+  rowsFinished,
   setTaskBackground,
   setTaskHandlers,
 } from '../../tasks/lib/taskRegistry.js';
@@ -29,15 +30,15 @@ const RELEASE_DELAY_MS = 400;
 
 // Follows a stream's backend log for its task, whether or not its Source
 // window body is mounted (docked mode mounts only the active tab): the first
-// backend line marks the task running, "Injection finished" completes it.
+// backend line marks the task running, "Injection finished" means its rows are
+// in (rowsFinished: the Service or the job ends it, else that line does).
 // Stops by itself when the task ends.
 export const watchStreamTask = (windowId, taskId) => {
   const check = () => {
     if (!isTaskActive(getTask(taskId))) return;
     const backend = getStreamLogLines(windowId).filter((line) => line.source === 'backend');
     if (backend.some((line) => STREAM_FINISHED_RE.test(line.message))) {
-      markStreamEnded(windowId);
-      finishTask(taskId, TASK_STATUSES.COMPLETED);
+      rowsFinished(taskId);
     } else if (backend.length) {
       markTaskRunning(taskId);
     }
@@ -45,23 +46,23 @@ export const watchStreamTask = (windowId, taskId) => {
   const stopLog = subscribeStreamLog(windowId, check);
   const stopEnd = onTaskEnded((task) => {
     if (task.id !== taskId) return;
+    markStreamEnded(windowId);
     stopLog();
     stopEnd();
   });
   return () => { stopLog(); stopEnd(); };
 };
 
-export const continueStreamInBackground = ({ windowId, taskId, apiFetch, release }) => {
+export const continueStreamInBackground = ({ windowId, taskId, apiFetch, release, note = 'Source window closed: the stream keeps running in the background.' }) => {
   if (!isTaskActive(getTask(taskId))) return false;
   setTaskBackground(taskId, true);
-  appendStreamLog(windowId, 'Source window closed: the stream keeps running in the background.');
+  appendStreamLog(windowId, note);
 
   // The window's own log watcher is unmounted: follow the backend lines here.
   const check = () => {
     const backend = getStreamLogLines(windowId).filter((line) => line.source === 'backend');
     if (backend.some((line) => STREAM_FINISHED_RE.test(line.message))) {
-      markStreamEnded(windowId);
-      finishTask(taskId, TASK_STATUSES.COMPLETED);
+      rowsFinished(taskId);
     } else if (backend.length) {
       markTaskRunning(taskId);
     }
@@ -82,6 +83,7 @@ export const continueStreamInBackground = ({ windowId, taskId, apiFetch, release
   const stopEnd = onTaskEnded((task) => {
     if (task.id !== taskId || released) return;
     released = true;
+    markStreamEnded(windowId);
     stopLog();
     stopEnd();
     setTimeout(() => {

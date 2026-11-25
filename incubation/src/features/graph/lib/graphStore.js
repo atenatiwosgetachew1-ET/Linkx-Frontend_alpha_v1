@@ -8,9 +8,10 @@
 
 import { MultiDirectedGraph } from 'graphology';
 
-import { compareNodeValues, getNodeValue, normalizeGraphId, PROPERTY_KEY_HIDDEN } from './graphModel.js';
+import { getNodeValue, normalizeGraphId, PROPERTY_KEY_HIDDEN } from './graphModel.js';
 import { normalizeLimitRange } from './graphSettings.js';
-import { searchNodeIds } from './graphSearch.js';
+import { searchNodes } from './graphSearch.js';
+import { sortByValue } from '../../../shared/numbers/values.js';
 
 export const MARKER_KINDS = ['path', 'traversal', 'alert', 'pinned'];
 export const HIGHLIGHT_FLASH_MS = 1000;
@@ -26,8 +27,6 @@ const cloneDeep = (value) => {
   }
 };
 
-// Production skips sorting above this many nodes (GA:5466).
-const SORT_SKIP_ABOVE = 10000;
 // Incident-edge path while the view is under 65 % of the graph (GA:5536).
 const INDEXED_VIEW_SHARE = 0.65;
 
@@ -37,6 +36,11 @@ const endpointOf = (edge, ...keys) => {
   }
   return null;
 };
+
+// What the window draws now, for the right panel: the nodes and edges shown,
+// the search (matches: all of them, shown or not; viewKey: the limit and
+// search these figures are for), and what else narrows the view.
+export const EMPTY_VIEW_STATS = Object.freeze({ nodes: 0, edges: 0, searched: false, matches: 0, viewKey: '', hiddenTypes: '', hiddenNodes: 0, timeFiltered: false });
 
 export const createGraphStore = () => {
   let graph = new MultiDirectedGraph({ allowSelfLoops: true });
@@ -48,14 +52,15 @@ export const createGraphStore = () => {
   // Loading status: { state: 'idle'|'loading'|'queued'|'ready'|'empty'|'error', message, source }
   let status = { state: 'idle', message: '', source: '' };
   // What the window currently shows (for the right panel's counts).
-  let viewStats = { nodes: 0, edges: 0, searched: false };
+  let viewStats = { ...EMPTY_VIEW_STATS };
+  let alertReport = null;
   // dataVersion: bumped only when the graph's data changes, not for a
   // highlight (markers, the expand flash) nor for showing / hiding nodes
   // (reveal, expand, collapse, hide): what the Chart window measures (analyst
   // report 2026-11-18: a chart click revealing its entity recomputed every
   // chart).
   let dataVersion = 0;
-  let snapshot = { version: 0, dataVersion: 0, nodes: 0, edges: 0, danglingEdges: 0, selection: [], status, viewStats, history: { canUndo: false, canRedo: false } };
+  let snapshot = { version: 0, dataVersion: 0, nodes: 0, edges: 0, danglingEdges: 0, selection: [], status, viewStats, alertReport, history: { canUndo: false, canRedo: false } };
   // Laid-out positions (kept across remounts; a docked tab switch must not
   // re-run the layout) and the selected node ids (read by the right panel).
   let positions = new Map();
@@ -67,6 +72,9 @@ export const createGraphStore = () => {
   // window aborts it.
   let fetchController = null;
   let danglingEdges = 0;
+  let pendingEdges = [];
+  // The whole order of the last property sorted by (view changes re-slice it).
+  let sorted = { key: '', sort: '', dataVersion: -1, ids: [] };
   let propertyKeysCache = null;
   // Production edits VISIBLE_STATE in place (expand / collapse neighbourhood,
   // double-click expand) and applyLimit rebuilds it from scratch. Here the
@@ -118,13 +126,18 @@ export const createGraphStore = () => {
       dataVersion += 1;
       propertyKeysCache = null;
     }
-    snapshot = { version, dataVersion, nodes: graph.order, edges: graph.size, danglingEdges, selection, status, viewStats, history: historyState() };
+    snapshot = { version, dataVersion, nodes: graph.order, edges: graph.size, danglingEdges, selection, status, viewStats, alertReport, history: historyState() };
     listeners.forEach((listener) => listener());
   };
 
   const edgeKeyFor = (edge, from, to) => {
     const backendId = normalizeGraphId(edge?.id);
-    if (backendId != null) return `id:${backendId}`;
+    if (backendId != null) {
+      // The same id between other ends is another link.
+      const key = `id:${backendId}`;
+      if (!graph.hasEdge(key) || (graph.source(key) === from && graph.target(key) === to)) return key;
+      return `${key}@${from}|${to}`;
+    }
     const base = `${from}|${to}|${String(edge?.label ?? '')}`;
     const count = (anonymousEdgeCounts.get(base) || 0) + 1;
     anonymousEdgeCounts.set(base, count);
@@ -132,10 +145,12 @@ export const createGraphStore = () => {
   };
 
   // Adds one chunk (or a whole graph). Nodes merge by id (later attributes
-  // win, as production's chunk update); edges whose ends are unknown are
-  // counted, not drawn (vis-network ignored them too).
+  // win, as production's chunk update); edges whose ends are unknown wait for
+  // them (a later chunk may bring them) and are counted meanwhile.
   const mergeChunk = ({ nodes = [], edges = [] } = {}) => {
     let added = 0;
+    // Undoing to before this chunk would drop it.
+    history = { undo: [], redo: [] };
     nodes.forEach((raw) => {
       const id = normalizeGraphId(raw?.id);
       if (id == null) return;
@@ -146,11 +161,13 @@ export const createGraphStore = () => {
         added += 1;
       }
     });
-    edges.forEach((raw) => {
+    const waiting = added ? pendingEdges : [];
+    if (added) pendingEdges = [];
+    [...waiting, ...edges].forEach((raw) => {
       const from = endpointOf(raw, 'from', 'source');
       const to = endpointOf(raw, 'to', 'target');
       if (from == null || to == null || !graph.hasNode(from) || !graph.hasNode(to)) {
-        danglingEdges += 1;
+        pendingEdges.push(raw);
         return;
       }
       const key = edgeKeyFor(raw, from, to);
@@ -161,6 +178,7 @@ export const createGraphStore = () => {
       graph.addEdgeWithKey(key, from, to, { ...raw, from, to });
       added += 1;
     });
+    danglingEdges = pendingEdges.length;
     emit();
     return added;
   };
@@ -171,6 +189,7 @@ export const createGraphStore = () => {
     graph = new MultiDirectedGraph({ allowSelfLoops: true });
     anonymousEdgeCounts = new Map();
     danglingEdges = 0;
+    pendingEdges = [];
     positions = new Map();
     selection = [];
     viewport = null;
@@ -198,9 +217,19 @@ export const createGraphStore = () => {
   };
 
   const setViewStats = (next) => {
-    if (next.nodes === viewStats.nodes && next.edges === viewStats.edges && next.searched === viewStats.searched) return;
-    viewStats = { nodes: next.nodes, edges: next.edges, searched: Boolean(next.searched) };
+    const stats = { ...EMPTY_VIEW_STATS, ...next, searched: Boolean(next.searched) };
+    if (Object.keys(stats).every((key) => stats[key] === viewStats[key])) return;
+    viewStats = stats;
     snapshot = { ...snapshot, viewStats };
+    listeners.forEach((listener) => listener());
+  };
+
+  // The window's graph alerts in its own words (null: not scanned yet), for
+  // the right panel: { summary, total, high }.
+  const setAlertReport = (next) => {
+    if (JSON.stringify(next) === JSON.stringify(alertReport)) return;
+    alertReport = next;
+    snapshot = { ...snapshot, alertReport };
     listeners.forEach((listener) => listener());
   };
 
@@ -219,13 +248,13 @@ export const createGraphStore = () => {
   };
 
   // Production applyLimit (GA:5435) + recomputeVisibleEdges (GA:5528).
-  // Without a key (or above 10 000 nodes) nodes are taken in arrival order;
-  // with a key they are sorted by it and nodes lacking it are left out, as in
-  // production. Edges are visible when both ends are.
+  // Without a key nodes are taken in arrival order; with a key they are sorted
+  // by it and nodes lacking it are left out, as in production (which ignored
+  // the order above 10 000 nodes). Edges are visible when both ends are.
   const visibleView = ({ key = '', sort = 'asc', min = 0, max = 25 } = {}) => {
     const range = normalizeLimitRange({ min, max });
     const nodeIds = [];
-    if (!key || graph.order > SORT_SKIP_ABOVE) {
+    if (!key) {
       let index = 0;
       for (const id of graph.nodes()) {
         if (index >= range.max) break;
@@ -233,14 +262,16 @@ export const createGraphStore = () => {
         index += 1;
       }
     } else {
-      const keyed = [];
-      graph.forEachNode((id, attributes) => {
-        const value = getNodeValue(attributes, key);
-        if (value != null) keyed.push({ id, value });
-      });
-      keyed.sort((a, b) => compareNodeValues(a.value, b.value, sort));
-      const end = Math.min(range.max, keyed.length);
-      for (let i = range.min; i < end; i += 1) nodeIds.push(keyed[i].id);
+      if (sorted.key !== key || sorted.sort !== sort || sorted.dataVersion !== dataVersion || sorted.graph !== graph) {
+        const keyed = [];
+        graph.forEachNode((id, attributes) => {
+          const value = getNodeValue(attributes, key);
+          if (value != null) keyed.push({ id, value });
+        });
+        sorted = { key, sort, dataVersion, graph, ids: sortByValue(keyed, (entry) => entry.value, sort).map((entry) => entry.id) };
+      }
+      const end = Math.min(range.max, sorted.ids.length);
+      for (let i = range.min; i < end; i += 1) nodeIds.push(sorted.ids[i]);
     }
 
     return { nodeIds, ...edgesAmong(nodeIds) };
@@ -272,7 +303,7 @@ export const createGraphStore = () => {
   const searchView = ({ keyword = '', includeLinked = false, keys = [], key = '', sort = 'asc', min = 0, max = 25 } = {}) => {
     if (!String(keyword || '').trim()) return { ...visibleView({ key, sort, min, max }), searched: false };
     const range = normalizeLimitRange({ min, max });
-    const nodeIds = searchNodeIds({
+    const { ids: nodeIds, matches } = searchNodes({
       nodes: (function* iterate() {
         for (const id of graph.nodes()) yield [id, graph.getNodeAttributes(id)];
       }()),
@@ -283,7 +314,7 @@ export const createGraphStore = () => {
       min: range.min,
       max: range.max,
     });
-    return { nodeIds, ...edgesAmong(nodeIds), searched: true };
+    return { nodeIds, ...edgesAmong(nodeIds), searched: true, matches };
   };
 
   /* ── Expand / collapse (GA:3410, GA:3456, GA:5601) ─────────────────── */
@@ -1031,6 +1062,7 @@ export const createGraphStore = () => {
     setViewport: (next) => { viewport = next; },
     setPositions,
     setSelection,
+    setAlertReport,
     setStatus,
     setViewStats,
     beginFetch: () => {

@@ -9,6 +9,7 @@ import WindowLoadScreen from '../../../shared/components/WindowLoadScreen.jsx';
 import { useCan } from '../../../auth/useCan.js';
 import { SOURCE_PERMISSIONS } from '../../../auth/permissions.js';
 import { isSuccessResponse } from '../../../services/apiClient.js';
+import { cancelJob } from '../../../services/jobs.js';
 import { sanitizeBackendUserMessage } from '../../../services/apiErrors.js';
 import { loadSessionConfiguration, switchSessionDomain } from '../../../services/sessionApi.js';
 import {
@@ -33,7 +34,6 @@ import {
   startStreamRequest,
   waitForStreamJob,
 } from '../../../services/sourceApi.js';
-import { persistRealtimeToolConfiguration } from '../../../services/configurationApi.js';
 import { useNotifications } from '../../../shared/notifications/useNotifications.js';
 import { useSession } from '../../../shared/session/useSession.js';
 import {
@@ -88,6 +88,7 @@ import {
   abortSourceRequests,
   getSecret,
   getStagedFiles,
+  getActiveJob,
   setActiveJob,
   onSourceRuntimeDispose,
   windowRef,
@@ -105,6 +106,7 @@ import {
   unplugStreamLog,
 } from '../lib/streamLogs.js';
 import { endAbandonedStream, markStreamActive, markStreamEnded, setActiveStreamLogFile } from '../lib/activeStreams.js';
+import UnattendedSwitch from '../../tasks/components/UnattendedSwitch.jsx';
 import { watchStreamTask } from '../lib/backgroundStreams.js';
 import { markGraphSessionTerminated } from '../../graph/lib/graphStatus.js';
 import {
@@ -120,15 +122,22 @@ import {
   setTaskHandlers,
   updateTask,
   linkServerTask,
+  onTaskEnded,
+  rowsFinished,
 } from '../../tasks/lib/taskRegistry.js';
 import { ModeChooser } from './ModeChooser.jsx';
 import { SessionBadge, SourceWindowHeading, WorkflowTimeline } from './sourceUi.jsx';
 import { WorkflowBody } from './steps/WorkflowBody.jsx';
 import DataframeFilterDialog from './DataframeFilterDialog.jsx';
-import { filterPayload, filterProblems } from '../lib/dataframeFilter.js';
+import { describeFilterPayload, filterPayload, filterProblems } from '../lib/dataframeFilter.js';
 import { createLogger } from '../../../shared/logger.js';
 
 const log = createLogger('source');
+
+// A job sent to the Service: a dataframe being created, a run (queued, running
+// or ending), or a finished run still shown. Back, or a new input, makes the window ready for the next one.
+const hasSentJob = (state) => Boolean(state) && (isStreamActive(state) || state.streamStatus === STREAM_STATUSES.TERMINATING || state.dataframeStatus === DATAFRAME_STATUSES.CREATING
+  || (state.step === 'stream' && [STREAM_STATUSES.COMPLETED, STREAM_STATUSES.TERMINATED].includes(state.streamStatus)));
 
 export default function SourceWindowBody({ windowItem }) {
   const workspace = useWorkspaceActions();
@@ -349,8 +358,18 @@ export default function SourceWindowBody({ windowItem }) {
     || (isToolBusy(modeState) ? displayToolMessage(modeState.toolStatus) : '');
   // On the input step Continue runs upload/tool/create_DF unless a dataframe
   // for this input already exists (then it simply moves on).
-  const runsDataframePipeline = isInputStep(modeState) &&
-    modeState.dataframeStatus !== DATAFRAME_STATUSES.READY;
+  // A dataframe is of the domain it was made under: kept across a domain
+  // switch, and analysed only under its own (Service answer 2026-11-25, Q1).
+  const otherDomainOf = (state) => (state.dataframeStatus === DATAFRAME_STATUSES.READY && state.dataframeDomain && sourceDefaults.domain && state.dataframeDomain !== sourceDefaults.domain ? state.dataframeDomain : '');
+  const mappingNow = JSON.stringify(configuration?.column_mapping ?? null);
+  const dataframeNoticeOf = (state) => {
+    const other = otherDomainOf(state);
+    if (other) return `This dataframe was made under ${formatDomainLabel(other)}; the session is on ${formatDomainLabel(sourceDefaults.domain)}. Switch back to analyse it, or go back and create it again.`;
+    if (state.dataframeStatus === DATAFRAME_STATUSES.READY && state.dataframeMapping && state.dataframeMapping !== mappingNow) return 'The column mapping has changed since this dataframe was made. Go back and create it again to use the new one.';
+    return '';
+  };
+  const runsDataframePipeline = isInputStep(modeState)
+    && (modeState.dataframeStatus !== DATAFRAME_STATUSES.READY || Boolean(dataframeNoticeOf(modeState)));
   const canContinueWorkflow = runsDataframePipeline
     ? canPrepareDataframe(activeMode, modeState) && !isPreparing
     : Boolean(nextStep && accessibleSteps.has(nextStep.id));
@@ -387,8 +406,8 @@ export default function SourceWindowBody({ windowItem }) {
       ? (hasStreamRun ? 'Show task' : runActionLabel)
       : isDataframeStep ? runActionLabel : 'Continue';
   const primaryActionDisabled = isPreparing || (isStreamStep
-    ? !hasStreamRun && !canStream(modeState)
-    : !canContinueWorkflow);
+    ? !hasStreamRun && (!canStream(modeState) || modeState.dataframeStatus !== DATAFRAME_STATUSES.READY || Boolean(otherDomainOf(modeState)))
+    : !canContinueWorkflow || (isDataframeStep && Boolean(otherDomainOf(modeState))));
   const footerMessage = isStreamStep
     ? modeState.streamStatus === STREAM_STATUSES.STARTING
       ? 'The ingestion job is queued on the Service. The live log appears once it starts.'
@@ -407,7 +426,12 @@ export default function SourceWindowBody({ windowItem }) {
 
   // Broker target: with the flow page, the configured one behind "Use
   // Default" or the typed one; with the earlier page, what its fields hold.
-  const brokerTarget = (state = modeState, defaults = sourceDefaults) => (SOURCE_FLOW
+  // While connected: what it connected to, whatever the defaults are now (the
+  // dataframe is read from it, and it is what is disconnected).
+  const brokerTarget = (state = modeState, defaults = sourceDefaults) => (state.sourceStatus === SOURCE_STATUSES.CONNECTED && state.connectedTarget?.addressType === state.sourceAddressType
+    ? state.connectedTarget
+    : resolvedBrokerTarget(state, defaults));
+  const resolvedBrokerTarget = (state, defaults) => (SOURCE_FLOW
     ? resolveBrokerTarget(state, defaults)
     : { address: state.brokerAddress || '', topic: state.topic || '' });
   const brokerLabel = () => (SOURCE_FLOW && brokerUsesDefault(modeState, sourceDefaults)
@@ -445,7 +469,8 @@ export default function SourceWindowBody({ windowItem }) {
   const terminateStreamRef = windowRef(windowItem.id, 'terminateStream');
 
   // The live state follows the backend log: the first backend line means the
-  // ingestion is actually running; its "Injection finished" line means done.
+  // ingestion is actually running; its "Injection finished" line means the
+  // rows are in, and the run's end is the Service's to say (rowsFinished).
   useEffect(() => {
     if (modeState.step !== 'stream') return;
     const status = modeState.streamStatus;
@@ -453,7 +478,8 @@ export default function SourceWindowBody({ windowItem }) {
     const backendLines = streamLogLines.filter((line) => line.source === 'backend');
     if (!backendLines.length) return;
     if (backendLines.some((line) => /Injection finished for action/i.test(line.message))) {
-      completeStream(modeKey);
+      if (rowsFinished(streamTaskRef.current)) completeStream(modeKey);
+      else if (status === STREAM_STATUSES.STARTING) patchModeState({ streamStatus: STREAM_STATUSES.RUNNING }, modeKey);
       return;
     }
     markTaskRunning(streamTaskRef.current);
@@ -461,6 +487,34 @@ export default function SourceWindowBody({ windowItem }) {
     // Handlers are recreated each render; only the log/status drive this.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [streamLogLines, modeState.streamStatus, modeState.step, modeKey]);
+
+  // The run ended elsewhere (the Service's task_updated, Tasks): this window
+  // follows, also when it was not mounted at that moment.
+  const followTaskEndRef = useRef(() => {});
+  followTaskEndRef.current = () => {
+    const task = getTask(streamTaskRef.current);
+    if (!task || isTaskActive(task)) return;
+    ['batch', 'realtime'].forEach((key) => {
+      if (!isStreamActive(sourceStateRef.current[key] || {}) || sourceStateRef.current[key].preparing) return;
+      if (task.status === TASK_STATUSES.COMPLETED) {
+        completeStream(key);
+        return;
+      }
+      const failed = task.status === TASK_STATUSES.FAILED;
+      markStreamEnded(windowItem.id);
+      appendStreamLog(windowItem.id, task.message || (failed ? 'The run failed on the Service.' : 'The run was stopped on the Service.'), failed ? 'error' : 'warn');
+      patchModeState({ streamStatus: failed ? STREAM_STATUSES.FAILED : STREAM_STATUSES.TERMINATED, streamLogFile: '', preparing: '' }, key);
+      notify({ title: failed ? 'Run failed' : 'Run stopped', message: task.message || (failed ? 'The run failed on the Service.' : 'The run was stopped on the Service.'), level: failed ? 'error' : 'warning', source: windowItem.title });
+    });
+  };
+  useEffect(() => {
+    followTaskEndRef.current();
+    return onTaskEnded((task) => {
+      if (task.id === streamTaskRef.current) followTaskEndRef.current();
+    });
+  }, [streamTaskRef]);
+  // It may have ended while the start was still being answered.
+  useEffect(() => { followTaskEndRef.current(); }, [modeState.streamStatus, modeState.preparing]);
 
   const failStream = (key, message) => {
     markStreamEnded(windowItem.id);
@@ -499,6 +553,16 @@ export default function SourceWindowBody({ windowItem }) {
     const state = sourceStateRef.current[key];
     // One stream per window: a second start would orphan the running job.
     if (!canStream(state) || isStreamActive(state)) return;
+    // Only on the dataframe that is on screen (a domain switch, a new input or
+    // a reconnect drops it on the Service's side too).
+    if (state.dataframeStatus !== DATAFRAME_STATUSES.READY) {
+      setValidationMessage('The dataframe is no longer valid (its input changed). Create it again first.');
+      return;
+    }
+    if (otherDomainOf(state)) {
+      setValidationMessage(dataframeNoticeOf(state));
+      return;
+    }
     if (!requirePermission(SOURCE_PERMISSIONS.ANALYSIS_RUN, 'run the analysis')) return;
     const sourceSessionId = normalizeWindowSessionId(windowItem);
     if (!sourceSessionId) {
@@ -506,12 +570,10 @@ export default function SourceWindowBody({ windowItem }) {
       return;
     }
     const isRealtime = key === 'realtime';
-    // Realtime streams need Neo4j connected and its credentials saved to
-    // this session (production realtime start guard).
-    if (isRealtime && (state.toolStatus !== TOOL_STATUSES.CONNECTED || state.realtimeConfigSavedFor !== sourceSessionId)) {
-      const message = state.toolStatus !== TOOL_STATUSES.CONNECTED
-        ? `Connect Neo4j successfully for session ${sourceSessionId} before starting realtime.`
-        : state.realtimeConfigMessage || `Save Neo4j credentials for session ${sourceSessionId} before starting realtime (reconnect the tool).`;
+    // Realtime needs Neo4j connected; /connect_to_tool keeps its login for this
+    // session (R2-18: nothing is saved before a start).
+    if (isRealtime && state.toolStatus !== TOOL_STATUSES.CONNECTED) {
+      const message = `Connect Neo4j successfully for session ${sourceSessionId} before starting realtime.`;
       setValidationMessage(message);
       notify({ title: 'Realtime stream blocked', message, level: 'warning', source: windowItem.title });
       return;
@@ -555,9 +617,11 @@ export default function SourceWindowBody({ windowItem }) {
     appendStreamLog(windowItem.id, `Session ${sourceSessionId}: ${runActionLabel} requested.`);
     appendStreamLog(windowItem.id, 'Input: ' + describeStreamInput());
     appendStreamLog(windowItem.id, 'Action: ' + describeStreamAction());
+    if (payload.value.rule) appendStreamLog(windowItem.id, 'Rule: ' + payload.value.rule);
+    describeFilterPayload(payload.value.dataframe_filter).forEach((line) => appendStreamLog(windowItem.id, 'Filter: ' + line));
     patchModeState({ step: 'stream', streamStatus: STREAM_STATUSES.STARTING, streamLogFile: '', preparing: 'Starting stream…' }, key);
     // From here on the backend may be ingesting: leaving the window any other
-    // way than complete/fail/terminate sends end_session (activeStreams.js).
+    // way than complete/fail/terminate is handled in activeStreams.js.
     markStreamActive(windowItem.id, { sourceSessionId });
     const taskId = createTask({
       origin: TASK_ORIGINS.SOURCE,
@@ -568,9 +632,12 @@ export default function SourceWindowBody({ windowItem }) {
       windowId: windowItem.id,
       windowTitle: windowItem.title,
       sourceSessionId,
-      rule: payload.rule || '',
-      sourceColumn: payload.source || '',
-      targetColumn: payload.target || '',
+      domain: sourceDefaults.domain || '',
+      // What was sent, not what is on screen now.
+      rule: payload.value.rule || '',
+      sourceColumn: payload.value.source || '',
+      targetColumn: payload.value.target || '',
+      filter: describeFilterPayload(payload.value.dataframe_filter),
       relationship: needsSourceTarget ? relationship : '',
       // The dataframe this run streams (shown in the Tasks window).
       dataframe: state.dataframeInfo ? {
@@ -621,6 +688,8 @@ export default function SourceWindowBody({ windowItem }) {
       return;
     }
     if (!started.accepted) {
+      // Made under another domain than this page knew (Q1).
+      if (started.data?.code === 'configuration_changed' && started.data.dataframe_domain) patchModeState({ dataframeDomain: String(started.data.dataframe_domain) }, key);
       failStream(key, started.message);
       return;
     }
@@ -642,10 +711,11 @@ export default function SourceWindowBody({ windowItem }) {
     // Closing the window stops following the job (the backend cleans up).
     onSourceRuntimeDispose(windowItem.id, () => controller.abort());
     setActiveJob(windowItem.id, 'stream', started.jobId);
+    updateTask(taskId, { jobFollowed: true });
     try {
       const result = await waitForStreamJob(apiFetch, started.pollPath, { signal: controller.signal });
       if (job.terminateRequested || controller.signal.aborted) return;
-      // The queued job resolves when the ingestion has finished.
+      // The queued job resolves when the run has finished.
       const logFile = resolveStreamLogFile(result) || started.logFile;
       setActiveStreamLogFile(windowItem.id, logFile);
       if (logFile) updateTask(taskId, { logFile });
@@ -654,6 +724,12 @@ export default function SourceWindowBody({ windowItem }) {
     } catch (error) {
       if (job.terminateRequested || controller.signal.aborted || error?.name === 'AbortError') return;
       log.error('Stream job failed', { status: error?.status, jobStatus: error?.jobStatus });
+      // Contact was lost, not the run: the Service's task says how it ends.
+      if (!error?.jobStatus && getTask(taskId)?.serverId) {
+        updateTask(taskId, { jobFollowed: false });
+        appendStreamLog(windowItem.id, 'Contact with the job was lost. The run goes on; its end comes from the Service.', 'warn');
+        return;
+      }
       failStream(key, sanitizeBackendUserMessage(error?.message, 'The stream job failed before it started.'));
     } finally {
       if (streamJobRef.current === job) streamJobRef.current = null;
@@ -862,6 +938,9 @@ export default function SourceWindowBody({ windowItem }) {
         sourceStatus: nextStatus,
         sourceMessage: result.ok ? displaySourceMessage(nextStatus) : result.message,
         connectedKind: result.ok && !isDisconnecting ? connectionKindOf(modeState) : '',
+        connectedTarget: result.ok && !isDisconnecting && modeState.sourceAddressType !== 'storage'
+          ? { ...resolvedBrokerTarget(modeState, sourceDefaults), addressType: modeState.sourceAddressType }
+          : null,
         ...(result.ok ? { ...STALE_DATAFRAME_PATCH, ...STORAGE_SEARCH_RESET_PATCH } : {}),
         ...(isDisconnecting ? { toolStatus: TOOL_STATUSES.IDLE, toolMessage: displayToolMessage(TOOL_STATUSES.IDLE), step: activeMode === SOURCE_MODES.BATCH ? 'upload' : 'connect' } : {}),
       });
@@ -932,26 +1011,6 @@ export default function SourceWindowBody({ windowItem }) {
       toolMessage: result.ok ? displayToolMessage(nextStatus) : result.message,
       ...(result.ok ? keptPassword : {}),
     }, key);
-    // Realtime: save the credentials to this source session (production
-    // persistRealtimeToolConfigurationForWindow) while the typed password is
-    // still available; the realtime start guard checks the result.
-    if (result.ok && key === 'realtime' && nextStatus === TOOL_STATUSES.CONNECTED) {
-      const sourceSessionId = normalizeWindowSessionId(windowItem);
-      const persisted = await persistRealtimeToolConfiguration(apiFetch, {
-        sourceSessionId,
-        sessionConfiguration: configuration,
-        tool: {
-          url: sanitizeConnectionValue(state.toolUrl),
-          username: sanitizeIdentifier(state.toolUsername),
-          database: sanitizeIdentifier(state.toolDatabase),
-          password: getSecret(windowItem.id, key),
-        },
-      });
-      patchModeState(persisted.ok
-        ? { realtimeConfigSavedFor: sourceSessionId, realtimeConfigMessage: '', ...(persisted.passwordRef ? { toolPasswordRef: persisted.passwordRef, toolPassword: '***' } : {}) }
-        : { realtimeConfigSavedFor: '', realtimeConfigMessage: persisted.message }, key);
-      if (!persisted.ok) notify({ title: 'Neo4j credentials not saved', message: persisted.message, level: 'warning', source: windowItem.title });
-    }
     // A typed password is dropped once used successfully.
     if (result.ok) setSecret(windowItem.id, key, '');
     if (!quiet || !result.ok) {
@@ -1015,6 +1074,7 @@ export default function SourceWindowBody({ windowItem }) {
     const sourceSessionId = normalizeWindowSessionId(windowItem);
     const read = () => sourceStateRef.current[key];
     const patch = (values) => patchModeState(values, key);
+    const domainAtStart = sourceDefaults.domain;
     const failDataframe = (message) => {
       patch({ dataframeStatus: DATAFRAME_STATUSES.FAILED, dataframeMessage: message, preparing: '' });
       notify({ title: 'Dataframe not created', message, level: 'error', source: windowItem.title });
@@ -1087,7 +1147,7 @@ export default function SourceWindowBody({ windowItem }) {
           return;
         }
         if (!(await ensureToolConnected())) return;
-        payload = buildArrayDataframePayload({ sourceSessionId, kind: 'hybrid', items });
+        payload = buildArrayDataframePayload({ sourceSessionId, kind: 'hybrid', items, dateFrom: read().elasticSearchLast?.dateFrom, dateTo: read().elasticSearchLast?.dateTo });
       } else {
         if (!(await ensureToolConnected())) return;
         const state = read();
@@ -1111,6 +1171,22 @@ export default function SourceWindowBody({ windowItem }) {
         return;
       }
 
+      // Made under another domain. The job itself was right (it ran with what it
+      // was sent with), but a run sent now would put the new domain's rules on it.
+      if (lastDefaultsRef.current?.domain !== domainAtStart) {
+        failDataframe(`The dataframe was made under ${formatDomainLabel(domainAtStart)}, and the domain is now ${formatDomainLabel(lastDefaultsRef.current?.domain)}. Create it again to analyse it under the new one.`);
+        return;
+      }
+
+      if (result.failedSources?.length) {
+        notify({
+          title: 'Some sources could not be read',
+          message: `${formatDataframeFailureMessage(result.data, 'The dataframe was created without them.')} The dataframe holds the others only.`,
+          level: 'warning',
+          source: windowItem.title,
+          durationMs: 15000,
+        });
+      }
       const info = { ...result.info };
       if (key === 'realtime' && read().sourceAddressType === 'broker') info.totalRows = 'Live';
       const state = read();
@@ -1123,6 +1199,8 @@ export default function SourceWindowBody({ windowItem }) {
       patch({
         dataframeStatus: DATAFRAME_STATUSES.READY,
         dataframeInfo: info,
+        dataframeDomain: domainAtStart || '',
+        dataframeMapping: mappingNow,
         // A new dataframe starts unfiltered (a filter is made for its columns).
         dataframeFilter: null,
         dataframeMessage: '',
@@ -1130,7 +1208,9 @@ export default function SourceWindowBody({ windowItem }) {
         step: 'dataframe',
         // Keep earlier picks this dataframe still offers; otherwise preselect
         // the configured defaults that exist in it (or clear the pick).
-        ...(!ruleOptions.includes(state.rule) ? { rule: ruleOptions[0] || '' } : {}),
+        // The rule: the configured active one when offered, or the only one
+        // there is; else the analyst chooses.
+        ...(!ruleOptions.includes(state.rule) ? { rule: ruleOptions.includes(sourceDefaults.dataframe.activeRule) ? sourceDefaults.dataframe.activeRule : ruleOptions.length === 1 ? ruleOptions[0] : '' } : {}),
         ...(!columnHas(state.sourceColumn) ? { sourceColumn: columnHas(sourceDefaults.dataframe.sourceColumn) ? sourceDefaults.dataframe.sourceColumn : '' } : {}),
         ...(!columnHas(state.targetColumn) ? { targetColumn: columnHas(sourceDefaults.dataframe.targetColumn) ? sourceDefaults.dataframe.targetColumn : '' } : {}),
         ...(!state.relationship && sourceDefaults.dataframe.relationship ? { relationship: sourceDefaults.dataframe.relationship } : {}),
@@ -1311,36 +1391,27 @@ export default function SourceWindowBody({ windowItem }) {
   // The session domain changed (Configuration window, or another Source
   // window) while this mode was connected: the old connection points at the
   // previous domain's endpoints, so disconnect and reconnect with the new
-  // domain's defaults. Fields the analyst typed by hand are kept.
+  // domain's defaults. Fields the analyst typed by hand are kept. Never while
+  // a job is out (hasSentJob).
+  // A realtime dataframe is gone: back to the input that makes a new one,
+  // unless a run is there to look at.
+  const inputStepPatch = (key, state) => (['dataframe', 'stream'].includes(state?.step) && !hasSentJob(state)
+    ? { step: key === 'realtime' ? 'connect' : 'upload' }
+    : {});
+
   const reconnectAfterDomainChange = async (key, previousDefaults, nextDefaults) => {
     const before = sourceStateRef.current[key];
     const mode = key === 'realtime' ? SOURCE_MODES.REALTIME : SOURCE_MODES.BATCH;
     const label = formatDomainLabel(nextDefaults.domain);
     const refreshed = domainDefaultsPatch(before, previousDefaults, nextDefaults);
-    const after = { ...before, ...refreshed };
+    const after = { ...before, ...refreshed, connectedTarget: null };
     const what = before.sourceAddressType === 'storage' ? 'storage' : 'source';
-
-    // A stream reads from the connection being replaced: close it first.
-    const streamWasActive = isStreamActive(before);
-    if (streamWasActive) {
-      const streamJob = windowRef(windowItem.id, 'streamJob').current;
-      if (streamJob) {
-        streamJob.terminateRequested = true;
-        streamJob.controller.abort();
-      }
-      appendStreamLog(windowItem.id, `Domain changed to ${label}: ending the running stream.`, 'warn');
-      finishTask(streamTaskRef.current, TASK_STATUSES.TERMINATED, { message: `Domain changed to ${label}.` });
-      endAbandonedStream(apiFetch, windowItem.id, { reason: 'domain_changed' }).then((ended) => {
-        appendStreamLog(windowItem.id, ended?.ok ? 'Stream ended on the Service.' : (ended?.message || 'The stream end could not be confirmed.'), ended?.ok ? 'info' : 'warn');
-      });
-    }
 
     const tracked = trackRequest(windowItem.id);
     const { signal } = tracked;
     patchModeState({
-      ...(streamWasActive ? { streamStatus: STREAM_STATUSES.TERMINATED, streamLogFile: '' } : {}),
       ...refreshed,
-      ...STALE_DATAFRAME_PATCH,
+      ...(key === 'realtime' ? { ...STALE_DATAFRAME_PATCH, ...inputStepPatch(key, before) } : {}),
       ...STORAGE_SEARCH_RESET_PATCH,
       preparing: `Domain changed to ${label}: reconnecting the ${what}…`,
       domainReconnect: true,
@@ -1376,10 +1447,13 @@ export default function SourceWindowBody({ windowItem }) {
         return;
       }
       const nextStatus = sourceStatusFromMessage(result.message || 'Connection established!');
-      patchModeState({ preparing: '', domainReconnect: false, sourceStatus: nextStatus, sourceMessage: displaySourceMessage(nextStatus) }, key);
+      patchModeState({
+        preparing: '', domainReconnect: false, sourceStatus: nextStatus, sourceMessage: displaySourceMessage(nextStatus),
+        connectedTarget: after.sourceAddressType === 'storage' ? null : { ...resolvedBrokerTarget(after, nextDefaults), addressType: after.sourceAddressType },
+      }, key);
       notify({
         title: `Reconnected to ${label}`,
-        message: `The session domain changed, so the ${what} connection was re-established with the ${label} endpoints${nextDefaults.storage.path && what === 'storage' ? ` (${nextDefaults.storage.path})` : ''}. Previous search results and dataframes were cleared.`,
+        message: `The session domain changed, so the ${what} connection was re-established with the ${label} endpoints${nextDefaults.storage.path && what === 'storage' ? ` (${nextDefaults.storage.path})` : ''}. Previous search results were cleared.`,
         level: 'info',
         source: windowItem.title,
       });
@@ -1511,42 +1585,58 @@ export default function SourceWindowBody({ windowItem }) {
   // in docked mode the body is unmounted while another tab is active, and a
   // change made meanwhile must still be applied when it comes back.
   const lastDefaultsRef = windowRef(windowItem.id, 'lastAppliedDefaults', sourceDefaults);
+  // A job sent to the Service is queued on a worker with the configuration it
+  // was sent with (analyst, 2026-11-24). A change made since never touches it,
+  // its connection or its result on screen; it waits here and applies once the
+  // window is ready for the next job. Per mode: the defaults last applied.
+  const waitingDefaultsRef = windowRef(windowItem.id, 'waitingDefaults', { batch: null, realtime: null });
+  const sentJobs = ['batch', 'realtime'].map((key) => hasSentJob(sourceState[key])).join();
   useEffect(() => {
-    const previous = lastDefaultsRef.current;
+    const last = lastDefaultsRef.current;
     lastDefaultsRef.current = sourceDefaults;
-    if (!previous || previous === sourceDefaults || !sourceDefaults.domain) return;
-    const hasTypedPassword = (key) => Boolean(getSecret(windowItem.id, key)) || Boolean(sourceStateRef.current[key]?.toolPasswordTyped);
-    if (previous.domain && previous.domain !== sourceDefaults.domain) {
-      ['batch', 'realtime'].forEach((key) => {
-        const state = sourceStateRef.current[key];
-        if (state?.sourceStatus === SOURCE_STATUSES.CONNECTED) {
-          reconnectAfterDomainChangeRef.current(key, previous, sourceDefaults);
-          const ref = configDefaultsPatch(state, previous, sourceDefaults, { hasTypedPassword: hasTypedPassword(key) });
-          if ('toolPasswordRef' in ref) patchModeState({ toolPasswordRef: ref.toolPasswordRef, toolPassword: ref.toolPassword }, key);
-        } else if (state) {
-          // Not connected: refresh default-held fields, and drop a dataframe
-          // built under the old domain's rules and columns.
-          const hasDataframe = state.dataframeStatus && state.dataframeStatus !== DATAFRAME_STATUSES.NONE;
-          const refreshed = configDefaultsPatch(state, previous, sourceDefaults, { hasTypedPassword: hasTypedPassword(key) });
-          if (hasDataframe || Object.keys(refreshed).length) {
-            patchModeState({ ...refreshed, ...(hasDataframe ? { ...STALE_DATAFRAME_PATCH, ...STORAGE_SEARCH_RESET_PATCH } : {}) }, key);
-          }
+    if (!last || !sourceDefaults.domain) return;
+    ['batch', 'realtime'].forEach((key) => {
+      const from = waitingDefaultsRef.current[key] || last;
+      if (from === sourceDefaults) return;
+      if (hasSentJob(sourceStateRef.current[key])) {
+        waitingDefaultsRef.current[key] = from;
+        if (last !== sourceDefaults && last.domain && last.domain !== sourceDefaults.domain && isStreamActive(sourceStateRef.current[key])) {
+          appendStreamLog(windowItem.id, `Domain changed to ${formatDomainLabel(sourceDefaults.domain)}. This run keeps the configuration it was sent with; the change applies to the next one.`);
         }
-      });
+        return;
+      }
+      waitingDefaultsRef.current[key] = null;
+      applyDefaults(key, from);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sourceDefaults, sentJobs]);
+  const applyDefaults = (key, previous) => {
+    const hasTypedPassword = (key) => Boolean(getSecret(windowItem.id, key)) || Boolean(sourceStateRef.current[key]?.toolPasswordTyped);
+    const state = sourceStateRef.current[key];
+    if (!state) return;
+    if (previous.domain && previous.domain !== sourceDefaults.domain) {
+      if (state.sourceStatus === SOURCE_STATUSES.CONNECTED) {
+        reconnectAfterDomainChangeRef.current(key, previous, sourceDefaults);
+        const ref = configDefaultsPatch(state, previous, sourceDefaults, { hasTypedPassword: hasTypedPassword(key) });
+        if ('toolPasswordRef' in ref) patchModeState({ toolPasswordRef: ref.toolPasswordRef, toolPassword: ref.toolPassword }, key);
+        return;
+      }
+      // Not connected: refresh default-held fields. A batch dataframe is kept
+      // and labelled with its domain; a realtime one reads live under the new.
+      const hasDataframe = state.dataframeStatus && state.dataframeStatus !== DATAFRAME_STATUSES.NONE;
+      const refreshed = configDefaultsPatch(state, previous, sourceDefaults, { hasTypedPassword: hasTypedPassword(key) });
+      if (hasDataframe || Object.keys(refreshed).length) {
+        patchModeState({ ...refreshed, ...(hasDataframe ? STORAGE_SEARCH_RESET_PATCH : {}), ...(hasDataframe && key === 'realtime' ? { ...STALE_DATAFRAME_PATCH, ...inputStepPatch(key, state) } : {}) }, key);
+      }
       return;
     }
     // Same domain, configuration saved / reset / imported: move fields still
     // holding the old defaults (tool URL, user, database, saved password
     // ref, broker, topic) to the new ones. A live connection is kept; the
     // new values apply on the next connect.
-    ['batch', 'realtime'].forEach((key) => {
-      const state = sourceStateRef.current[key];
-      if (!state) return;
-      const refreshed = configDefaultsPatch(state, previous, sourceDefaults, { hasTypedPassword: hasTypedPassword(key), onlyChanged: true });
-      if (Object.keys(refreshed).length) patchModeState(refreshed, key);
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sourceDefaults]);
+    const refreshed = configDefaultsPatch(state, previous, sourceDefaults, { hasTypedPassword: hasTypedPassword(key), onlyChanged: true });
+    if (Object.keys(refreshed).length) patchModeState(refreshed, key);
+  };
 
   // Session-wide domain switch (same request as production's Configuration
   // window). The backend re-projects storage path, tables and defaults from the
@@ -1554,6 +1644,8 @@ export default function SourceWindowBody({ windowItem }) {
   const switchDomain = async (domain) => {
     const nextDomain = String(domain || '').trim();
     if (!nextDomain || nextDomain === sourceDefaults.domain) return;
+    // Analysts may switch domain without config:write (R2-18).
+    if (!(can('config:read') && can('analysis:run')) && !requirePermission('config:write', 'switch the domain')) return;
     if (!mainSessionId) {
       setValidationMessage('Session is still initializing. Please try again in a moment.');
       return;
@@ -1583,7 +1675,11 @@ export default function SourceWindowBody({ windowItem }) {
         active_domain: nextConfiguration?.active_domain || nextDomain,
         domain: nextConfiguration?.domain || nextDomain,
       });
-      patchModeState({ preparing: '', ...STORAGE_SEARCH_RESET_PATCH, ...STALE_DATAFRAME_PATCH });
+      patchModeState({
+        preparing: '',
+        ...(hasSentJob(sourceStateRef.current[modeKey]) ? {} : STORAGE_SEARCH_RESET_PATCH),
+        ...(modeKey === 'realtime' && !hasSentJob(sourceStateRef.current[modeKey]) ? { ...STALE_DATAFRAME_PATCH, ...inputStepPatch(modeKey, sourceStateRef.current[modeKey]) } : {}),
+      });
       notify({
         title: 'Domain switched',
         message: `The session now uses the ${formatDomainLabel(nextDomain)} domain. Storage path and defaults were updated.`,
@@ -1615,9 +1711,13 @@ export default function SourceWindowBody({ windowItem }) {
   };
 
   // "Esc or click here to cancel" on the load screen: abort whatever is in
-  // flight for this window and roll the busy statuses back. Queued backend jobs
-  // have no cancel endpoint, so their result is simply ignored.
+  // flight for this window, ask the Service to stop the queued search or
+  // dataframe job (B-7), and roll the busy statuses back.
   const cancelBusyAction = () => {
+    ['search', 'dataframe'].forEach((kind) => {
+      const jobId = getActiveJob(windowItem.id, kind);
+      if (jobId) cancelJob(apiFetch, jobId);
+    });
     abortSourceRequests(windowItem.id);
     // Requests of both modes share the window's controllers, so roll back
     // every mode that was busy (e.g. a domain reconnect running for both).
@@ -1714,6 +1814,8 @@ export default function SourceWindowBody({ windowItem }) {
           handlers={{ onSourceAction: handleSourceAction, onToolAction: handleToolAction, onStorageSearch: runStorageSearch, onElasticSearch: runElasticSearch, onSwitchDomain: switchDomain }}
           sessionId={normalizeWindowSessionId(windowItem)}
           streamLogLines={streamLogLines}
+          dataframeNotice={dataframeNoticeOf(modeState)}
+          keepRunning={<UnattendedSwitch taskId={streamTaskRef.current || ''} className="is-source" />}
           onPatchModeState={patchModeState}
           onOpenConfiguration={openConfigurationWindow}
           onOpenLibrary={openLibrariesWindow}

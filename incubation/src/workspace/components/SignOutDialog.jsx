@@ -5,7 +5,8 @@ import ConfirmTitle from '../../shared/components/ConfirmTitle.jsx';
 
 // Asked on Sign out when something would be lost (lib/leaveReasons.js).
 // Escape / backdrop click stay signed in.
-export default function SignOutDialog({ reasons, remembered, onSignOut, onCancel }) {
+// running: a run with a seat is going; it is kept or stopped, as chosen.
+export default function SignOutDialog({ reasons, remembered, running = 0, onSignOut, onStopAndSignOut, onCancel }) {
   useEffect(() => {
     const onKeyDown = (event) => {
       if (event.key !== 'Escape') return;
@@ -29,7 +30,10 @@ export default function SignOutDialog({ reasons, remembered, onSignOut, onCancel
           {remembered ? <p>Your windows can be restored when you sign in again.</p> : null}
         </div>
         <div className="linkx_confirm_footer">
-          <button type="button" className="linkx_confirm_btn_cancel" onClick={onSignOut}>Sign out anyway</button>
+          {running ? (
+            <button type="button" className="linkx_confirm_btn_cancel" onClick={onStopAndSignOut}>Stop it and sign out</button>
+          ) : null}
+          <button type="button" className="linkx_confirm_btn_cancel" onClick={onSignOut}>{running ? 'Keep running and sign out' : 'Sign out anyway'}</button>
           <button type="button" className="linkx_confirm_btn_ok" autoFocus onClick={onCancel}>Stay</button>
         </div>
       </section>

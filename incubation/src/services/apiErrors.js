@@ -63,6 +63,7 @@ export const getConnectSourceErrorMessage = (input, fallback = 'Connection faile
 };
 
 export const getDisconnectSourceErrorMessage = (input, fallback = 'Could not disconnect source. Try again.') => {
+  if (getServiceRefusalCode(input) === 'run_in_progress') return getServiceRefusalMessage(input);
   const detail = String(getApiProblemPayload(input)?.detail || '').trim();
   if (detail === 'session_id_required') return 'Missing session.';
   return getSharedApiErrorMessage(input, fallback);
@@ -118,8 +119,25 @@ const CODE_MESSAGES = {
   session_limit: 'All analysis sessions are in use.',
   alerts_read_all_required: 'Your account cannot see every alert.',
   session_not_owned: 'This session belongs to another user.',
+  empty_selection: 'Nothing is selected to make a dataframe from.',
+  source_not_connected: 'The source is not connected (or not at that address). Connect it, then try again.',
+  invalid_date: 'The date range is not accepted. Use YYYY-MM-DD, with the start on or before the end.',
+  run_in_progress: 'An analysis of this Source window is going. Wait for it, or terminate it first.',
+  session_id_in_use: 'That window number is still in use on the Service. Try again.',
+  task_running: 'The run is still going. Its graph is kept when it ends.',
+  graph_not_kept: 'The Service kept no graph of this run (it was stopped, failed, or is older).',
+  graph_expired: 'The graph of this run is no longer kept (24 hours). Run it again, or open it from saved evidence.',
+  task_not_running: 'Only a run that has started can keep going without you.',
+  not_offered: 'The Service offers no seats now: its workers are needed for running work.',
+  sensitive_keys: 'Only an administrator can change passwords and the trusted and risk lists.',
+  endpoint_admin_only: 'Managed by an administrator.',
+  unattended_no_seat: 'No seat is free now. Try again later.',
+  unattended_limit: 'You already have a run that keeps going.',
+  unattended_not_allowed: 'Only a batch run can keep going without you.',
+  quick_limit: 'This is over the limits of a quick analysis.',
+  use_end_session: 'A running analysis is stopped with Terminate.',
 };
-const SHOW_DETAIL = new Set(['session_limit', 'intake_not_complete', 'invalid_dataframe_filter', 'delivery_failed']);
+const SHOW_DETAIL = new Set(['session_limit', 'intake_not_complete', 'invalid_dataframe_filter', 'delivery_failed', 'quick_limit']);
 
 export const getServiceRefusalCode = (input) => {
   const payload = getApiProblemPayload(input);
@@ -140,6 +158,16 @@ export const getServiceRefusalMessage = (input) => {
   if (code === 'permission') return `Your account lacks the “${String(payload.permission).slice(0, 60)}” permission.`;
   const detail = sanitizeBackendUserMessage(payload?.detail, '');
   if (SHOW_DETAIL.has(code) && detail) return detail;
+  // R2-18: which settings were refused.
+  if (code === 'sensitive_keys' || code === 'endpoint_admin_only') {
+    const fields = [payload?.invalid_fields, payload?.fields].find(Array.isArray) || [];
+    const named = fields.filter((field) => typeof field === 'string').slice(0, 6).map((field) => field.slice(0, 60)).join(', ');
+    return named ? `${CODE_MESSAGES[code]} (${named})` : CODE_MESSAGES[code];
+  }
+  if (code === 'configuration_changed') {
+    const made = String(payload?.dataframe_domain || '').slice(0, 40);
+    return `The dataframe was made under ${made || 'another domain'}. Switch back to it, or create the dataframe again.`;
+  }
   return CODE_MESSAGES[code] || detail || '';
 };
 
@@ -168,9 +196,35 @@ const fieldName = (item) => {
 };
 const fieldLabel = (name) => String(name).replace(/_/g, ' ');
 
+// The codes of user and service-account administration (Service answer
+// 2026-11-25, B-33). { text, detail: the Service's reason is added }
+const USER_CODES = {
+  missing_field: { text: 'A required field is missing.', detail: true },
+  unknown_field: { text: 'The Service does not know a field that was sent.', detail: true },
+  invalid_field: { text: 'A field is not accepted.', detail: true },
+  invalid_username: { text: 'The username is not accepted: 3 to 120 letters, digits, or . _ @ : -' },
+  password_policy: { text: 'The password does not meet the Service’s password rules.', detail: true },
+  invalid_roles: { text: 'A selected role is not accepted by the Service.' },
+  permissions_not_assignable: { text: 'Privileges come from the role and cannot be given one by one.' },
+  unknown_permissions: { text: 'A selected permission is not accepted by the Service.', detail: true },
+  weak_secret: { text: 'The client secret is too weak.', detail: true },
+  role_scope_exceeded: { text: 'Your account cannot give that role.' },
+  cannot_manage_account: { text: 'Your account cannot change this account.' },
+  cannot_grant_permissions: { text: 'Your account cannot give those permissions.', detail: true },
+  not_found: { text: 'The account no longer exists.' },
+  username_taken: { text: 'That username is already taken.' },
+  client_id_taken: { text: 'That client ID is already taken.' },
+  self_lockout: { text: 'That would lock you out of your own account.' },
+};
+
 export const getUserAdminErrorMessage = (input, fallback = 'The user could not be saved.') => {
   const payload = getApiProblemPayload(input);
   const status = getApiProblemStatus(input);
+  const known = USER_CODES[String(payload?.code || '').trim()];
+  if (known) {
+    const reason = known.detail && typeof payload.detail === 'string' && /\s/.test(payload.detail.trim()) ? sanitizeBackendUserMessage(payload.detail, '') : '';
+    return reason ? `${known.text} ${reason}` : known.text;
+  }
   const refusal = getServiceRefusalMessage(input);
   if (refusal && status !== 400) return refusal;
   if (status === 409) return 'That username is already taken.';
@@ -180,8 +234,8 @@ export const getUserAdminErrorMessage = (input, fallback = 'The user could not b
   if (typeof detail === 'string' && detail.trim()) {
     const text = detail.trim();
     if (/^[a-z][a-z0-9_:.-]*$/i.test(text)) {
-      const known = USER_DETAIL_MESSAGES.find(([pattern]) => pattern.test(text.toLowerCase()));
-      if (known) return known[1];
+      const worded = USER_DETAIL_MESSAGES.find(([pattern]) => pattern.test(text.toLowerCase()));
+      if (worded) return worded[1];
       if (text !== 'validation_error') return `The Service refused it: ${humanizeCode(text)}`;
     } else {
       const shown = sanitizeBackendUserMessage(text, '');

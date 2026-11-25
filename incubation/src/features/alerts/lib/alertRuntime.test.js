@@ -96,4 +96,46 @@ describe('STR alert workflow on the mock service', () => {
     expect(notify).toHaveBeenCalledWith(expect.objectContaining({ title: 'STR alert reassigned' }));
     expect((await runtime.runAlertAnalysis('mock-141')).message).toMatch(/only the assignee/);
   });
+
+  // The alert's Graph window, with the first `drawn` of 4 entities drawn.
+  const withWindow = async (status = { state: 'ready' }) => {
+    const { getGraphStore } = await import('../../graph/lib/graphStore.js');
+    const { publishGraphState } = await import('../../graph/lib/graphLinkBus.js');
+    const store = getGraphStore('graph-9');
+    store.replace({ nodes: ['a', 'b', 'c', 'd'].map((id) => ({ id })), edges: [{ id: 1, from: 'a', to: 'b' }, { id: 2, from: 'c', to: 'd' }] });
+    store.setStatus(status);
+    publishGraphState('graph-9', { nodeIds: ['a'], edgeIds: [] });
+    runtime.setAlertEnvironment({ notify, openWindow, focusWindow: vi.fn(), getWindows: () => [{ id: 'graph-9', type: 'graph', title: 'G', metadata: { alert: { id: 'mock-141' } } }], onArrival: vi.fn(), openReports: vi.fn(), username: 'Me' });
+  };
+
+  it('extracts the whole graph, not what the window draws (audit A3)', async () => {
+    await flush(0);
+    await withWindow();
+    expect((await runtime.extractAlertResults('mock-141')).ok).toBe(true);
+    expect(getAlertsSnapshot().drafts['mock-141'].counts).toEqual({ nodes: 4, links: 2 });
+  });
+
+  it.each([[{ state: 'loading' }], [{ state: 'error', message: 'x' }], [{ state: 'ready', partial: true }]])('refuses a graph that did not load in full: %j (audit A3)', async (status) => {
+    await flush(0);
+    await withWindow(status);
+    expect((await runtime.extractAlertResults('mock-141')).ok).toBe(false);
+    expect(getAlertsSnapshot().drafts['mock-141']?.extractedAt).toBeUndefined();
+  });
+
+  it('never assumes clean; keeps what the analyst chose (audit A2)', async () => {
+    const { patchAlert, setAlertDraft } = await import('./alertStore.js');
+    await flush(0);
+    await withWindow();
+    const verdictOf = async () => {
+      await runtime.extractAlertResults('mock-141');
+      return getAlertsSnapshot().drafts['mock-141'].verdict;
+    };
+    patchAlert('mock-141', { flags: {}, verdict: null });
+    expect(await verdictOf()).toBe('');
+    expect(runtime.feedbackBlocker({ ...getAlert('mock-141'), response: 'analysed' }, getAlertsSnapshot().drafts['mock-141'])).toBe('Choose a verdict.');
+    patchAlert('mock-141', { flags: {}, verdict: 'suspicious' });
+    expect(await verdictOf()).toBe('suspicious');
+    setAlertDraft('mock-141', { verdict: 'undetermined', verdictEdited: true });
+    expect(await verdictOf()).toBe('undetermined');
+  });
 });

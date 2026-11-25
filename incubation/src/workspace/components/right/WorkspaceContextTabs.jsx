@@ -49,8 +49,8 @@ function AssistantTabIcon() {
 const contextTabs = [
   { id: 'overview', label: 'Overview', tooltip: 'Session Overview', icon: OverviewTabIcon, panelId: 'workspace-context-overview' },
   { id: 'assistant', label: 'Assistant', tooltip: 'Co-Analyst', icon: AssistantTabIcon, panelId: 'workspace-context-assistant' },
-  { id: 'info', label: 'Info', tooltip: 'Informations', icon: InfoTabIcon, panelId: 'workspace-context-info' },
-  { id: 'filter', label: 'Filter', tooltip: 'Filter entities', icon: FilterTabIcon, panelId: 'workspace-context-filter' },
+  { id: 'info', label: 'Info', tooltip: 'Graph info', icon: InfoTabIcon, panelId: 'workspace-context-info' },
+  { id: 'filter', label: 'Filter', tooltip: 'Filter nodes', icon: FilterTabIcon, panelId: 'workspace-context-filter' },
   { id: 'settings', label: 'Settings', tooltip: 'Analysis settings', icon: SettingsTabIcon, panelId: 'workspace-context-settings' },
 ];
 
@@ -67,7 +67,7 @@ export default function WorkspaceContextTabs({ activeTab, onSelectTab, isCollaps
         if (isPanelDisabled) {
           tooltipText = `${tab.tooltip || tab.label} (Disabled)`;
         } else if (isTabDisabled) {
-          tooltipText = `${tab.tooltip || tab.label} (Requires Graph or Chart active window)`;
+          tooltipText = `${tab.tooltip || tab.label} (select a Graph, Chart or Table window)`;
         }
 
         return (

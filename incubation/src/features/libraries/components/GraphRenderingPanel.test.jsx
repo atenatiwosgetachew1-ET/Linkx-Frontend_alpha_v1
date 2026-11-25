@@ -154,13 +154,6 @@ describe('Libraries → Graph rendering', () => {
     expect(getGpuPreference()).toBe(true);
   });
 
-  it('says "Not set" when the Service sends no setting', () => {
-    const { rerender } = render(<GraphRenderingPanel configuration={{}} />);
-    expect(screen.getByText('Not set')).toBeInTheDocument();
-    rerender(<GraphRenderingPanel configuration={{ graph_gpu_allowed: true }} />);
-    expect(screen.getByText('Allowed')).toBeInTheDocument();
-  });
-
   it('uses slow hardware with a caution, but does not suggest it', () => {
     capability.current = { verdict: 'capable', status: 'hardware', reasons: [], cautions: ['The draw test was slow.'] };
     render(<GraphRenderingPanel configuration={{}} />);
@@ -170,12 +163,11 @@ describe('Libraries → Graph rendering', () => {
     expect(shouldSuggestGpu({})).toBe(false);
   });
 
-  it('respects the system policy even when chosen on the device', () => {
+  it('is this browser’s own choice: the configuration cannot forbid it (B-36 refused)', () => {
     setGpuPreference(true);
-    render(<GraphRenderingPanel configuration={{ graph_gpu_allowed: false }} />);
-    expect(screen.getByRole('switch', { name: /Use the GPU for graphs/ })).toBeEnabled(); // to clear it
-    expect(screen.getByText(/turned off for everyone by the system configuration/)).toBeInTheDocument();
-    expect(resolveRenderer({ graph_gpu_allowed: false })).toBe('canvas');
+    render(<GraphRenderingPanel />);
+    expect(screen.queryByText('System setting')).not.toBeInTheDocument();
+    expect(resolveRenderer()).toBe('webgl');
   });
 });
 
@@ -186,11 +178,10 @@ describe('one-time GPU suggestion', () => {
     expect(shouldSuggestGpu({})).toBe(false);
   });
 
-  it('is not offered when GPU is on, forbidden or not capable', () => {
+  it('is not offered when GPU is on or not capable', () => {
     setGpuPreference(true);
     expect(shouldSuggestGpu({})).toBe(false);
     setGpuPreference(false);
-    expect(shouldSuggestGpu({ graph_gpu_allowed: false })).toBe(false);
     capability.current = { verdict: 'unknown', reasons: [] };
     expect(shouldSuggestGpu({})).toBe(false);
   });

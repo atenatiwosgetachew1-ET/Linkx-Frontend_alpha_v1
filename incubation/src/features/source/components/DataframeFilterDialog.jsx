@@ -203,9 +203,24 @@ export default function DataframeFilterDialog({ columns = [], totalRows = null, 
                           <input
                             className="graph_customize_input"
                             aria-label={`Condition ${n} value`}
-                            placeholder={operator.needs === 'list' ? 'a, b, c' : operator.ordered ? 'number or YYYY-MM-DD' : 'value'}
+                            placeholder={operator.needs === 'list' ? 'a, b, "1,000"' : operator.ordered ? 'number or YYYY-MM-DD' : 'value'}
                             value={condition.value}
-                            maxLength={FILTER_LIMITS.value}
+                            maxLength={operator.needs === 'list' ? FILTER_LIMITS.list : FILTER_LIMITS.value}
+                            // A column pasted from a sheet: one value a line (an
+                            // input would join the lines into one value).
+                            onPaste={operator.needs === 'list' ? (event) => {
+                              const pasted = event.clipboardData?.getData('text') || '';
+                              if (!/[\r\n\t;]/.test(pasted)) return;
+                              event.preventDefault();
+                              const values = pasted.split(/[\r\n\t;]+/).map((entry) => entry.trim()).filter(Boolean).map((entry) => (entry.includes(',') ? `"${entry}"` : entry));
+                              const { value, selectionStart, selectionEnd } = event.target;
+                              // Never run into the value before or after; too many are
+                              // refused below, not cut.
+                              const before = value.slice(0, selectionStart).trimEnd();
+                              const after = value.slice(selectionEnd).trimStart();
+                              const text = `${before}${before && !before.endsWith(',') ? ', ' : before ? ' ' : ''}${values.join(', ')}${after && !after.startsWith(',') ? ', ' : ''}${after}`;
+                              setCondition(index, { value: text });
+                            } : undefined}
                             onChange={(event) => setCondition(index, { value: event.target.value })}
                           />
                         )}
@@ -225,7 +240,7 @@ export default function DataframeFilterDialog({ columns = [], totalRows = null, 
                   })}
                 </ol>
               ) : <p className="source_window_df_filter_none">No condition: every row is kept. Add one to remove or keep rows by their values.</p>}
-              <small className="source_window_df_filter_note">Text compares without regard to case; &gt; ≥ &lt; ≤ and between take numbers or dates (YYYY-MM-DD).</small>
+              <small className="source_window_df_filter_note">Text compares without regard to case; &gt; ≥ &lt; ≤ and between take numbers or dates (YYYY-MM-DD). A list takes up to {FILTER_LIMITS.values} values, separated by commas; put a value holding a comma in quotes.</small>
             </>
           ) : null}
 

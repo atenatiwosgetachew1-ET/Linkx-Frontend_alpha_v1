@@ -84,6 +84,7 @@ export const ensureAlertGraph = async (alert) => {
   const graph = await fetchGraph(env.apiFetch, byTrace
     ? buildEvidencePayload(alert.traceId, { id: alert.reportId || alert.id, externalReferenceId: alert.reference })
     : buildRelationshipPayload(alert.sessionId, '*'));
+  if (graph?.partial) throw new Error('The Service delivered only part of this alert\u2019s graph. Try again.');
   if (!graph?.nodes?.length && !graph?.edges?.length) return null;
   cacheEvidenceGraph(byTrace ? alert.traceId : sessionGraphKey(alert), graph);
   return graph;
@@ -256,17 +257,29 @@ export const extractAlertResults = async (alertId) => {
     let source;
     if (graphWindow && hasGraphStore(graphWindow.id)) {
       store = getGraphStore(graphWindow.id);
-      const link = getGraphState(graphWindow.id);
+      // Only a graph that loaded in full is extracted.
+      const { state: loadState, partial } = store.getStatus();
+      if (loadState === 'loading' || loadState === 'queued') return { ok: false, message: 'The alert’s graph is still loading. Extract the results when it has finished.' };
+      if (loadState === 'error' || partial) return { ok: false, message: 'The alert’s graph did not load in full. Load it again in its Graph window first.' };
+      if (!store.getSnapshot().nodes) return { ok: false, message: 'The alert’s Graph window holds no graph. Load it first.' };
+      const published = getGraphState(graphWindow.id);
+      const whole = { nodeIds: store.graph().nodes(), edgeIds: store.graph().edges() };
       extras = await graphReportExtras({
         store,
-        link,
+        link: published,
+        // Without windows of the analyst's: the default tables and charts,
+        // over the whole graph (never the window's first entities only).
+        fallback: whole,
         chartWindows: windows.filter((item) => item.type === WORKSPACE_WINDOW_TYPES.CHART && item.metadata?.chartGraph === graphWindow.id),
         tableWindows: windows.filter((item) => item.type === WORKSPACE_WINDOW_TYPES.TABLE && item.metadata?.tableGraph === graphWindow.id),
       });
-      view = { nodeIds: link.nodeIds?.length ? link.nodeIds : store.graph().nodes(), edgeIds: link.edgeIds?.length ? link.edgeIds : store.graph().edges() };
+      // The counts and findings describe the alert's graph, not how much of
+      // it the window happens to draw.
+      view = whole;
       source = `${graphWindow.customTitle || graphWindow.title} (the alert’s Graph window) and its linked windows`;
     } else {
-      const graphData = await ensureAlertGraph(alert).catch(() => null);
+      const graphData = await ensureAlertGraph(alert).catch((error) => ({ failed: error?.message || 'The alert\u2019s graph could not be loaded.' }));
+      if (graphData?.failed) return { ok: false, message: graphData.failed };
       if (!graphData) return { ok: false, message: 'Run the analysis first: the alert has no graph yet.' };
       store = evidenceReportContext({ graphData, evidence: { traceId: alert.traceId || sessionGraphKey(alert), reportId: alert.reportId || alert.id, externalReferenceId: alert.reference } }).store;
       extras = await evidenceReportExtras({ store });
@@ -283,7 +296,7 @@ export const extractAlertResults = async (alertId) => {
       extractedAt: Date.now(),
       source,
       graphImage: graphImage || null,
-      counts: { nodes: view.nodeIds.length, links: view.edgeIds.length },
+      counts: { nodes: facts.nodeIds.length, links: facts.edgeIds.length },
       tables: extras.tables,
       charts: extras.measures.flatMap((set) => set.cells),
       chartsSkipped: extras.measures.flatMap((set) => set.skipped || []),
@@ -293,7 +306,10 @@ export const extractAlertResults = async (alertId) => {
       findings: current.findingsEdited ? current.findings : findings,
       findingsEdited: Boolean(current.findingsEdited),
       comments: current.comments || '',
-      verdict: current.verdict || (flagged ? 'suspicious' : 'clean'),
+      // Flags, else the Service's own verdict; with neither, the analyst
+      // chooses ("clean" is never assumed). What they chose stays.
+      verdict: current.verdictEdited ? current.verdict : flagged ? 'suspicious' : alert.verdict || '',
+      verdictEdited: Boolean(current.verdictEdited),
       include: current.include || { graph: true, table: true, charts: true },
     });
     logAlertEvent(alertId, 'extracted', 'Results extracted');

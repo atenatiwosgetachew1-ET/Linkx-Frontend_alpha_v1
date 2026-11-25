@@ -1,154 +1,172 @@
-import React, { useState } from 'react';
+import React, { useMemo, useSyncExternalStore } from 'react';
 
-function ChevronIcon({ isCollapsed }) {
+import { formatDomainPillarLabel, getActiveDomainKey } from '../../../features/configuration/lib/configModel.js';
+import { graphStateOf } from '../../../features/graph/components/panel/GraphPanels.jsx';
+import { getGraphStore } from '../../../features/graph/lib/graphStore.js';
+import { graphWindowName, useActiveGraph } from '../../../features/graph/lib/useActiveGraph.js';
+import { Masthead, PageHero, Pill, Stat, Stats } from '../../../features/settings/components/SettingsPage.jsx';
+import { endedText, taskOriginLabel, taskStatusLabel } from '../../../features/tasks/lib/taskFormat.js';
+import { TASK_STATUSES, countActiveTasks, getSessionUsage, getTasksSnapshot, isTaskActive, subscribeTasks } from '../../../features/tasks/lib/taskRegistry.js';
+import { TOOL_ICONS } from '../../../shared/icons/windowIcons.js';
+import { useSession } from '../../../shared/session/useSession.js';
+import { WORKSPACE_WINDOW_LIMITS, WORKSPACE_WINDOW_TYPES } from '../../state/workspaceTypes.js';
+import OneLine from './OneLine.jsx';
+import { PanelBlock, PanelNote, PanelPage, PanelRows } from './PanelParts.jsx';
+
+const noopSubscribe = () => () => {};
+const RECENT_TASKS = 3;
+const ICONS = {
+  session: ['M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2', 'M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z'],
+  graph: TOOL_ICONS.showGraph,
+  assistant: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z',
+  activity: 'M22 12h-4l-3 9L9 3l-3 9H2',
+};
+const formatCount = (value) => Number(value || 0).toLocaleString();
+const formatWhen = (ms) => new Date(ms).toLocaleString([], { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+
+// The graph the active window shows, or (Chart, Table) follows.
+function GraphSummary({ windowItem }) {
+  const store = useMemo(() => getGraphStore(windowItem.id), [windowItem.id]);
+  const snapshot = useSyncExternalStore(store.subscribe, store.getSnapshot);
+  const keyword = windowItem.metadata?.graphSearch?.keyword;
   return (
-    <svg className={`workspace_section_chevron${isCollapsed ? ' is-collapsed' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
-      <polyline points="6 9 12 15 18 9" />
-    </svg>
+    <PanelBlock title="Graph" icon={ICONS.graph} collapsible>
+      <div className="right_card_body">
+        <PanelRows
+          label="Graph"
+          rows={[
+            ['Window', graphWindowName(windowItem)],
+            ['Data', graphStateOf(snapshot).label],
+            ['Nodes shown', `${formatCount(snapshot.viewStats.nodes)} of ${formatCount(snapshot.nodes)}`],
+            ['Edges shown', `${formatCount(snapshot.viewStats.edges)} of ${formatCount(snapshot.edges)}`],
+            ['Search', keyword ? `“${keyword}”` : 'None'],
+          ]}
+        />
+      </div>
+    </PanelBlock>
   );
 }
 
-function SectionHeader({ title, isCollapsed, onToggle }) {
+// The graph's alerts, as its Graph Alerts card's tooltip says them. Opening
+// the co-analyst puts a question about them in its box (not sent).
+function CoAnalystCard({ windowItem, canOpen, onAsk }) {
+  const store = useMemo(() => (windowItem ? getGraphStore(windowItem.id) : null), [windowItem]);
+  const snapshot = useSyncExternalStore(store ? store.subscribe : noopSubscribe, store ? store.getSnapshot : () => null);
+  const report = snapshot?.nodes ? snapshot.alertReport : null;
+  const total = report?.total || 0;
+  const medium = total - (report?.high || 0);
+  const summary = !windowItem ? 'No graph selected'
+    : !snapshot?.nodes ? 'No graph loaded'
+      : report ? report.summary : 'Not scanned yet';
+  const hint = !windowItem ? 'Select a Graph, Chart or Table window to ask about its graph.'
+    : total ? 'Ask the co-analyst which to look at first.'
+      : snapshot?.nodes ? 'Ask the co-analyst about this graph.' : 'Load a graph to ask about it.';
+  const question = total
+    ? `This graph has ${formatCount(total)} ${total === 1 ? 'alert' : 'alerts'}${report.high ? ` (${formatCount(report.high)} high)` : ''}. Which should I look at first, and why?`
+    : '';
   return (
-    <div className="workspace_section_header" onClick={onToggle}>
-      <h2>{title}</h2>
-      <button
-        type="button"
-        className="workspace_section_toggle_btn linkx_tooltip_anchor"
-        data-tooltip={isCollapsed ? `Expand ${title}` : `Collapse ${title}`}
-        aria-label={isCollapsed ? `Expand ${title}` : `Collapse ${title}`}
-        aria-expanded={!isCollapsed}
-        onClick={(e) => {
-          e.stopPropagation();
-          onToggle();
-        }}
-      >
-        <ChevronIcon isCollapsed={isCollapsed} />
-      </button>
-    </div>
+    <PanelBlock title="Co-analyst" icon={ICONS.assistant} collapsible actions={total ? <Pill dot title="The graph's alert rules flagged something here">Suspicious</Pill> : null}>
+      <div className="right_card_body">
+        <div className={`right_alert${total ? ' is-raised' : ''}`} role="group" aria-label="Graph alerts">
+          <span className="right_alert_title">Graph Alerts</span>
+          <strong>{summary}</strong>
+          {total ? (
+            <span className="right_alert_chips">
+              {report.high ? <span className="right_alert_chip">{formatCount(report.high)} high</span> : null}
+              {medium ? <span className="right_alert_chip is-medium">{formatCount(medium)} medium</span> : null}
+            </span>
+          ) : null}
+          <small>{hint}</small>
+        </div>
+        <button type="button" className="right_assist_open" disabled={!canOpen} onClick={() => onAsk(question)}>Open co-analyst</button>
+      </div>
+    </PanelBlock>
   );
 }
 
-export default function WorkspaceOverviewTab({ displayName, workspace, onSwitchTab }) {
-  const [collapsedSections, setCollapsedSections] = useState({
-    session: false,
-    workspace: false,
-    activity: false,
-    assistantReview: false,
-  });
+function ActivityRow({ task }) {
+  const active = isTaskActive(task);
+  const ended = endedText(task);
+  const tone = task.status === TASK_STATUSES.FAILED ? ' is-failed' : active ? ' is-active' : '';
+  const detail = `${taskOriginLabel(task)} · ${active ? 'since' : 'ended'} ${formatWhen(active ? task.startedAt : task.endedAt || task.startedAt)}`;
+  return (
+    <li className={`right_task${tone}`}>
+      <span>
+        <OneLine as="strong">{task.title}</OneLine>
+        <OneLine as="small">{detail}</OneLine>
+      </span>
+      <em className={ended ? 'linkx_tooltip_anchor' : undefined} data-tooltip={ended || undefined} tabIndex={ended ? 0 : undefined}>{taskStatusLabel(task)}</em>
+    </li>
+  );
+}
 
-  const toggleSection = (sectionKey) => {
-    setCollapsedSections((prev) => ({
-      ...prev,
-      [sectionKey]: !prev[sectionKey],
-    }));
-  };
+export default function WorkspaceOverviewTab({ displayName, workspace, onSwitchTab, canOpenAssistant = false }) {
+  const { configuration, isSocketConnected } = useSession();
+  const { tasks } = useSyncExternalStore(subscribeTasks, getTasksSnapshot);
+  const graph = useActiveGraph(workspace);
+  const graphWindow = graph.windowItem || graph.companionGraph;
 
-  const workspaceStats = [
-    ['Open windows', String(workspace?.windows?.length || 0)],
-    ['Active window', workspace?.activeWindow?.title || 'None'],
-    ['Context tab', workspace?.contextTab || 'overview'],
-  ];
+  const windows = workspace?.windows || [];
+  const sessions = getSessionUsage(windows.filter((item) => item.type === WORKSPACE_WINDOW_TYPES.SOURCE).length, tasks);
+  const own = tasks.filter((task) => !task.foreign);
+  const recent = own.slice(0, RECENT_TASKS);
+  const activeName = workspace?.activeWindow ? graphWindowName(workspace.activeWindow) : '';
 
   return (
-    <div className="workspace_context_overview_wrapper">
-      {/* Session Status Section */}
-      <section className={`workspace_context_section${collapsedSections.session ? ' is-collapsed' : ''}`} aria-label="Session status">
-        <SectionHeader
-          title="Session"
-          isCollapsed={collapsedSections.session}
-          onToggle={() => toggleSection('session')}
+    <PanelPage fill cards label="Overview">
+      <Masthead>
+        <PageHero
+          eyebrow="Overview"
+          title={activeName || 'No window selected'}
+          titleHint={activeName}
+          pill={<Pill tone={isSocketConnected ? 'active' : ''}>{isSocketConnected ? 'Connected' : 'Offline'}</Pill>}
+          media={(
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z" />
+            </svg>
+          )}
         />
-        <div className="workspace_section_body">
-          <dl className="workspace_context_pairs">
-            <div>
-              <dt>Signed in as</dt>
-              <dd>{displayName}</dd>
-            </div>
-            <div>
-              <dt>Status</dt>
-              <dd>
-                <span className="workspace_context_status">Active</span>
-              </dd>
-            </div>
-          </dl>
-        </div>
-      </section>
+        <Stats label="Workspace figures" columns={3}>
+          <Stat label="Windows" value={formatCount(windows.length)} note="open" />
+          <Stat label="Sessions" value={`${sessions.used}/${sessions.limit}`} note="in use" />
+          <Stat label="Tasks" value={formatCount(countActiveTasks(tasks))} note="running" />
+        </Stats>
+      </Masthead>
 
-      {/* Workspace Telemetry Metrics Section */}
-      <section className={`workspace_context_section${collapsedSections.workspace ? ' is-collapsed' : ''}`} aria-label="Workspace summary">
-        <SectionHeader
-          title="Workspace"
-          isCollapsed={collapsedSections.workspace}
-          onToggle={() => toggleSection('workspace')}
-        />
-        <div className="workspace_section_body">
-          <dl className="workspace_context_pairs">
-            {workspaceStats.map(([label, value]) => (
-              <div key={label}>
-                <dt>{label}</dt>
-                <dd>{value}</dd>
-              </div>
-            ))}
-          </dl>
+      <PanelBlock title="Session" icon={ICONS.session} collapsible startCollapsed>
+        <div className="right_card_body">
+          <PanelRows
+            label="Session"
+            rows={[
+              ['Signed in as', displayName],
+              ['Domain', formatDomainPillarLabel(getActiveDomainKey(configuration))],
+              ...WORKSPACE_WINDOW_LIMITS.map((group) => [
+                `${group.label} windows`,
+                `${windows.filter((item) => group.types.includes(item.type)).length} of ${group.limit}`,
+              ]),
+            ]}
+          />
         </div>
-      </section>
+      </PanelBlock>
 
-      {/* Recent Activity Log Section */}
-      <section className={`workspace_context_section${collapsedSections.activity ? ' is-collapsed' : ''}`} aria-label="Recent activity">
-        <SectionHeader
-          title="Activity"
-          isCollapsed={collapsedSections.activity}
-          onToggle={() => toggleSection('activity')}
-        />
-        <div className="workspace_section_body">
-          <p className="workspace_context_empty">No activity yet</p>
-        </div>
-      </section>
+      {graphWindow ? <GraphSummary windowItem={graphWindow} /> : null}
 
-      {/* Executive Assistant Graph Review Summary Card */}
-      <section className="workspace_context_section workspace_assistant_review_card" aria-label="Assistant review summary">
-        <div className="workspace_assistant_header">
-          <h2>Assistant Review</h2>
-          <div className="workspace_assistant_actions">
-            <button
-              type="button"
-              className="workspace_assistant_action_btn linkx_tooltip_anchor"
-              data-tooltip="Open Assistant Chat Tab"
-              aria-label="Open Assistant Chat Tab"
-              onClick={() => onSwitchTab?.('assistant')}
-            >
-              <svg className="workspace_assistant_icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-                <polyline points="15 3 21 3 21 9" />
-                <line x1="10" y1="14" x2="21" y2="3" />
-              </svg>
-            </button>
-          </div>
-        </div>
+      <CoAnalystCard
+        windowItem={graphWindow || null}
+        canOpen={canOpenAssistant}
+        onAsk={(draft) => onSwitchTab?.('assistant', { draft })}
+      />
 
-        <div className="workspace_section_body">
-          <div className="workspace_assistant_summary_content">
-            <div className="workspace_assistant_summary_badge">
-              <span className="workspace_context_status">Review Ready</span>
-            </div>
-            <p className="workspace_assistant_summary_text">
-              <strong>Executive Graph Review:</strong> 65 entity nodes mapped across 4 community clusters. 0 critical telemetry anomalies detected.
-            </p>
-            <div className="workspace_assistant_summary_key_finding">
-              <span className="workspace_assistant_finding_label">Key Observation:</span>
-              <span className="workspace_assistant_finding_val">Node #12 ("Main Gateway") identified as primary degree centrality bottleneck.</span>
-            </div>
-            <button
-              type="button"
-              className="workspace_assistant_review_btn"
-              onClick={() => onSwitchTab?.('assistant')}
-            >
-              Open Full Assistant Chat →
-            </button>
-          </div>
+      <PanelBlock title="Activity" icon={ICONS.activity} collapsible grow>
+        <div className="right_card_body">
+          {recent.length ? (
+            <ul className="right_tasks" aria-label="Recent analyses">
+              {recent.map((task) => <ActivityRow key={task.id} task={task} />)}
+            </ul>
+          ) : <PanelNote>No analysis has run yet.</PanelNote>}
+          {own.length > recent.length ? <PanelNote>{formatCount(own.length - recent.length)} more in Tasks.</PanelNote> : null}
         </div>
-      </section>
-    </div>
+      </PanelBlock>
+    </PanelPage>
   );
 }

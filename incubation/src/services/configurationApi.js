@@ -3,7 +3,6 @@
 
 import { isSuccessResponse } from './apiClient.js';
 import {
-  buildConfigurationSavePayload,
   extractConfigurationPayload,
   getConfigurationErrorMessage,
   normalizeLoadedConfiguration,
@@ -38,8 +37,11 @@ export const uploadRule = async (apiFetch, sessionId, { file, ruleName, fields =
   const formData = new FormData();
   Object.entries(fields).forEach(([key, value]) => {
     if (value === undefined || value === null) return;
+    // Form fields are text: production's form has no field for lists of
+    // objects (classified entities) or maps (column mapping), and a list of
+    // objects joined is "[object Object]".
+    if (Array.isArray(value) ? value.some((item) => typeof item === 'object' && item !== null) : typeof value === 'object') return;
     if (Array.isArray(value)) formData.append(key, value.join(', '));
-    else if (typeof value === 'object') formData.append(key, JSON.stringify(value));
     else formData.append(key, String(value));
   });
   formData.set('id', 'save');
@@ -109,6 +111,7 @@ export const exportEncryptedConfiguration = async (apiFetch, sessionId, password
 };
 
 export const getLxacErrorMessage = (error, fallback) => {
+  if (error?.data?.code === 'wrong_password_or_damaged') return 'The password is wrong, or the file is damaged.';
   if (error?.data?.detail === 'invalid_password') return 'Incorrect password. Please verify the password and try again.';
   if (error?.data?.detail === 'tampered_file') return 'Integrity check failed: the file appears to be damaged or modified.';
   return getConfigurationErrorMessage(error, fallback);
@@ -146,48 +149,13 @@ export const patchSessionPolicy = (apiFetch, sessionId, idleSettings) => apiFetc
 
 /* ── Detection sensitivity ──────────────────────────────────────────── */
 
-// Production tries the domain-scoped endpoint first and falls back to the
-// unscoped one. Only a missing route (404/405) falls back: nothing was
-// processed then, so retrying cannot duplicate a write, and real errors
-// (400/403/500/timeouts) surface instead of being replaced. Backend request
-// B-9 removes the need for this.
-const isRouteMissing = (error) => error?.status === 404 || error?.status === 405;
-const withFallback = async (primary, fallback) => {
-  try {
-    return await primary();
-  } catch (error) {
-    if (!isRouteMissing(error)) throw error;
-    return fallback();
-  }
-};
-
-export const fetchRuleThresholds = (apiFetch, isCdr) => withFallback(
-  () => apiFetch(isCdr ? '/rule-thresholds?domain_id=cdr' : '/rule-thresholds', { suppressForbiddenHandler: true }),
-  () => apiFetch('/rule-thresholds', { suppressForbiddenHandler: true }),
-);
-
-export const fetchRuleThresholdHistory = (apiFetch, isCdr) => withFallback(
-  () => apiFetch(isCdr ? '/rule-thresholds/history?domain_id=cdr&limit=50' : '/rule-thresholds/history?limit=50', { suppressForbiddenHandler: true }),
-  () => apiFetch('/rule-thresholds/history?limit=50', { suppressForbiddenHandler: true }),
-);
-
-export const saveRuleThresholds = (apiFetch, isCdr, values) => {
-  const body = { ...(isCdr ? { domain_id: 'cdr' } : {}), ...values };
-  return withFallback(
-    () => apiFetch(`/rule-thresholds?domain=${isCdr ? 'cdr' : 'bank'}`, { method: 'POST', body }),
-    () => apiFetch('/rule-thresholds', { method: 'POST', body }),
-  );
-};
-
-export const fetchScoreLineage = (apiFetch, isCdr) => withFallback(
-  () => apiFetch(isCdr ? '/config/score-lineage?domain_id=cdr' : '/config/score-lineage', { suppressForbiddenHandler: true }),
-  () => apiFetch('/config/score-lineage', { suppressForbiddenHandler: true }),
-);
-
-export const saveScoreLineage = (apiFetch, isCdr, payload) => withFallback(
-  () => apiFetch(isCdr ? '/config/score-lineage?domain_id=cdr' : '/config/score-lineage', { method: 'POST', body: payload }),
-  () => apiFetch('/config/score-lineage', { method: 'POST', body: payload }),
-);
+// Per domain, read and written (B-9).
+const byDomain = (domain) => `domain=${encodeURIComponent(domain || 'bank')}`;
+export const fetchRuleThresholds = (apiFetch, domain) => apiFetch(`/rule-thresholds?${byDomain(domain)}`, { suppressForbiddenHandler: true });
+export const fetchRuleThresholdHistory = (apiFetch, domain) => apiFetch(`/rule-thresholds/history?${byDomain(domain)}&limit=50`, { suppressForbiddenHandler: true });
+export const saveRuleThresholds = (apiFetch, domain, values) => apiFetch('/rule-thresholds', { method: 'POST', body: { ...values, domain: domain || 'bank' } });
+export const fetchScoreLineage = (apiFetch, domain) => apiFetch(`/config/score-lineage?${byDomain(domain)}`, { suppressForbiddenHandler: true });
+export const saveScoreLineage = (apiFetch, domain, payload) => apiFetch('/config/score-lineage', { method: 'POST', body: { ...payload, domain: domain || 'bank' } });
 
 /* ── Activity log (cleanup audit) ───────────────────────────────────── */
 
@@ -210,35 +178,4 @@ export const fetchCleanupAudit = async (apiFetch, { limit = 20, offset = 0, sess
 export const requestSessionCleanup = async (apiFetch, payload) => {
   const data = await apiFetch('/admin/cleanup/session', { method: 'POST', body: payload });
   return data?.results || data || {};
-};
-
-/* ── Realtime tool credentials (production persistRealtimeToolConfigurationForWindow) ── */
-
-// Realtime streams resolve Neo4j from the *source* session's configuration,
-// so after a successful realtime tool connect the credentials are saved to
-// that session and read back to confirm a usable password reference exists.
-export const persistRealtimeToolConfiguration = async (apiFetch, { sourceSessionId, sessionConfiguration, tool }) => {
-  const configuration = {
-    ...buildConfigurationSavePayload(sessionConfiguration),
-    session_id: sourceSessionId,
-    active_tool_url: tool.url,
-    active_tool_protocol: tool.url,
-    active_tool_username: tool.username,
-    active_tool_database: tool.database,
-    ...(tool.password && !/^\*+$/.test(String(tool.password).trim()) ? { active_tool_password: tool.password } : {}),
-  };
-  try {
-    const saved = await saveConfiguration(apiFetch, sourceSessionId, configuration);
-    if (!saved.ok) return { ok: false, message: saved.message || 'Neo4j credentials could not be saved for this session.' };
-    const loaded = await loadConfiguration(apiFetch, sourceSessionId);
-    if (!loaded.ok) return { ok: false, message: 'Neo4j credentials were saved, but the session configuration could not be reloaded.' };
-    const confirmed = loaded.configuration || {};
-    const passwordRef = confirmed.active_tool_password_ref || confirmed.tool_password_ref || confirmed.password_ref || '';
-    const hasCredentials = Boolean(confirmed.active_tool_url && confirmed.active_tool_username && (passwordRef || confirmed.active_tool_password));
-    return hasCredentials
-      ? { ok: true, configuration: confirmed, passwordRef }
-      : { ok: false, message: 'Neo4j connected, but this session does not yet have confirmed saved credentials.' };
-  } catch (error) {
-    return { ok: false, message: getConfigurationErrorMessage(error, 'Neo4j credentials could not be saved for this session.') };
-  }
 };

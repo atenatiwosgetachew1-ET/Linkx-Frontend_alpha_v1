@@ -522,6 +522,30 @@
 	white-space: nowrap;
 }
 
+/* "Keep running while I'm away": the switch, then what it does or why it
+   cannot be turned on (in Tasks and in the Source window's stream step). */
+.tasks_unattended {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 4px 12px;
+	padding: 6px 10px;
+}
+
+.tasks_unattended small {
+	color: var(--tasks-muted-text);
+	font-size: var(--fs-xs, 11px);
+}
+
+.tasks_unattended small.is-problem {
+	color: var(--graph-warning-text);
+}
+
+.tasks_unattended .settings_switch:has(input:disabled) {
+	opacity: 0.6;
+	cursor: default;
+}
+
 .tasks_detail_header_actions {
 	display: flex;
 	flex: 0 1 auto;

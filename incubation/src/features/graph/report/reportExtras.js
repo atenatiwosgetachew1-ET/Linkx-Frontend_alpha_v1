@@ -17,8 +17,12 @@ const SCOPE_NAME = { drawn: 'drawn', selected: 'selected', all: 'whole' };
 // link bus state: nodeIds, edgeIds, selection, weightKey, timeKey,
 // timeSlice); chartWindows / tableWindows: the linked windows ({ title,
 // metadata }); nameKey: Identify entities by.
+// fallback: { nodeIds, edgeIds } the automatic charts and default tables
+// cover instead of what is drawn (an STR alert's results: the whole graph).
 // -> { measures: [{ title, source, cells, skipped }], tables: [appendix] }
-export async function graphReportExtras({ store, link, chartWindows = [], tableWindows = [], nameKey = '' }) {
+export async function graphReportExtras({ store, link, chartWindows = [], tableWindows = [], nameKey = '', fallback = null }) {
+  const automatic = fallback ? { ...link, ...fallback } : link;
+  const covers = fallback ? 'in the graph' : 'drawn';
   const measures = [];
   const charted = chartWindows
     .map((item) => ({ item, state: normalizeChartState(item.metadata?.chartState) }))
@@ -28,12 +32,12 @@ export async function graphReportExtras({ store, link, chartWindows = [], tableW
     measures.push({ ...drawn, title: item.title, source: `The charts of ${item.title} (the analyst's), over the ${SCOPE_NAME[state.scope] || 'drawn'} graph.` });
   }
   if (!charted.length) {
-    const drawn = await reportChartCells({ store, link, scope: 'drawn', nameKey });
-    measures.push({ ...drawn, title: 'Automatic set', source: `An automatic set of measures over the ${count(link.nodeIds?.length)} entities and ${count(link.edgeIds?.length)} relationships drawn (no Chart window is linked to this graph).` });
+    const drawn = await reportChartCells({ store, link: automatic, scope: 'drawn', nameKey });
+    measures.push({ ...drawn, title: 'Automatic set', source: `An automatic set of measures over the ${count(automatic.nodeIds?.length)} entities and ${count(automatic.edgeIds?.length)} relationships ${covers} (no Chart window is linked to this graph).` });
   }
   const tables = tableWindows.length
     ? tableWindows.map((item) => tableAppendix({ store, link, tableState: item.metadata?.tableState, title: item.title }))
-    : defaultTableAppendices({ store, link, weightKey: link.weightKey || '', timeKey: link.timeKey || '' });
+    : defaultTableAppendices({ store, link: automatic, ...(fallback ? { scopeLabel: 'whole' } : {}), weightKey: link.weightKey || '', timeKey: link.timeKey || '' });
   return { measures, tables };
 }
 

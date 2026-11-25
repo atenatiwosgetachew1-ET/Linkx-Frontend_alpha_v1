@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
 
@@ -10,6 +10,7 @@ import { SessionContext } from '../../../../shared/session/sessionContext.js';
 import { WorkspaceProvider } from '../../../../workspace/state/WorkspaceContext.jsx';
 import { useWorkspace } from '../../../../workspace/hooks/useWorkspace.js';
 import { WORKSPACE_WINDOW_TYPES } from '../../../../workspace/state/workspaceTypes.js';
+import { getGraphDefaults, resetGraphDefaults, setGraphDefaults } from '../../lib/graphDefaults.js';
 import { clearGraphStores, getGraphStore } from '../../lib/graphStore.js';
 import GraphInfoTab from '../../../../workspace/components/right/GraphInfoTab.jsx';
 import GraphFilterTab from '../../../../workspace/components/right/GraphFilterTab.jsx';
@@ -92,9 +93,112 @@ describe('right panel bound to the active Graph window', () => {
     await userEvent.click(panel.getByRole('checkbox', { name: 'amount' }));
     await userEvent.click(panel.getByRole('button', { name: 'Search' }));
     await waitFor(() => expect(screen.getByTestId('canvas')).toHaveAttribute('data-nodes', '2,3'));
-    expect(panel.getByRole('status')).toHaveTextContent('Nodes found: 2 · Edges found: 1');
+    expect(panel.getByRole('status')).toHaveTextContent('2 matches · showing 2 nodes and 1 edge');
     await userEvent.click(panel.getByRole('button', { name: 'Clear' }));
     await waitFor(() => expect(screen.getByTestId('canvas')).toHaveAttribute('data-nodes', '1,2,3'));
+  });
+
+  it('Filter: the cards fold; a button in a heading does not fold its card', async () => {
+    const panel = setup('filter');
+    await userEvent.click(panel.getByRole('checkbox', { name: 'amount' }));
+    await userEvent.click(panel.getByRole('button', { name: 'All properties' }));
+    expect(panel.getByRole('checkbox', { name: 'amount' })).not.toBeChecked();
+    await userEvent.click(panel.getByRole('button', { name: 'Collapse Search' }));
+    expect(panel.queryByRole('textbox')).not.toBeInTheDocument();
+    await userEvent.click(panel.getByRole('button', { name: 'Expand Search' }));
+    expect(panel.getByRole('textbox')).toBeInTheDocument();
+  });
+
+  it('Filter: says what will be looked for', async () => {
+    const panel = setup('filter');
+    await userEvent.type(panel.getByRole('textbox'), '>=1000');
+    expect(panel.getByRole('textbox')).toHaveAccessibleDescription(/^Values at least 1.?000$/);
+    await userEvent.click(panel.getByRole('button', { name: 'Clear' }));
+    expect(panel.getByRole('textbox')).toHaveValue('');
+    expect(panel.queryByRole('button', { name: 'Clear' })).not.toBeInTheDocument();
+  });
+
+  it('Filter: the range goes from 0 to the largest value of the chosen properties', async () => {
+    const panel = setup('filter');
+    expect(panel.getByRole('slider', { name: 'To' })).toBeDisabled();
+    expect(panel.getByText('Choose a number property under Search in.')).toBeInTheDocument();
+    await userEvent.click(panel.getByRole('checkbox', { name: 'name' }));
+    expect(panel.getByText('The chosen properties hold no amounts.')).toBeInTheDocument();
+    await userEvent.click(panel.getByRole('checkbox', { name: 'amount' }));
+    const from = panel.getByRole('slider', { name: 'From' });
+    const to = panel.getByRole('slider', { name: 'To' });
+    expect(to).toHaveAttribute('aria-valuetext', (2500).toLocaleString());
+    fireEvent.change(from, { target: { value: '400' } });
+    expect(panel.getByRole('textbox')).toHaveValue('1000-2500');
+    fireEvent.pointerUp(from);
+    await waitFor(() => expect(screen.getByTestId('canvas')).toHaveAttribute('data-nodes', '2,3'));
+    // The handles do not cross; from end to end is no search.
+    fireEvent.change(to, { target: { value: '100' } });
+    expect(panel.getByRole('textbox')).toHaveValue('1000-1000');
+    fireEvent.change(to, { target: { value: '1000' } });
+    fireEvent.change(from, { target: { value: '0' } });
+    fireEvent.pointerUp(from);
+    expect(panel.getByRole('textbox')).toHaveValue('');
+    await waitFor(() => expect(screen.getByTestId('canvas')).toHaveAttribute('data-nodes', '1,2,3'));
+  });
+
+  it('Filter: counts every match, not only the shown ones, and says what else narrows the view', async () => {
+    const panel = setup('filter');
+    act(() => {
+      const item = workspaceRef.windows.find((entry) => entry.id === 'graph-1');
+      workspaceRef.updateWindowMetadata('graph-1', { metadata: { ...item.metadata, graphSettings: { limit: { min: 0, max: 1 } }, graphSearch: { keyword: '>1000', includeLinked: false, keys: ['amount'] } } });
+    });
+    await waitFor(() => expect(panel.getByRole('status')).toHaveTextContent('2 matches · showing 1 node and 0 edges'));
+    expect(panel.queryByText(/Also applied in the window/)).not.toBeInTheDocument();
+    act(() => workspaceRef.updateWindowMetadata('graph-1', { metadata: { graphElementFilters: { edges: false } } }));
+    await waitFor(() => expect(panel.getByText(/Also applied in the window: Filter Elements hides/)).toBeInTheDocument());
+  });
+
+  it('Filter: a search after an empty one is not called empty from the old figures', async () => {
+    const panel = setup('filter');
+    const box = panel.getByRole('textbox');
+    await userEvent.type(box, 'nobody{Enter}');
+    expect(await screen.findAllByText('No result found.')).toHaveLength(1);
+    await userEvent.clear(box);
+    await userEvent.type(box, 'Abebe{Enter}');
+    await waitFor(() => expect(panel.getByRole('status')).toHaveTextContent('1 match'));
+    expect(screen.getAllByText('No result found.')).toHaveLength(1);
+  });
+
+  it('Info: a run\u2019s kept graph and an imported file are named as the source', () => {
+    const panel = setup('info');
+    act(() => workspaceRef.updateWindowMetadata('graph-1', { metadata: { evidence: null, graphBlank: true, graphImported: 'case.json' } }));
+    expect(panel.getByText('Imported file')).toBeInTheDocument();
+    expect(panel.getByText('case.json')).toBeInTheDocument();
+    expect(panel.queryByText('Not linked')).not.toBeInTheDocument();
+  });
+
+  it('the window tells the panel its graph alerts, in the words of its own card', async () => {
+    setup('info');
+    const hub = { nodes: Array.from({ length: 11 }, (_, i) => ({ id: i, label: `N${i}` })), edges: Array.from({ length: 10 }, (_, i) => ({ from: 0, to: i + 1 })) };
+    act(() => getGraphStore('graph-1').replace(hub));
+    await waitFor(() => expect(getGraphStore('graph-1').getSnapshot().alertReport?.high).toBe(1));
+    const { alertReport } = getGraphStore('graph-1').getSnapshot();
+    expect(alertReport.total).toBeGreaterThan(0);
+    expect(alertReport.summary).toMatch(/alert/);
+  });
+
+  it('Settings: the range warns under the same limit as the window', async () => {
+    const panel = setup('settings');
+    const to = panel.getByRole('spinbutton', { name: 'To' });
+    await userEvent.clear(to);
+    await userEvent.type(to, '5000{Enter}');
+    expect(await panel.findByText(/Limited to 2,000/)).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('Limited to 2,000')).toBeInTheDocument());
+  });
+
+  it('Settings: Reset goes back to Libraries ▸ Graph defaults', async () => {
+    setGraphDefaults({ ...getGraphDefaults(), layout: { ...getGraphDefaults().layout, type: 'grid' } });
+    const panel = setup('settings');
+    await userEvent.selectOptions(panel.getByRole('combobox', { name: 'Layout' }), 'circle');
+    await userEvent.click(panel.getByRole('button', { name: 'Reset this graph' }));
+    expect(panel.getByRole('combobox', { name: 'Layout' })).toHaveValue('grid');
+    resetGraphDefaults();
   });
 
   it('Settings: the actor profile card can be turned off for this graph', async () => {

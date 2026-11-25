@@ -1,14 +1,21 @@
-import React, { useMemo, useState, useRef, useEffect, useSyncExternalStore } from 'react';
+import React, { useCallback, useMemo, useState, useRef, useEffect, useSyncExternalStore } from 'react';
 import { WORKSPACE_WINDOW_TYPES } from '../state/workspaceTypes.js';
 import { useSession } from '../../shared/session/useSession.js';
+import { useCan } from '../../auth/useCan.js';
+import { SOURCE_PERMISSIONS } from '../../auth/permissions.js';
 import { resolveSourceDefaults } from '../../features/source/lib/sourceConfig.js';
 import { quickReview } from '../lib/quickReview.js';
-import { getTasksSnapshot, isTaskActive, subscribeTasks } from '../../features/tasks/lib/taskRegistry.js';
+import { QUICK_INPUTS, QUICK_LIMITS, cancelQuickPreparation, clearQuickRun, getQuickRun, isQuickRunGoing, quickBlocker, quickFileProblem, startQuickRun, subscribeQuickRun } from '../../features/quick/lib/quickRun.js';
+import { taskFlagVerdict } from '../../features/tasks/lib/taskFlags.js';
+import { endedText, taskStatusLabel } from '../../features/tasks/lib/taskFormat.js';
+import { canTerminateTask, getTasksSnapshot, isTaskActive, subscribeTasks, terminateTask } from '../../features/tasks/lib/taskRegistry.js';
+import { formatRowProgress, rowProgress } from '../../features/source/lib/rowProgress.js';
+import { getStreamLogLines, getStreamRowTally, subscribeStreamLog } from '../../features/source/lib/streamLogs.js';
+import { uploadAcceptValue } from '../../features/source/lib/sourceModel.js';
 
-// The quick panel is not connected to the Service yet (analyst decision
-// 2026-11-24: no simulated runs or findings). It shows what would be used and
-// runs nothing: no task, no result. Plan: the formal analysis pipeline, with
-// limits (docs/backend-requests.md B-35).
+// The quick analysis panel (B-35; analyst decision 2026-11-24): a real, short
+// run on the formal pipeline with the Service's limits (quick/lib/quickRun.js);
+// its result is its task's, never made up here.
 const footerLinks = ['Privacy Policy', 'Terms of Service', 'Contact Us', 'Help'];
 
 function ChevronDownIcon() {
@@ -172,14 +179,27 @@ function ResetIcon() {
   );
 }
 
-function WorkspaceHome({ openWindowsCount = 0, onOpenWindow, onOpenTask, unseenTasks = 0, unseenReports = 0 }) {
+const NO_LINES = [];
+
+// The run as it goes: its log's flags per batch and rows, live.
+function useQuickLog(task) {
+  const windowId = task && !task.frozenLog ? task.windowId : '';
+  const subscribe = useCallback((listener) => (windowId ? subscribeStreamLog(windowId, listener) : () => {}), [windowId]);
+  const lines = useSyncExternalStore(subscribe, useCallback(() => (windowId ? getStreamLogLines(windowId) : NO_LINES), [windowId]));
+  return task?.frozenLog || lines;
+}
+
+function WorkspaceHome({ openWindowsCount = 0, onOpenWindow, onOpenTask, unseenTasks = 0, unseenReports = 0, nextSourceWindowNumber = 1, apiFetch, signedIn = false, sessionsFull = '' }) {
   const [isDragOver, setIsDragOver] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState([]);
   const [selectedSourceMode, setSelectedSourceMode] = useState(null); // Options: null, 'realtime', 'batch', 'tasks', 'reports'
   const [selectedSubOption, setSelectedSubOption] = useState(null); // Options: null, 'kafka', 'rest_api', 'batch_kafka', 'batch_rest_api', 'batch_hadoop'
   const { tasks: allTasks } = useSyncExternalStore(subscribeTasks, getTasksSnapshot);
   const activeTasksCount = allTasks.filter(isTaskActive).length;
-  const { configuration } = useSession();
+  const { configuration, socket, mainSessionId } = useSession();
+  const can = useCan();
+  const quick = useSyncExternalStore(subscribeQuickRun, getQuickRun);
+  const [fileProblem, setFileProblem] = useState('');
   const sourceDefaults = useMemo(() => resolveSourceDefaults(configuration), [configuration]);
   const [isResetSpinning, setIsResetSpinning] = useState(false);
   const [isSecondaryResetSpinning, setIsSecondaryResetSpinning] = useState(false);
@@ -255,15 +275,15 @@ function WorkspaceHome({ openWindowsCount = 0, onOpenWindow, onOpenTask, unseenT
   };
 
   const handleFiles = (newFiles) => {
-    const fileArray = Array.from(newFiles).map((file) => ({
-      id: Math.random().toString(36).substring(2, 9),
-      name: file.name,
-      size: formatFileSize(file.size),
-      type: file.type || 'Document',
-    }));
+    const files = Array.from(newFiles);
+    const problem = files.length > 1 ? 'One file at a time.' : quickFileProblem(files[0]);
+    setFileProblem(problem);
+    if (problem) return;
+    const [file] = files;
     setSelectedSourceMode(null);
     setSelectedSubOption(null);
-    setUploadedFiles((prev) => [...prev, ...fileArray]);
+    clearQuickRun();
+    setUploadedFiles([{ id: 'file', name: file.name, size: formatFileSize(file.size), file }]);
   };
 
   const handleDragOver = (e) => {
@@ -291,12 +311,15 @@ function WorkspaceHome({ openWindowsCount = 0, onOpenWindow, onOpenTask, unseenT
     if (e.target.files && e.target.files.length > 0) {
       handleFiles(e.target.files);
     }
+    // The same file can be chosen again.
+    e.target.value = '';
   };
 
   const removeFile = (id, e) => {
     e.stopPropagation();
     e.preventDefault();
     setUploadedFiles((prev) => prev.filter((f) => f.id !== id));
+    setFileProblem('');
   };
 
   const handleResetPanel = () => {
@@ -305,6 +328,8 @@ function WorkspaceHome({ openWindowsCount = 0, onOpenWindow, onOpenTask, unseenT
     setUploadedFiles([]);
     setSelectedSourceMode(null);
     setSelectedSubOption(null);
+    setFileProblem('');
+    clearQuickRun();
   };
 
   const handleOptionClick = (option, e) => {
@@ -324,6 +349,7 @@ function WorkspaceHome({ openWindowsCount = 0, onOpenWindow, onOpenTask, unseenT
       return;
     }
     if (!option.disabled) {
+      clearQuickRun();
       if (selectedSourceMode === option.id) {
         setSelectedSourceMode(null);
         setSelectedSubOption(null);
@@ -331,8 +357,15 @@ function WorkspaceHome({ openWindowsCount = 0, onOpenWindow, onOpenTask, unseenT
         setSelectedSourceMode(option.id);
         setSelectedSubOption(null);
         setUploadedFiles([]);
+        setFileProblem('');
       }
     }
+  };
+
+  // Another choice: the last result or refusal is not about it.
+  const chooseSubOption = (id) => {
+    clearQuickRun();
+    setSelectedSubOption((prev) => (prev === id ? null : id));
   };
 
   const sourceOptions = [
@@ -352,11 +385,41 @@ function WorkspaceHome({ openWindowsCount = 0, onOpenWindow, onOpenTask, unseenT
     },
   ];
 
-  const showExpandedReview = uploadedFiles.length > 0 || selectedSourceMode === 'realtime' || selectedSourceMode === 'batch';
-  const reviewItems = quickReview({
-    defaults: sourceDefaults,
-    input: uploadedFiles.length ? 'upload' : selectedSubOption,
-  });
+  const showExpandedReview = quick.phase !== 'idle' || uploadedFiles.length > 0 || selectedSourceMode === 'realtime' || selectedSourceMode === 'batch';
+  const quickInput = uploadedFiles.length ? 'upload' : selectedSubOption;
+  const reviewItems = quickReview({ defaults: sourceDefaults, input: quickInput });
+  // The run: getting ready, or its task.
+  const quickTask = quick.taskId ? allTasks.find((task) => task.id === quick.taskId) || null : null;
+  const quickGoing = isQuickRunGoing();
+  const defaultsRef = useRef(sourceDefaults);
+  defaultsRef.current = sourceDefaults;
+  // The same permissions as the steps of a Source window.
+  const missing = [
+    SOURCE_PERMISSIONS.ANALYSIS_RUN, SOURCE_PERMISSIONS.SOURCE_CREATE, SOURCE_PERMISSIONS.SOURCE_CONNECT,
+    ...(QUICK_INPUTS[quickInput]?.realtime === false ? [SOURCE_PERMISSIONS.BATCH_QUERY] : []),
+    ...(quickInput === 'upload' ? [SOURCE_PERMISSIONS.BATCH_UPLOAD] : []),
+  ].filter((permission) => !can(permission));
+  const quickStop = quickGoing ? 'A quick analysis is going.'
+    : !signedIn ? 'Sign in to run an analysis.'
+      : missing.length ? `Your account needs ${missing.join(', ')} for this.`
+        : sessionsFull || quickBlocker({ input: quickInput, file: uploadedFiles[0]?.file, defaults: sourceDefaults });
+  const quickLines = useQuickLog(quickTask);
+  const quickVerdict = quickTask ? taskFlagVerdict(quickTask, quickLines) : null;
+  const quickActive = isTaskActive(quickTask);
+  // The Service's own count, else the log's (as in Tasks).
+  const quickRows = !quickActive ? '' : formatRowProgress(Number.isFinite(quickTask.rowsDone)
+    ? { done: quickTask.rowsDone, total: quickTask.rowsTotal ?? null }
+    : rowProgress(getStreamRowTally(quickTask.windowId), quickTask.dataframe?.totalRows));
+  const quickFlagNames = quickVerdict?.flags.length
+    ? `${quickVerdict.flags.slice(0, 4).map((flag) => (flag.count ? `${flag.name} (${flag.count.toLocaleString('en-GB')})` : flag.name)).join(', ')}${quickVerdict.flags.length > 4 ? ` and ${quickVerdict.flags.length - 4} more` : ''}`
+    : '';
+  const analyze = () => startQuickRun({ apiFetch, socket, mainSessionId, nextWindowNumber: nextSourceWindowNumber, defaults: sourceDefaults, getDefaults: () => defaultsRef.current, input: quickInput, file: uploadedFiles[0]?.file || null });
+  const limitNote = {
+    upload: `One file, up to ${QUICK_LIMITS.fileBytes / 1024 / 1024} MB and ${QUICK_LIMITS.rows.toLocaleString('en-GB')} rows.`,
+    batch_kafka: `The last hour of the topic, up to ${QUICK_LIMITS.rows.toLocaleString('en-GB')} rows.`,
+    kafka: `New messages for ${QUICK_LIMITS.realtimeMinutes} minutes, analysed as they arrive.`,
+    rest_api: `New data for ${QUICK_LIMITS.realtimeMinutes} minutes, analysed as it arrives.`,
+  }[quickInput] || '';
 
   return (
     <div className="workspace_home" ref={workspaceHomeRef} aria-label="Workspace start">
@@ -395,7 +458,7 @@ function WorkspaceHome({ openWindowsCount = 0, onOpenWindow, onOpenTask, unseenT
             <div className="workspace_home_header_left">
               <div className="workspace_home_panel_badge">Quick analysis panel</div>
               <div className="workspace_home_panel_subtitle" role="note">
-                Not connected to the Service yet: nothing here is sent or analysed. Use a Source window to run an analysis.
+                A short run with the session configuration: one file, the last hour of a Kafka topic, or the next 15 minutes of a live source. Use a Source window for more.
               </div>
             </div>
             <button
@@ -423,7 +486,8 @@ function WorkspaceHome({ openWindowsCount = 0, onOpenWindow, onOpenTask, unseenT
               <input
                 id="workspace-home-file-input"
                 type="file"
-                multiple
+                accept={uploadAcceptValue}
+                disabled={quickGoing}
                 onChange={handleFileInputChange}
               />
               <span className="workspace_home_upload_mark">
@@ -432,11 +496,12 @@ function WorkspaceHome({ openWindowsCount = 0, onOpenWindow, onOpenTask, unseenT
               <span className="workspace_home_upload_text">
                 <strong>File upload</strong>
                 <small>
-                  {uploadedFiles.length > 0
-                    ? `${uploadedFiles.length} file${uploadedFiles.length > 1 ? 's' : ''} selected (not uploaded).`
-                    : openWindowsCount
-                    ? `${openWindowsCount} workspace window active.`
-                    : 'Drop source files here or click to browse.'}
+                  {fileProblem
+                    || (uploadedFiles.length > 0
+                      ? 'One file chosen. It is uploaded when you analyze.'
+                      : openWindowsCount
+                        ? `${openWindowsCount} workspace window active.`
+                        : 'Drop one file here or click to browse (up to 5 MB).')}
                 </small>
               </span>
             </label>
@@ -489,35 +554,35 @@ function WorkspaceHome({ openWindowsCount = 0, onOpenWindow, onOpenTask, unseenT
         {selectedSourceMode === 'realtime' && (
           <div className="workspace_home_realtime_container" aria-label="Real-time source options">
             <div className="workspace_home_realtime_header">
-              <strong>Real-time Stream Ingestion</strong>
-              <span>Select stream protocol for real-time analysis</span>
+              <strong>Real-time, next 15 minutes</strong>
+              <span>What to listen to</span>
             </div>
             <div className="workspace_home_realtime_grid">
               <button
                 type="button"
                 className={`workspace_home_realtime_card${selectedSubOption === 'kafka' ? ' is-selected' : ''}`}
-                onClick={() => setSelectedSubOption((prev) => (prev === 'kafka' ? null : 'kafka'))}
+                onClick={() => chooseSubOption('kafka')}
               >
                 <div className="workspace_home_realtime_icon">
                   <KafkaIcon />
                 </div>
                 <div className="workspace_home_realtime_info">
                   <strong>Kafka broker</strong>
-                  <p>Event streaming cluster ingestion for real-time telemetry.</p>
+                  <p>The configured topic, for the next 15 minutes.</p>
                 </div>
               </button>
 
               <button
                 type="button"
                 className={`workspace_home_realtime_card${selectedSubOption === 'rest_api' ? ' is-selected' : ''}`}
-                onClick={() => setSelectedSubOption((prev) => (prev === 'rest_api' ? null : 'rest_api'))}
+                onClick={() => chooseSubOption('rest_api')}
               >
                 <div className="workspace_home_realtime_icon">
                   <RestApiIcon />
                 </div>
                 <div className="workspace_home_realtime_info">
                   <strong>REST API</strong>
-                  <p>HTTP endpoint webhook & streaming JSON payload ingestion.</p>
+                  <p>The configured endpoint, for the next 15 minutes.</p>
                 </div>
               </button>
             </div>
@@ -528,49 +593,41 @@ function WorkspaceHome({ openWindowsCount = 0, onOpenWindow, onOpenTask, unseenT
         {selectedSourceMode === 'batch' && (
           <div className="workspace_home_realtime_container" aria-label="Batch source options">
             <div className="workspace_home_realtime_header">
-              <strong>Batch Scheduled Ingestion (1hr Window)</strong>
-              <span>Select batch data source protocol for 1-hour window analysis</span>
+              <strong>Batch, last hour</strong>
+              <span>What to read the last hour from</span>
             </div>
             <div className="workspace_home_realtime_grid is-batch">
               <button
                 type="button"
                 className={`workspace_home_realtime_card${selectedSubOption === 'batch_kafka' ? ' is-selected' : ''}`}
-                onClick={() => setSelectedSubOption((prev) => (prev === 'batch_kafka' ? null : 'batch_kafka'))}
+                onClick={() => chooseSubOption('batch_kafka')}
               >
                 <div className="workspace_home_realtime_icon">
                   <KafkaIcon />
                 </div>
                 <div className="workspace_home_realtime_info">
                   <strong>Kafka Broker</strong>
-                  <p>Hourly batch consumer window from Kafka topic logs.</p>
+                  <p>The last hour of the configured topic.</p>
                 </div>
               </button>
 
-              <button
-                type="button"
-                className={`workspace_home_realtime_card${selectedSubOption === 'batch_rest_api' ? ' is-selected' : ''}`}
-                onClick={() => setSelectedSubOption((prev) => (prev === 'batch_rest_api' ? null : 'batch_rest_api'))}
-              >
+              <button type="button" className="workspace_home_realtime_card is-disabled" disabled title="Not for quick runs: the Service cannot tell the last hour of it. Use a Source window.">
                 <div className="workspace_home_realtime_icon">
                   <RestApiIcon />
                 </div>
                 <div className="workspace_home_realtime_info">
                   <strong>REST API</strong>
-                  <p>Hourly batch polling from external REST endpoints.</p>
+                  <p>Use a Source window: its data cannot be limited to the last hour.</p>
                 </div>
               </button>
 
-              <button
-                type="button"
-                className={`workspace_home_realtime_card${selectedSubOption === 'batch_hadoop' ? ' is-selected' : ''}`}
-                onClick={() => setSelectedSubOption((prev) => (prev === 'batch_hadoop' ? null : 'batch_hadoop'))}
-              >
+              <button type="button" className="workspace_home_realtime_card is-disabled" disabled title="Not for quick runs: the Service cannot tell the last hour of it. Use a Source window.">
                 <div className="workspace_home_realtime_icon">
                   <HadoopIcon />
                 </div>
                 <div className="workspace_home_realtime_info">
                   <strong>Hadoop Cluster</strong>
-                  <p>Distributed HDFS batch dump from Hadoop storage cluster.</p>
+                  <p>Use a Source window: its files cannot be limited to the last hour.</p>
                 </div>
               </button>
             </div>
@@ -600,15 +657,34 @@ function WorkspaceHome({ openWindowsCount = 0, onOpenWindow, onOpenTask, unseenT
             <div className="workspace_home_analyze_bar">
               <button
                 type="button"
-                className="workspace_home_analyze_btn is-disabled"
-                disabled
-                title="Quick analysis is not connected to the Service yet."
+                className={'workspace_home_analyze_btn' + (quickStop ? ' is-disabled' : '') + (quickGoing ? ' is-analyzing' : '')}
+                disabled={Boolean(quickStop)}
+                title={quickStop || undefined}
+                onClick={analyze}
               >
-                <ShockIcon /> {analyzeButtonLabelText}
+                <ShockIcon /> {quick.phase === 'preparing' ? 'Getting ready…' : quickGoing ? 'Analyzing…' : analyzeButtonLabelText}
               </button>
-              <p className="workspace_home_session_limit" role="status">
-                Not available yet. Use a Source window to run this analysis.
-              </p>
+              <div className="workspace_home_quick_status" role="status">
+                {quick.phase === 'preparing' ? (
+                  <p>{quick.step} <button type="button" onClick={cancelQuickPreparation}>Cancel</button></p>
+                ) : quickTask ? (
+                  <>
+                    <p>
+                      <strong>{quickActive ? taskStatusLabel(quickTask) : quickVerdict.label}</strong>
+                      {quickActive ? ` · ${QUICK_INPUTS[quick.input]?.label || ''}${quickRows ? ` · ${quickRows}` : ''}` : ''}
+                      {!quickActive && quickFlagNames ? `: ${quickFlagNames}` : ''}
+                    </p>
+                    {quickActive && quickTask.hasResults ? <p>{quickFlagNames ? `Flags so far: ${quickFlagNames}` : 'No flags so far'}</p> : null}
+                    {!quickActive && (endedText(quickTask) || quickVerdict.detail) ? <p>{endedText(quickTask) || quickVerdict.detail}</p> : null}
+                    <p>
+                      <button type="button" onClick={() => onOpenTask?.(quickTask.id)}>View task</button>
+                      {canTerminateTask(quickTask.id) ? <button type="button" onClick={() => terminateTask(quickTask.id)}>Stop</button> : null}
+                    </p>
+                  </>
+                ) : (
+                  <p>{quick.phase === 'failed' && !quickGoing ? quick.message : quickStop || limitNote}</p>
+                )}
+              </div>
             </div>
           </div>
         )}

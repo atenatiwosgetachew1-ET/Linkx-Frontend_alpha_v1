@@ -68,4 +68,28 @@ describe('settings pages of the Vigilance family', () => {
     render(<ServiceAccountsPanel apiFetch={vi.fn()} canManageUsers={false} requestConfirmation={vi.fn()} />);
     expect(screen.getByText('You need users:manage to manage service accounts.')).toBeInTheDocument();
   });
+
+  it('Service accounts: the Service makes and rotates the secret, shown once (B-3, B-9)', async () => {
+    const calls = [];
+    const apiFetch = vi.fn(async (url, options = {}) => {
+      calls.push([url, options.method || 'GET', options.body]);
+      if (url.endsWith('/rotate-secret')) return { client_secret: 'ROTATED-SECRET' };
+      if (url === '/auth/admin/service-accounts' && options.method === 'POST') return { client_secret: 'MADE-SECRET' };
+      return url.startsWith('/auth/admin/service-accounts') ? [{ id: 2, client_id: 'pipeline', is_active: true, permissions: [] }] : { domains: [] };
+    });
+    render(<div className="settings_window_workspace"><ServiceAccountsPanel apiFetch={apiFetch} canManageUsers requestConfirmation={vi.fn(async () => true)} /></div>);
+    await userEvent.click(screen.getByRole('button', { name: /Create service account/ }));
+    const dialog = screen.getByRole('dialog', { name: 'Create service account' });
+    expect(within(dialog).queryByLabelText(/Client secret/)).not.toBeInTheDocument();
+    await userEvent.type(within(dialog).getByLabelText(/^Client ID/), 'newclient');
+    while (within(dialog).queryByRole('button', { name: 'Next' })) await userEvent.click(within(dialog).getByRole('button', { name: 'Next' }));
+    await userEvent.click(within(dialog).getByRole('button', { name: /^Create/ }));
+    expect(await screen.findByText('MADE-SECRET')).toBeInTheDocument();
+    expect(calls.find(([, method]) => method === 'POST')[2]).not.toHaveProperty('client_secret');
+    await userEvent.click(screen.getByRole('button', { name: /Existing service accounts/ }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Rotate secret of pipeline' }));
+    expect((await screen.findAllByText('ROTATED-SECRET')).length).toBeGreaterThan(0);
+    expect(calls.some(([url, method]) => url === '/auth/admin/service-accounts/2/rotate-secret' && method === 'POST')).toBe(true);
+    expect(calls.some(([, method]) => method === 'PUT')).toBe(false);
+  });
 });

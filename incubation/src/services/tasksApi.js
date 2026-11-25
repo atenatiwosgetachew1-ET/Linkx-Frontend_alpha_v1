@@ -22,6 +22,12 @@ export const reconfirmTask = async (apiFetch, serverId) => {
   return data?.task || null;
 };
 
+// Seats for runs that go on without a browser (B-38).
+//   GET  /api/v1/unattended-seats                 -> { seats: { total, available } }
+//   POST /api/v1/tasks/<task_id>/unattended { on } -> { task, seats }
+export const fetchUnattendedSeats = (apiFetch) => apiFetch('/api/v1/unattended-seats', { suppressForbiddenHandler: true });
+export const setTaskUnattended = (apiFetch, serverId, on) => apiFetch(`/api/v1/tasks/${encodeURIComponent(serverId)}/unattended`, { method: 'POST', body: { on: Boolean(on) }, suppressForbiddenHandler: true });
+
 export const EVIDENCE_TITLE_MAX = 300;
 export const EVIDENCE_SUMMARY_MAX = 4000;
 

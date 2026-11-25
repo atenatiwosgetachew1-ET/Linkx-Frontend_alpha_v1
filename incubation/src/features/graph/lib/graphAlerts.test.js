@@ -118,6 +118,26 @@ describe('generateGraphAlerts rules', () => {
   });
 });
 
+describe('alerts that would mislead (audit A4)', () => {
+  const graphWith = (edges) => {
+    const ids = new Set(edges.flatMap((edge) => [edge.from, edge.to]));
+    const store = createGraphStore();
+    store.replace({ nodes: [...ids].map((id) => ({ id })), edges });
+    return [store.graph(), { nodeIds: store.graph().nodes(), edgeIds: store.graph().edges() }];
+  };
+  it('equal weights raise no heavy-edge alert', () => {
+    const [graph, view] = graphWith(Array.from({ length: 8 }, (_, i) => ({ id: `e${i}`, from: `n${i}`, to: `n${i + 1}`, weight: 250 })));
+    expect(generateGraphAlerts(graph, view).filter((item) => item.type === 'heavy_edge')).toEqual([]);
+  });
+  it('says how many it does not list', () => {
+    const edges = [];
+    for (let hub = 0; hub < 20; hub += 1) for (let leaf = 0; leaf < 10; leaf += 1) edges.push({ id: `${hub}_${leaf}`, from: `H${hub}`, to: `H${hub}_${leaf}` });
+    const alerts = generateGraphAlerts(...graphWith(edges));
+    expect(alerts).toHaveLength(5);
+    expect(alertSummary(alerts)).toBe('5 alerts · 5 high · 15 more not listed');
+  });
+});
+
 describe('alert panel wording (GA describeGraphAlert)', () => {
   const graph = build(
     [{ id: 'a', label: 'Alpha', size: 30, account: 'ACC-1\nsecond line', bank: 'NBE' }, { id: 'b', name: 'Bravo' }, { id: 'c' }],
@@ -147,8 +167,12 @@ describe('alert panel wording (GA describeGraphAlert)', () => {
     expect(alertPropertyKeys(graph, [edgeAlert])).toEqual(['name', 'label', 'account', 'bank']);
   });
 
-  it('summarises counts as production', () => {
-    expect(alertSummary([])).toBe('No alerts — graph looks clean.');
+  it('summarises counts, and what was looked at', () => {
+    expect(alertSummary([])).toBe('No alerts in this graph.');
+    expect(alertSummary([], { drawn: 25, total: 200 })).toBe('No alerts among the 25 drawn of 200 entities.');
+    expect(alertSummary([], { rules: { enableHighDegree: false, enableHeavyEdge: false } })).toBe('No alert rule is on.');
+    expect(alertSummary([], { scanned: false })).toMatch(/^Not scanned/);
+    expect(alertSummary([{ severity: 'high' }], { drawn: 25, total: 200 })).toBe('1 alert · 1 high · 25 of 200 entities checked');
     expect(alertSummary([{ severity: 'high' }, { severity: 'medium' }, { severity: 'medium' }])).toBe('3 alerts · 1 high · 2 medium');
   });
 });

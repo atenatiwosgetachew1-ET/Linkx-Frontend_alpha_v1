@@ -51,4 +51,17 @@ describe('Configuration · Detection sensitivity', () => {
     within(thresholds).getAllByRole('spinbutton').forEach((input) => expect(input).toBeDisabled());
     expect(screen.queryByRole('table', { name: 'Threshold history' })).not.toBeInTheDocument();
   });
+
+  it('reads and saves the domain it is open on, never another’s (B-9)', async () => {
+    const { apiFetch } = renderPanel({ domain: 'microfinance' });
+    const thresholds = await screen.findByRole('region', { name: 'Rule thresholds' });
+    await userEvent.click(within(thresholds).getByRole('button', { name: 'Save sensitivity settings' }));
+    const lineage = await screen.findByRole('region', { name: 'Score lineage' });
+    await userEvent.click(within(lineage).getByRole('button', { name: 'Save new version' }));
+    const calls = apiFetch.mock.calls;
+    calls.filter(([, options]) => !options?.method).forEach(([url]) => expect(url).toContain('domain=microfinance'));
+    const posts = calls.filter(([, options]) => options?.method === 'POST');
+    expect(posts.map(([url, options]) => [url, options.body.domain])).toEqual([['/rule-thresholds', 'microfinance'], ['/config/score-lineage', 'microfinance']]);
+    expect(screen.getByRole('heading', { name: 'Microfinance detection' })).toBeInTheDocument();
+  });
 });

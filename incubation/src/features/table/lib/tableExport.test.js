@@ -25,7 +25,7 @@ describe('tableExport', () => {
       'Name,Amount',
       '"Abebe, Kebede","2,500"',
       '"He said ""hi""",',
-      '"\'=HYPERLINK(""x"")",\'-3',
+      '"\'=HYPERLINK(""x"")",-3',
       '"አበበ\nline",7',
       '',
     ]);
@@ -36,7 +36,7 @@ describe('tableExport', () => {
       'Name\tAmount',
       'Abebe, Kebede\t2,500',
       'He said "hi"\t',
-      '\'=HYPERLINK("x")\t\'-3',
+      '\'=HYPERLINK("x")\t-3',
       'አበበ line\t7',
     ]);
   });

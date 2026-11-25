@@ -1,6 +1,6 @@
 // Which renderer a Graph window uses (graph-chart-plan §3.9, libraries-plan
-// §2). GPU (WebGL) is OFF by default. It is used only when all three agree:
-// - System: the configuration does not forbid it (graph_gpu_allowed !== false)
+// §2). GPU (WebGL) is OFF by default, and each browser's own choice (B-36
+// refused: the configuration cannot forbid it). Used only when both agree:
 // - Device: the user switched it on in this browser (Libraries → Graph rendering)
 // - Device: this browser can draw with the graphics card now (gpuCapability.js)
 
@@ -32,22 +32,12 @@ export const subscribeGpuPreference = (listener) => {
   return () => listeners.delete(listener);
 };
 
-// 'off' | 'allowed' | 'not_set' (the Service sent nothing: not restricted).
-export const getSystemGpuSetting = (configuration) => {
-  const value = configuration?.graph_gpu_allowed;
-  if (value === undefined || value === null || value === '') return 'not_set';
-  return String(value).toLowerCase() === 'false' ? 'off' : 'allowed';
-};
-
-export const isGpuAllowedBySystem = (configuration) => getSystemGpuSetting(configuration) !== 'off';
-
 // Pure decision (unit-tested).
-export const decideRenderer = ({ allowedBySystem, preferGpu, verdict }) => (
-  allowedBySystem && preferGpu && verdict === GPU_VERDICTS.CAPABLE ? RENDERERS.WEBGL : RENDERERS.CANVAS
+export const decideRenderer = ({ preferGpu, verdict }) => (
+  preferGpu && verdict === GPU_VERDICTS.CAPABLE ? RENDERERS.WEBGL : RENDERERS.CANVAS
 );
 
-export const resolveRenderer = (configuration) => decideRenderer({
-  allowedBySystem: isGpuAllowedBySystem(configuration),
+export const resolveRenderer = () => decideRenderer({
   preferGpu: getGpuPreference(),
   // Only probed when the user asked for GPU (the probe costs a WebGL context).
   verdict: getGpuPreference() ? getGpuCapability().verdict : GPU_VERDICTS.UNKNOWN,
@@ -79,8 +69,8 @@ export const markGpuSuggested = () => {
 
 // True once per device: GPU off, allowed, and usable without cautions. The
 // capability probe (a short WebGL context) only runs when the rest holds.
-export const shouldSuggestGpu = (configuration) => {
-  if (wasSuggested() || getGpuPreference() || !isGpuAllowedBySystem(configuration)) return false;
+export const shouldSuggestGpu = () => {
+  if (wasSuggested() || getGpuPreference()) return false;
   const capability = getGpuCapability();
   return capability.verdict === GPU_VERDICTS.CAPABLE && !capability.cautions?.length;
 };

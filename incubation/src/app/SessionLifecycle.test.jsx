@@ -22,6 +22,7 @@ vi.mock('../auth/WorkspaceLockOverlay.jsx', () => ({
   ),
 }));
 
+const { applyServerTask, createTask, linkServerTask, resetTasks } = await import('../features/tasks/lib/taskRegistry.js');
 const { default: SessionLifecycle } = await import('./SessionLifecycle.jsx');
 
 function Harness({ initiallyLocked = true }) {
@@ -84,5 +85,32 @@ describe('SessionLifecycle (production lock / unlock / logout flow)', () => {
     await waitFor(() => expect(auth.logout).toHaveBeenCalled());
     expect(session.unlockBackendSession).not.toHaveBeenCalled();
     expect(session.notifyBackendLogout).toHaveBeenCalledWith('user_logout');
+  });
+});
+
+describe('idle sign-out', () => {
+  afterEach(() => {
+    resetTasks();
+    vi.useRealTimers();
+  });
+  it.each([
+    ['no run', undefined, ''],
+    ['a run without a seat', false, 'Signing out stops your running analysis.'],
+    ['a run with a seat', true, ''],
+  ])('%s', async (_name, unattended, said) => {
+    vi.useFakeTimers();
+    if (unattended !== undefined) {
+      const id = createTask({ windowId: 'w1', sourceSessionId: '1_9' });
+      linkServerTask(id, 'T1');
+      applyServerTask({ task_id: 'T1', status: 'running', unattended });
+    }
+    Object.assign(session, { idleSettings: { enabled: true, warningMs: 1, lockMs: 2, timeoutMs: 3 } });
+    render(<Harness initiallyLocked={false} />);
+    await act(async () => { await vi.advanceTimersByTimeAsync(6000); });
+    const warning = notify.mock.calls.map(([notice]) => notice).find((notice) => notice.title === 'Inactivity warning').message;
+    expect(warning.includes('Signing out stops')).toBe(Boolean(said));
+    if (said) expect(warning).toContain(said);
+    await act(async () => { await vi.advanceTimersByTimeAsync(10000); });
+    expect(session.notifyIdleTimeout).toHaveBeenCalled();
   });
 });

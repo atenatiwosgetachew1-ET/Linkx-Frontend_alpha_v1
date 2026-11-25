@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  EMPTY_FILTER, countFilters, describeFilter, filterIsActive, filterPayload, filterProblems, listValues, normalizeFilter, summarizeFilter,
+  EMPTY_FILTER, countFilters, describeFilter, describeFilterPayload, filterIsActive, filterPayload, filterProblems, listValues, normalizeFilter, summarizeFilter,
 } from './dataframeFilter.js';
 import { buildStreamPayload } from '../../../services/sourceApi.js';
 
@@ -93,5 +93,27 @@ describe('dataframe filter (analyst decision 2026-11-19)', () => {
     const stream = buildStreamPayload({ sourceSessionId: '12', mode: 'batch', tool: 'neo4j', action: 'Link Analysis', rule: 'R', dataframeFilter: payload });
     expect(stream.value.dataframe_filter).toBe(payload);
     expect(buildStreamPayload({ sourceSessionId: '12', mode: 'batch', tool: 'neo4j', action: 'Link Analysis', rule: 'R' }).value).not.toHaveProperty('dataframe_filter');
+  });
+});
+
+describe('lists, ranges and dates (audit B7)', () => {
+  const one = (condition) => ({ rows: { match: 'all', action: 'keep', conditions: [{ column: 'ACCOUNT', value2: '', ...condition }] } });
+  const problems = (condition) => filterProblems(one(condition), { columns });
+  it('sends every value of a long list, whole', () => {
+    const accounts = Array.from({ length: 30 }, (_, i) => String(1000100010001 + i));
+    expect(filterPayload(one({ operator: 'in', value: accounts.join(', ') })).row_filter.conditions[0].values).toEqual(accounts);
+    expect(filterPayload(one({ operator: 'in', value: '"5,000", 7' })).row_filter.conditions[0].values).toEqual(['5,000', '7']);
+  });
+  it('refuses what would be cut or match nothing', () => {
+    expect(problems({ operator: 'in', value: Array.from({ length: 51 }, (_, i) => i).join(',') })[0]).toMatch(/51 values; at most 50/);
+    expect(problems({ operator: 'between', value: '9000', value2: '100' })[0]).toMatch(/larger than the second/);
+    expect(problems({ operator: 'between', value: '100', value2: '2026-01-01' })[0]).toMatch(/both values must be numbers, or both dates/);
+    expect(problems({ operator: 'gt', value: '2026-13-45' })).toHaveLength(1);
+    expect(problems({ operator: 'gt', value: ',' })).toHaveLength(1);
+    expect(problems({ operator: 'between', value: '100', value2: '5,000' })).toEqual([]);
+  });
+  it('describes what was sent as what was asked', () => {
+    expect(describeFilterPayload(filterPayload(filter))).toEqual(describeFilter(filter));
+    expect(describeFilterPayload(null)).toEqual([]);
   });
 });

@@ -17,6 +17,8 @@ import { OVERLAY_PREFS_KEY, resetOverlayPrefsCache } from '../lib/overlayPrefs.j
 import { CLIPBOARD_KEY, resetClipboardCache } from '../lib/graphClipboard.js';
 import { getProfileSettings, resetProfileSettingsCache, setProfileSettings } from '../lib/nodeProfile.js';
 import { resetDomainFormattingCache, setDomainFormatting } from '../lib/conditionalFormatting.js';
+import { createTask, finishTask, markTaskRunning, resetTasks } from '../../tasks/lib/taskRegistry.js';
+import { runSettingsLine } from '../report/graphReportModel.js';
 import { getGraphState, resetGraphLinkBus } from '../lib/graphLinkBus.js';
 import { bindGraphStatusSocket, clearGraphStatus, markGraphSessionClosed, markGraphSessionTerminated } from '../lib/graphStatus.js';
 
@@ -68,6 +70,7 @@ afterEach(() => {
   cleanup();
   clearGraphStatus();
   clearGraphStores();
+  resetTasks();
   clearEvidenceGraphs();
   localStorage.clear();
   resetPinnedEvidenceCache();
@@ -187,7 +190,7 @@ describe('GraphWindowBody', () => {
     expect(screen.getByText('Limited to 2,000')).toBeInTheDocument();
   });
 
-  it('follows the GPU choice, the GPU check and the system setting at once, and keeps the choice when a graph fails', async () => {
+  it('follows the GPU choice and the GPU check at once, and keeps the choice when a graph fails', async () => {
     cacheEvidenceGraph('tr-gpu', { data: {}, ...graphOf(3) });
     const verdict = { current: 'capable' };
     getGpuCapability.mockImplementation(() => ({ verdict: verdict.current, reasons: [] }));
@@ -204,9 +207,8 @@ describe('GraphWindowBody', () => {
     await waitFor(() => expect(drawnWith()).toBe('canvas'));
     act(() => setGpuPreference(true));
     expect(drawnWith()).toBe('webgl');
+    // The configuration cannot forbid it (B-36).
     rerender(ui({ active_domain: 'bank', graph_gpu_allowed: false }));
-    expect(drawnWith()).toBe('canvas');
-    rerender(ui({ active_domain: 'bank' }));
     expect(drawnWith()).toBe('webgl');
     act(() => {
       verdict.current = 'not_capable';
@@ -333,7 +335,7 @@ describe('GraphWindowBody linked to a session', () => {
     statusSocket();
     openLinked(vi.fn(async () => ({ results: { graph: { nodes: [], edges: [] } } })), { graphFinishedRun: true });
     expect(await screen.findByText('No graph data')).toBeInTheDocument();
-    expect(screen.getByText('Session 3_17 returned no nodes and no relationships.')).toBeInTheDocument();
+    expect(screen.getByText(/^Session 3_17 has no relationships to draw\./)).toBeInTheDocument();
   });
 
   it('an empty finished run can be loaded again', async () => {
@@ -352,6 +354,111 @@ describe('GraphWindowBody linked to a session', () => {
     act(() => socket.receive('status', { session_id: '3_17', type: 'relationships', data: ['SMURFING'] }));
     expect(await screen.findByText('No graph data found for this session.')).toBeInTheDocument();
     expect(workspaceRef.windows.map((item) => item.id)).toContain('graph-7');
+  });
+
+  it('a failed relationship keeps the graph before it, under its own tab (audit D1)', async () => {
+    const socket = statusSocket();
+    openLinked(vi.fn(async (path, options) => {
+      if (options?.body?.relationship === 'A') throw new Error('Neo4j unavailable');
+      return { results: { graph: graphOf(4) } };
+    }));
+    act(() => socket.receive('status', { session_id: '3_17', type: 'relationships', data: ['A'] }));
+    await waitFor(() => expect(screen.getByTestId('canvas')).toHaveAttribute('data-nodes', '4'));
+    await userEvent.click(screen.getByRole('tab', { name: 'A' }));
+    expect(await screen.findByText(/The graph shown before is kept/)).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'All (*)' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByTestId('canvas')).toHaveAttribute('data-nodes', '4');
+  });
+
+  it('a graph the Service left incomplete says so, and asks before an export (audit D1)', async () => {
+    statusSocket();
+    openLinked(vi.fn(async () => ({ results: { graph: graphOf(4) } })), { graphFinishedRun: true });
+    await waitFor(() => expect(screen.getByTestId('canvas')).toHaveAttribute('data-nodes', '4'));
+    act(() => getGraphStore('graph-7').setStatus({ state: 'ready', source: 'relationship', partial: true, received: { nodes: 4, edges: 0 }, expected: { nodes: 500, edges: 3 } }));
+    expect(screen.getByText('Incomplete')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Export' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: /JSON/ }));
+    expect(await screen.findByText(/4 of 500 entities and 0 of 3 links came/)).toBeInTheDocument();
+  });
+
+  it('a graph loaded while its run was going offers the rest; nothing is exported while loading (audit D4, D6)', async () => {
+    statusSocket();
+    const taskId = createTask({ origin: 'source', sourceSessionId: '3_17', windowId: 'source-3' });
+    markTaskRunning(taskId);
+    let size = 2;
+    openLinked(vi.fn(async () => ({ results: { graph: graphOf(size) } })), { graphFinishedRun: true, taskId });
+    await waitFor(() => expect(screen.getByTestId('canvas')).toHaveAttribute('data-nodes', '2'));
+    expect(screen.getByRole('button', { name: 'Run going: reload' })).toBeInTheDocument();
+    act(() => finishTask(taskId, 'completed'));
+    size = 5;
+    await userEvent.click(screen.getByRole('button', { name: 'Run finished: reload' }));
+    await waitFor(() => expect(screen.getByTestId('canvas')).toHaveAttribute('data-nodes', '5'));
+    expect(screen.queryByRole('button', { name: /reload/ })).not.toBeInTheDocument();
+  });
+
+  it('the report names the domain of the run, not today\u2019s (audit D8); an edge weight is not an amount (E4)', async () => {
+    statusSocket();
+    const taskId = createTask({ origin: 'source', sourceSessionId: '3_17', windowId: 'source-3', domain: 'cdr' });
+    finishTask(taskId, 'completed');
+    openLinked(vi.fn(async () => ({ results: { graph: graphOf(3) } })), { graphFinishedRun: true, taskId, graphSettings: { edgeWeight: 'balance' } });
+    await waitFor(() => expect(screen.getByTestId('canvas')).toHaveAttribute('data-nodes', '3'));
+    expect(getGraphState('graph-7').weightKey).toBe('');
+    Object.assign(URL, { createObjectURL: vi.fn(() => 'blob:x'), revokeObjectURL: vi.fn() });
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    await userEvent.click(screen.getByRole('button', { name: 'Export' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Generate report…' }));
+    const form = await screen.findByRole('dialog', { name: 'Generate graph report' });
+    await userEvent.click(within(form).getByRole('button', { name: 'Generate PDF' }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Generate graph report' })).not.toBeInTheDocument(), { timeout: 5000 });
+    expect(renderGraphReportPdf.mock.calls.at(-1)[0].cover.domain).toMatch(/CDR|Telecom/i);
+  });
+
+  it('a finished run’s kept graph loads by its task, with no session (B-37); one the Service cut says so', async () => {
+    statusSocket();
+    const apiFetch = vi.fn(async () => ({ success: true, nodes: graphOf(3).nodes, edges: graphOf(3).edges, total_nodes: 9, total_edges: 8, complete: false, truncated_by: 'link_limit', expires_at: 'x' }));
+    openLinked(apiFetch, { graphLinkSource: null, graphTaskId: 'T5' });
+    await waitFor(() => expect(screen.getByTestId('canvas')).toHaveAttribute('data-nodes', '3'));
+    expect(apiFetch).toHaveBeenCalledWith('/get_graph', expect.objectContaining({ body: { id: 'relationship', task_id: 'T5' } }));
+    const flag = screen.getByText('Incomplete');
+    expect(flag.dataset.tooltip).toContain('cut it (link limit): 3 of 9 entities');
+    expect(screen.queryByLabelText('Source ID')).not.toBeInTheDocument();
+  });
+
+  it('a report of a run says what it was made with (Q16)', async () => {
+    expect(runSettingsLine({ rule: 'bank_rules', filter: ['Keep only the rows where A is "x".'], configVersions: { thresholds: '12', preset: 'baseline', mapping: null }, rulesSkipped: [{ rule: 'SMURFING', fields: [] }] }))
+      .toBe('Run: rule bank_rules; dataframe filter: Keep only the rows where A is "x".; settings: thresholds version 12, preset baseline, mapping built-in; rules that could not run: SMURFING.');
+    expect(runSettingsLine(null)).toBe('');
+  });
+
+  it.each([
+    [404, 'graph_not_kept', /kept no graph of this run/],
+    [410, 'graph_expired', /no longer kept \(24 hours\)/],
+    [409, 'task_running', /still going/],
+  ])('a kept graph that cannot be had: %s %s', async (status, code, text) => {
+    statusSocket();
+    openLinked(vi.fn(async () => { throw Object.assign(new Error('x'), { status, data: { code } }); }), { graphLinkSource: null, graphTaskId: 'T5' });
+    expect(await screen.findByText(text)).toBeInTheDocument();
+  });
+
+  it('a kept graph with no relationships says so', async () => {
+    statusSocket();
+    openLinked(vi.fn(async () => ({ nodes: [], edges: [], complete: true })), { graphLinkSource: null, graphTaskId: 'T5' });
+    expect(await screen.findByText('No graph data')).toBeInTheDocument();
+  });
+
+  it('a window of an earlier run never loads the newer one (audit D5)', async () => {
+    const socket = statusSocket();
+    const first = createTask({ origin: 'source', sourceSessionId: '3_17', windowId: 'source-3' });
+    finishTask(first, 'completed');
+    const apiFetch = vi.fn(async () => ({ results: { graph: graphOf(2) } }));
+    openLinked(apiFetch, { graphFinishedRun: true, taskId: first });
+    await waitFor(() => expect(screen.getByTestId('canvas')).toHaveAttribute('data-nodes', '2'));
+    act(() => { createTask({ origin: 'source', sourceSessionId: '3_17', windowId: 'source-3' }); });
+    act(() => socket.receive('status', { session_id: '3_17', type: 'relationships', data: ['A'] }));
+    const before = apiFetch.mock.calls.length;
+    await userEvent.click(screen.getByRole('tab', { name: 'A' }));
+    expect(await screen.findByText(/shows an earlier run/)).toBeInTheDocument();
+    expect(apiFetch.mock.calls.length).toBe(before);
   });
 
   it('unlinks but keeps the graph when the source is terminated; resets when it is closed', async () => {
@@ -631,11 +738,11 @@ describe('GraphWindowBody graph alerts (G2.4)', () => {
   it('a clean graph still opens the panel and says so; Run Alert Scan rescans', async () => {
     await open(graphOf(3));
     const panel = await screen.findByRole('region', { name: 'Graph Alerts' });
-    expect(panel).toHaveTextContent('No alerts — graph looks clean.');
+    expect(panel).toHaveTextContent('No alerts in this graph.');
     await alertMenu('Run Alert Scan');
     expect(screen.getByRole('region', { name: 'Graph Alerts' })).toHaveTextContent('Scanning…');
     // (The summary is also in the bubble's tooltip.)
-    expect((await screen.findAllByText('No alerts — graph looks clean.')).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText('No alerts in this graph.')).length).toBeGreaterThan(0);
   });
 
   it('Disable Alert Rules clears the highlight and is kept in the window settings', async () => {

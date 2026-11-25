@@ -50,7 +50,7 @@ function RightWorkspace({ displayName, workspace, logoSrc, isRightCollapsed = fa
 
   // 4. Per-tab disabled rules:
   // - If panel is disabled: all tabs disabled
-  // - If Graph or Chart window is active: ALL tabs enabled ([])
+  // - If a Graph, Chart or Table window is active: ALL tabs enabled ([])
   // - If Source or other window is active: ONLY 'overview' is enabled, so assistant, info, filter, settings are disabled
   const disabledTabs = useMemo(() => {
     if (isPanelDisabled) return ['overview', 'assistant', 'info', 'filter', 'settings'];
@@ -64,8 +64,11 @@ function RightWorkspace({ displayName, workspace, logoSrc, isRightCollapsed = fa
     }
   }, [disabledTabs, activeTab, isPanelDisabled]);
 
-  const handleSelectTab = (tabId) => {
+  // A question to start the co-analyst with (Overview ▸ Co-analyst).
+  const [assistantDraft, setAssistantDraft] = useState('');
+  const handleSelectTab = (tabId, { draft = '' } = {}) => {
     if (isPanelDisabled || disabledTabs.includes(tabId)) return;
+    setAssistantDraft(draft);
     setActiveTab(tabId);
     if (isRightCollapsed && onToggleCollapse) {
       onToggleCollapse();
@@ -133,7 +136,7 @@ function RightWorkspace({ displayName, workspace, logoSrc, isRightCollapsed = fa
               </div>
               <h4 className="workspace_panel_disabled_title">Analysis Panel Inactive</h4>
               <p className="workspace_panel_disabled_desc">
-                Open a <strong>Source</strong>, <strong>Graph</strong>, or <strong>Chart</strong> workspace window to activate session controls, Co-Analyst, filters, and analysis settings.
+                Open a <strong>Source</strong>, <strong>Graph</strong>, <strong>Chart</strong> or <strong>Table</strong> window to use this panel.
               </p>
             </div>
           ) : (
@@ -144,11 +147,13 @@ function RightWorkspace({ displayName, workspace, logoSrc, isRightCollapsed = fa
                   workspace={workspace}
                   logoSrc={logoSrc}
                   onSwitchTab={handleSelectTab}
+                  canOpenAssistant={!disabledTabs.includes('assistant')}
                 />
               )}
 
               {activeTab === 'assistant' && (
                 <WorkspaceAssistantTab
+                  initialMessage={assistantDraft}
                   displayName={displayName}
                   workspace={workspace}
                   logoSrc={logoSrc}

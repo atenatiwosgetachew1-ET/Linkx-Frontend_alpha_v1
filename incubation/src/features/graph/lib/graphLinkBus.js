@@ -80,7 +80,7 @@ export const requestGraphAction = (graphId, action) => {
   return false;
 };
 
-// Tests.
+// Sign-out (the next workspace reuses window ids), and tests.
 export const resetGraphLinkBus = () => {
   states.clear();
   stateListeners.clear();

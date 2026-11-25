@@ -3,6 +3,8 @@
 // undirected neighbour index and return { id: {x, y} }. Run in the layout
 // worker (workers/layout.worker.js); also unit-tested directly.
 
+import { parseAmount } from '../../../shared/numbers/values.js';
+
 // GA:6248
 export const layoutRadius = (nodeCount, baseRadius = 200, step = 16, maxRadius = 1800) => (
   Math.max(baseRadius, Math.min(maxRadius, nodeCount * step))
@@ -222,11 +224,7 @@ const identityLayers = (nodeIds, info) => {
     .map(([, ids]) => ids);
 };
 
-const toNumber = (value) => {
-  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
-  const numeric = Number(String(value ?? '').trim().replace(/,/g, ''));
-  return String(value ?? '').trim() && Number.isFinite(numeric) ? numeric : null;
-};
+const toNumber = parseAmount;
 
 // Buckets by the layer key's value: numbers ascending, then text.
 const propertyLayers = (nodeIds, info) => {

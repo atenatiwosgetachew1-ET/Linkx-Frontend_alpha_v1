@@ -193,3 +193,5 @@ export const viewKeyOf = (limit, search) => JSON.stringify([limit, search || nul
 export const visibleCapFor = (renderer, gpuLimits) => (
   renderer === 'webgl' ? gpuLimits?.cap ?? GRAPH_LIMITS.WEBGL_WARNING : GRAPH_LIMITS.CANVAS_HARD_CAP
 );
+// From how many shown nodes "may be slow" is said.
+export const warnAtFor = (renderer, gpuLimits) => (renderer === 'webgl' && gpuLimits ? gpuLimits.warnAt : GRAPH_LIMITS.WARNING);

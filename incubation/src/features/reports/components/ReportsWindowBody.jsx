@@ -7,6 +7,7 @@ import { useWorkspace, useWorkspaceActions } from '../../../workspace/hooks/useW
 import { WORKSPACE_WINDOW_TYPES } from '../../../workspace/state/workspaceTypes.js';
 import { buildEvidencePayload, fetchGraph } from '../../../services/graphApi.js';
 import { AuthContext } from '../../../auth/authContext.js';
+import { isPresentationLoaded } from '../../graph/lib/domainPresentation.js';
 import { formatDomainPillarLabel, getActiveDomainKey } from '../../configuration/lib/configModel.js';
 import GraphReportDialog from '../../graph/components/GraphReportDialog.jsx';
 import { getProfileSettings, resolveProfileSettings } from '../../graph/lib/nodeProfile.js';
@@ -346,7 +347,7 @@ export default function ReportsWindowBody({ windowItem }) {
     fetchGraph(apiFetch, buildEvidencePayload(selectedTraceId, selected), { signal: controller.signal })
       .then((graph) => {
         const hasGraph = graph.nodes.length > 0 || graph.edges.length > 0;
-        if (hasGraph) cacheEvidenceGraph(selectedTraceId, graph);
+        if (hasGraph && !graph.partial) cacheEvidenceGraph(selectedTraceId, graph);
         setGraphStatus((current) => ({ ...current, [selectedTraceId]: hasGraph }));
       })
       .catch((probeError) => {
@@ -393,7 +394,15 @@ export default function ReportsWindowBody({ windowItem }) {
         notify({ title: 'No graph', message: 'No graph data found for this evidence report.', level: 'warning', source: 'Reports' });
         return null;
       }
-      cacheEvidenceGraph(traceId, graph);
+      if (graph.partial) {
+        notify({
+          title: 'Incomplete graph',
+          message: `The Service delivered ${graph.nodes.length.toLocaleString('en-GB')} entities and ${graph.edges.length.toLocaleString('en-GB')} links${graph.expected ? ` of ${graph.expected.nodes.toLocaleString('en-GB')} and ${graph.expected.edges.toLocaleString('en-GB')}` : ''}. Load it again before relying on it.`,
+          level: 'warning',
+          source: 'Reports',
+          durationMs: 15000,
+        });
+      } else cacheEvidenceGraph(traceId, graph);
       setGraphStatus((current) => ({ ...current, [traceId]: true }));
       return graph;
     } catch (openError) {
@@ -444,7 +453,7 @@ export default function ReportsWindowBody({ windowItem }) {
     try {
       const graph = await loadEvidenceGraph(traceId, record);
       if (!graph) return;
-      const profileSettings = configuration?.actor_profile ? resolveProfileSettings(configuration, domainKey) : getProfileSettings(domainKey);
+      const profileSettings = configuration?.actor_profile && !isPresentationLoaded(domainKey) ? resolveProfileSettings(configuration, domainKey) : getProfileSettings(domainKey);
       const context = evidenceReportContext({
         graphData: graph,
         evidence: evidenceMetaOf(record, traceId),

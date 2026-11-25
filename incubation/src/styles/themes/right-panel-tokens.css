@@ -1,0 +1,144 @@
+/*
+ * Right workspace panel pages: one variable per coloured part, so the Theme
+ * Studio and the element picker restyle that part and nothing else. Each
+ * starts from the panel's base colours (tokens.css, --right-*); no window
+ * reads any of these. The list shown in the Theme Studio is
+ * src/shared/theme/rightPanelThemeTokens.js.
+ */
+:root {
+  /* Page header */
+  --right-page-head-bg: color-mix(in srgb, var(--right-card-bg) calc(var(--right-card-bg-opacity, 0.85) * 100%), transparent);
+  --right-page-head-wash: color-mix(in srgb, var(--right-card-toggle-btn-color) 12%, transparent);
+  --right-page-head-line: color-mix(in srgb, var(--right-card-border) 70%, transparent);
+  --right-page-head-shadow: color-mix(in srgb, var(--right-value-color) 14%, transparent);
+  --right-page-head-eyebrow: var(--right-label-color);
+  --right-page-head-title: var(--right-value-color);
+  --right-page-head-note: var(--right-label-color);
+  --right-page-head-icon-bg: color-mix(in srgb, var(--right-card-toggle-btn-color) 14%, transparent);
+  --right-page-head-icon-border: color-mix(in srgb, var(--right-card-toggle-btn-color) 45%, transparent);
+  --right-page-head-icon: var(--right-card-toggle-btn-color);
+  --right-page-stat-line: color-mix(in srgb, var(--right-card-border) 70%, transparent);
+  --right-page-stat-label: var(--right-label-color);
+  --right-page-stat-value: var(--right-value-color);
+  --right-page-stat-empty: var(--right-empty-text-color);
+  --right-page-stat-note: var(--right-label-color);
+  /* Status labels */
+  --right-page-pill-ok-bg: var(--right-status-badge-bg);
+  --right-page-pill-ok-border: color-mix(in srgb, var(--right-status-badge-text) 35%, transparent);
+  --right-page-pill-ok-text: var(--right-status-badge-text);
+  --right-page-pill-neutral-bg: color-mix(in srgb, var(--right-value-color) 8%, transparent);
+  --right-page-pill-neutral-border: var(--right-card-border);
+  --right-page-pill-neutral-text: var(--right-value-color);
+  --right-page-pill-alert-bg: color-mix(in srgb, color-mix(in srgb, #e5484d 78%, var(--right-value-color)) 10%, transparent);
+  --right-page-pill-alert-border: color-mix(in srgb, color-mix(in srgb, #e5484d 78%, var(--right-value-color)) 45%, transparent);
+  --right-page-pill-alert-text: color-mix(in srgb, #e5484d 78%, var(--right-value-color));
+  /* Cards */
+  --right-page-card-bg: color-mix(in srgb, var(--right-card-bg) calc(var(--right-card-bg-opacity, 0.85) * 100%), transparent);
+  --right-page-card-border: var(--right-card-border);
+  --right-page-card-line: color-mix(in srgb, var(--right-card-border) 70%, transparent);
+  --right-page-card-title: var(--right-card-title-color);
+  --right-page-card-icon: var(--right-card-toggle-btn-color);
+  --right-page-toggle-bg: var(--right-card-toggle-btn-bg);
+  --right-page-toggle-icon: var(--right-card-toggle-btn-color);
+  --right-page-toggle-hover-bg: var(--right-card-toggle-btn-hover-bg);
+  --right-page-toggle-hover-icon: var(--right-card-toggle-btn-hover-color);
+  --right-page-row-label: var(--right-label-color);
+  --right-page-row-value: var(--right-value-color);
+  --right-page-row-line: color-mix(in srgb, var(--right-card-border) 70%, transparent);
+  --right-page-note-text: var(--right-label-color);
+  --right-page-hint-text: var(--right-label-color);
+  --right-page-warning-text: color-mix(in srgb, #d97706 72%, var(--right-value-color));
+  --right-page-line-focus: var(--right-card-toggle-btn-color);
+  /* Overview: activity */
+  --right-page-task-title: var(--right-value-color);
+  --right-page-task-detail: var(--right-label-color);
+  --right-page-task-line: color-mix(in srgb, var(--right-card-border) 70%, transparent);
+  --right-page-task-status: var(--right-label-color);
+  --right-page-task-status-active: var(--right-status-badge-text);
+  --right-page-task-status-failed: color-mix(in srgb, #e5484d 78%, var(--right-value-color));
+  /* Overview: co-analyst */
+  --right-page-alert-tone: color-mix(in srgb, #e5484d 78%, var(--right-value-color));
+  --right-page-alert-quiet: var(--right-label-color);
+  --right-page-alert-border: var(--right-card-border);
+  --right-page-alert-text: var(--right-value-color);
+  --right-page-alert-hint: var(--right-label-color);
+  --right-page-chip-high: color-mix(in srgb, #e5484d 78%, var(--right-value-color));
+  --right-page-chip-medium: color-mix(in srgb, #d97706 72%, var(--right-value-color));
+  --right-page-assist-btn-bg: var(--right-filter-btn-bg);
+  --right-page-assist-btn-border: var(--right-filter-btn-bg);
+  --right-page-assist-btn-text: var(--right-filter-btn-text);
+  --right-page-assist-btn-hover-bg: color-mix(in srgb, var(--right-filter-btn-bg) 86%, var(--right-filter-btn-text));
+  --right-page-assist-btn-hover-border: var(--right-card-toggle-btn-color);
+  /* Form cards (Filter, Settings) */
+  --right-page-form-bg: color-mix(in srgb, var(--right-card-bg) calc(var(--right-card-bg-opacity, 0.85) * 100%), transparent);
+  --right-page-form-border: var(--right-card-border);
+  --right-page-form-title: var(--right-card-title-color);
+  --right-page-key-line: color-mix(in srgb, var(--right-card-border) 70%, transparent);
+  --right-page-field-label: var(--right-form-label-color);
+  --right-page-form-result: var(--right-value-color);
+  --right-page-input-bg: var(--right-filter-input-bg);
+  --right-page-input-border: var(--right-filter-input-border);
+  --right-page-input-text: var(--right-form-input-text);
+  --right-page-input-placeholder: var(--right-chat-input-placeholder);
+  --right-page-input-hover-border: var(--right-card-toggle-btn-color);
+  --right-page-input-focus-border: var(--right-card-toggle-btn-color);
+  --right-page-input-focus-ring: var(--right-chat-input-focus-ring);
+  --right-page-input-disabled-bg: color-mix(in srgb, var(--right-value-color) 5%, transparent);
+  --right-page-input-disabled-text: var(--right-empty-text-color);
+  --right-page-switch-label: var(--right-form-input-text);
+  --right-page-switch-bg: color-mix(in srgb, var(--right-value-color) 14%, transparent);
+  --right-page-switch-border: var(--right-filter-input-border);
+  --right-page-switch-on-bg: var(--right-status-badge-text);
+  --right-page-switch-on-border: var(--right-status-badge-text);
+  --right-page-switch-knob: #ffffff;
+  --right-page-switch-knob-shadow: rgba(0, 0, 0, 0.3);
+  --right-page-switch-focus: var(--right-card-toggle-btn-color);
+  /* Buttons (Filter, Settings) */
+  --right-page-btn-bg: var(--right-filter-input-bg);
+  --right-page-btn-border: var(--right-filter-input-border);
+  --right-page-btn-text: var(--right-form-input-text);
+  --right-page-btn-hover-bg: color-mix(in srgb, var(--right-card-toggle-btn-color) 10%, var(--right-filter-input-bg));
+  --right-page-btn-hover-border: var(--right-card-toggle-btn-color);
+  --right-page-btn-hover-text: var(--right-form-input-text);
+  --right-page-btn-pressed-bg: color-mix(in srgb, var(--right-card-toggle-btn-color) 18%, var(--right-filter-input-bg));
+  --right-page-btn-pressed-border: var(--right-card-toggle-btn-color);
+  --right-page-btn-pressed-text: var(--right-form-input-text);
+  --right-page-btn-disabled-bg: color-mix(in srgb, var(--right-value-color) 5%, transparent);
+  --right-page-btn-disabled-border: var(--right-filter-input-border);
+  --right-page-btn-disabled-text: var(--right-empty-text-color);
+  --right-page-btn-disabled-opacity: 0.5;
+  --right-page-btn-focus: var(--right-card-toggle-btn-color);
+  --right-page-btn-primary-bg: var(--right-filter-btn-bg);
+  --right-page-btn-primary-border: var(--right-filter-btn-bg);
+  --right-page-btn-primary-text: var(--right-filter-btn-text);
+  --right-page-btn-primary-hover-bg: color-mix(in srgb, var(--right-filter-btn-bg) 86%, var(--right-filter-btn-text));
+  --right-page-btn-primary-hover-border: var(--right-card-toggle-btn-color);
+  /* Filter: search card */
+  --right-page-search-field-bg: var(--right-filter-input-bg);
+  --right-page-search-field-border: var(--right-filter-input-border);
+  --right-page-search-field-text: var(--right-form-input-text);
+  --right-page-search-field-placeholder: var(--right-chat-input-placeholder);
+  --right-page-search-field-focus: var(--right-card-toggle-btn-color);
+  --right-page-search-field-ring: color-mix(in srgb, var(--right-card-toggle-btn-color) 20%, transparent);
+  --right-page-search-icon: var(--right-card-toggle-btn-color);
+  --right-page-search-clear: var(--right-label-color);
+  --right-page-search-clear-hover: var(--right-value-color);
+  --right-page-search-key-bg: color-mix(in srgb, var(--right-value-color) 6%, transparent);
+  --right-page-search-key-border: var(--right-card-border);
+  --right-page-search-key-text: var(--right-label-color);
+  --right-page-search-reading: var(--right-label-color);
+  --right-page-search-reading-on: var(--right-value-color);
+  --right-page-search-reading-mark: var(--right-card-toggle-btn-color);
+  --right-page-search-found-track: color-mix(in srgb, var(--right-value-color) 9%, transparent);
+  --right-page-search-found-fill: var(--right-card-toggle-btn-color);
+  --right-page-search-found-none: color-mix(in srgb, #d97706 72%, var(--right-value-color));
+  --right-page-range-label: var(--right-form-label-color);
+  --right-page-range-value: var(--right-value-color);
+  --right-page-range-ends: var(--right-label-color);
+  --right-page-range-track: color-mix(in srgb, var(--right-value-color) 12%, transparent);
+  --right-page-range-fill: var(--right-card-toggle-btn-color);
+  --right-page-range-thumb: #ffffff;
+  --right-page-range-thumb-border: var(--right-card-toggle-btn-color);
+  --right-page-range-thumb-shadow: rgba(0, 0, 0, 0.18);
+  --right-page-range-focus: color-mix(in srgb, var(--right-card-toggle-btn-color) 30%, transparent);
+}

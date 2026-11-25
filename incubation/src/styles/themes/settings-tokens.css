@@ -428,16 +428,16 @@
   --settings-theme-studio-import-card-bg: var(--panel-bg);
   --settings-theme-studio-import-card-border: var(--panel-border);
   --settings-theme-studio-import-card-h5-text: var(--linkx-text-primary);
-  --settings-theme-studio-search-input-bg: var(--right-card-bg, #FFFFFF);
-  --settings-theme-studio-search-input-border: var(--right-card-border, rgba(174, 135, 79, 0.35));
-  --settings-theme-studio-search-input-text: var(--right-form-input-text, #131e2a);
-  --settings-theme-studio-search-input-focus-border: var(--right-tab-active-border, #FCC676);
+  --settings-theme-studio-search-input-bg: var(--input-bg);
+  --settings-theme-studio-search-input-border: color-mix(in srgb, var(--input-border) 25%, transparent);
+  --settings-theme-studio-search-input-text: var(--app-text);
+  --settings-theme-studio-search-input-focus-border: var(--accent);
   --settings-theme-studio-search-input-focus-shadow: color-mix(in srgb, var(--accent) 25%, transparent);
   --settings-theme-studio-search-clear-text: #8896a6;
   --settings-theme-studio-search-clear-hover-text: #131e2a;
   --settings-theme-studio-search-clear-hover-bg: rgba(0, 0, 0, 0.06);
   --settings-theme-studio-cat-badge-bg: color-mix(in srgb, var(--accent) 35%, transparent);
   --settings-theme-studio-cat-badge-text: #131e2a;
-  --settings-theme-studio-empty-search-text: var(--right-chat-body-text, #4a5568);
-  --settings-theme-studio-search-hint-text: var(--right-label-color, #7f5523);
+  --settings-theme-studio-empty-search-text: #4a5568;
+  --settings-theme-studio-search-hint-text: var(--muted-text);
 }

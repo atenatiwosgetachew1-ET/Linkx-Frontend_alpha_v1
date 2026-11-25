@@ -5,7 +5,7 @@ import { recolorSvgForDarkMode, resolveIconUrl } from './graphIcons.js';
 import { semanticLegend } from './graphModel.js';
 import { concentricLayout, layoutRadius, neighbourIndex } from './layouts.js';
 import { createGraphStore } from './graphStore.js';
-import { RENDERERS, decideRenderer, isGpuAllowedBySystem } from './rendererPreference.js';
+import { RENDERERS, decideRenderer, } from './rendererPreference.js';
 
 describe('graph elements (production payload -> Cytoscape)', () => {
   it('treats production default colours as theme colours, keeps real ones', () => {
@@ -101,17 +101,10 @@ describe('concentric layout (production default)', () => {
 });
 
 describe('renderer choice (GPU off by default)', () => {
-  it('uses WebGL only when allowed, chosen and capable', () => {
-    expect(decideRenderer({ allowedBySystem: true, preferGpu: true, verdict: 'capable' })).toBe(RENDERERS.WEBGL);
-    expect(decideRenderer({ allowedBySystem: true, preferGpu: false, verdict: 'capable' })).toBe(RENDERERS.CANVAS);
-    expect(decideRenderer({ allowedBySystem: false, preferGpu: true, verdict: 'capable' })).toBe(RENDERERS.CANVAS);
-    expect(decideRenderer({ allowedBySystem: true, preferGpu: true, verdict: 'unknown' })).toBe(RENDERERS.CANVAS);
-  });
-
-  it('reads the system policy from the configuration', () => {
-    expect(isGpuAllowedBySystem({})).toBe(true);
-    expect(isGpuAllowedBySystem({ graph_gpu_allowed: false })).toBe(false);
-    expect(isGpuAllowedBySystem({ graph_gpu_allowed: 'false' })).toBe(false);
+  it('uses WebGL only when chosen and capable', () => {
+    expect(decideRenderer({ preferGpu: true, verdict: 'capable' })).toBe(RENDERERS.WEBGL);
+    expect(decideRenderer({ preferGpu: false, verdict: 'capable' })).toBe(RENDERERS.CANVAS);
+    expect(decideRenderer({ preferGpu: true, verdict: 'unknown' })).toBe(RENDERERS.CANVAS);
   });
 });
 

@@ -9,7 +9,7 @@ import WindowSwitcher from './WindowSwitcher.jsx';
 import { useWorkspace } from '../hooks/useWorkspace.js';
 import { useCan } from '../../auth/useCan.js';
 import { getVisibleLauncherItems, launcherItems } from './launcherItems.js';
-import { closeSourceWindow, initializeSourceWindow } from '../../services/sourceApi.js';
+import { closeSourceWindow } from '../../services/sourceApi.js';
 import { useSession } from '../../shared/session/useSession.js';
 import { disposeAllSourceRuntimes, disposeSourceRuntime } from '../../features/source/lib/sourceRuntime.js';
 import { bindStreamLogSocket, disposeAllStreamLogs, disposeStreamLog, peekStreamLogLines } from '../../features/source/lib/streamLogs.js';
@@ -21,8 +21,8 @@ import { clearGraphStores, disposeGraphStore, getGraphStore, hasGraphStore } fro
 import { forgetGraphState } from '../../features/graph/lib/graphLinkBus.js';
 import { forgetLayoutOwner } from '../../features/graph/lib/layoutClient.js';
 import { bindGraphStatusSocket, clearGraphStatus, markGraphSessionClosed, markGraphSessionTerminated, retainGraphStatus, setGraphStatusNotifier } from '../../features/graph/lib/graphStatus.js';
-import { isRunGraphAvailable, runGraphMissingReason, streamingSessionIds } from '../../features/graph/lib/graphLinkFlow.js';
-import { endAbandonedStream, endAllAbandonedStreams, getActiveStream } from '../../features/source/lib/activeStreams.js';
+import { isRunGraphAvailable, isRunGraphKept, runGraphMissingReason, streamingSessionIds } from '../../features/graph/lib/graphLinkFlow.js';
+import { forgetActiveStreams, endAbandonedStream, endAllAbandonedStreams, getActiveStream } from '../../features/source/lib/activeStreams.js';
 import { continueStreamInBackground } from '../../features/source/lib/backgroundStreams.js';
 import {
   TASK_ORIGINS,
@@ -35,13 +35,14 @@ import {
   getTask,
   holdTaskSession,
   releaseAllTaskSessions,
+  releaseTaskSession,
+  subscribeTasks,
   getSessionUsage,
   getTasksSnapshot,
   onTaskEnded,
   requestTaskFocus,
   resetTasks,
   sessionLimitMessage,
-  subscribeTasks,
 } from '../../features/tasks/lib/taskRegistry.js';
 import { useNotifications } from '../../shared/notifications/useNotifications.js';
 import CloseAnalysisDialog from './CloseAnalysisDialog.jsx';
@@ -49,9 +50,14 @@ import SaveBeforeCloseDialog from './SaveBeforeCloseDialog.jsx';
 import RestoreWorkspaceDialog from './RestoreWorkspaceDialog.jsx';
 import SignOutDialog from './SignOutDialog.jsx';
 import { useWorkspaceCopy } from '../hooks/useWorkspaceCopy.js';
-import { leaveReasons } from '../lib/leaveReasons.js';
-import { nextSourceWindowNumber } from '../lib/sourceWindowIds.js';
-import { isRememberingWorkspace, windowOutcome } from '../lib/workspaceCopy.js';
+import { isRunGoing, leaveReasons, ownUnattendedGoing } from '../lib/leaveReasons.js';
+import { resetSeats, unattendedWindowIds } from '../../features/tasks/lib/unattendedSeats.js';
+import { loadPresentation, resetPresentation } from '../../features/graph/lib/domainPresentation.js';
+import { resetQuickRun } from '../../features/quick/lib/quickRun.js';
+import { rememberAwayRuns } from '../lib/awayRuns.js';
+import { useAwayRuns } from '../hooks/useAwayRuns.js';
+import { openSourceSession } from '../lib/openSourceSession.js';
+import { isRememberingWorkspace, windowOutcome, workspaceOwnerKey } from '../lib/workspaceCopy.js';
 import TaskEvidenceDialog from '../../features/tasks/components/TaskEvidenceDialog.jsx';
 import { canSaveAsEvidence, saveRunAsEvidence } from '../../features/tasks/lib/saveEvidence.js';
 import { WORKSPACE_CONTEXT_TABS, WORKSPACE_ORIENTATIONS, WORKSPACE_WINDOW_TYPES, getWindowLimitBlock } from '../state/workspaceTypes.js';
@@ -60,6 +66,8 @@ import { createLogger } from '../../shared/logger.js';
 import { useParentAlerts } from '../../features/alerts/hooks/useParentAlerts.js';
 import { useServerTasks } from '../../features/tasks/hooks/useServerTasks.js';
 import { resetPermissionCatalog } from '../../auth/permissions.js';
+import { clearChartResults } from '../../features/chart/lib/chartResultCache.js';
+import { resetGraphLinkBus } from '../../features/graph/lib/graphLinkBus.js';
 import { resetAlerts } from '../../features/alerts/lib/alertStore.js';
 
 // Signed out / workspace gone: the next workspace reuses window ids
@@ -67,7 +75,10 @@ import { resetAlerts } from '../../features/alerts/lib/alertStore.js';
 // typed passwords, stream logs, cached report pages, evidence graphs, graph
 // window stores and unsaved Configuration drafts.
 const clearWorkspaceSessionData = () => {
+  resetQuickRun();
   resetTasks();
+  resetSeats();
+  resetPresentation();
   resetPermissionCatalog();
   disposeAllSourceRuntimes();
   disposeAllStreamLogs();
@@ -78,6 +89,8 @@ const clearWorkspaceSessionData = () => {
   clearKnownBuiltinRules();
   clearGraphStores();
   clearGraphStatus();
+  clearChartResults();
+  resetGraphLinkBus();
 };
 
 const log = createLogger('workspace');
@@ -224,9 +237,9 @@ export default function WorkspaceFrame({ user, token, mainSessionId, sessionErro
   useEffect(() => onTaskEnded((task) => {
     if (task.origin === TASK_ORIGINS.QUICK && !task.background) return;
     const view = { label: 'View task', onClick: () => openTask(task.id) };
-    const source = task.background ? 'Background task' : (task.windowTitle || 'Tasks');
+    const source = task.quick ? 'Quick analysis' : task.background ? 'Background task' : (task.windowTitle || 'Tasks');
     if (task.status === TASK_STATUSES.COMPLETED) {
-      const kept = task.background && task.origin === TASK_ORIGINS.SOURCE ? ' Its session is kept for its graph: save it or release it in Tasks.' : '';
+      const kept = task.background && task.origin === TASK_ORIGINS.SOURCE && !task.quick && !task.graphSaved ? ' Its session is kept for its graph: save it or release it in Tasks.' : '';
       notify({ title: `${task.title} completed`, message: `${task.input || 'The results are ready.'}${kept}`, level: 'success', source, action: view });
     } else if (task.background && task.status === TASK_STATUSES.FAILED) {
       notify({ title: `${task.title} failed`, message: task.message || task.input || 'The analysis failed.', level: 'error', source, action: view });
@@ -234,6 +247,18 @@ export default function WorkspaceFrame({ user, token, mainSessionId, sessionErro
       notify({ title: `${task.title} stopped`, message: task.message || task.input || 'The analysis was stopped.', level: 'warning', source, action: view });
     }
   }), [notify, openTask]);
+  useAwayRuns({ user, notify, openTask });
+  // The active domain's shared profile mapping and formatting rules.
+  const activeDomain = configuration?.active_domain || configuration?.domain || '';
+  useEffect(() => {
+    if (token && activeDomain && can('config:read')) loadPresentation(apiFetch, activeDomain);
+    // Once per domain and sign-in.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeDomain, Boolean(token)]);
+  // A held run whose graph the Service now keeps: its session is free again.
+  useEffect(() => subscribeTasks(() => {
+    getTasksSnapshot().tasks.filter((task) => task.heldSession && isRunGraphKept(task)).forEach((task) => releaseTaskSession(task.id));
+  }), []);
   const toggleRightCollapsed = useCallback(() => setIsRightCollapsed((current) => !current), []);
 
 
@@ -312,7 +337,9 @@ export default function WorkspaceFrame({ user, token, mainSessionId, sessionErro
         disposeSourceRuntime(windowId);
         disposeStreamLog(windowId);
         if (!apiFetchRef.current || !hadTokenRef.current) return;
-        if (ended?.status !== TASK_STATUSES.COMPLETED) {
+        // Not completed, or its graph is kept by the Service (B-37): no need
+        // to hold its session.
+        if (ended?.status !== TASK_STATUSES.COMPLETED || ended.graphSaved) {
           releaseSourceSession(targetWindow, 'background_task_ended');
           return;
         }
@@ -349,7 +376,7 @@ export default function WorkspaceFrame({ user, token, mainSessionId, sessionErro
     }
     // A completed run nobody saved: its graph goes with the window.
     const latest = getLatestTaskForWindow(windowId);
-    if (token && canSaveAsEvidence(latest, can) && isRunGraphAvailable(latest, windowsRef.current)) {
+    if (token && canSaveAsEvidence(latest, can) && isRunGraphAvailable(latest, windowsRef.current) && !isRunGraphKept(latest)) {
       setPendingSave({ windowId, windowTitle: targetWindow.title, taskId: latest.id, saving: false });
       return;
     }
@@ -386,28 +413,33 @@ export default function WorkspaceFrame({ user, token, mainSessionId, sessionErro
     else closeAndStop(targetWindow);
   };
 
-  // Streams left running when the page goes away (tab closed / reloaded) or
-  // the workspace unmounts (sign-out, idle timeout) are ended with keepalive
-  // requests, sent while the session token is still known. Background tasks
-  // included: nobody is left to receive their results.
+  // The workspace goes away (sign-out, idle timeout): runs are ended with
+  // keepalive requests, but the one the Service gave a seat, which goes on
+  // (analyst decision 2026-11-25). How they ended is told at the next sign-in.
+  // Finished runs' kept sessions are released.
+  const ownerRef = React.useRef('');
+  ownerRef.current = workspaceOwnerKey(user);
   useEffect(() => {
-    const endAll = (reason) => {
-      endAllAbandonedStreams(apiFetchRef.current, { reason, keepalive: true }).catch(() => null);
-      releaseAllTaskSessions({ keepalive: true });
-    };
     const onPageHide = (event) => {
-      endAll('page_closed');
-      // Their Source sessions too: ids are never reused, so nothing could
-      // open them again, and each still counts as one of the sessions.
+      // Runs are left to the Service: it stops one without a seat 2 minutes
+      // after its owner's last browser is gone, so a reload, or another tab,
+      // keeps it (R2-19). Their sessions stay; the others are closed: ids are never reused, so
+      // nothing could open them again.
+      rememberAwayRuns(ownerRef.current);
+      releaseAllTaskSessions({ keepalive: true });
       if (event.persisted) return;
-      windowsRef.current.filter((item) => item.type === WORKSPACE_WINDOW_TYPES.SOURCE).forEach((item) => {
+      windowsRef.current.filter((item) => item.type === WORKSPACE_WINDOW_TYPES.SOURCE && !getActiveStream(item.id)).forEach((item) => {
         releaseSourceSessionRef.current(item, 'page_closed', { keepalive: true });
       });
     };
     window.addEventListener('pagehide', onPageHide);
     return () => {
       window.removeEventListener('pagehide', onPageHide);
-      endAll('workspace_closed');
+      // Signed out: the Service ends this user's runs without a seat.
+      rememberAwayRuns(ownerRef.current);
+      endAllAbandonedStreams(apiFetchRef.current, { reason: 'workspace_closed', keepalive: true, except: unattendedWindowIds() }).catch(() => null);
+      releaseAllTaskSessions({ keepalive: true });
+      forgetActiveStreams();
       clearWorkspaceSessionData();
     };
   }, []);
@@ -416,7 +448,9 @@ export default function WorkspaceFrame({ user, token, mainSessionId, sessionErro
   const hadTokenRef = React.useRef(Boolean(token));
   useEffect(() => {
     if (hadTokenRef.current && !token) {
-      endAllAbandonedStreams(apiFetchRef.current, { reason: 'signed_out', keepalive: true }).catch(() => null);
+      rememberAwayRuns(ownerRef.current);
+      endAllAbandonedStreams(apiFetchRef.current, { reason: 'signed_out', keepalive: true, except: unattendedWindowIds() }).catch(() => null);
+      forgetActiveStreams();
       releaseAllTaskSessions({ keepalive: true });
       clearWorkspaceSessionData();
     }
@@ -443,10 +477,7 @@ export default function WorkspaceFrame({ user, token, mainSessionId, sessionErro
         }
         try {
           // In order: each takes a session of its own.
-          const identity = await initializeSourceWindow(apiFetch, {
-            sessionId: mainSessionId,
-            windowId: nextSourceWindowNumber(mainSessionId, workspace.nextSourceWindowId + ready.length),
-          });
+          const identity = await openSourceSession(apiFetch, mainSessionId, workspace.nextSourceWindowId + ready.length);
           sessions -= 1;
           ready.push({ ...item, backendWindowId: identity.windowId, parentSessionId: identity.parentSessionId, sourceSessionId: identity.sourceSessionId });
         } catch (error) {
@@ -495,6 +526,13 @@ export default function WorkspaceFrame({ user, token, mainSessionId, sessionErro
     if (reasons.length) setSignOutReasons(reasons);
     else onSignOut();
   };
+  // Stopped while the sign-in still holds, then signed out.
+  const stopRunsAndSignOut = async () => {
+    setSignOutReasons(null);
+    getTasksSnapshot().tasks.filter((task) => isRunGoing(task)).forEach((task) => finishTask(task.id, TASK_STATUSES.TERMINATED, { message: 'Stopped at sign-out.' }));
+    await endAllAbandonedStreams(apiFetch, { reason: 'user_logout' }).catch(() => null);
+    onSignOut();
+  };
 
   const windowWorkspace = useMemo(() => ({
     ...workspace,
@@ -528,15 +566,9 @@ export default function WorkspaceFrame({ user, token, mainSessionId, sessionErro
         return;
       }
 
-      // Never a number this main session already used (an earlier page load
-      // or another tab): the Service names the session after it (B-37).
-      const sourceWindowId = nextSourceWindowNumber(mainSessionId, workspace.nextSourceWindowId);
       setIsOpeningSource(true);
       try {
-        const identity = await initializeSourceWindow(apiFetch, {
-          sessionId: mainSessionId,
-          windowId: sourceWindowId,
-        });
+        const identity = await openSourceSession(apiFetch, mainSessionId, workspace.nextSourceWindowId);
         workspace.openWindow(item.windowType, {
           contextTab: item.contextTab,
           title: item.label,
@@ -663,6 +695,10 @@ export default function WorkspaceFrame({ user, token, mainSessionId, sessionErro
               onOpenTask={openTask}
               unseenTasks={activeTaskCount}
               unseenReports={unseenBadges.reports}
+              nextSourceWindowNumber={workspace.nextSourceWindowId}
+              apiFetch={latestApiFetch}
+              signedIn={Boolean(token && mainSessionId)}
+              sessionsFull={sessionUsage.available <= 0 ? sessionLimitMessage(sessionUsage) : ''}
             />
             {(sessionError || sourceOpenError) && (
               <div className="workspace_session_notice" role="status">
@@ -686,6 +722,8 @@ export default function WorkspaceFrame({ user, token, mainSessionId, sessionErro
               <SignOutDialog
                 reasons={signOutReasons}
                 remembered={isRememberingWorkspace()}
+                running={ownUnattendedGoing(getTasksSnapshot().tasks)}
+                onStopAndSignOut={stopRunsAndSignOut}
                 onSignOut={() => { setSignOutReasons(null); onSignOut(); }}
                 onCancel={() => setSignOutReasons(null)}
               />

@@ -10,6 +10,8 @@ import { downloadBlob, downloadDataUrl, printImage } from '../../graph/lib/graph
 import { TABLE_SCOPES } from '../../table/lib/tableRows.js';
 import { COLOR_SCHEMAS, DEFAULT_SCHEMA, SCHEMA_NAMES, nodeOwnColor } from '../lib/chartColors.js';
 import { ADVANCED_HINT, CHART_METRICS, METRIC_GROUPS, isMetricAvailable, metricById } from '../lib/chartMetrics.js';
+import { graphDataNotice } from '../../graph/lib/graphDataNotice.js';
+import { resultCache } from '../lib/chartResultCache.js';
 import { normalizeChartState, scopeInput, toneStep } from '../lib/chartState.js';
 import { getChartDefaults, subscribeChartDefaults } from '../lib/chartDefaults.js';
 import { histogramKeys, histogramValues } from '../lib/chartHistogram.js';
@@ -64,10 +66,6 @@ const useFrozenWhile = (frozen, value) => {
   if (!frozen) kept.current = value;
   return frozen ? kept.current : value;
 };
-
-// Each Chart window's finished results and board scroll, kept while it is
-// open: window id -> { key, results, scrollTop }.
-const resultCache = new Map();
 
 // Generation (analyst decision 2026-11-18).
 const CHART_MODE_OPTIONS = Object.freeze([
@@ -130,6 +128,7 @@ export default function ChartWindowBody({ windowItem, hidden = false }) {
   // nothing new).
   const snapshot = useFrozenWhile(hidden, liveSnapshot);
   const link = useFrozenWhile(hidden, liveLink);
+  const dataNotice = graphDataNotice(snapshot, link, state.scope);
   const selectedNodes = link.selection.nodes;
 
   // The scope's entities and the links among them (theme lines left out,
@@ -658,6 +657,7 @@ export default function ChartWindowBody({ windowItem, hidden = false }) {
           <p className="graph_window_counts" aria-live="polite">
             <strong>{input.nodeIds.length.toLocaleString()}</strong> {input.nodeIds.length === 1 ? 'entity' : 'entities'} · <strong>{input.edges.length.toLocaleString()}</strong> {input.edges.length === 1 ? 'link' : 'links'} in scope
           </p>
+          {dataNotice ? <span className="graph_window_flag is-warning linkx_tooltip_anchor" role="status" data-tooltip-placement="bottom" data-tooltip={dataNotice.detail}>{dataNotice.label}</span> : null}
           <LinkedGraphMenu icon={CHART_ICON} graphs={graphs} graphId={graphId} onLink={linkTo} onShow={() => focusWindow(graphId)} />
           <ScopeMenu scopes={TABLE_SCOPES} scope={state.scope} onScope={(scope) => setState({ scope })} />
           <GraphToolbarPopover label="Generation" tooltip={`Generation: ${CHART_MODE_OPTIONS.find((entry) => entry.id === state.mode).hint}`} icon={<StrokeIcon d={TOOL_ICONS.generation} />} text={CHART_MODE_OPTIONS.find((entry) => entry.id === state.mode).label}>

@@ -28,7 +28,7 @@ const renderSystem = (props = {}) => {
       canWrite
       isSwitchingDomain={false}
       idleSettings={{ warningMs: 5 * 60000, lockMs: 10 * 60000, timeoutMs: 30 * 60000, lockRequiresReauth: true }}
-      idlePolicyMeta={{ source: 'service' }}
+      idlePolicyMeta={{ source: 'service', editableFields: ['idle_warning_ms', 'idle_lock_ms', 'max_idle_timeout_ms', 'lock_requires_reauth'] }}
       {...handlers}
       {...props}
     />,
@@ -60,6 +60,12 @@ describe('Configuration · System', () => {
     expect(onSwitchDomain).not.toHaveBeenCalled();
     await userEvent.click(cdr);
     expect(onSwitchDomain).toHaveBeenCalledWith('cdr');
+  });
+
+  it('locks every timeout when the Service lists none as editable (B-15)', () => {
+    renderSystem({ idlePolicyMeta: { source: 'service', editableFields: [] } });
+    expect(screen.getByLabelText('Lock after (min)')).toBeDisabled();
+    expect(screen.getByLabelText('Warn after (min)')).toBeDisabled();
   });
 
   it('edits the timeouts in minutes and the services as switches', async () => {
