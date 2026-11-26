@@ -136,5 +136,10 @@ export const RIGHT_PANEL_THEME_TOKENS = [
   { key: '--right-page-range-thumb', label: "Range — handle", type: 'color', default: '#ffffff', group: "Filter: search card" },
   { key: '--right-page-range-thumb-border', label: "Range — handle border", type: 'color', default: 'var(--right-card-toggle-btn-color)', group: "Filter: search card" },
   { key: '--right-page-range-thumb-shadow', label: "Range — handle shadow", type: 'color', default: 'rgba(0, 0, 0, 0.18)', group: "Filter: search card" },
-  { key: '--right-page-range-focus', label: "Range — handle focus", type: 'color', default: 'color-mix(in srgb, var(--right-card-toggle-btn-color) 30%, transparent)', group: "Filter: search card" },
+  { key: '--right-page-range-focus', label: "Range — handle focus", type: 'color', default: 'color-mix(in srgb, var(--right-card-toggle-btn-color) 30%, transparent)', group: "Filter: search card" },  // Scrollbar
+  { key: '--right-page-scrollbar-track', label: "Track", type: 'color', default: 'transparent', group: "Scrollbar" },
+  { key: '--right-page-scrollbar-thumb', label: "Thumb", type: 'color', default: 'color-mix(in srgb, var(--accent-strong) 40%, transparent)', group: "Scrollbar" },
+  { key: '--right-page-scrollbar-thumb-hover', label: "Thumb — hover", type: 'color', default: 'color-mix(in srgb, var(--accent-strong) 65%, transparent)', group: "Scrollbar" },
+  { key: '--right-page-scrollbar-thumb-active', label: "Thumb — pressed", type: 'color', default: 'color-mix(in srgb, var(--accent-strong) 90%, transparent)', group: "Scrollbar" },
+  { key: '--right-page-scrollbar-thumb-border', label: "Thumb — border", type: 'color', default: 'transparent', group: "Scrollbar" },
 ];

@@ -53,19 +53,6 @@
 	color: var(--settings-text-muted);
 }
 
-.settings_user_browser_editor_actions {
-	display: flex;
-	flex-wrap: wrap;
-	align-items: center;
-	justify-content: flex-end;
-	gap: 8px;
-	padding: 10px 12px 12px;
-}
-
-.settings_user_browser_editor_actions .settings_permission_quick_actions {
-	margin-right: auto;
-}
-
 /* Service accounts */
 .service_account_card {
 	display: grid;
@@ -1885,7 +1872,7 @@
 	border: 1px solid var(--settings-theme-studio-token-card-border);
 	border-radius: 4px;
 	background: var(--linkx-card-bg);
-	box-shadow: 0 8px 20px rgba(0, 0, 0, 0.16);
+	box-shadow: var(--settings-studio-menu-shadow);
 	overflow-y: auto;
 	scrollbar-width: thin;
 }
@@ -2662,7 +2649,6 @@
 .graph_customize.settings_popup {
 	max-height: 100%;
 }
-
 
 @media (prefers-reduced-motion: reduce) {
 	.settings_launch_card {
@@ -4282,7 +4268,6 @@
 	letter-spacing: 0.02em;
 	vertical-align: 1px;
 }
-
 
 /* The mapping card: its text opens the popup; the bin at its end drops
    every column and mapping. */

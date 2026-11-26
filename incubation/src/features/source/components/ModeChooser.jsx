@@ -7,6 +7,7 @@ import { SessionBadge, SourceModeIcon, SourceWindowHeading } from './sourceUi.js
 import { SourceStartFlow } from './SourceStartFlow.jsx';
 
 const CONNECTION_TYPES = ['upload', 'storage', 'broker', 'search'];
+const INPUT_OPTIONS_TIP = 'Batch makes one dataframe from uploaded files, a storage search or an Elasticsearch search; live analyses events from a message broker as they arrive.';
 
 // Glyphs for the labels over the options (24px grid, stroked).
 const OPTION_ICONS = {
@@ -164,7 +165,8 @@ export function ModeChooser({ sourceSessionId, initialMode, initialConnectionTyp
       )}
 
       <footer className="source_window_choose_footer">
-        <span>
+        {/* Not a link: what the choices mean, in the app's tooltip. */}
+        <span className="linkx_tooltip_anchor" role="note" tabIndex={0} data-tooltip={INPUT_OPTIONS_TIP} aria-label={INPUT_OPTIONS_TIP}>
           <svg className="window_footer_info_icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="12" cy="12" r="10" />
             <line x1="12" y1="16" x2="12" y2="12" />
@@ -173,7 +175,7 @@ export function ModeChooser({ sourceSessionId, initialMode, initialConnectionTyp
           Learn more about data input options
         </span>
         <div>
-          <button type="button" disabled>Back</button>
+          {/* The first page: nothing to go back to. */}
           <button type="button" onClick={() => onSelectMode(selectedInputMode, selectedConnectionType)}>Continue</button>
         </div>
       </footer>

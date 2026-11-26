@@ -204,7 +204,7 @@
 	border: 1px solid var(--reports-border);
 	border-radius: var(--reports-radius);
 	background: var(--reports-surface-bg);
-	box-shadow: 0 8px 24px rgb(0 0 0 / 16%);
+	box-shadow: var(--reports-menu-shadow);
 }
 
 .reports_sort_menu button {
@@ -289,8 +289,20 @@
 	background: var(--reports-surface-bg);
 }
 
-.reports_window_main.has-detail {
-	grid-template-columns: minmax(0, 1fr) minmax(300px, 34%);
+/* The details: the default popup over the window (ReportDetailPopup, the
+   Settings popup frame). Under the report form (z-index 6) and the run
+   settings popup it opens. */
+.graph_customize_backdrop.settings_popup_backdrop.reports_detail_backdrop {
+	z-index: 5;
+}
+
+/* Framed by the popup: no frame, header or scrolling of its own (its
+   layout: the `rdx` rules further down). */
+.reports_detail.is-framed {
+	border-left: 0;
+	background: none;
+	animation: none;
+	outline: none;
 }
 
 .reports_list {
@@ -326,10 +338,16 @@
 	text-align: left;
 	text-transform: uppercase;
 	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	vertical-align: middle;
 }
 
 .reports_table td {
-	padding: 9px 12px;
+	height: 38px;
+	padding: 0 12px;
+	vertical-align: middle;
+	box-sizing: border-box;
 	overflow: hidden;
 	border-bottom: 1px solid var(--reports-hairline);
 	color: var(--reports-text);
@@ -340,6 +358,194 @@
 .reports_table td.is-number {
 	font-variant-numeric: tabular-nums;
 	font-weight: 600;
+	text-align: right;
+}
+
+.reports_table th.is-number {
+	text-align: right;
+}
+
+/* Column widths (table-layout: fixed): the same on every tab. */
+.reports_col_type { width: 30%; }
+.reports_col_source { width: 22%; }
+.reports_col_status { width: 15%; }
+.reports_col_date { width: 15%; }
+.reports_col_settings { width: 18%; }
+.reports_table.has-run-settings .reports_col_type { width: 25%; }
+.reports_table.has-run-settings .reports_col_source { width: 18%; }
+.reports_table.has-run-settings .reports_col_settings { width: 20%; }
+.reports_table.has-run-settings .reports_col_status { width: 16%; }
+.reports_table.has-run-settings .reports_col_date { width: 16%; }
+.reports_table.is-scored .reports_col_type { width: 15%; }
+.reports_table.is-scored .reports_col_source { width: 12%; }
+.reports_table.is-scored .reports_col_anomaly { width: 14%; }
+.reports_table.is-scored .reports_col_score { width: 9%; }
+.reports_table.is-scored .reports_col_band { width: 10%; }
+.reports_table.is-scored .reports_col_reason { width: 16%; }
+.reports_table.is-scored .reports_col_status { width: 12%; }
+.reports_table.is-scored .reports_col_date { width: 12%; }
+.reports_table.is-scored.has-run-settings .reports_col_settings { width: 12%; }
+
+/* Run settings, in their own column: a dot and a few words, no pill. The
+   full words are the cell's title. */
+.reports_run_settings {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	max-width: 100%;
+	overflow: hidden;
+	color: var(--reports-muted-text);
+	font-size: var(--fs-xs, 11px);
+	text-overflow: ellipsis;
+}
+
+.reports_run_settings > span {
+	flex: none;
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: color-mix(in srgb, var(--reports-muted-text) 45%, transparent);
+}
+
+.reports_run_settings.is-overridden {
+	color: var(--reports-text);
+	font-weight: 600;
+}
+
+.reports_run_settings.is-overridden > span { background: var(--reports-accent); }
+.reports_run_settings.is-unknown > span { background: var(--reports-status-pending); }
+.reports_run_settings.is-none > span { display: none; }
+
+/* The mark is the way into the run settings popup. */
+.reports_run_settings.is-button {
+	padding: 2px 6px;
+	margin-left: -6px;
+	border: 0;
+	border-radius: 4px;
+	background: none;
+	font: inherit;
+	font-size: var(--fs-xs, 11px);
+	cursor: pointer;
+}
+
+.reports_run_settings.is-button:hover {
+	background: var(--reports-row-hover-bg);
+	text-decoration: underline;
+	text-underline-offset: 2px;
+}
+
+.reports_run_settings.is-button:focus-visible {
+	outline: 2px solid var(--reports-row-selected-border);
+	outline-offset: 1px;
+}
+
+.reports_run_settings_open {
+	margin-left: auto;
+	padding: 0;
+	border: 0;
+	background: none;
+	color: var(--reports-accent);
+	font: inherit;
+	font-size: var(--fs-xs, 11px);
+	font-weight: 600;
+	cursor: pointer;
+}
+
+.reports_run_settings_open:hover {
+	text-decoration: underline;
+}
+
+/* ── Run settings popup (the Settings ▸ Users popup over Reports) ── */
+/* The narrow popup's body comes without padding, so the content would
+   touch the popup's edges: the same margins as the other popups' bodies. */
+.reports_settings_body {
+	display: grid;
+	align-content: start;
+	gap: 10px;
+	padding: 14px 24px 22px;
+}
+
+.reports_settings_lead {
+	display: grid;
+	gap: 6px;
+	padding: 10px 12px;
+	border: 1px solid var(--settings-popup-line, var(--reports-hairline));
+	border-radius: 4px;
+	background: var(--settings-popup-soft-bg, transparent);
+}
+
+.reports_settings_lead p {
+	margin: 0;
+	color: var(--graph-muted-text);
+	font-size: 12px;
+	line-height: 1.45;
+}
+
+.reports_settings_lead .reports_run_settings {
+	font-size: 12px;
+}
+
+.reports_settings_rows {
+	display: grid;
+	margin: 0;
+}
+
+.reports_settings_rows > div {
+	display: grid;
+	grid-template-columns: 170px minmax(0, 1fr);
+	gap: 10px;
+	padding: 6px 0;
+	border-top: 1px solid var(--settings-popup-line, var(--reports-hairline));
+}
+
+.reports_settings_rows > div:first-child {
+	border-top: 0;
+}
+
+.reports_settings_rows dt {
+	color: var(--graph-muted-text);
+	font-size: 11.5px;
+}
+
+.reports_settings_rows dd {
+	margin: 0;
+	color: var(--graph-text);
+	font-size: 12px;
+	overflow-wrap: anywhere;
+}
+
+.reports_settings_table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 12px;
+}
+
+.reports_settings_table th {
+	padding: 5px 8px;
+	border-bottom: 1px solid var(--settings-popup-line, var(--reports-hairline));
+	color: var(--graph-muted-text);
+	font-size: 10.5px;
+	font-weight: 700;
+	letter-spacing: 0.04em;
+	text-align: left;
+	text-transform: uppercase;
+}
+
+.reports_settings_table td {
+	padding: 5px 8px;
+	border-bottom: 1px solid var(--settings-popup-line, var(--reports-hairline));
+	color: var(--graph-text);
+	overflow-wrap: anywhere;
+}
+
+.reports_settings_names {
+	color: var(--graph-text);
+	font-size: 12px;
+	overflow-wrap: anywhere;
+}
+
+.reports_settings_none {
+	color: var(--graph-muted-text);
 }
 
 .reports_table td.reports_cell_date {
@@ -1233,16 +1439,6 @@
 
 /* Narrow: detail over the table */
 @container reports (max-width: 760px) {
-	.reports_window_main.has-detail {
-		grid-template-columns: minmax(0, 1fr);
-		grid-template-rows: minmax(140px, 40%) minmax(0, 1fr);
-	}
-
-	.reports_detail {
-		border-top: 1px solid var(--reports-hairline);
-		border-left: 0;
-	}
-
 	.reports_sort {
 		margin-left: 0;
 	}
@@ -1280,11 +1476,18 @@
 	white-space: nowrap;
 }
 
+/* The window's checkboxes in its accent, not the browser's. */
+.reports_mock_switch input,
+/* ── STR alert procedure (AlertWorkflow), in the record details popup ────
+   Where the alert stands as a row of soft badges, then the three steps on
+   a vertical stepper: a mark per step on a rail joined by a faint line,
+   no boxes. The step to do now has its mark filled in the accent; done
+   steps are ticked in green; waiting ones are quiet. Buttons and fields
+   are the popup's own. */
 .reports_alert {
-	display: flex;
-	flex-direction: column;
-	gap: 10px;
-	margin-bottom: 12px;
+	display: grid;
+	gap: 12px;
+	margin: 0;
 }
 
 .reports_alert_status {
@@ -1294,91 +1497,153 @@
 }
 
 .reports_alert_chip {
-	padding: 2px 8px;
-	border: 1px solid var(--reports-border);
-	border-radius: 10px;
-	font-size: 11px;
+	--alert-chip-tone: var(--reports-muted-text);
+	display: inline-flex;
+	align-items: center;
+	height: 20px;
+	padding: 0 8px;
+	border: 0;
+	border-radius: 999px;
+	background: color-mix(in srgb, var(--alert-chip-tone) 12%, transparent);
+	color: var(--alert-chip-tone);
+	font-size: 10.5px;
 	font-weight: 600;
-	color: var(--reports-text);
-	background: var(--reports-surface-bg);
+	white-space: nowrap;
 }
 
-.reports_alert_chip.is-pending { border-color: var(--reports-status-pending); color: var(--reports-status-pending); }
-.reports_alert_chip.is-progress { border-color: var(--reports-accent); color: var(--reports-accent); }
-.reports_alert_chip.is-resolved { border-color: var(--reports-status-resolved); color: var(--reports-status-resolved); }
-.reports_alert_chip.is-error { border-color: var(--reports-status-error); color: var(--reports-status-error); }
-.reports_alert_chip.is-mock { border-style: dashed; color: var(--reports-muted-text); }
+.reports_alert_chip.is-pending { --alert-chip-tone: var(--reports-status-pending); }
+.reports_alert_chip.is-progress { --alert-chip-tone: var(--reports-accent); }
+.reports_alert_chip.is-resolved { --alert-chip-tone: var(--reports-status-resolved); }
+.reports_alert_chip.is-error { --alert-chip-tone: var(--reports-status-error); }
+.reports_alert_chip.is-mock {
+	background: none;
+	box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--reports-muted-text) 40%, transparent);
+}
 
 .reports_alert_reason {
 	margin: 0;
-	font-size: 12px;
 	color: var(--reports-muted-text);
+	font-size: 11.5px;
+	line-height: 1.5;
+}
+
+/* The stepper. */
+.reports_alert_steps {
+	display: grid;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.reports_alert_step_item {
+	position: relative;
+	display: grid;
+	grid-template-columns: 22px minmax(0, 1fr);
+	gap: 12px;
+	padding-bottom: 16px;
+}
+
+.reports_alert_step_item:last-child {
+	padding-bottom: 0;
+}
+
+/* The rail: from under this mark to the next one. */
+.reports_alert_step_item:not(:last-child)::after {
+	content: '';
+	position: absolute;
+	top: 26px;
+	bottom: 4px;
+	left: 10.5px;
+	width: 1px;
+	background: color-mix(in srgb, var(--reports-muted-text) 22%, transparent);
+}
+
+.reports_alert_step_item.is-done:not(:last-child)::after {
+	background: color-mix(in srgb, var(--reports-status-success) 45%, transparent);
+}
+
+.reports_alert_step_mark {
+	display: inline-grid;
+	place-items: center;
+	width: 22px;
+	height: 22px;
+	border-radius: 50%;
+	box-sizing: border-box;
+	box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--reports-muted-text) 35%, transparent);
+	color: var(--reports-muted-text);
+	font-size: 10.5px;
+	font-weight: 700;
+	font-variant-numeric: tabular-nums;
+}
+
+.reports_alert_step_item.is-current .reports_alert_step_mark,
+.reports_alert_step_item.is-active .reports_alert_step_mark {
+	background: var(--reports-accent);
+	box-shadow: 0 0 0 4px color-mix(in srgb, var(--reports-accent) 14%, transparent);
+	color: var(--graph-accent-button-text, #fff);
+}
+
+.reports_alert_step_item.is-done .reports_alert_step_mark {
+	background: color-mix(in srgb, var(--reports-status-success) 14%, transparent);
+	box-shadow: none;
+	color: var(--reports-status-success);
 }
 
 .reports_alert_step {
-	border: 1px solid var(--reports-border);
-	border-radius: 6px;
-	background: var(--reports-surface-bg);
+	display: grid;
+	gap: 6px;
+	min-width: 0;
+	border: 0;
+	background: none;
 	color: var(--reports-text);
-}
-
-.reports_alert_step.is-current,
-.reports_alert_step.is-active {
-	border-color: var(--reports-accent);
-}
-
-.reports_alert_step.is-locked {
-	opacity: 0.72;
 }
 
 .reports_alert_step_head {
 	display: flex;
 	align-items: center;
 	gap: 8px;
-	padding: 8px 10px 0;
+	min-height: 22px;
+	padding: 0;
 }
 
-.reports_alert_step_head small {
-	margin-left: auto;
-	font-size: 11px;
+.reports_alert_step_head strong {
+	font-size: 12.5px;
+	font-weight: 600;
+}
+
+.reports_alert_step_item.is-locked .reports_alert_step_head strong {
 	color: var(--reports-muted-text);
 }
 
-.reports_alert_step_number {
-	display: inline-grid;
-	place-items: center;
-	width: 20px;
-	height: 20px;
-	border-radius: 50%;
-	border: 1px solid var(--reports-border);
-	font-size: 11px;
+.reports_alert_step_state {
+	--alert-state-tone: var(--reports-muted-text);
+	padding: 1px 7px;
+	border-radius: 999px;
+	background: color-mix(in srgb, var(--alert-state-tone) 11%, transparent);
+	color: var(--alert-state-tone);
+	font-size: 9.5px;
 	font-weight: 700;
-	color: var(--reports-text);
+	letter-spacing: 0.4px;
+	text-transform: uppercase;
 }
 
-.reports_alert_step.is-done .reports_alert_step_number {
-	border-color: var(--reports-status-resolved);
-	background: var(--reports-status-resolved);
-	color: var(--reports-surface-bg);
-}
-
-.reports_alert_step.is-current .reports_alert_step_number,
-.reports_alert_step.is-active .reports_alert_step_number {
-	border-color: var(--reports-accent);
-	color: var(--reports-accent);
-}
+.reports_alert_step_state.is-current,
+.reports_alert_step_state.is-active { --alert-state-tone: var(--reports-accent); }
+.reports_alert_step_state.is-done { --alert-state-tone: var(--reports-status-success); }
 
 .reports_alert_step_body {
-	display: flex;
-	flex-direction: column;
+	display: grid;
 	gap: 8px;
-	padding: 6px 10px 10px 38px;
+	min-width: 0;
+	padding: 0;
 	font-size: 12px;
 }
 
 .reports_alert_step_body p {
 	margin: 0;
+	max-width: 72ch;
 	color: var(--reports-muted-text);
+	line-height: 1.5;
 }
 
 .reports_alert_actions {
@@ -1387,96 +1652,385 @@
 	gap: 6px;
 }
 
+/* The step's own buttons: the popup's, with a faint outline so the
+   secondary ones read as buttons in the body (not only in the footer). */
+.reports_alert_actions .graph_customize_button:not(.is-primary) {
+	box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--reports-muted-text) 28%, transparent);
+}
+
 .reports_alert_actions.is-dev {
 	opacity: 0.8;
 }
 
-.reports_alert_fields {
+/* Result (step 2): the theme's second colour (NBE Daylight: navy), so it
+   stands apart from the step's primary action. A theme can set its own
+   with --reports-alert-result-bg / -hover-bg / -text. */
+.reports_alert_actions .graph_customize_button.reports_alert_result_button {
+	background: var(--reports-alert-result-bg, var(--primary-action-bg));
+	box-shadow: none;
+	color: var(--reports-alert-result-text, var(--primary-action-text));
+	font-weight: 600;
+}
+
+.reports_alert_actions .graph_customize_button.reports_alert_result_button:hover {
+	background: var(--reports-alert-result-hover-bg, var(--primary-action-bg-hover, var(--primary-action-bg)));
+}
+
+/* ── The Extracted results popup (over the details) ──────────────────────
+   An overview of what was extracted (four figures), then what goes into
+   the feedback (a line each, its switch at the right), then the summary of findings. Small accent heads with
+   a faint line after them; the Reports colours mapped onto the popup's. */
+.reports_alert_results {
+	--reports-text: var(--graph-text);
+	--reports-muted-text: var(--graph-muted-text);
+	--reports-accent: var(--customize-accent);
+	--reports-surface-bg: var(--users-soft, var(--settings-popup-soft-bg));
+	--results-line: color-mix(in srgb, var(--graph-muted-text) 13%, transparent);
+	display: grid;
+	gap: 22px;
+	padding: 4px 0 8px;
+	color: var(--graph-text);
+	font-size: 12px;
+}
+
+/* The popup's tone follows the chosen verdict, as the details popup's
+   follows the record's flag: its header washed in the verdict's colour
+   from the top-left corner, the reference beside the title in the same
+   tone. No verdict yet: the theme's, as other popups. */
+.graph_customize.settings_popup:has(.reports_alert_results.is-suspicious) { --results-tone: var(--reports-status-error); }
+.graph_customize.settings_popup:has(.reports_alert_results.is-clean) { --results-tone: var(--reports-status-success); }
+.graph_customize.settings_popup:has(.reports_alert_results.is-undetermined) { --results-tone: var(--reports-status-pending); }
+
+.graph_customize.settings_popup:has(.reports_alert_results[class*="is-"]) {
+	background:
+		radial-gradient(150% 120px at 0 0, color-mix(in srgb, var(--results-tone) 22%, transparent), transparent 72%),
+		var(--graph-toolbar-bg);
+	transition: background 0.2s;
+}
+
+.graph_customize.settings_popup:has(.reports_alert_results[class*="is-"]) .graph_customize_heading span {
+	background: color-mix(in srgb, var(--results-tone) 14%, transparent);
+	color: color-mix(in srgb, var(--results-tone) 80%, var(--graph-text));
+}
+
+.reports_alert_results_part {
+	display: grid;
+	gap: 12px;
+	min-width: 0;
+}
+
+.reports_alert_results_head {
 	display: flex;
-	flex-direction: column;
-	gap: 6px;
+	align-items: center;
+	gap: 10px;
+	margin: 0;
+	color: var(--customize-accent);
+	font-size: 9px;
+	font-weight: 800;
+	letter-spacing: 0.8px;
+	text-transform: uppercase;
+}
+
+.reports_alert_results_head::after {
+	content: '';
+	flex: 1 1 auto;
+	order: 1;
+	height: 1px;
+	background: var(--results-line);
+}
+
+.reports_alert_results_head small {
+	order: 2;
+	color: var(--graph-muted-text);
+	font-size: 10px;
+	font-weight: 600;
+	letter-spacing: 0;
+	text-transform: none;
+}
+
+/* What goes in: a line per part. Its icon on a soft tile, its name over
+   its figures (the numbers in the text colour, their units muted, a dot
+   between them), the project's switch at the right; faint lines between
+   the parts. A part with nothing extracted reads quieter. */
+.reports_alert_fields {
+	display: grid;
 }
 
 .reports_alert_field {
 	display: grid;
-	grid-template-columns: auto minmax(0, 1fr);
+	grid-template-columns: auto minmax(0, 1fr) auto auto;
 	align-items: center;
-	gap: 4px 8px;
-	color: var(--reports-text);
+	gap: 14px;
+	padding: 12px 0;
+	border-top: 1px solid var(--results-line);
 }
 
-.reports_alert_field small,
-.reports_alert_thumb {
-	grid-column: 2;
+.reports_alert_field_text {
+	cursor: pointer;
 }
 
-.reports_alert_field small {
-	color: var(--reports-muted-text);
+/* Open graph / table / charts: an icon button (open in a window) before
+   the switch, its words in its tooltip. */
+.reports_alert_field_open {
+	display: inline-grid;
+	place-items: center;
+	width: 28px;
+	height: 28px;
+	padding: 0;
+	border: 0;
+	border-radius: 6px;
+	background: transparent;
+	box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--graph-muted-text) 24%, transparent);
+	color: var(--graph-muted-text);
+	cursor: pointer;
+	transition: background 0.15s, color 0.15s, box-shadow 0.15s;
 }
 
-.reports_alert_thumb {
-	max-width: 100%;
-	max-height: 120px;
-	object-fit: contain;
-	border: 1px solid var(--reports-border);
-	border-radius: 4px;
-	background: var(--reports-bg);
+.reports_alert_field_open svg {
+	width: 14px;
+	height: 14px;
 }
 
-.reports_alert_summary {
-	display: flex;
-	flex-direction: column;
-	gap: 6px;
-	padding-top: 6px;
-	border-top: 1px solid var(--reports-border);
-	color: var(--reports-text);
+.reports_alert_field_open:hover:not(:disabled) {
+	background: color-mix(in srgb, var(--customize-accent) 10%, transparent);
+	box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--customize-accent) 50%, transparent);
+	color: var(--customize-accent);
 }
 
-.reports_alert_line {
-	display: flex;
-	align-items: center;
-	gap: 8px;
+.reports_alert_field_open:focus-visible {
+	outline: 2px solid color-mix(in srgb, var(--customize-accent) 55%, transparent);
+	outline-offset: 1px;
 }
 
-.reports_alert_text {
-	display: flex;
-	flex-direction: column;
+.reports_alert_field_open:disabled {
+	opacity: 0.4;
+	cursor: default;
+}
+
+.reports_alert_field_icon {
+	display: grid;
+	place-items: center;
+	width: 32px;
+	height: 32px;
+	border-radius: 7px;
+	background: color-mix(in srgb, var(--customize-accent) 11%, transparent);
+	color: var(--customize-accent);
+}
+
+.reports_alert_field_icon svg {
+	width: 16px;
+	height: 16px;
+}
+
+.reports_alert_field_text {
+	display: grid;
 	gap: 3px;
-	color: var(--reports-muted-text);
+	min-width: 0;
 }
 
-.reports_alert_text textarea {
-	width: 100%;
+.reports_alert_field_text b {
+	color: var(--graph-text);
+	font-size: 12.5px;
+	font-weight: 600;
+}
+
+/* The figures wrap with the same left edge on every line: the dot between
+   two sits in the gap before the second, so one that starts a line puts
+   its dot outside the box, where the clip hides it. */
+.reports_alert_field_figures {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: 2px 16px;
+	min-width: 0;
+	clip-path: inset(0);
+	color: var(--graph-muted-text);
+	font-size: 11.5px;
+}
+
+.reports_alert_figure strong {
+	color: var(--graph-text);
+	font-variant-numeric: tabular-nums;
+	font-weight: 600;
+}
+
+.reports_alert_figure {
+	position: relative;
+}
+
+.reports_alert_figure + .reports_alert_figure::before {
+	content: '·';
+	position: absolute;
+	left: -10px;
+	color: color-mix(in srgb, var(--graph-muted-text) 60%, transparent);
+}
+
+.reports_alert_figure.is-none {
+	font-style: italic;
+}
+
+.reports_alert_field.is-empty .reports_alert_field_text {
+	cursor: default;
+}
+
+.reports_alert_field.is-empty .reports_alert_field_icon {
+	background: color-mix(in srgb, var(--graph-muted-text) 9%, transparent);
+	color: var(--graph-muted-text);
+}
+
+.reports_alert_field.is-empty .reports_alert_field_text b {
+	color: var(--graph-muted-text);
+}
+
+/* The summary of findings. */
+.reports_alert_line,
+.reports_alert_text {
+	display: grid;
+	gap: 6px;
+	min-width: 0;
+	color: var(--graph-text);
+	font-size: 11.5px;
+	font-weight: 600;
+}
+
+.reports_alert_text > span {
+	display: flex;
+	align-items: baseline;
+	gap: 6px;
+}
+
+.reports_alert_text em {
+	color: var(--graph-muted-text);
+	font-size: 10.5px;
+	font-style: normal;
+	font-weight: 400;
+}
+
+.reports_alert_text small {
+	margin-left: auto;
+	color: var(--graph-muted-text);
+	font-size: 10px;
+	font-variant-numeric: tabular-nums;
+	font-weight: 500;
+}
+
+.reports_alert_text textarea.graph_customize_input {
+	height: auto;
+	min-height: 64px;
+	padding: 8px 10px;
+	font-size: 12px;
+	font-weight: 400;
+	line-height: 1.5;
+}
+
+/* Verdict: the segment strip, a dot in each verdict's colour. */
+.reports_alert_verdicts.graph_customize_segments {
+	justify-self: start;
+}
+
+.reports_alert_verdicts .graph_customize_segment {
+	flex: none;
+	gap: 6px;
+	height: 26px;
+	padding: 0 14px;
+	font-family: inherit;
+	font-size: 11.5px;
+}
+
+.reports_alert_verdicts .graph_customize_segment {
+	--verdict-tone: var(--graph-muted-text);
+}
+
+.reports_alert_verdicts .graph_customize_segment.is-suspicious { --verdict-tone: var(--reports-status-error); }
+.reports_alert_verdicts .graph_customize_segment.is-clean { --verdict-tone: var(--reports-status-success); }
+.reports_alert_verdicts .graph_customize_segment.is-undetermined { --verdict-tone: var(--reports-status-pending); }
+
+.reports_alert_verdicts .graph_customize_segment i {
+	flex: none;
+	width: 7px;
+	height: 7px;
 	box-sizing: border-box;
-	padding: 6px 8px;
-	border: 1px solid var(--reports-border);
-	border-radius: 4px;
-	background: var(--reports-bg);
-	color: var(--reports-text);
-	font: inherit;
-	resize: vertical;
+	border-radius: 50%;
+	background: var(--verdict-tone);
+}
+
+/* The chosen verdict: filled in its own colour, white words, its dot
+   ringed in white. */
+.reports_alert_verdicts .graph_customize_segment.is-current {
+	background: var(--verdict-tone);
+	box-shadow: 0 1px 4px color-mix(in srgb, var(--verdict-tone) 35%, transparent);
+	color: #fff;
+}
+
+.reports_alert_verdicts .graph_customize_segment.is-current i {
+	width: 9px;
+	height: 9px;
+	border: 2px solid #fff;
+}
+
+/* The system's verdict: a small Auto tag. */
+.reports_alert_verdict_auto {
+	padding: 0 5px;
+	border-radius: 999px;
+	background: color-mix(in srgb, var(--verdict-tone) 14%, transparent);
+	color: var(--verdict-tone);
+	font-size: 8.5px;
+	font-weight: 800;
+	letter-spacing: 0.5px;
+	line-height: 14px;
+	text-transform: uppercase;
+}
+
+.reports_alert_verdicts .is-current .reports_alert_verdict_auto {
+	background: rgb(255 255 255 / 0.24);
+	color: #fff;
 }
 
 .reports_alert_message {
 	margin: 0;
-	font-size: 12px;
 	color: var(--reports-status-error);
+	font-size: 12px;
 }
 
-.reports_alert_history summary {
-	cursor: pointer;
-	font-size: 12px;
-	color: var(--reports-muted-text);
+/* A note on an action that went through (e.g. feedback already delivered). */
+.reports_alert_message.is-ok {
+	color: var(--reports-status-success);
 }
 
-.reports_alert_history ol {
-	margin: 6px 0 0;
-	padding-left: 18px;
-	font-size: 12px;
+/* The alert's history (the details' History tab): a time and what
+   happened, a line each. */
+.reports_alert_history {
+	display: grid;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.reports_alert_history li {
+	display: grid;
+	grid-template-columns: 112px minmax(0, 1fr);
+	gap: 12px;
+	padding: 7px 0;
+	border-top: 1px solid color-mix(in srgb, var(--reports-muted-text) 10%, transparent);
 	color: var(--reports-text);
+	font-size: 12px;
+	line-height: 1.45;
+}
+
+.reports_alert_history li:first-child {
+	border-top: 0;
+	padding-top: 0;
 }
 
 .reports_alert_history time {
+	color: var(--reports-muted-text);
+	font-size: 11px;
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+
+.reports_alert_history_empty {
+	margin: 0;
 	color: var(--reports-muted-text);
 }
 
@@ -1523,4 +2077,570 @@
 	font-size: 10.5px;
 	font-weight: 600;
 	white-space: nowrap;
+}
+
+/* ── The details inside their popup (ReportDetail framed, `rdx`) ─────────
+   A hero that continues the popup's title bar on a wash of the record's
+   flag colour (who it is about, the score, and the five score bands as
+   one scale),
+   then the rest behind the project's segment strip: Findings, Record,
+   Payload. Flat inside: no cards or rules, the Create user popup's small
+   accent heads and colours (the Reports colours are mapped onto the
+   popup's, so it blends with it). */
+.reports_detail.rdx {
+	/* Room between the last section and the popup's footer. */
+	padding-bottom: 14px;
+	--reports-text: var(--graph-text);
+	--reports-muted-text: var(--graph-muted-text);
+	--reports-accent: var(--customize-accent);
+	--reports-hairline: var(--users-line, var(--settings-popup-line));
+	--reports-surface-bg: var(--users-soft, var(--settings-popup-soft-bg));
+	display: grid;
+	gap: 14px;
+	color: var(--graph-text);
+	font-size: 12px;
+}
+
+.rdx_kicker,
+.rdx_head_label {
+	margin: 0;
+	color: var(--customize-accent);
+	font-size: 9px;
+	font-weight: 800;
+	letter-spacing: 0.8px;
+	text-transform: uppercase;
+}
+
+/* Each head draws a very faint line from its words to the right edge. The
+   score breakdown's head (its own markup) does the same from its label,
+   with its config version after the line. */
+.rdx_head_label,
+.rdx .reports_section_head .reports_section_label {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+
+.rdx .reports_section_head .reports_section_label {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.rdx_head_label::after,
+.rdx .reports_section_head .reports_section_label::after {
+	content: '';
+	flex: 1 1 auto;
+	height: 1px;
+	background: color-mix(in srgb, var(--graph-muted-text) 13%, transparent);
+}
+
+/* The hero continues the popup's title bar. Other popups wash their
+   header in the theme's accent; this one takes the record's flag colour
+   instead (its score band, or its status when it has no score), painted
+   on the popup itself from the top-left corner down behind the hero, so
+   the bar and the hero read as one header with no seam. The tone is set
+   on the popup here because the details sit inside its body. */
+.graph_customize.settings_popup:has(.rdx) {
+	--rdx-tone: var(--reports-status-pending);
+	background:
+		radial-gradient(150% 230px at 0 0, color-mix(in srgb, var(--rdx-tone) 13%, transparent), transparent 72%),
+		var(--graph-toolbar-bg);
+}
+
+.graph_customize.settings_popup:has(.rdx.is-success) { --rdx-tone: var(--reports-status-success); }
+.graph_customize.settings_popup:has(.rdx.is-error) { --rdx-tone: var(--reports-status-error); }
+.graph_customize.settings_popup:has(.rdx.is-resolved) { --rdx-tone: var(--reports-status-resolved); }
+.graph_customize.settings_popup:has(.rdx.band-low) { --rdx-tone: var(--reports-band-low); }
+.graph_customize.settings_popup:has(.rdx.band-medium) { --rdx-tone: var(--reports-band-medium); }
+.graph_customize.settings_popup:has(.rdx.band-high) { --rdx-tone: var(--reports-band-high); }
+.graph_customize.settings_popup:has(.rdx.band-critical) { --rdx-tone: var(--reports-band-critical); }
+.graph_customize.settings_popup:has(.rdx.band-fatal) { --rdx-tone: var(--reports-band-fatal); }
+
+/* The report number in the title bar takes the same tone. */
+.graph_customize.settings_popup:has(.rdx) .graph_customize_heading span {
+	background: color-mix(in srgb, var(--rdx-tone) 14%, transparent);
+	color: color-mix(in srgb, var(--rdx-tone) 80%, var(--graph-text));
+}
+
+/* Close under the title bar, with no background of its own. */
+.rdx_hero {
+	display: grid;
+	gap: 16px;
+	margin-top: -8px;
+	padding-bottom: 4px;
+}
+
+.rdx_hero_row {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	align-items: end;
+	gap: 20px;
+}
+
+.rdx_subject {
+	display: grid;
+	gap: 5px;
+	min-width: 0;
+}
+
+.rdx_subject strong {
+	overflow: hidden;
+	color: var(--graph-text);
+	font-size: 19px;
+	font-weight: 600;
+	letter-spacing: -0.2px;
+	line-height: 1.2;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.rdx_meta,
+.rdx_chips {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 6px;
+}
+
+.rdx_meta {
+	margin-top: 3px;
+}
+
+.rdx_meta_text {
+	margin-left: 2px;
+	color: var(--graph-muted-text);
+	font-size: 11px;
+}
+
+.rdx_badge,
+.rdx_chip {
+	display: inline-flex;
+	align-items: center;
+	height: 20px;
+	padding: 0 8px;
+	border-radius: 999px;
+	background: color-mix(in srgb, var(--graph-muted-text) 12%, transparent);
+	color: var(--graph-muted-text);
+	font-size: 10.5px;
+	font-weight: 600;
+	white-space: nowrap;
+}
+
+.rdx_badge.is-danger,
+.rdx_chip {
+	background: color-mix(in srgb, var(--reports-status-error) 11%, transparent);
+	color: var(--reports-status-error);
+}
+
+.rdx_badge.is-ok {
+	background: color-mix(in srgb, var(--reports-status-success) 11%, transparent);
+	color: var(--reports-status-success);
+}
+
+.rdx_chip {
+	height: 22px;
+	border-radius: 4px;
+	font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+	font-size: 10.5px;
+}
+
+/* The score: only the figure and its band, no box. */
+.reports_score.rdx_score {
+	display: grid;
+	justify-items: end;
+	gap: 3px;
+	margin: 0;
+	padding: 0;
+	border: 0;
+	border-radius: 0;
+	background: none;
+	text-align: right;
+}
+
+.rdx_score .rdx_kicker {
+	color: var(--graph-muted-text);
+}
+
+.rdx_score_value {
+	display: flex;
+	align-items: baseline;
+	gap: 5px;
+	margin: 0;
+}
+
+.rdx_score_value strong {
+	color: var(--reports-score-tone);
+	font-size: 38px;
+	font-variant-numeric: tabular-nums;
+	font-weight: 800;
+	letter-spacing: -1.2px;
+	line-height: 1;
+}
+
+.rdx_score_value span {
+	color: var(--graph-muted-text);
+	font-size: 11px;
+}
+
+.rdx_score_band {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	margin: 0;
+}
+
+.rdx_score_band small {
+	color: var(--graph-muted-text);
+	font-size: 10.5px;
+}
+
+/* The band scale: five bands at their real widths; the lit copy is clipped
+   at the score, the pin marks it. */
+.rdx_scale {
+	display: grid;
+	gap: 5px;
+}
+
+.rdx_scale_track {
+	position: relative;
+	height: 6px;
+}
+
+.rdx_scale_bands {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	gap: 2px;
+	opacity: 0.2;
+}
+
+.rdx_scale_bands.is-lit {
+	opacity: 1;
+}
+
+.rdx_scale_bands > span {
+	flex-basis: 0;
+	border-radius: 3px;
+}
+
+.rdx_scale_bands .is-low { background: var(--reports-band-low); }
+.rdx_scale_bands .is-medium { background: var(--reports-band-medium); }
+.rdx_scale_bands .is-high { background: var(--reports-band-high); }
+.rdx_scale_bands .is-critical { background: var(--reports-band-critical); }
+.rdx_scale_bands .is-fatal { background: var(--reports-band-fatal); }
+
+.rdx_scale_track i {
+	position: absolute;
+	top: 50%;
+	width: 4px;
+	height: 16px;
+	border-radius: 2px;
+	background: var(--reports-detail-tone);
+	box-shadow: 0 0 0 2px var(--graph-toolbar-bg, #fff);
+	transform: translate(-50%, -50%);
+}
+
+.rdx_scale_ticks {
+	position: relative;
+	height: 11px;
+	color: var(--graph-muted-text);
+	font-size: 9px;
+	font-variant-numeric: tabular-nums;
+}
+
+.rdx_scale_ticks span {
+	position: absolute;
+	transform: translateX(-50%);
+}
+
+.rdx_scale_ticks span:first-child { transform: none; }
+.rdx_scale_ticks span:last-child { transform: translateX(-100%); }
+
+/* The sections: the project's segment strip, as wide as its words. */
+.rdx_tabs.graph_customize_segments {
+	justify-self: start;
+}
+
+.rdx_tabs .graph_customize_segment {
+	flex: none;
+	height: 26px;
+	padding: 0 14px;
+	font-family: inherit;
+	font-size: 11.5px;
+}
+
+.rdx_tabs .graph_customize_segment small {
+	min-width: 16px;
+	padding: 0 4px;
+	border-radius: 999px;
+	background: color-mix(in srgb, var(--reports-status-error) 13%, transparent);
+	color: var(--reports-status-error);
+	font-size: 9.5px;
+	font-weight: 700;
+	line-height: 15px;
+}
+
+/* The current section: filled with the theme colour, as the popup's
+   primary button. A theme can give the fill
+   its own colour with --reports-detail-tab-on-bg / -text (NBE Daylight:
+   navy). */
+.rdx_tabs .graph_customize_segment.is-current {
+	background: var(--reports-detail-tab-on-bg, var(--customize-accent));
+	box-shadow: 0 1px 4px color-mix(in srgb, var(--reports-detail-tab-on-bg, var(--customize-accent)) 30%, transparent);
+	color: var(--reports-detail-tab-on-text, var(--graph-accent-button-text));
+}
+
+/* The count keeps its own look on the current tab: the same red tint, on
+   the popup's surface colour instead of on the tab's fill. */
+.rdx_tabs .graph_customize_segment.is-current small {
+	background: color-mix(in srgb, var(--reports-status-error) 13%, var(--graph-toolbar-bg, #fff));
+	color: var(--reports-status-error);
+}
+
+/* As tall as what it holds: no reserved height, so no hole under a short
+   section. */
+.rdx_panel {
+	display: grid;
+	align-content: start;
+	gap: 20px;
+	min-width: 0;
+}
+
+/* Two parts side by side; one alone takes the whole width. */
+.rdx_pair {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 20px 32px;
+	align-items: start;
+}
+
+.rdx_pair > :only-child {
+	grid-column: 1 / -1;
+}
+
+.rdx_section,
+.rdx .reports_section {
+	display: grid;
+	gap: 9px;
+	min-width: 0;
+}
+
+/* The score breakdown keeps its own markup: its head as the others. */
+.rdx .reports_section .reports_section_label {
+	color: var(--customize-accent);
+	font-size: 9px;
+	font-weight: 800;
+	letter-spacing: 0.8px;
+	text-transform: uppercase;
+}
+
+.rdx_text {
+	margin: 0;
+	color: var(--graph-text);
+	line-height: 1.55;
+}
+
+/* Network: the number over its name, nothing around it. */
+.rdx_stats {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+	gap: 14px 12px;
+	margin: 0;
+}
+
+.rdx_stats > div {
+	display: grid;
+	gap: 1px;
+}
+
+.rdx_stats dd {
+	margin: 0;
+	color: var(--graph-text);
+	font-size: 17px;
+	font-variant-numeric: tabular-nums;
+	font-weight: 700;
+	letter-spacing: -0.2px;
+}
+
+.rdx_stats dt {
+	color: var(--graph-muted-text);
+	font-size: 10.5px;
+}
+
+/* The record's facts: one row that flows, as many columns as there are
+   facts. In each: its name with an icon above, the value under it and the
+   copy button at the right end. No fill; one faint upright line between
+   neighbours. Every fact draws the line at its left, and the row is
+   clipped by that one pixel, so the first of each row shows none
+   (also when the row wraps). */
+.rdx_facts {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+	gap: 12px 0;
+	/* Pulled out by the facts' own padding on both sides, so the first one
+	   starts under the section's head and the last one ends at the popup's
+	   right margin (no extra space there). */
+	margin: 0 -14px;
+	clip-path: inset(0 0 0 1px);
+}
+
+.rdx_facts > div {
+	display: grid;
+	align-content: start;
+	gap: 2px;
+	min-width: 0;
+	padding: 1px 14px;
+	border-left: 1px solid color-mix(in srgb, var(--graph-muted-text) 18%, transparent);
+}
+
+.rdx_facts dt {
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	color: var(--graph-muted-text);
+	font-size: 9.5px;
+	font-weight: 700;
+	letter-spacing: 0.5px;
+	text-transform: uppercase;
+}
+
+.rdx_facts dt .reports_icon {
+	flex: none;
+	width: 11px;
+	height: 11px;
+	color: var(--customize-accent);
+	opacity: 0.85;
+}
+
+.rdx_facts dd {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+	min-height: 22px;
+	margin: 0;
+	color: var(--graph-text);
+	font-size: 12.5px;
+	font-weight: 400;
+}
+
+.rdx_facts dd > span {
+	flex: 1 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* Run settings: its link beside the title, in its own (not the title's)
+   lettering. */
+.rdx_facts dt > .rdx_link {
+	flex: none;
+	margin-left: 4px;
+	font-size: 10.5px;
+	letter-spacing: 0;
+	text-transform: none;
+}
+
+/* The copy button is always there, quiet until its line is pointed at. */
+.rdx_facts .reports_copy {
+	opacity: 0.55;
+}
+
+.rdx_facts > div:hover .reports_copy,
+.rdx_facts .reports_copy:focus-visible,
+.rdx_facts .reports_copy.is-copied {
+	opacity: 1;
+}
+
+.rdx_run {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.rdx_run > i {
+	flex: none;
+	width: 7px;
+	height: 7px;
+	border-radius: 50%;
+	background: var(--graph-muted-text);
+}
+
+.rdx_run.is-overridden > i { background: var(--customize-accent); }
+.rdx_run.is-unknown > i { background: var(--reports-status-pending); }
+.rdx_run.is-domain { color: var(--graph-muted-text); }
+
+.rdx_link {
+	justify-self: start;
+	padding: 0;
+	border: 0;
+	background: none;
+	color: var(--customize-accent);
+	font: inherit;
+	font-size: 11.5px;
+	font-weight: 600;
+	cursor: pointer;
+}
+
+.rdx_link:hover {
+	text-decoration: underline;
+	text-underline-offset: 2px;
+}
+
+/* The payload: its own section, so the code gets the room. */
+.rdx_payload {
+	display: grid;
+	gap: 8px;
+	min-width: 0;
+}
+
+.rdx_payload_bar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 10px;
+}
+
+.rdx_payload_size {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	color: var(--graph-muted-text);
+	font-size: 11px;
+}
+
+.rdx_payload_size .reports_icon {
+	width: 13px;
+	height: 13px;
+}
+
+/* The code scrolls inside its own area, which is kept short, so the
+   Payload tab does not stretch the popup: a short payload stays its own
+   height, a long one stops at the cap and scrolls (its scroll does not
+   carry on into the popup). */
+.rdx_payload .reports_json {
+	max-height: min(30vh, 240px);
+	overflow: auto;
+	overscroll-behavior: contain;
+	scrollbar-width: thin;
+	border: 0;
+	border-radius: 6px;
+	background: var(--reports-surface-bg);
+}
+
+@container reports (max-width: 640px) {
+	.rdx_hero_row,
+	.rdx_pair {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.rdx_hero_row {
+		align-items: start;
+	}
+
+	.reports_score.rdx_score {
+		justify-items: start;
+		text-align: left;
+	}
 }

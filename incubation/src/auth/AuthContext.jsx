@@ -14,6 +14,30 @@ const log = createLogger('auth');
 
 const AUTH_TOKEN_KEY = "linkx_auth_token";
 const SESSION_STORAGE_KEY = "session";
+// How the stored token was got: 'auto' (auto-login), 'password' or 'sso'.
+// Only an auto-login token is renewed by auto-login: renewing any other one
+// that way would turn a person's own sign-in (a superuser's, round 4) into the
+// default account without a word.
+const AUTH_METHOD_KEY = "linkx_auth_method";
+// With auto-login on: the sign-in page was asked for (signed out, or a
+// person's own sign-in ended). Kept for the tab, so a reload stays there.
+const SIGN_IN_KEY = "linkx_sign_in_requested";
+
+const readStorage = (storage, key) => {
+  try {
+    return storage.getItem(key) || "";
+  } catch {
+    return "";
+  }
+};
+const writeStorage = (storage, key, value) => {
+  try {
+    if (value) storage.setItem(key, value);
+    else storage.removeItem(key);
+  } catch {
+    // Storage blocked: it holds for this page only.
+  }
+};
 
 const readStoredToken = () => (
   localStorage.getItem(AUTH_TOKEN_KEY) || sessionStorage.getItem(AUTH_TOKEN_KEY) || ""
@@ -24,6 +48,7 @@ const clearClientSessionState = () => {
   sessionStorage.removeItem(SESSION_STORAGE_KEY);
   localStorage.removeItem(AUTH_TOKEN_KEY);
   localStorage.removeItem(SESSION_STORAGE_KEY);
+  writeStorage(localStorage, AUTH_METHOD_KEY, "");
 };
 
 const TOKEN_RENEW_LEAD_MS = 2 * 60 * 1000;
@@ -75,10 +100,16 @@ export function AuthProvider({ apiUrl, allowedSsoOrigins = [], autoLogin = false
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [isSsoAuthenticating, setIsSsoAuthenticating] = useState(false);
   const [ssoError, setSsoError] = useState("");
+  const [authMethod, setAuthMethod] = useState(() => readStorage(localStorage, AUTH_METHOD_KEY) || (autoLogin ? "auto" : "password"));
+  const [signInRequested, setSignInRequested] = useState(() => autoLogin && readStorage(sessionStorage, SIGN_IN_KEY) === "1");
+  const requestSignIn = useCallback((value) => {
+    writeStorage(sessionStorage, SIGN_IN_KEY, value ? "1" : "");
+    setSignInRequested(value);
+  }, []);
 
   const trustedSsoOrigins = useMemo(() => normalizeAllowedOrigins(allowedSsoOrigins), [allowedSsoOrigins]);
 
-  const applyAuth = useCallback((nextToken, nextUser) => {
+  const applyAuth = useCallback((nextToken, nextUser, method) => {
     const normalizedUser = normalizeAuthUser(nextUser);
     if (!nextToken || !normalizedUser) {
       clearClientSessionState();
@@ -89,22 +120,36 @@ export function AuthProvider({ apiUrl, allowedSsoOrigins = [], autoLogin = false
 
     localStorage.setItem(AUTH_TOKEN_KEY, nextToken);
     sessionStorage.removeItem(AUTH_TOKEN_KEY);
+    if (method) {
+      writeStorage(localStorage, AUTH_METHOD_KEY, method);
+      setAuthMethod(method);
+    }
     setToken(nextToken);
     setUser(normalizedUser);
     setSsoError("");
   }, []);
 
+  // Every end of a sign-in. With auto-login on it lands on the sign-in page
+  // (sign in as another user, or continue with the default account), never
+  // straight back into the default account.
   const logout = useCallback(() => {
     clearClientSessionState();
+    if (autoLogin) requestSignIn(true);
     setToken("");
     setUser(null);
-  }, []);
+  }, [autoLogin, requestSignIn]);
+
+  // With auto-login on: leave the sign-in page for the default account.
+  const continueWithDefault = useCallback(() => {
+    requestSignIn(false);
+  }, [requestSignIn]);
 
   const login = useCallback(async (username, password) => {
     const auth = await loginWithPassword(apiUrl, username, password);
-    applyAuth(auth.token, auth.user);
+    applyAuth(auth.token, auth.user, "password");
+    if (auth.token && auth.user) requestSignIn(false);
     return auth.user;
-  }, [apiUrl, applyAuth]);
+  }, [apiUrl, applyAuth, requestSignIn]);
 
   const exchangeSsoCode = useCallback(async (code, state = "") => {
     const cleanCode = String(code || "").trim();
@@ -119,7 +164,8 @@ export function AuthProvider({ apiUrl, allowedSsoOrigins = [], autoLogin = false
         state: cleanState,
         redirectUri: `${window.location.origin}${window.location.pathname}`,
       });
-      applyAuth(auth.token, auth.user);
+      applyAuth(auth.token, auth.user, "sso");
+      if (auth.token && auth.user) requestSignIn(false);
       return auth.user;
     } catch (err) {
       setSsoError(err?.message || "Single sign-on failed.");
@@ -127,7 +173,7 @@ export function AuthProvider({ apiUrl, allowedSsoOrigins = [], autoLogin = false
     } finally {
       setIsSsoAuthenticating(false);
     }
-  }, [apiUrl, applyAuth]);
+  }, [apiUrl, applyAuth, requestSignIn]);
 
   const verifyToken = useCallback(async (incomingToken) => {
     const candidateToken = incomingToken || token;
@@ -158,10 +204,10 @@ export function AuthProvider({ apiUrl, allowedSsoOrigins = [], autoLogin = false
       if (!token) {
         // With the login page disabled, sign in through the backend's
         // auto-login endpoint so session/source calls carry a real token.
-        if (autoLogin) {
+        if (autoLogin && !signInRequested) {
           try {
             const auth = await fetchAutoLoginAuth(apiUrl);
-            if (!cancelled) applyAuth(auth.token, auth.user);
+            if (!cancelled) applyAuth(auth.token, auth.user, "auto");
           } catch (err) {
             log.warn('Auto-login failed', { status: err?.status, message: err?.message });
           }
@@ -174,7 +220,15 @@ export function AuthProvider({ apiUrl, allowedSsoOrigins = [], autoLogin = false
         const auth = await fetchCurrentActor(apiUrl, token);
         if (!cancelled) applyAuth(auth.token, auth.user);
       } catch {
-        if (!cancelled) logout();
+        if (cancelled) return;
+        // An auto-login token that lapsed: auto-login again, as before.
+        if (autoLogin && authMethod === "auto") {
+          clearClientSessionState();
+          setToken("");
+          setUser(null);
+        } else {
+          logout();
+        }
       } finally {
         if (!cancelled) setIsAuthReady(true);
       }
@@ -184,20 +238,20 @@ export function AuthProvider({ apiUrl, allowedSsoOrigins = [], autoLogin = false
     return () => {
       cancelled = true;
     };
-  }, [apiUrl, applyAuth, autoLogin, exchangeSsoCode, logout, token]);
+  }, [apiUrl, applyAuth, autoLogin, authMethod, exchangeSsoCode, logout, signInRequested, token]);
 
   // Auto-login tokens are short-lived JWTs (≈30 min) and the backend answers
   // expired tokens with 403 "forbidden" rather than 401. Renew shortly before
   // `exp`, and again whenever the tab regains focus after the token lapsed
   // (timers are throttled/suspended in background tabs).
   useEffect(() => {
-    if (!autoLogin || !token) return undefined;
+    if (!autoLogin || !token || authMethod !== "auto") return undefined;
 
     let cancelled = false;
     const renew = async () => {
       try {
         const auth = await fetchAutoLoginAuth(apiUrl);
-        if (!cancelled) applyAuth(auth.token, auth.user);
+        if (!cancelled) applyAuth(auth.token, auth.user, "auto");
       } catch (err) {
         log.warn('Auto-login renewal failed', { status: err?.status, message: err?.message });
       }
@@ -220,7 +274,7 @@ export function AuthProvider({ apiUrl, allowedSsoOrigins = [], autoLogin = false
       document.removeEventListener('visibilitychange', handleWake);
       window.removeEventListener('focus', handleWake);
     };
-  }, [apiUrl, applyAuth, autoLogin, token]);
+  }, [apiUrl, applyAuth, autoLogin, authMethod, token]);
 
   useEffect(() => {
     const handleSsoMessage = async (event) => {
@@ -266,6 +320,10 @@ export function AuthProvider({ apiUrl, allowedSsoOrigins = [], autoLogin = false
       isAuthReady,
       isSsoAuthenticating,
       ssoError,
+      autoLogin,
+      authMethod,
+      signInRequested,
+      continueWithDefault,
       login,
       logout,
       verifyToken,
@@ -273,7 +331,7 @@ export function AuthProvider({ apiUrl, allowedSsoOrigins = [], autoLogin = false
       hasRole: (role) => roles.includes(role),
       hasPermission: (permission) => permissions.includes(permission),
     };
-  }, [user, token, isAuthReady, isSsoAuthenticating, ssoError, login, logout, verifyToken, exchangeSsoCode]);
+  }, [user, token, isAuthReady, isSsoAuthenticating, ssoError, autoLogin, authMethod, signInRequested, continueWithDefault, login, logout, verifyToken, exchangeSsoCode]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

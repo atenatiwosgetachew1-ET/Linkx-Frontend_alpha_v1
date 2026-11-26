@@ -4,6 +4,7 @@ import { useWorkspace } from '../../../workspace/hooks/useWorkspace.js';
 import { useNotifications } from '../../../shared/notifications/useNotifications.js';
 import { WORKSPACE_WINDOW_TYPES, getWindowLimitBlock } from '../../../workspace/state/workspaceTypes.js';
 import { getGraphStore, hasGraphStore } from '../../graph/lib/graphStore.js';
+import WindowLoadScreen from '../../../shared/components/WindowLoadScreen.jsx';
 import { getGraphState, requestGraphAction, subscribeGraphState } from '../../graph/lib/graphLinkBus.js';
 import { requestChartMetric } from '../../graph/lib/layoutClient.js';
 import { downloadBlob, downloadDataUrl, printImage } from '../../graph/lib/graphFile.js';
@@ -57,7 +58,7 @@ const readTheme = (element) => {
   if (!element) return {};
   const style = getComputedStyle(element);
   const read = (name, fallback) => style.getPropertyValue(name).trim() || fallback;
-  return { text: read('--graph-text', '#222222'), muted: read('--graph-muted-text', '#777777'), line: read('--graph-text', '#333333'), background: read('--graph-canvas-bg', '#ffffff'), selected: read('--graph-selected', '#2563eb'), surface: read('--graph-toolbar-bg', ''), border: read('--graph-border', '') };
+  return { text: read('--graph-text', '#222222'), muted: read('--graph-muted-text', '#777777'), line: read('--graph-text', '#333333'), background: read('--graph-canvas-bg', '#ffffff'), selected: read('--graph-selected', '#2563eb'), surface: read('--graph-toolbar-bg', ''), border: read('--graph-border', ''), pinText: read('--chart-pin-callout-text', ''), pinBackground: read('--chart-pin-callout-bg', ''), pinBorder: read('--chart-pin-border', ''), pinShadow: read('--chart-pin-shadow', '') };
 };
 
 
@@ -652,8 +653,14 @@ export default function ChartWindowBody({ windowItem, hidden = false }) {
     );
   }
 
+  // Nothing drawn yet: the Graph window may still be fetching, or have failed.
+  const graphStatus = (store && !snapshot.nodes && snapshot.status) || {};
+  const graphLoading = graphStatus.state === 'loading' || graphStatus.state === 'queued';
+  const graphError = graphStatus.state === 'error' ? graphStatus.message || '' : '';
   let empty = '';
-  if (!store || !snapshot.nodes) empty = 'The linked graph has no data yet.';
+  if (graphLoading) empty = 'Loading the graph…';
+  else if (graphStatus.state === 'error') empty = 'The linked graph could not be loaded.';
+  else if (!store || !snapshot.nodes) empty = 'The linked graph has no data yet.';
   else if (!link.live && state.scope !== 'all') empty = 'Waiting for the Graph window…';
 
   return (
@@ -795,8 +802,10 @@ export default function ChartWindowBody({ windowItem, hidden = false }) {
             </button>
           </div>
         </div>
-        {empty ? (
-          <div className="chart_state" role="status"><p>{empty}</p></div>
+        {graphLoading ? (
+          <WindowLoadScreen className="is-block" label="Loading the graph…" />
+        ) : empty ? (
+          <div className="chart_state" role="status"><p>{empty}</p>{graphError ? <p>{graphError}</p> : null}</div>
         ) : state.cards.length ? (
           <div
             ref={gridRef}

@@ -239,9 +239,9 @@
 	stroke: none;
 }
 
-.graph_customize_dot.is-red { fill: #ef4444; }
-.graph_customize_dot.is-amber { fill: #f59e0b; }
-.graph_customize_dot.is-blue { fill: #3b82f6; }
+.graph_customize_dot.is-red { fill: var(--graph-customize-dot-red); }
+.graph_customize_dot.is-amber { fill: var(--graph-customize-dot-amber); }
+.graph_customize_dot.is-blue { fill: var(--graph-customize-dot-blue); }
 
 .graph_window_icon_button svg {
 	width: 16px;
@@ -325,8 +325,6 @@
 .graph_window_state.is-error h4 {
 	color: var(--graph-warning-text);
 }
-
-
 
 .graph_window_spinner {
 	width: 22px;
@@ -569,7 +567,7 @@
    white ring, and stays still. */
 .graph_relationship_tab.is-active .graph_relationship_dot:not(.is-loading) {
 	animation: none;
-	outline: 1.5px solid #fff;
+	outline: 1.5px solid var(--graph-badge-text);
 	outline-offset: 0;
 }
 
@@ -604,8 +602,8 @@
 	height: 10px;
 	border-radius: 50%;
 	/* A darker core of the same colour inside. */
-	background: radial-gradient(circle, color-mix(in srgb, var(--chip-bg, var(--graph-muted-text)) 55%, #000) 0 2.5px, var(--chip-bg, var(--graph-muted-text)) 3px);
-	box-shadow: inset 0 0 0 1px color-mix(in srgb, #000 12%, transparent);
+	background: radial-gradient(circle, color-mix(in srgb, var(--chip-bg, var(--graph-muted-text)) 55%, var(--graph-dot-shade)) 0 2.5px, var(--chip-bg, var(--graph-muted-text)) 3px);
+	box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--graph-dot-shade) 12%, transparent);
 }
 
 /* "All": the first colours stacked. */
@@ -621,7 +619,7 @@
 	margin-left: -4px;
 	border: 1.5px solid var(--graph-canvas-bg);
 	border-radius: 50%;
-	background: radial-gradient(circle, color-mix(in srgb, var(--chip-bg) 55%, #000) 0 2px, var(--chip-bg) 2.5px);
+	background: radial-gradient(circle, color-mix(in srgb, var(--chip-bg) 55%, var(--graph-dot-shade)) 0 2px, var(--chip-bg) 2.5px);
 }
 
 /* Loading: the dot turns into a spinner. */
@@ -656,7 +654,7 @@
 	border-radius: 6px;
 	background: var(--graph-toolbar-bg);
 	color: var(--graph-text);
-	box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+	box-shadow: var(--graph-popup-shadow);
 	font-size: 12px;
 	line-height: 1.4;
 	white-space: pre-wrap;
@@ -677,7 +675,7 @@
 	border-radius: 6px;
 	background: var(--graph-toolbar-bg);
 	color: var(--graph-text);
-	box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+	box-shadow: var(--graph-popup-shadow);
 	font-size: 12px;
 	line-height: 1.4;
 	outline: none;
@@ -769,7 +767,7 @@
 	border-radius: 6px;
 	background: var(--graph-toolbar-bg);
 	color: var(--graph-text);
-	box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+	box-shadow: var(--graph-popup-shadow);
 	font-size: 12px;
 	line-height: 1.4;
 	box-sizing: border-box;
@@ -848,6 +846,7 @@
 	flex-direction: column;
 	gap: 6px;
 	width: 280px;
+	max-width: calc(100% - 16px);
 	padding: 8px;
 	border: 1px solid var(--graph-border);
 	border-radius: 6px;
@@ -1435,7 +1434,7 @@
 	border: 2px solid var(--graph-toolbar-bg);
 	border-radius: 50%;
 	background: var(--graph-accent);
-	color: #fff;
+	color: var(--graph-accent-button-text);
 	box-shadow: 0 2px 6px color-mix(in srgb, var(--graph-accent) 40%, transparent), 0 0 0 1px var(--graph-border);
 }
 
@@ -1445,12 +1444,12 @@
 }
 
 .graph_timeline_media_button.is-play:hover:not(:disabled) {
-	background: color-mix(in srgb, var(--graph-accent) 86%, #000);
-	color: #fff;
+	background: color-mix(in srgb, var(--graph-accent) 86%, var(--graph-accent-button-shade));
+	color: var(--graph-accent-button-text);
 }
 
 .graph_timeline_media_button.is-play[aria-pressed='true'] {
-	background: color-mix(in srgb, var(--graph-accent) 80%, #000);
+	background: color-mix(in srgb, var(--graph-accent) 80%, var(--graph-accent-button-shade));
 }
 
 .graph_timeline_media_button.is-play:disabled {
@@ -1692,7 +1691,7 @@
 	background:
 		linear-gradient(90deg, color-mix(in srgb, var(--card-accent, var(--graph-accent)) 10%, transparent), transparent 70%),
 		var(--graph-toolbar-bg);
-	box-shadow: 0 8px 22px rgb(0 0 0 / 0.16), 0 1px 3px rgb(0 0 0 / 0.08);
+	box-shadow: var(--graph-tip-shadow);
 	color: var(--graph-text);
 	font-size: 11px;
 	line-height: 1.35;
@@ -1917,7 +1916,7 @@
 	width: 17px;
 	height: 17px;
 	fill: none;
-	stroke: #fff;
+	stroke: var(--graph-badge-text);
 	stroke-width: 1.8;
 	stroke-linecap: round;
 }
@@ -2153,7 +2152,7 @@
 	padding: 0 5px;
 	border-radius: 10px;
 	background: var(--card-color);
-	color: #fff;
+	color: var(--graph-badge-text);
 	font-size: 8.5px;
 	font-weight: 700;
 	letter-spacing: 0.4px;
@@ -2183,16 +2182,6 @@
 	color: var(--graph-muted-text);
 	font-style: italic;
 	line-height: 1.4;
-}
-
-.graph_overlay_loading {
-	display: flex;
-	flex-direction: column;
-	align-items: center;
-	gap: 8px;
-	padding: 16px 0;
-	color: var(--graph-muted-text);
-	font-size: 11px;
 }
 
 .graph_overlay_footer {
@@ -2231,8 +2220,8 @@
    like their nodes. */
 .graph_overlay_panel.is-node-card {
 	/* The card's colour: its node's (alerts red, pinned amber). */
-	--card-accent: #dc2626;
-	--alerts-red: #dc2626;
+	--card-accent: var(--graph-alert-card);
+	--alerts-red: var(--graph-alert-card);
 	--alerts-amber: var(--graph-alert-medium);
 	/* The bubble's centre: bottom-right in the stack, top-left once moved
 	   (16px space + half the 44px node). */
@@ -2253,7 +2242,7 @@
 	background:
 		radial-gradient(140% 90px at 0 0, color-mix(in srgb, var(--card-accent) 11%, transparent), transparent 70%),
 		var(--graph-toolbar-bg);
-	box-shadow: 0 12px 32px rgb(0 0 0 / 0.16), 0 2px 6px rgb(0 0 0 / 0.08);
+	box-shadow: var(--graph-panel-shadow);
 	font-size: 11.5px;
 }
 
@@ -2618,13 +2607,13 @@
 
 .graph_card_row_bang {
 	fill: none;
-	stroke: #fff;
+	stroke: var(--graph-badge-text);
 	stroke-width: 2.2;
 	stroke-linecap: round;
 }
 
 .graph_card_row_dot {
-	fill: #fff;
+	fill: var(--graph-badge-text);
 }
 
 .graph_card_row_body {
@@ -2689,7 +2678,7 @@
 
 /* Pinned Evidence: the card in its node's amber. */
 .graph_overlay_panel.is-node-card.is-pinned-card {
-	--card-accent: #f59e0b;
+	--card-accent: var(--graph-pinned);
 }
 
 .graph_card_chip.is-muted {
@@ -3046,14 +3035,14 @@
 	width: 38px;
 	height: 38px;
 	border-radius: 50%;
-	background: color-mix(in srgb, #16a34a 14%, transparent);
+	background: color-mix(in srgb, var(--graph-ok) 14%, transparent);
 }
 
 .graph_card_empty_mark svg {
 	width: 20px;
 	height: 20px;
 	fill: none;
-	stroke: #16a34a;
+	stroke: var(--graph-ok);
 	stroke-width: 2.4;
 	stroke-linecap: round;
 	stroke-linejoin: round;
@@ -3192,7 +3181,7 @@
 		radial-gradient(140% 90px at 0 0, color-mix(in srgb, var(--customize-accent) 11%, transparent), transparent 70%),
 		var(--graph-toolbar-bg);
 	color: var(--graph-text);
-	box-shadow: 0 12px 32px rgb(0 0 0 / 0.16), 0 2px 6px rgb(0 0 0 / 0.08);
+	box-shadow: var(--graph-panel-shadow);
 	font-size: 11.5px;
 	line-height: 1.35;
 	box-sizing: border-box;
@@ -3724,12 +3713,12 @@ textarea.graph_customize_input {
 
 .graph_customize_button.is-primary {
 	background: var(--customize-accent);
-	color: #fff;
+	color: var(--graph-accent-button-text);
 	font-weight: 600;
 }
 
 .graph_customize_button.is-primary:hover:not(:disabled) {
-	background: color-mix(in srgb, var(--customize-accent) 85%, #000);
+	background: color-mix(in srgb, var(--customize-accent) 85%, var(--graph-accent-button-shade));
 }
 
 .graph_customize_button:disabled {
@@ -3876,7 +3865,7 @@ textarea.graph_customize_input {
 	object-fit: cover;
 	border: 1px solid color-mix(in srgb, var(--customize-accent) 22%, var(--graph-border));
 	border-radius: 3px;
-	box-shadow: 0 4px 12px rgb(0 0 0 / 0.12);
+	box-shadow: var(--graph-thumbnail-shadow);
 }
 
 .graph_report_contents {
@@ -3929,7 +3918,7 @@ textarea.graph_customize_input {
 		radial-gradient(140% 90px at 0 0, color-mix(in srgb, var(--customize-accent) 11%, transparent), transparent 70%),
 		var(--graph-toolbar-bg);
 	color: var(--graph-text);
-	box-shadow: 0 12px 32px rgb(0 0 0 / 0.16), 0 2px 6px rgb(0 0 0 / 0.08);
+	box-shadow: var(--graph-panel-shadow);
 	font-size: 11px;
 	box-sizing: border-box;
 	transform-origin: var(--album-arrow) 0;
@@ -4028,7 +4017,7 @@ textarea.graph_customize_input {
 
 .graph_customize_tab.is-current {
 	background: var(--graph-toolbar-bg);
-	box-shadow: 0 1px 3px rgb(0 0 0 / 0.12);
+	box-shadow: var(--graph-control-shadow);
 }
 
 /* Text fields: soft tinted wells, an accent ring when focused. */
@@ -4071,7 +4060,7 @@ textarea.graph_customize_input {
 
 .graph_customize_paint.is-current {
 	background: var(--graph-toolbar-bg);
-	box-shadow: 0 1px 3px rgb(0 0 0 / 0.12), 0 0 0 1px color-mix(in srgb, var(--customize-accent) 35%, transparent);
+	box-shadow: var(--graph-control-shadow), 0 0 0 1px color-mix(in srgb, var(--customize-accent) 35%, transparent);
 }
 
 .graph_customize_paint_text small {
@@ -4089,7 +4078,7 @@ textarea.graph_customize_input {
 	width: 24px;
 	height: 24px;
 	border: 0;
-	box-shadow: 0 0 0 1px color-mix(in srgb, var(--graph-text) 18%, transparent), 0 1px 3px rgb(0 0 0 / 0.15);
+	box-shadow: 0 0 0 1px color-mix(in srgb, var(--graph-text) 18%, transparent), var(--graph-swatch-shadow);
 	transition: transform 0.15s;
 }
 
@@ -4106,13 +4095,13 @@ textarea.graph_customize_input {
 .graph_customize .graph_adjust_swatch {
 	width: 18px;
 	height: 18px;
-	box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.12);
+	box-shadow: var(--graph-swatch-ring);
 	transition: transform 0.15s, box-shadow 0.15s;
 }
 
 .graph_customize .graph_adjust_swatch:hover {
 	transform: translateY(-1px) scale(1.1);
-	box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.12), 0 2px 5px rgb(0 0 0 / 0.2);
+	box-shadow: var(--graph-swatch-ring), var(--graph-swatch-hover-shadow);
 }
 
 .graph_customize .graph_adjust_swatch.is-current {
@@ -4155,7 +4144,7 @@ textarea.graph_customize_input {
 .graph_customize_segment.is-current {
 	border: 0;
 	background: var(--graph-toolbar-bg);
-	box-shadow: 0 1px 3px rgb(0 0 0 / 0.12), 0 0 0 1px color-mix(in srgb, var(--customize-accent) 35%, transparent);
+	box-shadow: var(--graph-control-shadow), 0 0 0 1px color-mix(in srgb, var(--customize-accent) 35%, transparent);
 	color: var(--graph-text);
 	font-weight: 600;
 }
@@ -4176,7 +4165,7 @@ textarea.graph_customize_input {
 }
 
 .graph_customize_segments.is-tiles .graph_customize_segment.is-current {
-	box-shadow: 0 1px 3px rgb(0 0 0 / 0.12), 0 0 0 1px color-mix(in srgb, var(--customize-accent) 35%, transparent);
+	box-shadow: var(--graph-control-shadow), 0 0 0 1px color-mix(in srgb, var(--customize-accent) 35%, transparent);
 }
 
 /* Sliders: a slim track filled with the accent up to the thumb. */
@@ -4213,7 +4202,7 @@ textarea.graph_customize_input {
 	border: 2px solid var(--customize-accent);
 	border-radius: 50%;
 	background: var(--graph-toolbar-bg);
-	box-shadow: 0 1px 4px rgb(0 0 0 / 0.25);
+	box-shadow: var(--graph-range-thumb-shadow);
 	transition: transform 0.12s;
 	-webkit-appearance: none;
 	appearance: none;
@@ -4225,7 +4214,7 @@ textarea.graph_customize_input {
 	border: 2px solid var(--customize-accent);
 	border-radius: 50%;
 	background: var(--graph-toolbar-bg);
-	box-shadow: 0 1px 4px rgb(0 0 0 / 0.25);
+	box-shadow: var(--graph-range-thumb-shadow);
 }
 
 .graph_customize_range input[type='range']:hover::-webkit-slider-thumb,
@@ -4267,7 +4256,7 @@ textarea.graph_customize_input {
 
 /* The preview: a gentle inner shadow, and a pressed feel while held. */
 .graph_customize_canvas {
-	box-shadow: inset 0 1px 4px rgb(0 0 0 / 0.06);
+	box-shadow: var(--graph-canvas-inset-shadow);
 	transition: border-color 0.15s, transform 0.15s;
 }
 
@@ -4278,7 +4267,7 @@ textarea.graph_customize_input {
 
 .graph_customize_stage:hover .graph_customize_canvas {
 	border-color: color-mix(in srgb, var(--customize-accent) 45%, var(--graph-border));
-	box-shadow: inset 0 1px 4px rgb(0 0 0 / 0.06), 0 6px 16px color-mix(in srgb, var(--customize-accent) 16%, transparent);
+	box-shadow: var(--graph-canvas-inset-shadow), 0 6px 16px color-mix(in srgb, var(--customize-accent) 16%, transparent);
 	transform: translateY(-1px);
 }
 
@@ -4288,7 +4277,7 @@ textarea.graph_customize_input {
 
 .graph_customize_preview.is-comparing .graph_customize_canvas,
 .graph_customize_preview.is-comparing .graph_customize_stage:hover .graph_customize_canvas {
-	box-shadow: inset 0 1px 4px rgb(0 0 0 / 0.06);
+	box-shadow: var(--graph-canvas-inset-shadow);
 	transform: scale(0.985);
 }
 
@@ -4358,7 +4347,7 @@ textarea.graph_customize_input {
 	/* A little see-through; the text stays crisp. */
 	background: color-mix(in srgb, var(--graph-toolbar-bg) 82%, transparent);
 	color: var(--graph-text);
-	box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
+	box-shadow: var(--graph-profile-shadow);
 	font-size: 10.5px;
 	line-height: 1.35;
 	box-sizing: border-box;

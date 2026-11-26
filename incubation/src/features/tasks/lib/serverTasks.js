@@ -10,6 +10,22 @@ let current = { scope: 'mine', archived: false };
 // What the last load asked for (a reconnect reloads the same).
 export const getServerTaskScope = () => current;
 
+// The list request, for the Tasks window: loading (asked, not answered),
+// loaded (answered once), error (why the last one failed, '' if it did not).
+let loadState = { loading: false, loaded: false, error: '' };
+const loadListeners = new Set();
+const setLoadState = (patch) => {
+  loadState = { ...loadState, ...patch };
+  loadListeners.forEach((listener) => listener());
+};
+export const subscribeServerTaskLoad = (listener) => {
+  loadListeners.add(listener);
+  return () => loadListeners.delete(listener);
+};
+export const getServerTaskLoad = () => loadState;
+// Tests and sign-out.
+export const resetServerTaskLoad = () => setLoadState({ loading: false, loaded: false, error: '' });
+
 // scope: 'mine' | 'all' (needs tasks:read_all); archived: also archived tasks.
 // -> { ok, count, message? }
 export const loadServerTasks = async (apiFetch, { scope = 'mine', archived = false } = {}) => {
@@ -18,6 +34,7 @@ export const loadServerTasks = async (apiFetch, { scope = 'mine', archived = fal
   lastLoad?.abort();
   const controller = new AbortController();
   lastLoad = controller;
+  setLoadState({ loading: true, error: '' });
   try {
     const { tasks, count } = await listTasks(apiFetch, { scope, archived, signal: controller.signal });
     if (controller.signal.aborted) return { ok: false, count: 0 };
@@ -25,10 +42,14 @@ export const loadServerTasks = async (apiFetch, { scope = 'mine', archived = fal
     [...tasks].reverse().forEach(applyServerTask);
     dropRemoteTasks(tasks.map((task) => task.task_id));
     attachOwnRuns((task) => endStreamRequest(apiFetch, { sourceSessionId: task.sourceSessionId, logFile: task.logFile }));
+    setLoadState({ loading: false, loaded: true });
     return { ok: true, count };
   } catch (error) {
-    if (error?.name === 'AbortError') return { ok: false, count: 0 };
-    return { ok: false, count: 0, message: error?.status === 403 ? 'Your account cannot see every analyst’s tasks.' : 'The task list could not be loaded from the Service.' };
+    // Aborted: a newer load is on its way and settles the state.
+    if (error?.name === 'AbortError' || controller.signal.aborted) return { ok: false, count: 0 };
+    const message = error?.status === 403 ? 'Your account cannot see every analyst’s tasks.' : 'The task list could not be loaded from the Service.';
+    setLoadState({ loading: false, error: message });
+    return { ok: false, count: 0, message };
   } finally {
     if (lastLoad === controller) lastLoad = null;
   }

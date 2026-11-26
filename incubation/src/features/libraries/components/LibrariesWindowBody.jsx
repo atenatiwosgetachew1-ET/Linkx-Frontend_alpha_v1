@@ -7,6 +7,7 @@ import { useWorkspace } from '../../../workspace/hooks/useWorkspace.js';
 import { WORKSPACE_WINDOW_TYPES } from '../../../workspace/state/workspaceTypes.js';
 import WindowLoadScreen from '../../../shared/components/WindowLoadScreen.jsx';
 import { loadConfiguration, removeRule, uploadRule } from '../../../services/configurationApi.js';
+import { getServiceRefusalMessage } from '../../../services/apiErrors.js';
 import { getConfigurationErrorMessage } from '../../configuration/lib/configModel.js';
 import { RULE_TEMPLATE_FILE, RULE_TEMPLATE_PATH,
   buildRuleUploadFields,
@@ -79,10 +80,25 @@ export default function LibrariesWindowBody({ windowItem }) {
     return Boolean(loaded?.ok);
   }, [adoptRules, apiFetch, mainSessionId]);
 
+  // First load and Reload: shown on the busy overlay, and a failure is told
+  // (the panel would otherwise read as an empty catalogue).
+  const reloadRules = useCallback(async () => {
+    setBusy('Loading rules…');
+    try {
+      const loaded = await loadConfiguration(apiFetch, mainSessionId);
+      if (loaded?.ok) adoptRules(loaded.configuration);
+      else notify({ title: 'Rules not loaded', message: loaded?.message || 'Could not load configuration. Try again.', level: 'warning', source: 'Libraries' });
+    } catch (error) {
+      if (mountedRef.current) notify({ title: 'Rules not loaded', message: getConfigurationErrorMessage(error, 'Could not load configuration. Try again.'), level: 'error', source: 'Libraries' });
+    } finally {
+      if (mountedRef.current) setBusy('');
+    }
+  }, [adoptRules, apiFetch, mainSessionId, notify]);
+
   // /init may not carry the rule catalogue: load it once.
   useEffect(() => {
     if (!isSessionReady || !mainSessionId || !canRead || hasRuleCatalogue(configuration)) return;
-    refreshRules();
+    reloadRules();
     // Once per session.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSessionReady, mainSessionId, canRead]);
@@ -120,7 +136,8 @@ export default function LibrariesWindowBody({ windowItem }) {
       notify({ title: 'Rule uploaded', message: 'Rule uploaded successfully.', level: 'success', source: 'Libraries' });
       return true;
     } catch (error) {
-      notify({ title: 'Rule upload failed', message: getConfigurationErrorMessage(error, 'Rule upload failed.'), level: 'error', source: 'Libraries' });
+      // A built-in rule set's name or pattern is refused with its name (round 4 §6).
+      notify({ title: 'Rule upload failed', message: getServiceRefusalMessage(error) || getConfigurationErrorMessage(error, 'Rule upload failed.'), level: 'error', source: 'Libraries' });
       return false;
     }
   };
@@ -282,7 +299,7 @@ export default function LibrariesWindowBody({ windowItem }) {
           </span>
           <div className="settings_window_footer_actions">
             {activeSection.id === 'rules' ? (
-              <button type="button" className="settings_button" disabled={!canRead || Boolean(busy) || !mainSessionId} onClick={refreshRules}>Reload</button>
+              <button type="button" className="settings_button" disabled={!canRead || Boolean(busy) || !mainSessionId} onClick={reloadRules}>Reload</button>
             ) : null}
           </div>
         </footer>

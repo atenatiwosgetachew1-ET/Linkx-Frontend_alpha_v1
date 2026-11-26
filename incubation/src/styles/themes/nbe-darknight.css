@@ -85,4 +85,7 @@
   --settings-danger-text: var(--linkx-danger-text);
   --settings-danger-bg: var(--linkx-danger-bg);
   --linkx-overlay-bg: rgba(0, 0, 0, 0.5);
+  /* Table: a lighter navy stripe and header tint, to show on a dark window. */
+  --table-row-stripe: color-mix(in srgb, #8fb3e0 6%, transparent);
+  --table-head-tint: #8fb3e0;
 }

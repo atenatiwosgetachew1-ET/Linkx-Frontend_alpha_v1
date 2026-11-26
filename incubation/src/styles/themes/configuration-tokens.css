@@ -254,6 +254,12 @@
   --config-active-rule-name-text: var(--settings-text);
   --config-active-rule-tag-border: var(--settings-accent);
   --config-active-rule-tag-text: var(--settings-accent-text, var(--settings-accent));
+  /* Sensitivity presets, by strictness: relaxed … strictest. */
+  --config-preset-tone-0: #16a34a;
+  --config-preset-tone-1: var(--settings-accent);
+  --config-preset-tone-2: #d97706;
+  --config-preset-tone-3: #dc2626;
+  --config-preset-tone-unknown: var(--settings-text-muted);
   --config-active-rule-empty-border: var(--settings-danger-text);
   --config-active-rule-empty-wash: color-mix(in srgb, var(--settings-danger-text) 12%, transparent);
   --config-rule-item-border: var(--settings-card-border);
@@ -261,4 +267,5 @@
   --config-rule-item-text: var(--settings-text);
   --config-rule-item-number-text: var(--settings-text-muted);
   --config-rule-item-off-text: var(--settings-text-muted);
+  --config-form-slider-thumb-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
 }

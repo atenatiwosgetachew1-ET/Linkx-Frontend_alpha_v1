@@ -112,6 +112,34 @@ describe('ReportsWindowBody', () => {
     expect(screen.getByLabelText('From date and time')).toBeInTheDocument();
   });
 
+  it('opens a record’s details in a popup over the table, closed with Escape', async () => {
+    renderReports();
+    await userEvent.click(await screen.findByText('core-banking'));
+    const popup = screen.getByRole('dialog', { name: 'STR' });
+    expect(popup).toHaveTextContent('Report #11');
+    expect(within(popup).getByRole('complementary', { name: 'Report 11' })).toBeInTheDocument();
+    // The table is still all there, under it.
+    expect(screen.getByRole('columnheader', { name: 'Status' })).toBeInTheDocument();
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog', { name: 'STR' })).not.toBeInTheDocument();
+  });
+
+  it('shows a record’s run settings in a popup from its mark in the table', async () => {
+    const base = makeApi();
+    const apiFetch = vi.fn(async (url, options) => (/reports\/evidence\?/.test(url)
+      ? { data: [{ id: 41, report_type: 'Evidence', source_system: 'svc-aml', status: 'success', created_at: now, payload: {}, settings_used: { domain: 'bank', overridden: true, overridden_by: 'a.kebede', overrides: { dataframe_mapping: { acct_no: 'account' } } } }], count: 1 }
+      : base(url, options)));
+    renderReports({ apiFetch, metadata: { reportsTab: 'evidence', openSeq: 903 } });
+    expect(await screen.findByRole('columnheader', { name: 'Run settings' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /^Run settings: Own column mapping/ }));
+    const popup = screen.getByRole('dialog', { name: 'Run settings' });
+    expect(within(popup).getByRole('cell', { name: 'acct_no' })).toBeInTheDocument();
+    expect(within(popup).getByRole('cell', { name: 'account' })).toBeInTheDocument();
+    expect(popup).toHaveTextContent('a.kebede');
+    await userEvent.click(within(popup).getByRole('button', { name: 'Done' }));
+    expect(screen.queryByRole('dialog', { name: 'Run settings' })).not.toBeInTheDocument();
+  });
+
   it('notes on the STR alerts tab only that they use the domain’s settings', async () => {
     renderReports({ metadata: { reportsTab: 'parent', openSeq: 902 } });
     await screen.findByText('core-banking');
@@ -190,14 +218,16 @@ describe('ReportsWindowBody', () => {
     expect(within(detail).getByText('FUND_FLOW')).toBeInTheDocument();
     expect(within(detail).getByText('Volume bonus')).toBeInTheDocument();
     expect(within(detail).getByRole('region', { name: 'Fraud score' })).toHaveTextContent('70');
-    // The payload starts collapsed.
-    const toggle = within(detail).getByRole('button', { name: /Payload data/ });
-    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    // The record's facts are on the overview, under the findings.
+    expect(within(detail).getByRole('tab', { name: 'Overview' })).toHaveAttribute('aria-selected', 'true');
+    expect(within(detail).getByRole('region', { name: 'Record' })).toHaveTextContent('31');
+    // The payload has its own section, behind the Payload tab.
     expect(within(detail).queryByLabelText('Payload data', { selector: 'pre' })).not.toBeInTheDocument();
-    await userEvent.click(toggle);
+    await userEvent.click(within(detail).getByRole('tab', { name: 'Payload' }));
     expect(within(detail).getByLabelText('Payload data', { selector: 'pre' })).toHaveTextContent('"config_version": "v3"');
-    await userEvent.click(toggle);
-    await userEvent.click(within(detail).getByRole('button', { name: 'Close details' }));
+    expect(within(detail).getByRole('button', { name: /Copy JSON/ })).toBeEnabled();
+    // The popup's × closes it.
+    await userEvent.click(within(screen.getByRole('dialog', { name: 'Evidence' })).getByRole('button', { name: 'Close' }));
     expect(screen.queryByRole('complementary')).not.toBeInTheDocument();
   });
 
@@ -358,6 +388,31 @@ describe('ReportsWindowBody', () => {
     expect(screen.getAllByRole('row').filter((row) => row.classList.contains('reports_row'))).toHaveLength(2);
     // The Service's Alert reports list is not asked for while the mock runs.
     expect(apiFetch.mock.calls.some(([url]) => String(url).startsWith('/api/v1/reports/parent'))).toBe(false);
+    resetAlerts();
+  });
+
+  it('STR alerts (live): loading, then a failed list with Retry; footer Refresh asks for the list again', async () => {
+    const { startAlertService, stopAlertService } = await import('../../alerts/lib/alertRuntime.js');
+    const { resetAlerts } = await import('../../alerts/lib/alertStore.js');
+    let answer;
+    const list = vi.fn(() => new Promise((resolve, reject) => { answer = { resolve, reject }; }));
+    act(() => startAlertService({ kind: 'live', start: () => () => {}, list }, { mode: 'live', userId: 'u1' }));
+    renderReports({ metadata: { reportsTab: 'parent' } });
+    expect(screen.getByText('Loading alerts…')).toBeInTheDocument();
+    expect(screen.queryByText('No reports found')).toBeNull();
+    await act(async () => { answer.reject(new Error('down')); });
+    expect(await screen.findByRole('alert')).toHaveTextContent('Could not load alerts');
+    await userEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(list).toHaveBeenCalledTimes(2);
+    expect(screen.getByText('Loading alerts…')).toBeInTheDocument();
+    await act(async () => { answer.resolve([]); });
+    expect(await screen.findByText('No reports found')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /Refresh/ }));
+    expect(list).toHaveBeenCalledTimes(3);
+    expect(screen.getByRole('button', { name: /Refresh/ })).toBeDisabled();
+    await act(async () => { answer.resolve([]); });
+    expect(screen.getByRole('button', { name: /Refresh/ })).toBeEnabled();
+    stopAlertService();
     resetAlerts();
   });
 });

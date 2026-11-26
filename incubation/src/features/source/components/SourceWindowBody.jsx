@@ -161,6 +161,8 @@ export default function SourceWindowBody({ windowItem }) {
   const [mappingOpen, setMappingOpen] = useState(false);
   const [mappingMessage, setMappingMessage] = useState('');
   const [requiredFields, setRequiredFields] = useState([]);
+  // The last domain fields asked for: an earlier answer does not overwrite it.
+  const mappingRequestRef = useRef(0);
   const [toolValidationMessage, setToolValidationMessage] = useState('');
   // Production's per-action RBAC (getWindowActionPermission + requirePermission):
   // the action is refused with a "Permission denied" notice and an inline
@@ -1089,9 +1091,14 @@ export default function SourceWindowBody({ windowItem }) {
     setMappingMessage('');
     setMappingOpen(true);
     const domain = modeState.dataframeDomain || sourceDefaults.domain;
-    if (!can('config:read') || !domain) return;
-    // Only to mark the required ones: without it the fields are listed plainly.
-    fetchDomainSection(apiFetch, domain, 'mapping').then((section) => setRequiredFields(section?.requiredFields || [])).catch(() => setRequiredFields([]));
+    const asked = mappingRequestRef.current + 1;
+    mappingRequestRef.current = asked;
+    if (!can('config:read') || !domain) { setRequiredFields([]); return; }
+    // null while asked (the dialog waits, so the list does not reorder under the
+    // user); only to mark the required ones: without it the fields are listed plainly.
+    setRequiredFields(null);
+    const settle = (fields) => { if (mappingRequestRef.current === asked) setRequiredFields(fields); };
+    fetchDomainSection(apiFetch, domain, 'mapping').then((section) => settle(section?.requiredFields || [])).catch(() => settle([]));
   };
 
   // Continue on the input step: (upload files ->) (connect tool ->) create_DF,

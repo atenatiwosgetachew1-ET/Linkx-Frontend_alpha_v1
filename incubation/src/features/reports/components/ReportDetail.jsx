@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 
-import { formatReportDate } from '../lib/reportModel.js';
+import { bandForScore, formatReportDate } from '../lib/reportModel.js';
+import { hasReportActions, reportGraphHint } from '../lib/reportActions.js';
 
 const ICONS = {
   close: ['M18 6 6 18', 'M6 6l12 12'],
@@ -15,6 +16,10 @@ const ICONS = {
   check: 'm5 12.5 4.5 4.5L19 7',
   chevron: 'm9 6 6 6-6 6',
   code: ['m8 8-4 4 4 4', 'm16 8 4 4-4 4', 'M13.5 5 10.5 19'],
+  hash: ['M5 9h14', 'M5 15h14', 'M10 4 8 20', 'M16 4l-2 16'],
+  link: ['M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1', 'M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1'],
+  trace: ['M6 8a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z', 'M18 20a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z', 'M6 8v5a3 3 0 0 0 3 3h7'],
+  sliders: ['M4 7h10', 'M18 7h2', 'M4 17h2', 'M10 17h10', 'M16 9a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z', 'M8 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z'],
 };
 
 function Icon({ d, className = 'reports_icon' }) {
@@ -79,7 +84,6 @@ const BANDS = [
   { id: 'fatal', from: 90, to: 100, label: 'Fatal: highest risk' },
 ];
 const TICKS = [0, 20, 50, 80, 90, 100];
-const bandForScore = (score) => BANDS.find((band) => score < band.to)?.id || 'fatal';
 
 function ScoreMeter({ record }) {
   const score = record.fraudScore;
@@ -118,6 +122,51 @@ function ScoreMeter({ record }) {
     </section>
   );
 }
+
+// The popup's score: the figure and its band, at the right of the hero.
+function HeroScore({ record, band }) {
+  const score = record.fraudScore;
+  const meta = BANDS.find((item) => item.id === band);
+  return (
+    <section className={`reports_score rdx_score is-${band || 'none'}`} aria-label="Fraud score">
+      <span className="rdx_kicker">Fraud score</span>
+      <p className="rdx_score_value">
+        <strong>{score === null ? record.scoreLabel || '—' : score.toLocaleString(undefined, { maximumFractionDigits: 1 })}</strong>
+        {score !== null ? <span>/ 100</span> : null}
+      </p>
+      {band ? <p className="rdx_score_band"><span className={`reports_band is-${band}`}>{band}</span>{meta ? <small>{meta.label}</small> : null}</p> : null}
+    </section>
+  );
+}
+
+// The 0-100 scale under the hero: the five score bands at their real
+// widths, each in its own colour, lit up to the score.
+function BandScale({ score }) {
+  const position = Math.min(100, Math.max(0, score));
+  const bands = (lit) => (
+    <div className={`rdx_scale_bands${lit ? ' is-lit' : ''}`} style={lit ? { clipPath: `inset(0 ${100 - position}% 0 0)` } : undefined}>
+      {BANDS.map((item) => <span key={item.id} className={`is-${item.id}`} style={{ flexGrow: item.to - item.from }} />)}
+    </div>
+  );
+  return (
+    <div className="rdx_scale" aria-hidden="true">
+      <div className="rdx_scale_track">
+        {bands(false)}
+        {bands(true)}
+        <i style={{ left: `${position}%` }} />
+      </div>
+      <div className="rdx_scale_ticks">
+        {TICKS.map((tick) => <span key={tick} style={{ left: `${tick}%` }}>{tick}</span>)}
+      </div>
+    </div>
+  );
+}
+
+const DETAIL_TABS = [
+  { id: 'overview', label: 'Overview' },
+  { id: 'history', label: 'History', needs: 'history' },
+  { id: 'payload', label: 'Payload' },
+];
 
 // score_evidence as one stacked bar: base score + node bonus + financial /
 // volume bonus.
@@ -167,9 +216,76 @@ try {
 } catch { /* storage unavailable */ }
 
 // graph: { state: 'unsupported' | 'checking' | 'loading' | 'available' | 'unavailable' | 'archived', onOpen }
-export default function ReportDetail({ record, isCdr, graph, onClose, onCopyPayload, download, workflow = null }) {
+// The details' actions (Open graph, Download report): in their own footer, or
+// in the popup's footer when the details are framed by it. Framed, they are
+// the popup's default buttons (graph_customize_button, words only, Open
+// graph the primary one), as in every other popup of this kind.
+export function ReportDetailActions({ graph, download, framed = false }) {
+  const graphLabel = {
+    unsupported: 'No graph available',
+    checking: 'Checking graph…',
+    loading: 'Loading graph…',
+    available: 'Open graph',
+    unavailable: 'No graph available',
+    archived: 'Graph archived',
+  }[graph.state];
+  const graphBusy = graph.state === 'checking' || graph.state === 'loading';
+  if (framed) {
+    return (
+      <>
+        <button
+          type="button"
+          className="graph_customize_button linkx_tooltip_anchor"
+          disabled={!download.available}
+          data-tooltip={download.hint}
+          onClick={download.onDownload}
+        >
+          {download.busy ? 'Preparing…' : 'Download report'}
+        </button>
+        <button
+          type="button"
+          className="graph_customize_button is-primary linkx_tooltip_anchor"
+          disabled={graph.state !== 'available'}
+          data-tooltip={reportGraphHint(graph.state)}
+          onClick={graph.onOpen}
+        >
+          {graphLabel}
+        </button>
+      </>
+    );
+  }
+  return (
+    <>
+      <button
+        type="button"
+        className="reports_action linkx_tooltip_anchor"
+        disabled={!download.available}
+        data-tooltip={download.hint}
+        onClick={download.onDownload}
+      >
+        <Icon d={download.busy ? ICONS.spinner : ICONS.download} className={download.busy ? 'reports_icon is-spinning' : undefined} />
+        {download.busy ? 'Preparing…' : 'Download report'}
+      </button>
+      <button
+        type="button"
+        className="reports_action is-primary linkx_tooltip_anchor"
+        disabled={graph.state !== 'available'}
+        data-tooltip={reportGraphHint(graph.state)}
+        onClick={graph.onOpen}
+      >
+        <Icon d={graphBusy ? ICONS.spinner : graph.state === 'available' ? ICONS.graph : ICONS.noGraph} className={`reports_icon${graphBusy ? ' is-spinning' : ''}`} />
+        {graphLabel}
+      </button>
+    </>
+  );
+}
+
+// framed: inside the popup, which gives the title, the close button and the
+// actions; the details show their tags and score at the top of the body.
+export default function ReportDetail({ record, isCdr, graph, onClose, onCopyPayload, download, workflow = null, history = null, onShowRunSettings, framed = false }) {
   const { payload } = record;
   const [payloadOpen, setPayloadOpen] = useState(payloadOpenPreference);
+  const [tab, setTab] = useState('overview');
   const jsonText = useMemo(() => prettyJson(record.raw.payload), [record.raw.payload]);
   const jsonLines = jsonText ? jsonText.split('\n').length : 0;
   const figures = networkFigures(payload);
@@ -185,32 +301,147 @@ export default function ReportDetail({ record, isCdr, graph, onClose, onCopyPayl
     try { window.localStorage.setItem('linkx.reports.payloadOpen', next ? '1' : '0'); } catch { /* ignore */ }
   };
 
-  const graphLabel = {
-    unsupported: 'No graph available',
-    checking: 'Checking graph…',
-    loading: 'Loading graph…',
-    available: 'Open graph',
-    unavailable: 'No graph available',
-    archived: 'Graph archived',
-  }[graph.state];
-  const graphHint = {
-    unsupported: 'Graph visualization is only available for service evidence reports',
-    checking: 'Checking graph data availability…',
-    loading: 'Fetching and opening the evidence graph…',
-    available: 'View the graph in a new Graph window',
-    unavailable: 'No graph data was included for this service evidence report',
-    archived: 'The graph is older than 180 days and was moved to cold storage by the Service',
-  }[graph.state];
-  const graphBusy = graph.state === 'checking' || graph.state === 'loading';
   // The action bar only shows when one of its actions can be used (or the
   // graph is still being checked).
   // The header's tone follows the fraud score band; reports without a score
   // keep the status tone.
   const headerBand = record.scoreBand || (record.fraudScore !== null ? bandForScore(record.fraudScore) : '');
-  const showFooter = download.available || !['unsupported', 'unavailable'].includes(graph.state);
+  const showFooter = !framed && hasReportActions(graph, download);
+
+  // In the popup: a hero (who it is about, the score and where it falls on
+  // the band scale), then two sections: the overview (an alert's procedure,
+  // the findings, and the record's facts as one flowing row, so no part
+  // leaves a hole when another is missing) and the payload. The popup is as
+  // tall as the section it shows.
+  if (framed) {
+    const showTrace = record.traceId && String(record.traceId) !== String(record.externalReferenceId) && String(record.traceId) !== String(record.id);
+    const hasScore = record.fraudScore !== null || Boolean(headerBand);
+    const origin = [record.sourceSystem, formatReportDate(record.createdAt)].filter(Boolean).join(' · ');
+    // History shows only for records that have one (an STR alert's).
+    const tabs = DETAIL_TABS.filter((item) => !item.needs || (item.needs === 'history' && history));
+    const onTabKey = (event) => {
+      const step = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0;
+      if (!step) return;
+      event.preventDefault();
+      const index = tabs.findIndex((item) => item.id === tab);
+      const next = tabs[(index + step + tabs.length) % tabs.length].id;
+      setTab(next);
+      event.currentTarget.querySelector(`[data-tab="${next}"]`)?.focus();
+    };
+    return (
+      <aside className={`reports_detail is-framed rdx is-${record.statusTone}${headerBand ? ` band-${headerBand}` : ''}`} aria-label={`Report ${record.id}`} tabIndex={-1}>
+        <header className="rdx_hero">
+          <div className="rdx_hero_row">
+            <section className="rdx_subject" aria-label="Subject">
+              <span className="rdx_kicker">Entity / Account</span>
+              <strong className="is-mono" title={entity || ''}>{entity || '—'}</strong>
+              <div className="rdx_meta">
+                <span className={`reports_status is-${record.statusTone}`}><span aria-hidden="true" />{record.status || '—'}</span>
+                {domain ? <span className="rdx_badge">{domain}</span> : null}
+                {blacklisted !== undefined ? (
+                  <span className={`rdx_badge ${blacklisted ? 'is-danger' : 'is-ok'}`}>{blacklisted ? 'Blacklisted' : 'Not blacklisted'}</span>
+                ) : null}
+                {origin ? <span className="rdx_meta_text">{origin}</span> : null}
+              </div>
+            </section>
+            {hasScore ? <HeroScore record={record} band={headerBand} /> : null}
+          </div>
+          {record.fraudScore !== null ? <BandScale score={record.fraudScore} /> : null}
+        </header>
+
+        <div className="rdx_tabs graph_customize_segments" role="tablist" aria-label="Report sections" onKeyDown={onTabKey}>
+          {tabs.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              role="tab"
+              id={`rdx-tab-${item.id}`}
+              data-tab={item.id}
+              aria-selected={tab === item.id}
+              aria-controls="rdx-panel"
+              tabIndex={tab === item.id ? 0 : -1}
+              className={`graph_customize_segment${tab === item.id ? ' is-current' : ''}`}
+              onClick={() => setTab(item.id)}
+            >
+              {item.label}
+              {item.id === 'overview' && signals.length ? <small aria-hidden="true">{signals.length}</small> : null}
+            </button>
+          ))}
+        </div>
+
+        <div className={`rdx_panel is-${tab}`} role="tabpanel" id="rdx-panel" aria-labelledby={`rdx-tab-${tab}`}>
+          {tab === 'overview' ? (
+            <>
+              {workflow ? <div className="rdx_workflow">{workflow}</div> : null}
+              {signals.length || record.reason ? (
+                <section className="rdx_section" aria-label="Signals">
+                  <h5 className="rdx_head_label">{record.flaggedRules.length ? 'Flagged rules' : 'Signals'}</h5>
+                  {signals.length ? (
+                    <div className="rdx_chips">{signals.map((signal) => <span key={signal} className="rdx_chip">{signal}</span>)}</div>
+                  ) : null}
+                  {record.reason ? <p className="rdx_text">{record.reason}</p> : null}
+                </section>
+              ) : null}
+              {payload.score_evidence || figures.length ? (
+                <div className="rdx_pair">
+                  <ScoreBreakdown evidence={payload.score_evidence} isCdr={isCdr} />
+                  {figures.length ? (
+                    <section className="rdx_section" aria-label="Network">
+                      <h5 className="rdx_head_label">Network</h5>
+                      <dl className="rdx_stats">
+                        {figures.map(([label, value]) => <div key={label}><dd>{value}</dd><dt>{label}</dt></div>)}
+                      </dl>
+                    </section>
+                  ) : null}
+                </div>
+              ) : null}
+              <section className="rdx_section" aria-label="Record">
+                <h5 className="rdx_head_label">Record</h5>
+                <dl className="rdx_facts">
+                  <div><dt><Icon d={ICONS.hash} />ID</dt><dd><span className="is-mono">{record.id || '—'}</span><CopyValue value={record.id} label="ID" /></dd></div>
+                  <div><dt><Icon d={ICONS.link} />Ref ID</dt><dd><span className="is-mono">{record.externalReferenceId || '—'}</span><CopyValue value={record.externalReferenceId} label="Ref ID" /></dd></div>
+                  {showTrace ? <div><dt><Icon d={ICONS.trace} />Trace ID</dt><dd><span className="is-mono">{record.traceId}</span><CopyValue value={record.traceId} label="trace ID" /></dd></div> : null}
+                  {record.runRemark ? (
+                    <div>
+                      <dt>
+                        <Icon d={ICONS.sliders} />Run settings
+                        {onShowRunSettings ? <button type="button" className="rdx_link" onClick={onShowRunSettings}>See what it used</button> : null}
+                      </dt>
+                      <dd>
+                        <span className={`rdx_run is-${record.runRemark.kind}`}><i aria-hidden="true" />{record.runRemark.marked ? record.runRemark.label : 'The domain’s settings'}</span>
+                      </dd>
+                    </div>
+                  ) : null}
+                </dl>
+              </section>
+            </>
+          ) : null}
+
+          {tab === 'history' && history ? (
+            <section className="rdx_section" aria-label="History">
+              <h5 className="rdx_head_label">History</h5>
+              {history}
+            </section>
+          ) : null}
+
+          {tab === 'payload' ? (
+            <section className="rdx_payload" aria-label="Payload">
+              <div className="rdx_payload_bar">
+                <span className="rdx_payload_size"><Icon d={ICONS.code} />{jsonLines ? `${jsonLines.toLocaleString()} lines of JSON` : 'Empty'}</span>
+                <button type="button" className="reports_text_button" onClick={onCopyPayload} disabled={!jsonText}>
+                  <Icon d={ICONS.copy} /> Copy JSON
+                </button>
+              </div>
+              <JsonView text={jsonText} />
+            </section>
+          ) : null}
+        </div>
+      </aside>
+    );
+  }
 
   return (
-    <aside className={`reports_detail is-${record.statusTone}${headerBand ? ` band-${headerBand}` : ''}`} aria-label={`Report ${record.id}`}>
+    <aside className={`reports_detail is-${record.statusTone}${headerBand ? ` band-${headerBand}` : ''}`} aria-label={`Report ${record.id}`} tabIndex={-1}>
       <header className="reports_detail_header">
         <div className="reports_detail_heading">
           <p className="reports_detail_eyebrow">Report #{record.id}</p>
@@ -279,6 +510,7 @@ export default function ReportDetail({ record, isCdr, graph, onClose, onCopyPayl
             <div className="reports_section_head">
               <span className="reports_section_label">Run settings</span>
               {record.runRemark.marked ? <span className="reports_run_mark">{record.runRemark.label}</span> : null}
+              {onShowRunSettings ? <button type="button" className="reports_run_settings_open" onClick={onShowRunSettings}>Details</button> : null}
             </div>
             <p className="reports_reason">{record.runRemark.text.replace(/^Run settings: /, '')}</p>
           </section>
@@ -313,26 +545,7 @@ export default function ReportDetail({ record, isCdr, graph, onClose, onCopyPayl
 
       {showFooter && (
       <footer className="reports_detail_footer">
-        <button
-          type="button"
-          className="reports_action is-primary linkx_tooltip_anchor"
-          disabled={graph.state !== 'available'}
-          data-tooltip={graphHint}
-          onClick={graph.onOpen}
-        >
-          <Icon d={graphBusy ? ICONS.spinner : graph.state === 'available' ? ICONS.graph : ICONS.noGraph} className={`reports_icon${graphBusy ? ' is-spinning' : ''}`} />
-          {graphLabel}
-        </button>
-        <button
-          type="button"
-          className="reports_action linkx_tooltip_anchor"
-          disabled={!download.available}
-          data-tooltip={download.hint}
-          onClick={download.onDownload}
-        >
-          <Icon d={download.busy ? ICONS.spinner : ICONS.download} className={download.busy ? 'reports_icon is-spinning' : undefined} />
-          {download.busy ? 'Preparing…' : 'Download report'}
-        </button>
+        <ReportDetailActions graph={graph} download={download} />
       </footer>
       )}
     </aside>

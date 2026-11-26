@@ -44,6 +44,11 @@ const CARD_ICONS = {
   session: 'M22 12h-4l-3 9L9 3l-3 9H2',
   search: ['M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14Z', 'm20 20-3.5-3.5'],
   properties: 'M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01',
+  drawing: ['M12 20h9', 'M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z'],
+  nodes: ['M12 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z', 'M5 22a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z', 'M19 22a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z', 'm10.5 7.6-4 8.8', 'm13.5 7.6 4 8.8'],
+  labels: ['M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82Z', 'M7 7h.01'],
+  edges: ['M7 17 17 7', 'M8 7h9v9'],
+  layout: ['M3 3h7v7H3Z', 'M14 3h7v7h-7Z', 'M14 14h7v7h-7Z', 'M3 14h7v7H3Z'],
 };
 
 // Every graph tab's header: what it is, the graph it is about, its state.
@@ -397,11 +402,16 @@ const LAYOUT_LABELS = {
   grouped: 'Grouped (clusters by type or property)',
 };
 
-function RangeInputs({ limit, onCommit, disabled }) {
+// The nodes shown, by position: a slider from 0 to the graph's node count,
+// and the same two numbers typed. Both edit one draft; letting go of the
+// slider, Enter or leaving a field applies it.
+function RangeInputs({ limit, total, onCommit, disabled }) {
   const [draft, setDraft] = useState({ min: String(limit.min), max: String(limit.max) });
   useEffect(() => setDraft({ min: String(limit.min), max: String(limit.max) }), [limit.min, limit.max]);
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
   const commit = () => {
-    const range = normalizeLimitRange({ min: draft.min, max: draft.max });
+    const range = normalizeLimitRange({ min: draftRef.current.min, max: draftRef.current.max });
     setDraft({ min: String(range.min), max: String(range.max) });
     if (range.min !== limit.min || range.max !== limit.max) onCommit(range);
   };
@@ -411,15 +421,36 @@ function RangeInputs({ limit, onCommit, disabled }) {
       commit();
     }
   };
+  const slider = useMemo(() => (total > 0 ? searchRangeOf([total]) : null), [total]);
+  const asNumber = (text) => (Number.isFinite(Number(text)) ? Number(text) : 0);
+  const from = slider ? Math.min(asNumber(draft.min), slider.max) : 0;
+  const to = slider ? Math.min(asNumber(draft.max), slider.max) : 0;
+  // The top end keeps a "To" already past the node count, so the view is not
+  // changed by moving only the lower handle.
+  const slide = (nextFrom, nextTo) => setDraft(() => ({
+    min: String(nextFrom),
+    max: String(nextTo >= slider.max && asNumber(limit.max) >= slider.max ? limit.max : nextTo),
+  }));
   return (
-    <div className="config_card_grid">
-      <PanelField label="From">
-        <input className="settings_input" type="number" min={0} value={draft.min} disabled={disabled} onChange={(event) => setDraft((current) => ({ ...current, min: event.target.value }))} onBlur={commit} onKeyDown={onKeyDown} />
-      </PanelField>
-      <PanelField label="To">
-        <input className="settings_input" type="number" min={1} value={draft.max} disabled={disabled} onChange={(event) => setDraft((current) => ({ ...current, max: event.target.value }))} onBlur={commit} onKeyDown={onKeyDown} />
-      </PanelField>
-    </div>
+    <>
+      <SearchRange
+        range={slider}
+        from={from}
+        to={to}
+        label="Nodes shown, by position"
+        hint="Load a graph first."
+        onChange={slide}
+        onCommit={commit}
+      />
+      <div className="config_card_grid">
+        <PanelField label="From">
+          <input className="settings_input" type="number" min={0} value={draft.min} disabled={disabled} onChange={(event) => setDraft((current) => ({ ...current, min: event.target.value }))} onBlur={commit} onKeyDown={onKeyDown} />
+        </PanelField>
+        <PanelField label="To">
+          <input className="settings_input" type="number" min={1} value={draft.max} disabled={disabled} onChange={(event) => setDraft((current) => ({ ...current, max: event.target.value }))} onBlur={commit} onKeyDown={onKeyDown} />
+        </PanelField>
+      </div>
+    </>
   );
 }
 
@@ -452,7 +483,7 @@ export function GraphSettingsPanel({ graph }) {
   const heldAt = editedAt !== null && editedAt < Math.min(count, cap) ? editedAt : 0;
 
   return (
-    <>
+    <PanelPage cards label="Settings">
       <GraphPanelHeader
         icon="settings"
         eyebrow="Graph settings"
@@ -469,16 +500,18 @@ export function GraphSettingsPanel({ graph }) {
 
       <PanelBlock
         title="Drawing"
+        icon={CARD_ICONS.drawing}
+        collapsible
         actions={<button type="button" className="settings_button is-compact" title="Back to Libraries ▸ Graph defaults; this graph's own rules are cleared too" onClick={() => updateSettings(getGraphDefaults())}>Reset this graph</button>}
       >
-        <div className="config_card">
+        <div className="right_card_body">
           <PanelSwitch label="Performance mode" checked={settings.performance} onChange={(checked) => patch({ performance: checked })} />
           {settings.performance ? <PanelHint>Labels, titles, edge weights and physics are off while it is on.</PanelHint> : null}
         </div>
       </PanelBlock>
 
-      <PanelBlock title="Nodes shown">
-        <div className="config_card">
+      <PanelBlock title="Nodes shown" icon={CARD_ICONS.nodes} collapsible>
+        <div className="right_card_body">
           <PanelField label="Order by">
             <select className="settings_input" value={settings.limit.key} disabled={!hasData} onChange={(event) => patch({ limit: { ...settings.limit, key: event.target.value } })}>
               <option value="">Arrival order</option>
@@ -496,7 +529,7 @@ export function GraphSettingsPanel({ graph }) {
               <PanelHint>Nodes without “{settings.limit.key}” are left out while ordering by it.</PanelHint>
             </>
           ) : null}
-          <RangeInputs limit={settings.limit} disabled={!hasData} onCommit={(range) => patch({ limit: { ...settings.limit, ...range } })} />
+          <RangeInputs limit={settings.limit} total={snapshot.nodes || 0} disabled={!hasData} onCommit={(range) => patch({ limit: { ...settings.limit, ...range } })} />
           {count > cap ? (
             <PanelHint warning>
               Limited to {formatCount(cap)}: {renderer !== RENDERERS.WEBGL ? 'the most standard drawing shows at once.' : gpuLimits.measured ? 'this computer’s GPU benchmark (Libraries ▸ Graph rendering).' : 'a temporary limit, until the GPU benchmark is run (Libraries ▸ Graph rendering).'}
@@ -509,8 +542,8 @@ export function GraphSettingsPanel({ graph }) {
         </div>
       </PanelBlock>
 
-      <PanelBlock title="Labels and cards">
-        <div className="config_card">
+      <PanelBlock title="Labels and cards" icon={CARD_ICONS.labels} collapsible>
+        <div className="right_card_body">
           <PanelSwitch label="Show labels" checked={settings.showLabels && !settings.performance} disabled={settings.performance} onChange={(checked) => patch({ showLabels: checked })} />
           <PanelField label="Label by property">
             <select className="settings_input"
@@ -539,8 +572,8 @@ export function GraphSettingsPanel({ graph }) {
         </div>
       </PanelBlock>
 
-      <PanelBlock title="Edges">
-        <div className="config_card">
+      <PanelBlock title="Edges" icon={CARD_ICONS.edges} collapsible>
+        <div className="right_card_body">
           <PanelField label="Edge weight">
             <select className="settings_input" value={settings.performance ? '' : settings.edgeWeight} disabled={!hasData || settings.performance} onChange={(event) => patch({ edgeWeight: event.target.value })}>
               <option value="">Off</option>
@@ -574,8 +607,8 @@ export function GraphSettingsPanel({ graph }) {
         </div>
       </PanelBlock>
 
-      <PanelBlock title="Layout">
-        <div className="config_card">
+      <PanelBlock title="Layout" icon={CARD_ICONS.layout} collapsible>
+        <div className="right_card_body">
           <PanelField label="Layout">
             <select className="settings_input"
               value={settings.layout.type}
@@ -654,6 +687,6 @@ export function GraphSettingsPanel({ graph }) {
           ) : null}
         </div>
       </PanelBlock>
-    </>
+    </PanelPage>
   );
 }

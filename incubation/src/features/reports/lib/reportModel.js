@@ -162,19 +162,51 @@ export const getScoreLabel = (payload) => {
   return centrality === null ? '' : `${(centrality * 100).toFixed(0)}%`;
 };
 
-export const getScoreBand = (payload) => String(payload.score_band || payload.scoreBand || '').toLowerCase();
+// The score bands' limits (SCORE_BANDS): 0-19 low, 20-49 medium, 50-79
+// high, 80-89 critical, 90+ fatal.
+export const bandForScore = (score) => {
+  if (score === null || score === undefined || !Number.isFinite(Number(score))) return '';
+  const value = Number(score);
+  if (value < 20) return 'low';
+  if (value < 50) return 'medium';
+  if (value < 80) return 'high';
+  if (value < 90) return 'critical';
+  return 'fatal';
+};
+
+// The band the Service gave, else the one the shown score falls in (as the
+// System reports' records carry it): the fraud score, or, without one, the
+// centrality score as the percentage the Fraud score column shows (user
+// decision 2026-11-26). Every record with a figure in that column has a band.
+export const getScoreBand = (payload) => {
+  const given = String(payload.score_band || payload.scoreBand || '').toLowerCase();
+  if (given) return given;
+  const score = getFraudScore(payload);
+  if (score !== null) return bandForScore(score);
+  const centrality = toNumber(payload.network_centrality_score);
+  return centrality === null ? '' : bandForScore(Math.round(centrality * 100));
+};
 
 const statusTone = (status) => {
   const value = String(status || '').toLowerCase();
   if (value === 'completed' || value === 'success' || value === 'new') return 'success';
-  if (value === 'failed' || value === 'error') return 'error';
+  // A flagged record reads in red, as its flag does elsewhere.
+  if (value === 'failed' || value === 'error' || value === 'flagged') return 'error';
   if (value === 'resolved') return 'resolved';
   return 'pending';
 };
 
 // One record shape for every tab (H-1). `raw` keeps the backend record.
 export const toReportRecord = (raw = {}, tabId = 'parent') => {
-  const payload = parsePayload(raw.payload);
+  const parsed = parsePayload(raw.payload);
+  // H-1 puts fraud_score / score_band on the record itself; older records
+  // (and the System reports) carry them in the payload. The record's own
+  // win, and the payload gets them so everything reading it agrees.
+  const payload = {
+    ...parsed,
+    ...(raw.fraud_score !== undefined && raw.fraud_score !== null && raw.fraud_score !== '' ? { fraud_score: raw.fraud_score } : {}),
+    ...(raw.score_band ? { score_band: raw.score_band } : {}),
+  };
   const tab = getReportTab(tabId);
   const createdTs = raw.created_at ? new Date(raw.created_at).getTime() : 0;
   const flaggedRules = Array.isArray(payload.flagged_rules)
@@ -182,6 +214,8 @@ export const toReportRecord = (raw = {}, tabId = 'parent') => {
     : payload.flagged_rules ? String(payload.flagged_rules).split(',').map((rule) => rule.trim()).filter(Boolean) : [];
   const flags = raw.flags && typeof raw.flags === 'object' ? raw.flags : payload.flags && typeof payload.flags === 'object' ? payload.flags : null;
   const band = getScoreBand(payload);
+  // The verdict reads only the band the Service itself gave.
+  const serviceBand = String(payload.score_band || payload.scoreBand || '').toLowerCase();
   const isFlagged = Boolean(payload.is_flagged || flaggedRules.length || (flags && Object.values(flags).some((count) => Number(count) > 0)));
   return {
     id: raw.id ?? '',
@@ -205,7 +239,7 @@ export const toReportRecord = (raw = {}, tabId = 'parent') => {
     leadingEntity: (raw.title && String(raw.title)) || getLeadingEntity(payload),
     flaggedRules,
     flags,
-    verdict: raw.verdict || (isFlagged || ['high', 'critical', 'fatal'].includes(band) ? 'suspicious' : ''),
+    verdict: raw.verdict || (isFlagged || ['high', 'critical', 'fatal'].includes(serviceBand) ? 'suspicious' : ''),
     isFlagged,
     graphClaim: getGraphClaim(raw),
     // Moved to cold storage after 180 days (has_graph false; B-31 asks the
@@ -214,6 +248,8 @@ export const toReportRecord = (raw = {}, tabId = 'parent') => {
     // What it was made with (B-42). Evidence saved by an analyst always says:
     // without it, it was not recorded. Other records use the domain's settings.
     runRemark: raw.settings_used ? settingsRemark(readSettingsUsed(raw.settings_used)) : tab.id === 'evidence' && raw.requester_type === 'analyst' ? settingsRemark(null) : null,
+    // The settings themselves (readSettingsUsed), for the run settings popup.
+    runSettings: raw.settings_used ? readSettingsUsed(raw.settings_used) : null,
     domain: typeof raw.domain === 'string' ? raw.domain : '',
     runId: payload.run_id ?? null,
     payload,

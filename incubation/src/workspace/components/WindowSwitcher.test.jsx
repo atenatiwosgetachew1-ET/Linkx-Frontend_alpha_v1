@@ -19,7 +19,7 @@ const WINDOWS = [
   { id: 'table-3', type: 'table', title: 'Table 3', customTitle: 'Placeholder', status: 'placeholder' },
 ];
 
-function Harness({ onClose = vi.fn() }) {
+function Harness({ onClose = vi.fn(), onMinimizeAll }) {
   const [windows, setWindows] = useState(WINDOWS);
   const [activeWindowId, setActive] = useState('table-3');
   const workspace = {
@@ -27,6 +27,7 @@ function Harness({ onClose = vi.fn() }) {
     activeWindowId,
     focusWindow: setActive,
     closeWindow: (id) => { onClose(id); setWindows((current) => current.filter((item) => item.id !== id)); },
+    toggleMinimizeAll: onMinimizeAll,
   };
   return (
     <>
@@ -39,6 +40,16 @@ function Harness({ onClose = vi.fn() }) {
 const rows = () => within(screen.getByRole('listbox', { name: 'Open windows' })).getAllByRole('option').map((row) => row.querySelector('strong').textContent);
 
 describe('WindowSwitcher', () => {
+  it('minimizes all windows with Ctrl+`, also while typing, without switching', () => {
+    const onMinimizeAll = vi.fn();
+    render(<><input aria-label="Notes" /><Harness onMinimizeAll={onMinimizeAll} /></>);
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Notes' }), { key: '`', code: 'Backquote', ctrlKey: true });
+    expect(onMinimizeAll).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId('active')).toHaveTextContent(/^table-3$/);
+    fireEvent.keyDown(window, { key: '`', code: 'Backquote', ctrlKey: true, repeat: true });
+    expect(onMinimizeAll).toHaveBeenCalledTimes(1);
+  });
+
   it('shows the count, lists windows most recent first, and goes back with one Enter', async () => {
     render(<Harness />);
     const button = screen.getByRole('button', { name: 'Switch window: 3 open' });

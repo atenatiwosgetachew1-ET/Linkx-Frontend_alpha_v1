@@ -11,6 +11,7 @@ import { getTasks } from '../features/tasks/lib/taskRegistry.js';
 import { isTaskUnattended } from '../features/tasks/lib/unattendedSeats.js';
 import { loadConfiguration } from '../services/configurationApi.js';
 import { noteDomainChange } from '../features/configuration/lib/domainChanges.js';
+import { loadDomainRegistry, resetDomainRegistry } from '../shared/domains/domainRegistry.js';
 import { formatDomainPillarLabel, getActiveDomainKey, preserveDomainRegistry } from '../features/configuration/lib/configModel.js';
 import { withoutPresentation } from '../features/graph/lib/domainPresentation.js';
 import { isRunGoing } from '../workspace/lib/leaveReasons.js';
@@ -31,7 +32,11 @@ const minutesLabel = (minutes) => `${minutes} minute${minutes === 1 ? '' : 's'}`
 // - timeout: POST /auth/idle-timeout, then logout
 // `children` receives the sign-out action for the workspace menu.
 export default function SessionLifecycle({ isLocked, setLocked, loginLogo, children }) {
-  const { user, token, logout, verifyToken } = useAuth();
+  const { user, token, logout, verifyToken, authMethod } = useAuth();
+  // The auto-login account is one account for every visitor: /auth/logout and
+  // /auth/idle-timeout work on the account and would end the others' sessions
+  // and runs (Service round 4 §2.3). Its token is only dropped here.
+  const sharedAccount = authMethod === 'auto';
   const {
     idleSettings,
     lockBackendSession,
@@ -53,7 +58,7 @@ export default function SessionLifecycle({ isLocked, setLocked, loginLogo, child
     loggingOutRef.current = true;
     try {
       if (isLockedRef.current) await unlockBackendSession({ reason: 'logout_unlock', quiet: true });
-      await notifyBackendLogout(reason);
+      if (!sharedAccount) await notifyBackendLogout(reason);
     } finally {
       setLocked(false);
       unlockFailedRef.current = false;
@@ -61,7 +66,7 @@ export default function SessionLifecycle({ isLocked, setLocked, loginLogo, child
       loggingOutRef.current = false;
       logout();
     }
-  }, [logout, notifyBackendLogout, setLocked, unlockBackendSession]);
+  }, [logout, notifyBackendLogout, setLocked, sharedAccount, unlockBackendSession]);
 
   const handleUnlock = async () => {
     if (isUnlocking || unlockFailedRef.current) return;
@@ -114,7 +119,7 @@ export default function SessionLifecycle({ isLocked, setLocked, loginLogo, child
     },
     onTimeout: async () => {
       // The Service leaves the session of a run with a seat alone.
-      await notifyIdleTimeout();
+      if (!sharedAccount) await notifyIdleTimeout();
       notify({ title: 'Signed out', message: 'You were signed out after inactivity.', source: 'Auth', level: 'warning', durationMs: 8000 });
       performLogout('idle_timeout');
     },
@@ -150,12 +155,28 @@ const DOMAIN_CHANGES = {
   lineage: ['score lineage', 'Runs that start from now on use it.'],
   columns: ['columns', 'The next search and dataframe use them.'],
   mapping: ['column mapping', 'Dataframes made before must be made again.'],
+  profile: ['domain profile', 'Runs that start from now on use it.'],
 };
 
 function DomainChangeNotices() {
   const { socket, apiFetch, mainSessionId, configuration, setConfiguration } = useSession();
   const { notify } = useNotifications();
   const latest = useRef(null);
+
+  // The Service's list of domains (round 4): read once signed in, again when
+  // a superuser creates, deactivates or activates one (`domains_changed`).
+  // A Service without the route leaves the app's own list in place.
+  useEffect(() => {
+    if (!mainSessionId) return undefined;
+    loadDomainRegistry(apiFetch);
+    return () => resetDomainRegistry();
+  }, [apiFetch, mainSessionId]);
+  useEffect(() => {
+    if (!socket) return undefined;
+    const handle = () => { loadDomainRegistry(latest.current.apiFetch); };
+    socket.on('domains_changed', handle);
+    return () => socket.off('domains_changed', handle);
+  }, [socket]);
   latest.current = { apiFetch, mainSessionId, configuration, setConfiguration, notify };
   const announced = useRef('');
 
@@ -164,6 +185,8 @@ function DomainChangeNotices() {
     const handle = async (payload = {}) => {
       const change = noteDomainChange(payload);
       const now = latest.current;
+      // A display name may have changed.
+      if (change?.section === 'profile') loadDomainRegistry(now.apiFetch);
       if (!change || change.domain !== getActiveDomainKey(now.configuration)) return;
       if (!change.own) {
         // A preset says it twice, under one version.

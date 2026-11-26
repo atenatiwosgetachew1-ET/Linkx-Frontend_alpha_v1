@@ -604,7 +604,10 @@ function WorkspaceWindow({ windowItem, stackIndex = 0, isActive, onFocus, onCust
   return (
     <article
       ref={windowRef}
-      className={'workspace_window' + (isActive ? ' is-active' : '') + (isDragging ? ' is-dragging' : '') + (isResizing ? ' is-resizing' : '') + (isMaximized ? ' is-maximized' : '')}
+      className={'workspace_window' + (isActive ? ' is-active' : '') + (isDragging ? ' is-dragging' : '') + (isResizing ? ' is-resizing' : '') + (isMaximized ? ' is-maximized' : '') + (windowItem.minimized ? ' is-minimized' : '')}
+      // Minimized: kept as it is (state, size, graph), only out of sight.
+      aria-hidden={windowItem.minimized ? true : undefined}
+      inert={windowItem.minimized ? true : undefined}
       aria-label={windowItem.customTitle ? windowItem.title + ': ' + windowItem.customTitle : windowItem.title}
       onMouseDown={focusIfInactive}
       style={{
@@ -628,8 +631,8 @@ function WorkspaceWindow({ windowItem, stackIndex = 0, isActive, onFocus, onCust
           <input
             className="workspace_window_custom_title_input"
             type="text"
-            value={windowItem.customTitle ?? windowItem.status ?? 'Placeholder'}
-            placeholder="Placeholder"
+            value={windowItem.customTitle ?? ''}
+            placeholder="Add a label"
             aria-label="Window custom title"
             maxLength={120}
             onPointerDown={stopHeaderControlDrag}

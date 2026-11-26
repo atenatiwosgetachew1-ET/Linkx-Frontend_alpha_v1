@@ -141,4 +141,10 @@
   --right-page-range-thumb-border: var(--right-card-toggle-btn-color);
   --right-page-range-thumb-shadow: rgba(0, 0, 0, 0.18);
   --right-page-range-focus: color-mix(in srgb, var(--right-card-toggle-btn-color) 30%, transparent);
+  /* Scrollbar: the windows' look, under the panel's own names */
+  --right-page-scrollbar-track: transparent;
+  --right-page-scrollbar-thumb: color-mix(in srgb, var(--accent-strong) 40%, transparent);
+  --right-page-scrollbar-thumb-hover: color-mix(in srgb, var(--accent-strong) 65%, transparent);
+  --right-page-scrollbar-thumb-active: color-mix(in srgb, var(--accent-strong) 90%, transparent);
+  --right-page-scrollbar-thumb-border: transparent;
 }

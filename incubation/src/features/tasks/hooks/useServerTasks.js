@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 
 import { useSession } from '../../../shared/session/useSession.js';
 import { hasTaskAwaitingService, setServerTaskOwner } from '../lib/taskRegistry.js';
-import { getServerTaskScope, handleTaskUpdated, loadServerTasks } from '../lib/serverTasks.js';
+import { getServerTaskScope, handleTaskUpdated, loadServerTasks, resetServerTaskLoad } from '../lib/serverTasks.js';
 
 // The signed-in user's tasks from the Service (H-2): loaded once per
 // workspace and kept live with the task_updated socket event. Mounted in
@@ -14,6 +14,8 @@ export function useServerTasks({ user }) {
 
   useEffect(() => {
     setServerTaskOwner({ userId, username });
+    // Another user's list is a first load again (the window shows its loader).
+    resetServerTaskLoad();
     loadServerTasks(apiFetch, { scope: 'mine' });
   }, [apiFetch, userId, username]);
 

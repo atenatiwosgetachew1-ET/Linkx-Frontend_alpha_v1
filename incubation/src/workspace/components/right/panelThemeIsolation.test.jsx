@@ -65,7 +65,7 @@ function Tab({ name }) {
   if (name === 'overview') return <WorkspaceOverviewTab displayName="Analyst" workspace={workspace} canOpenAssistant />;
   if (name === 'info') return <GraphInfoPanel graph={graph} />;
   if (name === 'filter') return <GraphFilterPanel graph={graph} />;
-  return <PanelPage label="Settings"><GraphSettingsPanel graph={graph} /></PanelPage>;
+  return <GraphSettingsPanel graph={graph} />;
 }
 const show = (name) => render(
   <NotificationProvider>
@@ -109,7 +109,7 @@ describe('the right panel’s theme variables', () => {
   it('a card, its title, its rows and a button share no variable', () => {
     const page = show('overview');
     const parts = ['.right_block', '.right_block h4', '.right_rows dt', '.right_rows dd', '.right_toggle', '.right_alert', '.right_assist_open', '.settings_pill', '.settings_masthead']
-      .map((selector) => [selector, variablesOf(page.querySelector(selector)).filter((name) => name.startsWith('--right-page-') && name !== '--right-page-line-focus')]);
+      .map((selector) => [selector, variablesOf(page.querySelector(selector)).filter((name) => name.startsWith('--right-page-') && name !== '--right-page-line-focus' && !name.startsWith('--right-page-scrollbar-'))]);
     parts.forEach(([selector, names]) => expect([selector, names.length > 0]).toEqual([selector, true]));
     parts.forEach(([selector, names], index) => parts.slice(index + 1).forEach(([other, others]) => {
       expect([selector, other, names.filter((name) => others.includes(name))]).toEqual([selector, other, []]);

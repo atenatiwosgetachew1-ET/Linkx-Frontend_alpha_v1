@@ -141,6 +141,14 @@ const CODE_MESSAGES = {
   version_conflict: 'Someone saved another version meanwhile.',
   feature_disabled: 'This is switched off on the Service.',
   use_end_session: 'A running analysis is stopped with Terminate.',
+  domain_inactive: 'This domain is inactive: it takes no new searches, dataframes or runs. Its records stay readable.',
+  domain_exists: 'A domain with this id, or with this id as another name, exists already.',
+  display_name_exists: 'Another domain has this display name.',
+  domain_in_use: 'This domain still has work tied to it, so it cannot be deactivated.',
+  unknown_domain: 'There is no such domain.',
+  rule_name_reserved: 'This rule name belongs to a built-in rule set. Choose another.',
+  relationship_name_reserved: 'A relationship in this rule is a built-in pattern. Rename it.',
+  field_not_editable: 'This part of a domain’s profile cannot be changed from a screen.',
 };
 const SHOW_DETAIL = new Set(['session_limit', 'intake_not_complete', 'invalid_dataframe_filter', 'delivery_failed', 'quick_limit']);
 
@@ -165,6 +173,29 @@ export const getServiceRefusalMessage = (input) => {
   if (SHOW_DETAIL.has(code) && detail) return detail;
   // R2-18: which settings were refused.
   if (code === 'sensitive_keys' || code === 'endpoint_admin_only') {
+    const fields = [payload?.invalid_fields, payload?.fields].find(Array.isArray) || [];
+    const named = fields.filter((field) => typeof field === 'string').slice(0, 6).map((field) => field.slice(0, 60)).join(', ');
+    return named ? `${CODE_MESSAGES[code]} (${named})` : CODE_MESSAGES[code];
+  }
+  if (code === 'domain_inactive') {
+    const domain = String(payload?.domain || '').slice(0, 40);
+    return domain ? `The domain “${domain}” is inactive: it takes no new searches, dataframes or runs. Its records stay readable.` : CODE_MESSAGES[code];
+  }
+  if (code === 'display_name_exists' && detail) return `${CODE_MESSAGES[code]} ${detail}`;
+  if (code === 'rule_name_reserved' || code === 'relationship_name_reserved') {
+    const name = String(payload?.name || '').slice(0, 80);
+    return name ? `“${name}”: ${CODE_MESSAGES[code]}` : CODE_MESSAGES[code];
+  }
+  if (code === 'domain_in_use') {
+    // used_by: [{ type, name, detail }] (round 4 §3).
+    const KINDS = { default_domain: 'it is the default domain (monitoring, and every request that names none)', alert_runs: 'the parent’s alert runs use it', service_account: 'service account' };
+    const uses = (Array.isArray(payload?.used_by) ? payload.used_by : []).slice(0, 6).map((use) => {
+      const kind = KINDS[use?.type] || String(use?.type || '').slice(0, 40);
+      return use?.type === 'service_account' ? `${kind} ${String(use?.name || '').slice(0, 60)}` : kind;
+    }).filter(Boolean);
+    return uses.length ? `${CODE_MESSAGES[code]} Used by: ${uses.join('; ')}.` : CODE_MESSAGES[code];
+  }
+  if (code === 'field_not_editable') {
     const fields = [payload?.invalid_fields, payload?.fields].find(Array.isArray) || [];
     const named = fields.filter((field) => typeof field === 'string').slice(0, 6).map((field) => field.slice(0, 60)).join(', ');
     return named ? `${CODE_MESSAGES[code]} (${named})` : CODE_MESSAGES[code];

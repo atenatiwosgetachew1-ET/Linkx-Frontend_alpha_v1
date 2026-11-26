@@ -486,7 +486,7 @@
 	font-size: 11px;
 }
 
-/* ── Overview, Info and Filter: each block is one card, its heading inside, with a line
+/* ── Overview, Info, Filter and Settings: each block is one card, its heading inside, with a line
    between one card and the next ── */
 .settings_page.right_page.right_cards {
 	--settings-block-header-h4-text: var(--right-page-card-title);
@@ -1090,4 +1090,43 @@
 	border-color: var(--right-collapsed-btn-active-border);
 	background: var(--right-collapsed-btn-active-bg);
 	color: var(--right-collapsed-btn-active-icon);
+}
+
+/* Scrollbar: the windows' look (thickness from the shared --window-scrollbar-width),
+   coloured by the panel's own variables. */
+@supports (-moz-appearance: none) {
+	.workspace_context_tab_body,
+	.workspace_context_tab_body * {
+		scrollbar-width: thin;
+		scrollbar-color: var(--right-page-scrollbar-thumb) var(--right-page-scrollbar-track);
+	}
+}
+
+.workspace_context_tab_body::-webkit-scrollbar,
+.workspace_context_tab_body *::-webkit-scrollbar {
+	width: var(--window-scrollbar-width, 6px);
+	height: var(--window-scrollbar-width, 6px);
+}
+
+.workspace_context_tab_body::-webkit-scrollbar-track,
+.workspace_context_tab_body *::-webkit-scrollbar-track {
+	background: var(--right-page-scrollbar-track);
+	border-radius: 4px;
+}
+
+.workspace_context_tab_body::-webkit-scrollbar-thumb,
+.workspace_context_tab_body *::-webkit-scrollbar-thumb {
+	background: var(--right-page-scrollbar-thumb);
+	border: 1px solid var(--right-page-scrollbar-thumb-border);
+	border-radius: 4px;
+}
+
+.workspace_context_tab_body::-webkit-scrollbar-thumb:hover,
+.workspace_context_tab_body *::-webkit-scrollbar-thumb:hover {
+	background: var(--right-page-scrollbar-thumb-hover);
+}
+
+.workspace_context_tab_body::-webkit-scrollbar-thumb:active,
+.workspace_context_tab_body *::-webkit-scrollbar-thumb:active {
+	background: var(--right-page-scrollbar-thumb-active);
 }

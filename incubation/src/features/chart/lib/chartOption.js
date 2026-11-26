@@ -23,7 +23,7 @@ const PIN_SIZE = 26;
 // Smaller on the heat matrix's cells.
 const HEAT_PIN_SIZE = 18;
 // calloutAt(index): the pin's label text (the entity and its values here).
-const pinsOf = (ids, labels, valueAt, selectedColors, calloutAt = null) => {
+const pinsOf = (ids, labels, valueAt, selectedColors, calloutAt = null, pin = PIN_STYLE) => {
   const data = [];
   for (let index = 0; index < ids.length && data.length < PIN_MAX; index += 1) {
     const id = ids[index];
@@ -32,12 +32,21 @@ const pinsOf = (ids, labels, valueAt, selectedColors, calloutAt = null) => {
     // Beside the pin, towards the middle of the chart (never off its edge).
     data.push({ name: labels[index], entity: id, coord: [index, value], value, itemStyle: { color: selectedColors[id] }, callout: calloutAt ? calloutAt(index) : labels[index], side: index < ids.length / 2 ? 'right' : 'left' });
   }
-  return pinMarks(data);
+  return pinMarks(data, PIN_SIZE, pin);
 };
 // Pins carry a label (what the selected item measures here) while there are
 // at most CALLOUT_MAX of them (analyst decision 2026-11-18: a chart says
 // something about what is selected, not only about all of it).
 export const CALLOUT_MAX = 3;
+// The pins' own colours: the theme's (ChartWindowBody reads them from the
+// window's --chart-pin-* variables), else these, the ones they always had.
+const PIN_STYLE = Object.freeze({ text: '#ffffff', background: 'rgba(19,29,41,0.92)', border: '#ffffff', shadow: 'rgba(0,0,0,0.35)' });
+const pinStyleOf = (theme = {}) => ({
+  text: theme.pinText || PIN_STYLE.text,
+  background: theme.pinBackground || PIN_STYLE.background,
+  border: theme.pinBorder || PIN_STYLE.border,
+  shadow: theme.pinShadow || PIN_STYLE.shadow,
+});
 // A pin as ECharts takes it (the callout text and side are ours).
 const plainPin = (item) => {
   const copy = { ...item };
@@ -45,16 +54,16 @@ const plainPin = (item) => {
   delete copy.side;
   return copy;
 };
-const withCallouts = (data) => (data.length > CALLOUT_MAX ? data : data.map((item) => (item.callout ? {
+const withCallouts = (data, pin = PIN_STYLE) => (data.length > CALLOUT_MAX ? data : data.map((item) => (item.callout ? {
   ...item,
   label: {
     show: true,
     position: item.side || 'right',
     distance: 4,
     formatter: item.callout,
-    color: '#ffffff',
-    backgroundColor: 'rgba(19,29,41,0.92)',
-    borderColor: item.itemStyle?.color || '#ffffff',
+    color: pin.text,
+    backgroundColor: pin.background,
+    borderColor: item.itemStyle?.color || pin.border,
     borderWidth: 1,
     borderRadius: 3,
     padding: [3, 6],
@@ -66,17 +75,17 @@ const withCallouts = (data) => (data.length > CALLOUT_MAX ? data : data.map((ite
 // Pins at given points: [{ name, entity?, coord, value, itemStyle }]. Always
 // given (empty without a selection): a chart updated in place (ChartCard
 // merges recolourings) drops its old pins.
-const pinMarks = (data, size = PIN_SIZE) => ({
+const pinMarks = (data, size = PIN_SIZE, pin = PIN_STYLE) => ({
     markPoint: {
       symbol: 'pin',
       symbolSize: size,
       // The pin's tip (its bottom) on the coordinate.
       symbolOffset: [0, '-50%'],
       label: { show: false },
-      itemStyle: { borderColor: '#ffffff', borderWidth: 1.2, shadowBlur: 4, shadowColor: 'rgba(0,0,0,0.35)' },
+      itemStyle: { borderColor: pin.border, borderWidth: 1.2, shadowBlur: 4, shadowColor: pin.shadow },
       emphasis: { scale: 1.15 },
       animation: false,
-      data: withCallouts(data.slice(0, PIN_MAX)).map(plainPin),
+      data: withCallouts(data.slice(0, PIN_MAX), pin).map(plainPin),
     },
 });
 // A pin where there is no entity axis to zoom along (bins, cells, pairs).
@@ -143,7 +152,7 @@ const singular = (noun) => (noun.endsWith('ies') ? `${noun.slice(0, -3)}y` : nou
 // Bins (Histogram, Degree Distribution, Community Sizes): a bar per bin,
 // labelled; a bin holding something selected on the graph in its colour; a
 // click selects the bin's members.
-const binsOption = (result, { base, muted, colorful, schema, selectedColors, names = {} }) => {
+const binsOption = (result, { base, muted, colorful, schema, selectedColors, names = {}, pin = PIN_STYLE }) => {
   const bins = result.bins || [];
   const range = valueRange(bins.map((bin) => bin.value));
   const noun = (result.yName || 'items').toLowerCase();
@@ -187,7 +196,7 @@ const binsOption = (result, { base, muted, colorful, schema, selectedColors, nam
         ...pinMarks(bins.flatMap((bin, index) => {
           const hit = selectedAmong(bin.members, selectedColors);
           return hit ? [{ name: bin.label, coord: [index, bin.value], value: bin.value, itemStyle: { color: hit.color }, callout: `${names[hit.id] ?? hit.id} \u00b7 ${bin.label} (${formatValue(bin.value)} ${bin.value === 1 ? singular(noun) : noun})`, side: index < bins.length / 2 ? 'right' : 'left' }] : [];
-        })),
+        }), PIN_SIZE, pin),
       }],
     },
   };
@@ -196,7 +205,7 @@ const binsOption = (result, { base, muted, colorful, schema, selectedColors, nam
 // Heat Matrix: weekdays down, hours across; a cell's shade by its links (the
 // card's schema, else grey); a cell holding a selected link outlined in its
 // colour; a click selects the cell's links.
-const heatmapOption = (result, { base, muted, colorful, schema, selectedColors, theme }) => {
+const heatmapOption = (result, { base, muted, colorful, schema, selectedColors, theme, pin = PIN_STYLE }) => {
   const cells = result.cells || [];
   const top = Math.max(1, ...cells.map((cell) => cell.value));
   const ramp = [0, 0.25, 0.5, 0.75, 1].map((t) => colorForValue(t, [0, 1], { colorful, schema }));
@@ -224,7 +233,7 @@ const heatmapOption = (result, { base, muted, colorful, schema, selectedColors, 
         ...pinMarks(cells.flatMap((cell) => {
           const hit = selectedAmong(cell.members, selectedColors);
           return hit ? [{ name: `${result.days[cell.day]} ${result.hours[cell.hour]}`, coord: [cell.hour, cell.day], value: cell.value, itemStyle: { color: hit.color }, callout: `${result.days[cell.day]} ${result.hours[cell.hour]} \u00b7 ${formatValue(cell.value)} links`, side: cell.hour < result.hours.length / 2 ? 'right' : 'left' }] : [];
-        }), HEAT_PIN_SIZE),
+        }), HEAT_PIN_SIZE, pin),
         emphasis: { itemStyle: { shadowBlur: 6, shadowColor: 'rgba(0,0,0,0.3)' } },
       }],
     },
@@ -261,6 +270,7 @@ export const buildChartOption = (result, {
   const text = theme.text || '#222222';
   const muted = theme.muted || '#777777';
   const line = theme.line || '#333333';
+  const pin = pinStyleOf(theme);
   const base = {
     animationDurationUpdate: 400,
     animationEasingUpdate: 'cubicOut',
@@ -283,8 +293,8 @@ export const buildChartOption = (result, {
   // Temporal Metrics: the measures as lines over the periods (gaps where a
   // period has nothing to measure), the period's links as bars behind them.
   if (result?.form === 'time') return timeOption(result, { base, text, muted, colorful, schema });
-  if (result?.form === 'bins') return binsOption(result, { base, muted, colorful, schema, selectedColors, names });
-  if (result?.form === 'heatmap') return heatmapOption(result, { base, muted, colorful, schema, selectedColors, theme });
+  if (result?.form === 'bins') return binsOption(result, { base, muted, colorful, schema, selectedColors, names, pin });
+  if (result?.form === 'heatmap') return heatmapOption(result, { base, muted, colorful, schema, selectedColors, theme, pin });
   const series = result?.series || [];
   if (!series.length) return { option: base, ids: [], empty: true };
   const ids = sortedIdsOf(result);
@@ -321,7 +331,7 @@ export const buildChartOption = (result, {
     const id = ids[index];
     const parts = series.map((entry) => (series.length > 1 ? `${entry.name} ${formatValue(entry.values[id])}` : formatValue(entry.values[id])));
     return `${labels[index]} \u00b7 ${parts.join(' \u00b7 ')}`;
-  });
+  }, pin);
   const axes = {
     grid: { top: result.form === 'dualbar' ? 30 : 14, bottom: 30, left: 8, right: 14, containLabel: true },
     xAxis: {
@@ -358,7 +368,7 @@ export const buildChartOption = (result, {
             itemStyle: { color: selectedColors[key] || colorForValue(values[key][0] + values[key][1], range, { colorful, schema }) },
           })),
           // A pin on each selected link's point.
-          ...pinMarks(keys.filter((key) => selectedColors[key]).map((key) => ({ name: names[key] ?? key, coord: values[key], value: values[key][1], itemStyle: { color: selectedColors[key] }, callout: `${names[key] ?? key} \u00b7 degrees ${values[key][0]} \u00b7 ${values[key][1]}` }))),
+          ...pinMarks(keys.filter((key) => selectedColors[key]).map((key) => ({ name: names[key] ?? key, coord: values[key], value: values[key][1], itemStyle: { color: selectedColors[key] }, callout: `${names[key] ?? key} \u00b7 degrees ${values[key][0]} \u00b7 ${values[key][1]}` })), PIN_SIZE, pin),
         }],
       },
     };

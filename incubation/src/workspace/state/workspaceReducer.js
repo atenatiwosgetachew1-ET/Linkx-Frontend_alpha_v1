@@ -25,6 +25,11 @@ const MULTI_INSTANCE_WINDOW_TYPES = new Set([
 
 const buildWindowId = (type, index) => `${type}-${index}`;
 
+// A window brought forward is no longer minimized.
+const unminimize = (windows, id) => (windows.some((windowItem) => windowItem.id === id && windowItem.minimized)
+  ? windows.map((windowItem) => (windowItem.id === id ? { ...windowItem, minimized: false } : windowItem))
+  : windows);
+
 // The Source window owns its defaults (features/source/lib/sourceModel.js
 // defaultSourceState, applied by mergeSourceState); only the initial mode and
 // any caller-provided state are stored here.
@@ -44,7 +49,7 @@ const createWindow = (type, index, metadata = {}, instanceNumber = 1) => {
     id: metadata.id || buildWindowId(type, index),
     type,
     title: defaultTitle,
-    customTitle: metadata.customTitle || metadata.status || 'Placeholder',
+    customTitle: metadata.customTitle || '',
     status: metadata.status || 'placeholder',
     instanceNumber,
     parentSessionId: metadata.parentSessionId || '',
@@ -71,11 +76,11 @@ export function workspaceReducer(state, action) {
         const metadata = action.payload?.metadata;
         return {
           ...state,
-          windows: metadata && typeof metadata === 'object'
+          windows: unminimize(metadata && typeof metadata === 'object'
             ? state.windows.map((windowItem) => (windowItem.id === existingWindow.id
               ? { ...windowItem, metadata: { ...windowItem.metadata, ...metadata } }
               : windowItem))
-            : state.windows,
+            : state.windows, existingWindow.id),
           activeWindowId: existingWindow.id,
           contextTab: action.payload?.contextTab || state.contextTab,
         };
@@ -87,7 +92,7 @@ export function workspaceReducer(state, action) {
       if (limitBlock) {
         const latestOfType = state.windows.filter((windowItem) => windowItem.type === windowType).at(-1)
           || state.windows.filter((windowItem) => limitBlock.types.includes(windowItem.type)).at(-1);
-        return latestOfType ? { ...state, activeWindowId: latestOfType.id } : state;
+        return latestOfType ? { ...state, windows: unminimize(state.windows, latestOfType.id), activeWindowId: latestOfType.id } : state;
       }
 
       const instanceNumber = state.windows.filter((windowItem) => windowItem.type === windowType).length + 1;
@@ -118,12 +123,20 @@ export function workspaceReducer(state, action) {
 
     case WORKSPACE_ACTIONS.FOCUS_WINDOW: {
       const windowId = action.payload?.id;
-      if (!windowId || state.activeWindowId === windowId) return state;
-      if (!state.windows.some((windowItem) => windowItem.id === windowId)) return state;
+      if (!windowId || !state.windows.some((windowItem) => windowItem.id === windowId)) return state;
+      const windows = unminimize(state.windows, windowId);
+      if (state.activeWindowId === windowId && windows === state.windows) return state;
       return {
         ...state,
+        windows,
         activeWindowId: windowId,
       };
+    }
+
+    case WORKSPACE_ACTIONS.TOGGLE_MINIMIZE_ALL: {
+      if (!state.windows.length) return state;
+      const minimized = !state.windows.every((windowItem) => windowItem.minimized);
+      return { ...state, windows: state.windows.map((windowItem) => ({ ...windowItem, minimized })) };
     }
 
     case WORKSPACE_ACTIONS.REORDER_WINDOWS: {

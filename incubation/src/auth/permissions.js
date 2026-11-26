@@ -6,7 +6,7 @@ import { useSyncExternalStore } from 'react';
 
 export const PERMISSION_GROUPS = Object.freeze([
   { label: 'Session', items: ['session:create', 'session:read'] },
-  { label: 'Configuration', items: ['config:read', 'config:write'] },
+  { label: 'Configuration', items: ['config:read', 'config:write', 'domains:manage'] },
   { label: 'Source', items: ['source:create', 'source:connect', 'source:disconnect'] },
   { label: 'Graph', items: ['graph:create', 'graph:read', 'graph:link'] },
   { label: 'Batch', items: ['batch:upload', 'batch:query'] },
@@ -23,7 +23,7 @@ export const ALL_PERMISSIONS = Object.freeze(PERMISSION_GROUPS.flatMap((group) =
 // Compact grouping used by the Users browser's privilege matrix.
 export const USER_PERMISSION_DISPLAY_GROUPS = Object.freeze([
   { label: 'Session', items: ['session:create', 'session:read'] },
-  { label: 'Configuration', items: ['config:read', 'config:write'] },
+  { label: 'Configuration', items: ['config:read', 'config:write', 'domains:manage'] },
   { label: 'Source', items: ['source:create', 'source:connect', 'source:disconnect'] },
   { label: 'Data & Analysis', items: ['batch:upload', 'batch:query', 'analysis:run', 'columns:override', 'mapping:override'] },
   { label: 'Graph', items: ['graph:create', 'graph:read', 'graph:link'] },

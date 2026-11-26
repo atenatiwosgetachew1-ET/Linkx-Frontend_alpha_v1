@@ -288,6 +288,20 @@ describe('TableWindowBody', () => {
     expect(await screen.findByText('The linked Graph window was closed')).toBeInTheDocument();
   });
 
+  it('an empty graph still fetching: the loader; failed: says so; truly empty: no data yet', async () => {
+    const { store } = setup();
+    act(() => {
+      store.replace({ nodes: [], edges: [] });
+      store.setStatus({ state: 'queued', message: 'Queued…' });
+    });
+    expect(await screen.findByText('Loading the graph…')).toBeInTheDocument();
+    act(() => store.setStatus({ state: 'error', message: 'The Service refused the request.' }));
+    expect(await screen.findByText('The linked graph could not be loaded.')).toBeInTheDocument();
+    expect(screen.getByText('The Service refused the request.')).toBeInTheDocument();
+    act(() => store.setStatus({ state: 'empty' }));
+    expect(await screen.findByText('The linked graph has no data yet.')).toBeInTheDocument();
+  });
+
   it("the Graph window's toolbar: linked graph, counts, Follow selection as a toggle", async () => {
     setup();
     const follow = await screen.findByRole('button', { name: 'Follow selection' });

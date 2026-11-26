@@ -15,7 +15,7 @@ const words = (value, max = 200) => (Array.isArray(value) ? value.map((item) => 
 
 const COLUMN_LISTS = ['fetch_columns', 'search_columns_strict', 'search_columns_fuzzy'];
 const LIST_NAMES = { fetch_columns: 'fetch columns', search_columns_strict: 'strict search columns', search_columns_fuzzy: 'fuzzy search columns' };
-const VERSIONS = ['thresholds', 'preset', 'mapping', 'columns'];
+const VERSIONS = ['thresholds', 'preset', 'mapping', 'columns', 'profile']; // profile: round 4
 
 // -> { domain, versions, overridden, columns: { list: { added, removed } },
 //      mapping: { source: target }, by, missingFields: [..] | null } | null

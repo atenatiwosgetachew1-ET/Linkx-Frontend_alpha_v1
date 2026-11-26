@@ -163,6 +163,7 @@ export const SETTINGS_THEME_CATEGORIES = [
       { key: '--settings-launch-icon-text', label: "Launch card icon — Text", type: 'color', default: "var(--settings-accent-text)" },
       { key: '--settings-launch-text-strong-text', label: "Launch card text title — Text", type: 'color', default: "var(--settings-text)" },
       { key: '--settings-launch-text-small-text', label: "Launch card text note — Text", type: 'color', default: "var(--settings-text-secondary)" },
+      { key: '--settings-error-border', label: "Error box — Border", type: 'color', default: "rgba(209, 0, 0, 0.24)" },
     ],
   },
   {
@@ -378,6 +379,7 @@ export const SETTINGS_THEME_CATEGORIES = [
       { key: '--settings-service-target-domain-card-border', label: "Domain card — Border", type: 'color', default: "var(--settings-card-border)" },
       { key: '--settings-service-target-domain-card-bg', label: "Domain card — Background", type: 'color', default: "var(--settings-card-bg)" },
       { key: '--settings-service-target-domain-card-text', label: "Domain card — Text", type: 'color', default: "var(--settings-text)" },
+      { key: '--settings-service-target-tab-border', label: "Pattern chip — Border", type: 'color', default: "rgba(127, 127, 127, 0.25)" },
       { key: '--settings-service-target-domain-card-small-text', label: "Domain card note — Text", type: 'color', default: "var(--settings-text-muted)" },
       { key: '--settings-service-target-domain-card-span-text', label: "Domain card text — Text", type: 'color', default: "var(--settings-text-secondary)" },
       { key: '--settings-service-target-domain-card-registered-border', label: "Domain card (registered) — Border", type: 'color', default: "var(--settings-accent)" },
@@ -474,6 +476,11 @@ export const SETTINGS_THEME_CATEGORIES = [
       { key: '--settings-theme-studio-cat-badge-text', label: "Cat badge — Text", type: 'color', default: "#131e2a" },
       { key: '--settings-theme-studio-empty-search-text', label: "Empty search — Text", type: 'color', default: "#4a5568" },
       { key: '--settings-theme-studio-search-hint-text', label: "Search hint — Text", type: 'color', default: "var(--muted-text)" },
+      { key: '--settings-studio-menu-shadow', label: "Menu list — Shadow", type: 'text', default: "0 8px 20px rgba(0, 0, 0, 0.16)" },
+      { key: '--settings-theme-option-shadow', label: "Theme card — Shadow", type: 'text', default: "0 2px 8px rgba(0, 0, 0, 0.15)" },
+      { key: '--settings-theme-option-hover-shadow', label: "Theme card (hover) — Shadow", type: 'text', default: "0 4px 12px rgba(0, 0, 0, 0.25)" },
+      { key: '--settings-theme-option-selected-shadow', label: "Theme card (selected) — Shadow (after the accent ring)", type: 'text', default: "0 4px 16px rgba(0, 0, 0, 0.3)" },
+      { key: '--settings-theme-badge-shadow', label: "Theme colour badge — Shadow", type: 'text', default: "0 0 6px rgba(0, 0, 0, 0.4)" },
     ],
   },
 ];

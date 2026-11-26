@@ -102,6 +102,17 @@ describe('LibrariesWindowBody: rules library (moved from Configuration)', () => 
     expect(within(rowOf('my_rule')).getByText('Built-in')).toBeInTheDocument();
   });
 
+  it('Reload shows the loader and tells a failure', async () => {
+    let fail;
+    const apiFetch = vi.fn(() => new Promise((resolve, reject) => { fail = reject; }));
+    render(<Harness apiFetch={apiFetch} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Reload' }));
+    expect(screen.getByText('Loading rules…')).toBeInTheDocument();
+    fail(new Error('offline'));
+    expect(await screen.findByText('Rules not loaded')).toBeInTheDocument();
+    expect(screen.queryByText('Loading rules…')).not.toBeInTheDocument();
+  });
+
   it('is read-only without config:write and hidden without config:read', () => {
     const { unmount } = render(<Harness apiFetch={vi.fn()} permissions={['config:read']} />);
     expect(within(rowOf('my_rule')).getByRole('button', { name: 'Remove' })).toBeDisabled();

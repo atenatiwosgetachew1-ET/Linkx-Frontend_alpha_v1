@@ -8,6 +8,9 @@ import { cardStats } from '../lib/chartStats.js';
 import { cancelChartWork, scheduleChartWork } from '../lib/chartScheduler.js';
 import StrokeIcon from '../../../shared/icons/StrokeIcon.jsx';
 import { TOOL_ICONS } from '../../../shared/icons/windowIcons.js';
+import WindowLoadScreen from '../../../shared/components/WindowLoadScreen.jsx';
+
+const COMPUTING = 'Computing…';
 
 // ECharts on demand (its own chunk), loaded once for every card: a whole
 // category of cards comes up at the same moment.
@@ -267,7 +270,7 @@ function ChartCard({
   let status = '';
   if (engineError && !isFigures) status = engineError;
   else if (state?.status === 'error') status = state.error;
-  else if (!ready) status = 'Computing…';
+  else if (!ready) status = COMPUTING;
   else if (built?.empty) status = 'Nothing to chart in this scope.';
 
   // With what is selected on the graph first (its value, rank, name).
@@ -358,7 +361,8 @@ function ChartCard({
         ) : null}
         <div ref={boxRef} className="chart_card_box" hidden={Boolean(status) || isFigures} />
         {zoomHint && !status ? <span className="chart_card_zoom_hint" role="status">Hold Ctrl and scroll to zoom · Ctrl + drag to slide</span> : null}
-        {status ? <p className={`chart_card_status${state?.status === 'error' || engineError ? ' is-error' : ''}`} role="status">{status}</p> : null}
+        {status === COMPUTING ? <WindowLoadScreen className="is-block chart_card_loader" label={COMPUTING} />
+          : status ? <p className={`chart_card_status${state?.status === 'error' || engineError ? ' is-error' : ''}`} role="status">{status}</p> : null}
       </div>
       {footnote ? <footer className="chart_card_footer" title={footnote}>{footnote}</footer> : null}
     </article>

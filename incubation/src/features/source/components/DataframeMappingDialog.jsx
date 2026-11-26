@@ -1,5 +1,6 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
 
+import WindowLoadScreen from '../../../shared/components/WindowLoadScreen.jsx';
 import { mappableFields, mappingPayload, mappingProblem, pickedOf } from '../lib/dataframeMapping.js';
 
 // Dataframe ▸ Map columns… (B-41): a column mapping for this dataframe only.
@@ -8,7 +9,7 @@ import { mappableFields, mappingPayload, mappingProblem, pickedOf } from '../lib
 //
 // info: the dataframe's ({ missingFields, sourceColumns, ownMapping });
 // draft: { target: source } as last picked; required: the domain's required
-// fields (groups of alternatives); message: why the last one was refused;
+// fields (groups of alternatives), null while they are fetched; message: why the last one was refused;
 // onApply({ source: target }); onCancel(draft).
 export default function DataframeMappingDialog({ info, draft = null, required = [], domainLabel = '', message = '', onApply, onCancel }) {
   const fields = mappableFields(info);
@@ -25,7 +26,7 @@ export default function DataframeMappingDialog({ info, draft = null, required = 
     return () => document.removeEventListener('keydown', onKey);
   }, [onCancel, picked]);
 
-  const isRequired = (field) => required.some((group) => group.some((name) => name.toUpperCase() === field.toUpperCase()));
+  const isRequired = (field) => (required || []).some((group) => group.some((name) => name.toUpperCase() === field.toUpperCase()));
   const ordered = [...fields].sort((a, b) => Number(isRequired(b)) - Number(isRequired(a)) || a.localeCompare(b));
   const mapping = mappingPayload(picked);
   const problem = mappingProblem(picked);
@@ -49,7 +50,7 @@ export default function DataframeMappingDialog({ info, draft = null, required = 
         <div className="source_window_df_filter_panel">
           {message ? <p className="source_window_validation" role="alert">{message}</p> : null}
           <p className="source_window_df_filter_note">Say which column of the data holds a field it does not have under its own name. Everything made from this dataframe will say so.</p>
-          {ordered.length ? (
+          {required === null ? <WindowLoadScreen className="is-block" label="Loading the domain’s fields…" /> : ordered.length ? (
             <ul className="source_window_df_mapping" aria-label="Fields the data does not have">
               {ordered.map((field) => (
                 <li key={field}>

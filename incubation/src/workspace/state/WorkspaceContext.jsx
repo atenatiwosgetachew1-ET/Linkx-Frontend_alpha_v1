@@ -54,6 +54,7 @@ function createWorkspaceActions(dispatch, { getWindows, getNextWindowIndex, onLi
     }),
     restoreWindows: (payload) => dispatch({ type: WORKSPACE_ACTIONS.RESTORE_WINDOWS, payload }),
     clearWindows: () => dispatch({ type: WORKSPACE_ACTIONS.CLEAR_WINDOWS }),
+    toggleMinimizeAll: () => dispatch({ type: WORKSPACE_ACTIONS.TOGGLE_MINIMIZE_ALL }),
   };
 }
 

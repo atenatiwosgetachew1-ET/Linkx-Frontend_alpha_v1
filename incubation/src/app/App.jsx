@@ -32,6 +32,7 @@ import { NotificationProvider } from '../shared/notifications/NotificationContex
 import { ThemeProvider, useTheme } from '../shared/theme/ThemeContext.jsx';
 import { appConfig } from './config.js';
 import TooltipLayer from '../shared/components/TooltipLayer.jsx';
+import WindowLoadScreen from '../shared/components/WindowLoadScreen.jsx';
 
 import SessionLifecycle from './SessionLifecycle.jsx';
 
@@ -89,9 +90,14 @@ function SessionWorkspaceFrame({ user, token, onSignOut }) {
   );
 }
 function IncubationApp() {
-  const { isAuthReady, isAuthenticated, isSsoAuthenticating, ssoError, login } = useAuth();
+  const { isAuthReady, isAuthenticated, isSsoAuthenticating, ssoError, login, signInRequested, continueWithDefault } = useAuth();
 
   if (appConfig.authDisabled) {
+    // Auto-login on: after a sign-out, anyone may sign in with their own
+    // username and password (a superuser, round 4) or go on as before.
+    if (signInRequested && !isAuthenticated) {
+      return <LoginPage onLogin={login} ssoError={ssoError} isSsoAuthenticating={isSsoAuthenticating} onContinueDefault={continueWithDefault} />;
+    }
     return <IncubationShell />;
   }
 
@@ -108,6 +114,7 @@ function IncubationApp() {
               </div>
               <small>Preparing login</small>
             </div>
+            <WindowLoadScreen className="is-block" label="Preparing sign-in…" />
           </section>
         </div>
       </main>

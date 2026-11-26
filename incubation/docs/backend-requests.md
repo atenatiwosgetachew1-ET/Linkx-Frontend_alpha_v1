@@ -729,3 +729,27 @@ and, on `create_DF` for a batch source, `limits: { "last_seconds": 3600, "time_c
 | Later | B-4, B-10 (exists, report if not), B-11 and B-13 for the session |
 
 Frontend for B-40 to B-48: built 2026-11-25, not run on the live Service. Next free number: **B-49**.
+
+---
+
+### B-49. Domains managed by a superuser (Service round 4, `domains:manage`)
+
+**Asked by the Service** on 2026-11-26 (`service-request-round-4-2026-11-26.md`); our answer is `frontend-reply-round-4-2026-11-26.md`. Proposed routes: `GET /domains`, `GET /rule-sets`, `GET/PATCH /domains/<id>/profile`, `POST /domains`, `…/profile/history`, `…/deactivate`, `…/activate`; events `domain_config_changed` `section: "profile"` and `domains_changed`; refusal `domain_inactive`.
+
+**We asked in return:** confirm `/auth/login` with auto-login on and the token lifetime; whether `/auth/logout` of the shared auto-login account ends other visitors' sessions; unique display names; what deactivation does to open sessions; refuse deactivating a domain still in use; field names and `type` values; `domains_changed` payload; a code for refused rule uploads.
+
+**Frontend:** built 2026-11-26 against the proposal (Configuration ▸ Domain profiles; selectors read `GET /domains`; sign-in page after Sign out when auto-login is on). Hidden while the routes answer 404. Not run on the Service.
+
+**Answered 2026-11-26** (`service-response-round-4-2026-11-26.md`): all **Next** (live with the Service's next deployment). Display names unique, `domain_in_use`, rule-upload codes: Next. Our field names refused (we use theirs); no refresh route for password sign-ins. `/auth/logout` ends every session of the account, so the auto-login account now signs out without it (and without `/auth/idle-timeout`); this browser's Source window sessions are closed instead. Frontend aligned the same day.
+
+---
+
+### B-50. Tasks ended per day, counted by the Service (System panel, P3)
+
+**Why:** the System panel's "tasks ended, last 7 days" chart is counted from the tasks the app holds, and it holds its last 50 (`MAX_TASKS`, `taskRegistry.js`). For a busy analyst, and for a supervisor's "All tasks", the earlier days of the week can be short. The panel says so on the card when that can be the case (`weekMayBeShort`, `dashboardModel.js`), but cannot give the true count.
+
+**Asked:** a count by day, for example `GET /api/v1/tasks/summary?scope=mine|all&days=7` → `{ days: [{ date: "2026-11-26", completed, failed, terminated }] }`, with `scope=all` under `tasks:read_all` as for `GET /api/v1/tasks`. Days in the Service's time zone, named in the answer. Running tasks are not needed.
+
+**Frontend until then:** the chart counts what the app holds and carries the note. Asked 2026-11-26; not sent in a round yet.
+
+Next free number: **B-51**.

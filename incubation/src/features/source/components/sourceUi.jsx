@@ -228,6 +228,9 @@ export function RequiredBadge({ filled }) {
   );
 }
 
+// The "?" on a field the run does not need (its default is used when empty).
+const OPTIONAL_FIELD_TIP = 'Optional: left empty, the default is used.';
+
 export function DataframeField({ label, icon = 'table', required = false, filled = false, children }) {
   const isMissing = required && !filled;
   return (
@@ -235,7 +238,7 @@ export function DataframeField({ label, icon = 'table', required = false, filled
       <span className="source_window_dataframe_field_label">
         <SourceModeIcon type={icon} />
         <strong>{label}</strong>
-        {required ? <RequiredBadge filled={filled} /> : <i aria-hidden="true">?</i>}
+        {required ? <RequiredBadge filled={filled} /> : <i className="linkx_tooltip_anchor" role="img" aria-label={OPTIONAL_FIELD_TIP} data-tooltip={OPTIONAL_FIELD_TIP}>?</i>}
       </span>
       {children}
     </label>

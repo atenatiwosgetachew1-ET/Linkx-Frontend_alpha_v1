@@ -15,7 +15,8 @@ const fallbackLoginBackgroundImage = "/site_images/Linkx_background_basic.webp";
 const loginLogo = import.meta.env.BASE_URL + "site_images/Linkx square Icon (256x256).png";
 const genericLoginError = "Unable to sign in at this time. Please try again later.";
 
-export default function LoginPage({ onLogin, ssoError = "", isSsoAuthenticating = false }) {
+// onContinueDefault: with auto-login on, the way back to the default account.
+export default function LoginPage({ onLogin, ssoError = "", isSsoAuthenticating = false, onContinueDefault = null }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -150,10 +151,16 @@ export default function LoginPage({ onLogin, ssoError = "", isSsoAuthenticating 
               required
             />
           </label>
-          {(error || ssoError) && <div className="linkx_login_error">{error || ssoError}</div>}
+          {(error || ssoError) && <div className="linkx_login_error" role="alert">{error || ssoError}</div>}
           <button type="submit" disabled={isSubmitting || isSsoAuthenticating}>
-            {isSsoAuthenticating ? "Completing SSO..." : isSubmitting ? "Signing in..." : "Sign in"}
+            {isSsoAuthenticating ? "Completing SSO…" : isSubmitting ? "Signing in…" : "Sign in"}
           </button>
+          {onContinueDefault ? (
+            <>
+              <p className="linkx_login_note">You are signed out. Sign in with your own username and password, or continue with the default account.</p>
+              <button type="button" className="linkx_login_secondary" disabled={isSubmitting} onClick={onContinueDefault}>Continue with the default account</button>
+            </>
+          ) : null}
         </form>
       </section>
       </div>

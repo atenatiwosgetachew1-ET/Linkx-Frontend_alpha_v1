@@ -187,7 +187,7 @@ function RuleThresholds({ windowId, apiFetch, domain, isCdr, canManage, notify, 
         description={canManage ? 'What a rule must see before it raises a finding, for everyone in this domain. Only what you change is saved.' : 'You need users:manage to change detection thresholds.'}
         actions={canManage ? (
           <>
-            {dirty ? <button type="button" className="settings_button" disabled={saving} onClick={discard}>Discard changes</button> : null}
+            {dirty ? <button type="button" className="settings_button is-danger" disabled={saving} onClick={discard}>Discard changes</button> : null}
             <button type="button" className="settings_button" disabled={saving} onClick={handleReset}>{fromService ? 'Fill in defaults' : 'Fill in built-in defaults'}</button>
             <button type="button" className="settings_button settings_primary" disabled={saving || !dirty || Object.keys(problems).length > 0} onClick={handleSave}>{saving ? 'Saving…' : dirty ? `Save ${changed.length} changed` : 'Save thresholds'}</button>
           </>
@@ -438,7 +438,7 @@ function ScoreLineage({ windowId, apiFetch, domain, isCdr, canManage, notify, re
       description={canManage ? "How a finding's risk score is built, for everyone in this domain: points per typology, then points added by scale. Each save is a new version." : 'You need users:manage to change the score lineage.'}
       actions={canManage ? (
         <>
-          {dirty ? <button type="button" className="settings_button" disabled={saving} onClick={reload}>Discard changes</button> : null}
+          {dirty ? <button type="button" className="settings_button is-danger" disabled={saving} onClick={reload}>Discard changes</button> : null}
           <button type="button" className="settings_button settings_primary" disabled={saving || !dirty} onClick={handleSave}>{saving ? 'Saving…' : 'Save new version'}</button>
         </>
       ) : null}

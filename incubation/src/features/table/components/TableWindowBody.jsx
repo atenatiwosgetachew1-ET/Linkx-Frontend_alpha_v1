@@ -6,6 +6,7 @@ import { graphDataNotice } from '../../graph/lib/graphDataNotice.js';
 import RunRemarkFlag from '../../../shared/components/RunRemarkFlag.jsx';
 import { runRemark, runSettingsCell } from '../../../shared/runSettings.js';
 import { getGraphStore, hasGraphStore } from '../../graph/lib/graphStore.js';
+import WindowLoadScreen from '../../../shared/components/WindowLoadScreen.jsx';
 import { getGraphState, requestGraphAction, subscribeGraphState } from '../../graph/lib/graphLinkBus.js';
 import StrokeIcon from '../../../shared/icons/StrokeIcon.jsx';
 import { TABLE_ICON, TOOL_ICONS } from '../../../shared/icons/windowIcons.js';
@@ -395,8 +396,14 @@ export default function TableWindowBody({ windowItem }) {
     else { counts.nodes = link.nodeIds.length; counts.links = link.edgeIds.length; }
   }
 
+  // Nothing drawn yet: the Graph window may still be fetching, or have failed.
+  const graphStatus = (store && !snapshot.nodes && snapshot.status) || {};
+  const graphLoading = graphStatus.state === 'loading' || graphStatus.state === 'queued';
+  const graphError = graphStatus.state === 'error' ? graphStatus.message || '' : '';
   let empty = '';
-  if (!store || !snapshot.nodes) empty = 'The linked graph has no data yet.';
+  if (graphLoading) empty = 'Loading the graph…';
+  else if (graphStatus.state === 'error') empty = 'The linked graph could not be loaded.';
+  else if (!store || !snapshot.nodes) empty = 'The linked graph has no data yet.';
   else if (!link.live && state.scope !== 'all') empty = 'Waiting for the Graph window…';
   else if (!allRows.length) empty = state.scope === 'selected' ? `Nothing selected on the graph. Select ${nodesTab ? 'nodes' : 'links'} there, or switch the scope.` : `No ${nodesTab ? 'nodes' : 'links'} in this scope.`;
   else if (!rows.length) empty = 'No rows match the filter.';
@@ -461,8 +468,10 @@ export default function TableWindowBody({ windowItem }) {
             </button>
           </div>
         </div>
-        {empty ? (
-          <div className="table_state" role="status"><p>{empty}</p></div>
+        {graphLoading ? (
+          <WindowLoadScreen className="is-block" label="Loading the graph…" />
+        ) : empty ? (
+          <div className="table_state" role="status"><p>{empty}</p>{graphError ? <p>{graphError}</p> : null}</div>
         ) : (
           <div
             ref={scrollRef}

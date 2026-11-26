@@ -163,4 +163,23 @@ describe('getDomainDistribution', () => {
     expect(getDomainDistribution({})).toEqual([]);
     expect(getDomainDistribution({ domain_distribution: 'bank' })).toEqual([]);
   });
+
+  it('takes the score band from the fraud score when the Service gave none', () => {
+    expect(toReportRecord({ id: 1, payload: { fraud_score: 85 } }, 'evidence').scoreBand).toBe('critical');
+    expect(toReportRecord({ id: 2, payload: { fraud_score: 19.9 } }, 'evidence').scoreBand).toBe('low');
+    expect(toReportRecord({ id: 3, payload: { fraud_score: 90 } }, 'evidence').scoreBand).toBe('fatal');
+    expect(toReportRecord({ id: 4, payload: { fraud_score: 30, score_band: 'High' } }, 'evidence').scoreBand).toBe('high');
+    expect(toReportRecord({ id: 5, payload: { is_flagged: true } }, 'evidence').scoreBand).toBe('');
+  });
+
+  it('reads the H-1 record-level fraud score and band before the payload', () => {
+    expect(toReportRecord({ id: 1, fraud_score: 87, score_band: 'High', payload: {} }, 'evidence')).toMatchObject({ fraudScore: 87, scoreLabel: '87', scoreBand: 'high' });
+    expect(toReportRecord({ id: 2, fraud_score: 92, payload: { is_flagged: true } }, 'evidence')).toMatchObject({ fraudScore: 92, scoreBand: 'fatal' });
+    expect(toReportRecord({ id: 3, payload: { fraud_score: 40, score_band: 'medium' } }, 'xvigilance').scoreBand).toBe('medium');
+  });
+
+  it('bands the centrality percentage when there is no fraud score', () => {
+    expect(toReportRecord({ id: 1, payload: { network_centrality_score: 0.45 } }, 'evidence')).toMatchObject({ scoreLabel: '45%', scoreBand: 'medium' });
+    expect(toReportRecord({ id: 2, payload: { network_centrality_score: 0.93 } }, 'evidence').scoreBand).toBe('fatal');
+  });
 });

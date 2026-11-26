@@ -107,7 +107,7 @@ export default function DomainMapping({ windowId, apiFetch, domain, canManage, n
         description={canManage ? 'Which source column is which field of the domain. Only the rows you change are saved.' : 'Managed by an administrator (users:manage).'}
         actions={canManage ? (
           <>
-            {dirty ? <button type="button" className="settings_button" disabled={saving} onClick={() => { setRefused({}); setEdits({}); }}>Discard changes</button> : null}
+            {dirty ? <button type="button" className="settings_button is-danger" disabled={saving} onClick={() => { setRefused({}); setEdits({}); }}>Discard changes</button> : null}
             <button type="button" className="settings_button" disabled={saving || !Object.keys(state.adjustments).length} onClick={handleReset}>Reset to profile</button>
             <button type="button" className="settings_button settings_primary" disabled={saving || !dirty} onClick={handleSave}>{saving ? 'Saving…' : dirty ? `Save ${changed.length} changed` : 'Save column mapping'}</button>
           </>

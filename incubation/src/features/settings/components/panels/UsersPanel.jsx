@@ -1122,7 +1122,7 @@ export function UsersPanel({ apiFetch, canManageUsers, canManageSuperusers, curr
               </>
             )}
           >
-            {error ? <div className="settings_error users_popup_error">{error}</div> : null}
+            {error ? <div className="settings_error users_popup_error" role="alert">{error}</div> : null}
             {/* The users on the left; the selected one's editor on the right. */}
             <div className="users_browser" aria-label="Existing users browser">
               <div className="users_list_pane">
@@ -1142,7 +1142,7 @@ export function UsersPanel({ apiFetch, canManageUsers, canManageSuperusers, curr
                     <option value="locked">Locked</option>
                   </select>
                 </div>
-                <p className="users_list_count">{filteredUsers.length} Matching users</p>
+                <p className="users_list_count">{filteredUsers.length} matching users</p>
                 {filteredUsers.length > 0 ? (
                   <ul className="users_list" role="listbox" aria-label="Users">
                     {filteredUsers.map((user) => {
@@ -1179,6 +1179,8 @@ export function UsersPanel({ apiFetch, canManageUsers, canManageSuperusers, curr
                       );
                     })}
                   </ul>
+                ) : usersLoading && users.length === 0 ? (
+                  <WindowLoadScreen className="is-block" label="Loading users…" />
                 ) : (
                   <p className="users_empty" role="status" aria-live="polite">{users.length === 0 ? 'No users to show.' : 'No matching users.'}</p>
                 )}

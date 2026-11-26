@@ -520,4 +520,7 @@
   --notice-text: var(--linkx-text-primary);
   --notice-text-muted: var(--linkx-text-muted);
   --notice-accent: var(--linkx-accent);
+  /* Table: a lighter navy stripe and header tint, to show on a dark window. */
+  --table-row-stripe: color-mix(in srgb, #8fb3e0 6%, transparent);
+  --table-head-tint: #8fb3e0;
 }

@@ -44,7 +44,7 @@ describe('STR alert workflow on the mock service', () => {
     expect(notify).toHaveBeenCalledWith(expect.objectContaining({ title: 'New STR alert' }));
   });
 
-  it('analyse → extract → report back: a task, the graph opened, the draft, sent and acknowledged', async () => {
+  it('analyse → extract → report back: a task, the graph on request, the draft, sent and acknowledged', async () => {
     await flush(0);
     const started = await runtime.runAlertAnalysis('mock-141');
     expect(started.ok).toBe(true);
@@ -55,7 +55,21 @@ describe('STR alert workflow on the mock service', () => {
     expect(getTask(started.taskId).log.at(-1)).toMatch(/flags:/);
     expect(getAlert('mock-141').response).toBe('analysed');
     expect(notify).toHaveBeenCalledWith(expect.objectContaining({ title: 'STR analysis finished' }));
+    // The graph does not open by itself; Open graph opens it.
+    expect(openWindow).not.toHaveBeenCalledWith('graph', expect.anything());
+    runtime.openAlertGraph('mock-141');
     expect(openWindow).toHaveBeenCalledWith('graph', expect.objectContaining({ metadata: expect.objectContaining({ alert: { id: 'mock-141', reference: 'STR-2026-0141' } }) }));
+    // The results' tables and charts: windows linked to the alert's Graph
+    // window, focused when one is open.
+    const focusWindow = vi.fn();
+    const windows = [{ id: 'graph-9', type: 'graph', title: 'G', metadata: { alert: { id: 'mock-141' } } }];
+    runtime.setAlertEnvironment({ getWindows: () => windows, focusWindow });
+    expect((await runtime.openAlertCompanion('mock-141', 'table')).ok).toBe(true);
+    expect(openWindow).toHaveBeenCalledWith('table', { title: 'Table', metadata: { tableGraph: 'graph-9' } });
+    windows.push({ id: 'chart-2', type: 'chart', title: 'Chart', metadata: { chartGraph: 'graph-9' } });
+    await runtime.openAlertCompanion('mock-141', 'chart');
+    expect(focusWindow).toHaveBeenCalledWith('chart-2');
+    runtime.setAlertEnvironment({ getWindows: () => [], focusWindow: vi.fn() });
     // Extract: no Graph window open, so the alert's graph with the defaults.
     expect(runtime.feedbackBlocker(getAlert('mock-141'), null)).toBe('Extract the results first.');
     expect((await runtime.extractAlertResults('mock-141')).ok).toBe(true);

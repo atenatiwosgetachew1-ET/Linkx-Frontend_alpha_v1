@@ -293,6 +293,7 @@ export const LIBRARIES_THEME_CATEGORIES = [
       { key: '--libraries-upload-bad-text', label: "Upload list (refused) — Text", type: 'color', default: "var(--settings-danger-text)" },
       { key: '--libraries-pending-border', label: "Coming-soon card — Border", type: 'color', default: "var(--settings-card-border)" },
       { key: '--libraries-pending-text', label: "Coming-soon card — Text", type: 'color', default: "var(--settings-text-muted)" },
+      { key: '--libraries-template-thumbnail-shadow', label: "Template thumbnail — Shadow", type: 'text', default: "0 4px 12px rgb(0 0 0 / 0.12)" },
     ],
   },
 ];

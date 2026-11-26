@@ -12,6 +12,33 @@ import { SectionMissing } from './DomainSection.jsx';
 
 const same = (left, right) => JSON.stringify(left) === JSON.stringify(right);
 
+// How strict a preset is, from its name (the Service sends no such figure):
+// 0 relaxed … 3 strictest; null for a name not known here (a neutral tone).
+const STRICTNESS = [
+  [3, /(very|extra|ultra)[_ -]?strict|aggressive|maximum|max|paranoid|critical/],
+  [0, /lenient|relaxed|loose|permissive|low|light|minimal|min/],
+  [2, /strict|high|tight|sensitive|heightened|elevated/],
+  [1, /baseline|balanced|standard|default|normal|medium|moderate/],
+];
+const STRICTNESS_LABELS = ['Relaxed', 'Balanced', 'Strict', 'Strictest'];
+const presetStrictness = (name) => {
+  const text = String(name || '').toLowerCase();
+  const found = STRICTNESS.find(([, pattern]) => pattern.test(text));
+  return found ? found[0] : null;
+};
+
+// A gauge whose needle leans further right the stricter the preset.
+function StrictnessGauge({ level }) {
+  const angle = ((level ?? 1.5) / 3) * 150 - 75;
+  return (
+    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M4 16a8 8 0 1 1 16 0" />
+      <path d="M12 16V9.5" transform={`rotate(${angle} 12 16)`} />
+      <circle cx="12" cy="16" r="1.3" fill="currentColor" />
+    </svg>
+  );
+}
+
 // Configuration ▸ Domains ▸ Sensitivity: a domain's preset, which sets many
 // thresholds at once. What it would change is always shown first.
 export default function DomainSensitivity({ apiFetch, domain, canManage, notify, requestConfirmation, thresholdsDirty }) {
@@ -82,11 +109,17 @@ export default function DomainSensitivity({ apiFetch, domain, canManage, notify,
               const values = state.presets[name];
               const count = values && typeof values === 'object' ? Object.keys(values).length : 0;
               const active = name === state.preset;
+              const level = presetStrictness(name);
               return (
-                <li key={name} className={active ? 'is-on' : undefined}>
-                  <span>
-                    <strong>{wordKey(name)}</strong>
-                    <small>{[active ? (state.modified.length ? 'in use, changed by hand' : 'in use') : '', count ? `${count} thresholds` : ''].filter(Boolean).join(' · ') || 'preset'}</small>
+                <li key={name} className={`config_preset is-level-${level ?? 'unknown'}${active ? ' is-on' : ''}`}>
+                  <span className="config_preset_icon"><StrictnessGauge level={level} /></span>
+                  <span className="config_preset_text">
+                    <small>{level == null ? 'Preset' : STRICTNESS_LABELS[level]}</small>
+                    <strong title={name}>{wordKey(name)}</strong>
+                    <span className="config_preset_tags">
+                      {active ? <em>{state.modified.length ? 'In use, changed by hand' : 'In use'}</em> : null}
+                      {count ? <em>{count} thresholds</em> : null}
+                    </span>
                   </span>
                   {canManage ? (
                     <button type="button" className="settings_button" aria-label={`Apply ${name}`} disabled={Boolean(busy) || (active && !state.modified.length)} onClick={() => apply(name)}>{busy === name ? 'Checking…' : active ? 'Apply again' : 'Apply…'}</button>

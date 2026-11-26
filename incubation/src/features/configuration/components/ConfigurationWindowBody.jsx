@@ -12,6 +12,7 @@ import { adoptPresentation, getPresentationSeq, getPresentationVersion, subscrib
 import { savePresentation } from '../../../services/domainConfigApi.js';
 import { CONFIG_FORMATTING_KEY, setDomainFormatting } from '../../graph/lib/conditionalFormatting.js';
 import DomainsPanel from './DomainsPanel.jsx';
+import DomainProfilesPanel from './DomainProfilesPanel.jsx';
 import OwnColumns from './OwnColumns.jsx';
 import ActivityLogPanel from './ActivityLogPanel.jsx';
 import LxacDialog from './LxacDialog.jsx';
@@ -48,6 +49,7 @@ const TABS = [
   { id: 'tools', label: 'Tools', description: 'Graph tool (Neo4j) connection defaults.' },
   { id: 'rules', label: 'Rules', description: 'Analysis rules, classified entities, profile mapping and formatting rules.' },
   { id: 'domains', label: 'Domains', description: 'Each domain’s thresholds, sensitivity, score lineage, columns and column mapping.', permission: 'config:read' },
+  { id: 'profiles', label: 'Domain profiles', description: 'Create domains and change what each one is: rule set, graph shape, storage.', permission: 'domains:manage' },
   { id: 'activity', label: 'Activity log', description: 'Session cleanup and cleanup audit trail.', permission: 'users:manage' },
 ];
 // Tabs whose fields belong to the session configuration draft (Save/Reset).
@@ -577,6 +579,8 @@ export default function ConfigurationWindowBody({ windowItem }) {
     );
   } else if (activeTab === 'domains') {
     content = <DomainsPanel windowId={windowId} apiFetch={apiFetch} domains={getRegisteredDomains(draft)} activeDomain={getActiveDomainKey(draft)} canManage={canManageUsers} notify={notify} requestConfirmation={requestConfirmation} />;
+  } else if (activeTab === 'profiles') {
+    content = <DomainProfilesPanel apiFetch={apiFetch} canManage={canAccess('domains:manage')} activeDomain={getActiveDomainKey(draft)} notify={notify} requestConfirmation={requestConfirmation} />;
   } else if (activeTab === 'activity') {
     content = <ActivityLogPanel apiFetch={apiFetch} canManage={canManageUsers} defaultSessionId={mainSessionId} />;
   }

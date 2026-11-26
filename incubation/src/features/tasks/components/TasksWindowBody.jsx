@@ -28,7 +28,8 @@ import {
 } from '../lib/taskRegistry.js';
 import { overrideLabel } from '../../../shared/runSettings.js';
 import { FLAG_STATES, taskFlagVerdict } from '../lib/taskFlags.js';
-import { getServerTaskScope, loadServerTasks } from '../lib/serverTasks.js';
+import { getServerTaskLoad, getServerTaskScope, loadServerTasks, subscribeServerTaskLoad } from '../lib/serverTasks.js';
+import WindowLoadScreen from '../../../shared/components/WindowLoadScreen.jsx';
 import KeptSessionsDialog from './KeptSessionsDialog.jsx';
 import UnattendedSwitch from './UnattendedSwitch.jsx';
 import TaskServicePanel from './TaskServicePanel.jsx';
@@ -858,6 +859,8 @@ export default function TasksWindowBody() {
     if (!result.ok && result.message) setScopeMessage(result.message);
   };
   const { tasks, focus } = useSyncExternalStore(subscribeTasks, getTasksSnapshot);
+  // The Service's list: its loader on the first load, a hint on a reload.
+  const serverLoad = useSyncExternalStore(subscribeServerTaskLoad, getServerTaskLoad);
   const [filter, setFilter] = useState('all');
   const [selectedId, setSelectedId] = useState(() => focus.taskId || tasks.find(isTaskActive)?.id || tasks[0]?.id || null);
   // Another tab: no task is open until one is picked from its list (analyst
@@ -978,7 +981,9 @@ export default function TasksWindowBody() {
               Archived
             </label>
           </span>
-          {scopeMessage ? <span className="tasks_scope_message" role="status">{scopeMessage}</span> : null}
+          {scopeMessage
+            ? <span className="tasks_scope_message is-error" role="status">{scopeMessage}</span>
+            : serverLoad.loading && (serverLoad.loaded || tasks.length) ? <span className="tasks_scope_message" role="status">Loading tasks…</span> : null}
           <button
             type="button"
             className="tasks_icon_button linkx_tooltip_anchor"
@@ -991,7 +996,9 @@ export default function TasksWindowBody() {
           </button>
         </div>
 
-        {tasks.length === 0 ? (
+        {tasks.length === 0 && serverLoad.loading && !serverLoad.loaded ? (
+          <WindowLoadScreen className="is-block" label="Loading tasks…" />
+        ) : tasks.length === 0 ? (
           <div className="tasks_empty">
             <Icon d={ICONS.tasks} className="tasks_empty_icon" />
             <h4>No analysis tasks yet</h4>
@@ -999,6 +1006,7 @@ export default function TasksWindowBody() {
               Runs started from a Source window or the quick analysis panel appear here, with their live log,
               graph and chart. Up to {usage.limit} analysis sessions can run at once.
             </p>
+            {serverLoad.error && !scopeMessage ? <p className="tasks_scope_message is-error" role="alert">{serverLoad.error}</p> : null}
           </div>
         ) : (
           <div className="tasks_window_main">

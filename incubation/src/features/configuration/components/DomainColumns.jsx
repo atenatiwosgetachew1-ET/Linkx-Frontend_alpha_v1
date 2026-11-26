@@ -103,7 +103,7 @@ export default function DomainColumns({ windowId, apiFetch, domain, canManage, n
         description={canManage ? 'The search and fetch columns everyone in this domain starts from. A user’s own columns come before these, for that user only.' : 'You need users:manage to change a domain’s columns.'}
         actions={canManage ? (
           <>
-            {dirty ? <button type="button" className="settings_button" disabled={saving} onClick={() => { setRefused({}); setEdits({}); }}>Discard changes</button> : null}
+            {dirty ? <button type="button" className="settings_button is-danger" disabled={saving} onClick={() => { setRefused({}); setEdits({}); }}>Discard changes</button> : null}
             <button type="button" className="settings_button" disabled={saving || !anyAdmin} onClick={() => handleReset(COLUMN_KEYS)}>Reset to profile</button>
             <button type="button" className="settings_button settings_primary" disabled={saving || !dirty || Object.keys(problems).length > 0} onClick={handleSave}>{saving ? 'Saving…' : 'Save columns'}</button>
           </>

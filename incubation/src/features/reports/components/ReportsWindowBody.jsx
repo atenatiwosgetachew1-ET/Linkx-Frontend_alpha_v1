@@ -36,7 +36,9 @@ import {
   vigilanceRunView,
 } from '../lib/reportModel.js';
 import ReportDetail from './ReportDetail.jsx';
-import AlertWorkflow from '../../alerts/components/AlertWorkflow.jsx';
+import RunSettingsPopup from './RunSettingsPopup.jsx';
+import ReportDetailPopup from './ReportDetailPopup.jsx';
+import AlertWorkflow, { AlertHistory } from '../../alerts/components/AlertWorkflow.jsx';
 import { getAlertsSnapshot, subscribeAlerts } from '../../alerts/lib/alertStore.js';
 import { isMockSwitchOn, mockSwitchAvailable, setMockSwitch, subscribeAlertMode } from '../../alerts/lib/alertMode.js';
 import { responseInfo } from '../../alerts/lib/alertModel.js';
@@ -194,9 +196,14 @@ export default function ReportsWindowBody({ windowItem }) {
   const [offset, setOffset] = useState(initial.offset || 0);
   // The loaded page, tagged with the tab it belongs to.
   const [page, setPage] = useState(() => getCachedReportsPage(windowId, initial.tabId));
-  const [loading, setLoading] = useState(false);
+  // Loading from the first paint when there is no page to show yet (the Alert
+  // reports tab, with the alert service on, has its own loading state).
+  const [loading, setLoading] = useState(() => !getCachedReportsPage(windowId, initial.tabId)
+    && !(initial.tabId === 'parent' && getAlertsSnapshot().mode !== 'off'));
   const [error, setError] = useState(null);
   const [selectedId, setSelectedId] = useState(initial.selectedId ?? null);
+  // The record whose run settings are shown in their popup.
+  const [settingsRecord, setSettingsRecord] = useState(null);
   const [graphStatus, setGraphStatus] = useState({}); // traceId -> true | false
   const [probingTraceId, setProbingTraceId] = useState(null);
   const [openingTraceId, setOpeningTraceId] = useState(null);
@@ -257,6 +264,13 @@ export default function ReportsWindowBody({ windowItem }) {
     if (!result.ok && result.message) setAlertScopeError(result.message);
   };
   const alertTab = tabId === 'parent' && alertsActive;
+  // The alert service's list again (footer Refresh, Retry): load() does not
+  // read that tab.
+  const refreshAlerts = async () => {
+    setAlertScopeError('');
+    const result = await reloadAlerts(alertScope === 'all' ? 'all' : 'me');
+    if (!result.ok && result.message && getAlertsSnapshot().alerts.length) setAlertScopeError(result.message);
+  };
 
   const load = useCallback(async () => {
     if (tabId === 'parent' && getAlertsSnapshot().mode !== 'off') return;
@@ -284,6 +298,8 @@ export default function ReportsWindowBody({ windowItem }) {
   useEffect(() => {
     load();
   }, [load]);
+  const busy = alertTab ? Boolean(alertsState.loading) : loading;
+  const refresh = alertTab ? refreshAlerts : load;
 
   useEffect(() => () => {
     loadRef.current?.abort();
@@ -529,11 +545,26 @@ export default function ReportsWindowBody({ windowItem }) {
     }
   };
 
-  const columns = tab.scored ? 8 : 4;
+  // Run settings get their own column when any listed record carries them
+  // (records made from a run: Service evidence), not a mark in the Type cell.
+  const showRunSettings = visible.some((record) => record.runRemark);
+  const columns = (tab.scored ? 8 : 4) + (showRunSettings ? 1 : 0);
   const forbidden = error?.status === 403;
 
   const renderTable = () => {
-    if (forbidden) {
+    if (alertTab && !alertRows.length) {
+      if (alertsState.loadError) {
+        return (
+          <div className="reports_state is-error" role="alert">
+            <h4>Could not load alerts</h4>
+            <p>{alertsState.loadError}</p>
+            <button type="button" className="reports_action" onClick={refreshAlerts}>Retry</button>
+          </div>
+        );
+      }
+      if (alertsState.loading) return <WindowLoadScreen className="is-block" label="Loading alerts…" />;
+    }
+    if (forbidden && !alertTab) {
       return (
         <div className="reports_state is-denied" role="alert">
           <Icon d={ICONS.lock} className="reports_state_icon" />
@@ -542,7 +573,7 @@ export default function ReportsWindowBody({ windowItem }) {
         </div>
       );
     }
-    if (error) {
+    if (error && !alertTab) {
       return (
         <div className="reports_state is-error" role="alert">
           <h4>Could not load reports</h4>
@@ -551,12 +582,28 @@ export default function ReportsWindowBody({ windowItem }) {
         </div>
       );
     }
-    if (loading && !rawRecords.length) {
+    if (loading && !alertTab && !rawRecords.length) {
       return <WindowLoadScreen className="is-block" label="Loading reports…" />;
     }
     return (
       <div className="reports_table_wrap">
-        <table className={`reports_table${tab.scored ? ' is-scored' : ''}`}>
+        <table className={`reports_table${tab.scored ? ' is-scored' : ''}${showRunSettings ? ' has-run-settings' : ''}`}>
+          {/* Fixed widths, so every tab's rows line up the same way. */}
+          <colgroup>
+            <col className="reports_col_type" />
+            <col className="reports_col_source" />
+            {tab.scored && (
+              <>
+                <col className="reports_col_anomaly" />
+                <col className="reports_col_score" />
+                <col className="reports_col_band" />
+                <col className="reports_col_reason" />
+              </>
+            )}
+            {showRunSettings ? <col className="reports_col_settings" /> : null}
+            <col className="reports_col_status" />
+            <col className="reports_col_date" />
+          </colgroup>
           <thead>
             <tr>
               <th scope="col">Type</th>
@@ -564,11 +611,12 @@ export default function ReportsWindowBody({ windowItem }) {
               {tab.scored && (
                 <>
                   <th scope="col">Anomaly type</th>
-                  <th scope="col">Fraud score</th>
+                  <th scope="col" className="is-number">Fraud score</th>
                   <th scope="col">Score band</th>
                   <th scope="col">Reason</th>
                 </>
               )}
+              {showRunSettings ? <th scope="col">Run settings</th> : null}
               <th scope="col">Status</th>
               <th scope="col">Date</th>
             </tr>
@@ -597,7 +645,7 @@ export default function ReportsWindowBody({ windowItem }) {
                   onKeyDown={(event) => handleRowKeyDown(event, record)}
                 >
                   <td>
-                    <span className="reports_cell_icon"><Icon d={ICONS.tag} /><strong>{record.reportType || '—'}</strong>{record.runRemark?.marked ? <span className="reports_run_mark" title={record.runRemark.text}>{record.runRemark.label}</span> : null}</span>
+                    <span className="reports_cell_icon"><Icon d={ICONS.tag} /><strong>{record.reportType || '—'}</strong></span>
                   </td>
                   <td>
                     <span className="reports_cell_icon is-muted"><Icon d={ICONS.source} />{record.sourceSystem || '—'}</span>
@@ -607,13 +655,34 @@ export default function ReportsWindowBody({ windowItem }) {
                       <td title={record.anomaly}>{record.anomaly || '—'}</td>
                       <td className="is-number">{record.scoreLabel || '—'}</td>
                       <td>
+                        {/* The band follows the fraud score when the Service gave
+                            none (reportModel getScoreBand); no score, a dash.
+                            Production showed "Flagged" here for is_flagged
+                            records, but their Status already says flagged
+                            (user decision 2026-11-26). */}
                         {record.scoreBand
                           ? <span className={`reports_band is-${record.scoreBand}`}>{record.scoreBand}</span>
-                          : record.payload.is_flagged ? <span className="reports_band is-critical">Flagged</span> : '—'}
+                          : '—'}
                       </td>
                       <td title={record.reason}>{record.reason || '—'}</td>
                     </>
                   )}
+                  {showRunSettings ? (
+                    <td title={record.runRemark?.text}>
+                      {record.runRemark ? (
+                        <button
+                          type="button"
+                          className={`reports_run_settings is-${record.runRemark.kind} is-button`}
+                          aria-label={`Run settings: ${record.runRemark.marked ? record.runRemark.label : 'the domain’s'}. Show them`}
+                          onClick={(event) => { event.stopPropagation(); setSettingsRecord(record); }}
+                          onKeyDown={(event) => event.stopPropagation()}
+                        >
+                          <span aria-hidden="true" />
+                          {record.runRemark.marked ? record.runRemark.label : 'Domain’s'}
+                        </button>
+                      ) : <span className="reports_run_settings is-none">—</span>}
+                    </td>
+                  ) : null}
                   <td>
                     <span className={`reports_status is-${record.statusTone}`}><span aria-hidden="true" />{record.status || '—'}</span>
                   </td>
@@ -721,28 +790,10 @@ export default function ReportsWindowBody({ windowItem }) {
           </p>
         ) : null}
 
-        <div className={`reports_window_main${selected ? ' has-detail' : ''}`}>
-          <section className="reports_list" aria-label={tab.label} aria-busy={loading}>
+        <div className="reports_window_main">
+          <section className="reports_list" aria-label={tab.label} aria-busy={busy}>
             {renderTable()}
           </section>
-          {selected && (
-            <ReportDetail
-              workflow={selected.alert ? <AlertWorkflow alertId={selected.alert.id} mockControls={isMockAlerts} /> : null}
-              record={selected}
-              isCdr={isCdr}
-              onClose={() => setSelectedId(null)}
-              onCopyPayload={copyPayload}
-              graph={{ state: graphState, onOpen: openGraph }}
-              download={{
-                available: graphState === 'available' && !reportLoading,
-                busy: reportLoading,
-                hint: graphState === 'available'
-                  ? 'The Evidence Report of this evidence, as the Service analysed it (PDF)'
-                  : 'Available for evidence reports with a graph',
-                onDownload: openReport,
-              }}
-            />
-          )}
         </div>
 
         <footer className="reports_footer">
@@ -750,10 +801,10 @@ export default function ReportsWindowBody({ windowItem }) {
             {pageSummary({ offset, shown: visible.length, loaded: rawRecords.length, total })}
           </span>
           <div className="reports_footer_actions">
-            <button type="button" className="reports_action" onClick={load} disabled={loading}>
-              <Icon d={ICONS.refresh} className={`reports_icon${loading ? ' is-spinning' : ''}`} /> Refresh
+            <button type="button" className="reports_action" onClick={refresh} disabled={busy}>
+              <Icon d={ICONS.refresh} className={`reports_icon${busy ? ' is-spinning' : ''}`} /> Refresh
             </button>
-            <button type="button" className="reports_action" onClick={downloadList} disabled={loading || exporting || !visible.length}>
+            <button type="button" className="reports_action" onClick={downloadList} disabled={busy || exporting || !visible.length}>
               <Icon d={ICONS.download} /> {exporting ? 'Preparing…' : 'Download list'}
             </button>
             <span className="reports_pager">
@@ -766,6 +817,36 @@ export default function ReportsWindowBody({ windowItem }) {
             </span>
           </div>
         </footer>
+        {/* The selected record's details, in the default popup over the
+            window (the table keeps its full width), under the report form
+            and the run settings popup it opens. */}
+        {selected ? (() => {
+          const graph = { state: graphState, onOpen: openGraph };
+          const download = {
+            available: graphState === 'available' && !reportLoading,
+            busy: reportLoading,
+            hint: graphState === 'available'
+              ? 'The Evidence Report of this evidence, as the Service analysed it (PDF)'
+              : 'Available for evidence reports with a graph',
+            onDownload: openReport,
+          };
+          return (
+            <ReportDetailPopup record={selected} graph={graph} download={download} busy={Boolean(reportJob)} onClose={() => setSelectedId(null)}>
+              <ReportDetail
+                framed
+                workflow={selected.alert ? <AlertWorkflow alertId={selected.alert.id} mockControls={isMockAlerts} /> : null}
+                history={selected.alert ? <AlertHistory alertId={selected.alert.id} /> : null}
+                record={selected}
+                isCdr={isCdr}
+                onShowRunSettings={() => setSettingsRecord(selected)}
+                onClose={() => setSelectedId(null)}
+                onCopyPayload={copyPayload}
+                graph={graph}
+                download={download}
+              />
+            </ReportDetailPopup>
+          );
+        })() : null}
         {reportJob ? (
           <GraphReportDialog
             initial={reportJob.initial}
@@ -778,6 +859,7 @@ export default function ReportsWindowBody({ windowItem }) {
             onCancel={() => setReportJob(null)}
           />
         ) : null}
+        {settingsRecord?.runRemark ? <RunSettingsPopup record={settingsRecord} onClose={() => setSettingsRecord(null)} /> : null}
       </div>
     </div>
   );

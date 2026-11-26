@@ -1562,7 +1562,7 @@
 	vertical-align: 1px;
 }
 
-.tasks_log_line.is-warn { --tasks-log-level: var(--status-warning-text, #d97706); }
+.tasks_log_line.is-warn { --tasks-log-level: var(--tasks-log-warn); }
 .tasks_log_line.is-error { --tasks-log-level: var(--tasks-status-failed); }
 .tasks_log_line.is-success { --tasks-log-level: var(--tasks-status-completed); }
 
@@ -1610,7 +1610,7 @@
 	font: inherit;
 	font-size: 11px;
 	font-weight: 600;
-	box-shadow: 0 4px 12px rgb(0 0 0 / 18%);
+	box-shadow: var(--tasks-float-shadow);
 	cursor: pointer;
 }
 
@@ -1762,25 +1762,42 @@
 	align-items: center;
 	gap: 4px;
 }
+.tasks_scope_archived input {
+	accent-color: var(--tasks-primary-border);
+}
 .tasks_scope_message,
 .tasks_service_message {
 	color: var(--tasks-muted-text);
 	font-size: 12px;
 }
+.tasks_service_message {
+	margin: 0;
+	padding: 7px 0;
+}
+/* The list could not be loaded (or not with that scope). */
+.tasks_scope_message.is-error {
+	color: var(--tasks-status-failed);
+}
 .tasks_service {
 	display: grid;
-	gap: 8px;
-	padding: 12px 14px;
+	gap: 0;
+	padding: 2px 10px;
 	/* As Libraries ▸ Graph rendering's "Use the GPU for graphs" card: its
 	   border and background, and its "on" look once saved as evidence. */
-	border: 1px solid var(--libraries-page-option-border);
+	--service-tone: var(--libraries-page-option-border);
+	border: 1px solid var(--service-tone);
 	border-radius: 4px;
-	background: var(--libraries-page-option-bg);
+	/* Its border colour, as a wash from the top-left corner (as the popup
+	   windows' tiles: 160°, 8%, gone by 62%). */
+	background:
+		linear-gradient(160deg, color-mix(in srgb, var(--service-tone) 8%, transparent), transparent 62%),
+		var(--libraries-page-option-bg);
 	color: var(--tasks-text);
 }
 .tasks_service.is-saved {
-	border-color: var(--libraries-page-option-on-border);
+	--service-tone: var(--libraries-page-option-on-border);
 	background:
+		linear-gradient(160deg, color-mix(in srgb, var(--service-tone) 8%, transparent), transparent 62%),
 		radial-gradient(120% 70px at 0 0, var(--libraries-page-option-on-bg), transparent 70%),
 		var(--libraries-page-option-on-bg-2);
 }
@@ -1789,16 +1806,43 @@
 }
 .tasks_service.is-expired,
 .tasks_service.is-archived {
-	border-color: var(--tasks-status-failed);
+	--service-tone: var(--tasks-status-failed);
+}
+/* Expiring soon: the starting/attention colour the list's chip uses. */
+.tasks_service.is-expiring {
+	--service-tone: var(--tasks-status-starting);
+}
+.tasks_service_row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	min-height: 38px;
+	padding: 5px 0;
+}
+.tasks_service_row + .tasks_service_row,
+.tasks_service_row + .tasks_service_message {
+	border-top: 1px solid var(--tasks-hairline);
 }
 .tasks_service_note {
-	display: flex;
-	flex-wrap: wrap;
-	align-items: center;
-	gap: 8px;
+	flex: 1 1 auto;
+	min-width: 0;
 	margin: 0;
 	color: var(--tasks-muted-text);
 	font-size: 12px;
+	line-height: 1.4;
+}
+/* Every button of the record at the right end of its line. */
+.tasks_service_actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 6px;
+	flex: 0 0 auto;
+	margin-left: auto;
+}
+.tasks_service_actions .tasks_action {
+	height: 26px;
+	padding: 0 10px;
 }
 /* "Saved as evidence" badge: the same evidence token as the button
    (gold gradient in NBE Daylight). */
@@ -1814,10 +1858,6 @@
 	font-weight: 600;
 	line-height: 1.5;
 	white-space: nowrap;
-}
-/* Open in Reports / Save as evidence sit at the right end of their row. */
-.tasks_service_note .tasks_service_end {
-	margin-left: auto;
 }
 .tasks_chip.is-expiring {
 	color: var(--tasks-status-starting);

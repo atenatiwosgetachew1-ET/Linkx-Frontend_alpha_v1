@@ -9,7 +9,7 @@ export const STUDIO_AREAS = [
     id: 'workspace',
     name: 'Workspace',
     hint: 'The page behind the windows and the bars around it.',
-    categories: ['background_central', 'left_launcher', 'right_workspace', 'right_context', 'bottom_dock'],
+    categories: ['background_central', 'quick_analysis', 'left_launcher', 'right_workspace', 'right_context', 'bottom_dock', 'sign_in_page', 'lock_overlay', 'core_palette'],
   },
   {
     id: 'windows',
@@ -27,7 +27,7 @@ export const STUDIO_AREAS = [
     id: 'feedback',
     name: 'Notices & tooltips',
     hint: 'What appears over everything else.',
-    categories: ['notifications', 'global_tooltips'],
+    categories: ['notifications', 'message_dialogs', 'global_tooltips'],
   },
 ];
 

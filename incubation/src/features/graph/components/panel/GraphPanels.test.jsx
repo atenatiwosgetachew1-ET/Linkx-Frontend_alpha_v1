@@ -233,6 +233,28 @@ describe('right panel bound to the active Graph window', () => {
     expect(saved.limit).toEqual({ key: 'amount', sort: 'desc', min: 0, max: 2 });
   });
 
+  it('Settings: the nodes-shown slider runs 0 to the node count and fills the From/To fields', async () => {
+    const panel = setup('settings');
+    const from = panel.getByRole('slider', { name: 'From' });
+    const to = panel.getByRole('slider', { name: 'To' });
+    expect(to).toHaveAttribute('max', '3');
+    expect(to).toHaveValue('3');
+    // Only the lower handle moved: "To" keeps its value past the node count.
+    const before = panel.getByRole('spinbutton', { name: 'To' }).value;
+    fireEvent.change(from, { target: { value: '1' } });
+    expect(panel.getByRole('spinbutton', { name: 'From' })).toHaveValue(1);
+    expect(panel.getByRole('spinbutton', { name: 'To' }).value).toBe(before);
+    fireEvent.change(to, { target: { value: '2' } });
+    expect(panel.getByRole('spinbutton', { name: 'To' })).toHaveValue(2);
+    fireEvent.pointerUp(to);
+    await waitFor(() => expect(workspaceRef.windows.find((item) => item.id === 'graph-1').metadata.graphSettings.limit).toMatchObject({ min: 1, max: 2 }));
+    // Typed numbers move the handles.
+    const typed = panel.getByRole('spinbutton', { name: 'From' });
+    await userEvent.clear(typed);
+    await userEvent.type(typed, '0{Enter}');
+    expect(panel.getByRole('slider', { name: 'From' })).toHaveValue('0');
+  });
+
   it('Settings: choosing a label property turns labels on (production)', async () => {
     const panel = setup('settings');
     // New windows start in performance mode (production), which keeps labels off.

@@ -51,6 +51,8 @@ export const WORKSPACE_ACTIONS = Object.freeze({
   SET_CONTEXT_TAB: 'workspace/setContextTab',
   CLEAR_WINDOWS: 'workspace/clearWindows',
   RESTORE_WINDOWS: 'workspace/restoreWindows',
+  // Ctrl+`: minimize every window; again (all minimized) brings them back.
+  TOGGLE_MINIMIZE_ALL: 'workspace/toggleMinimizeAll',
 });
 
 export const WORKSPACE_WINDOW_LABELS = Object.freeze({

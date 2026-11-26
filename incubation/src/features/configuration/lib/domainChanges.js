@@ -1,6 +1,6 @@
 // Domain settings changed by someone (socket `domain_config_changed`, B-47):
 // { domain, section, version_id }, section thresholds | sensitivity | lineage
-// | columns | mapping. The open Domains page reads that part again; one's own
+// | columns | mapping | profile (round 4). The open Domains page reads that part again; one's own
 // saves are recognised so they are not announced back.
 
 // A preset rewrites the thresholds: the two share their version.
@@ -46,7 +46,7 @@ export const asOwnChange = async (domain, section, save, versionOf = () => null)
 export const noteDomainChange = (payload) => {
   const domain = String(payload?.domain || '').trim().toLowerCase();
   const section = String(payload?.section || '').trim();
-  if (!domain || !['thresholds', 'sensitivity', 'lineage', 'columns', 'mapping'].includes(section)) return null;
+  if (!domain || !['thresholds', 'sensitivity', 'lineage', 'columns', 'mapping', 'profile'].includes(section)) return null;
   const key = keyOf(domain, section);
   const mine = (saving.get(key) || 0) > 0 || (payload.version_id !== null && payload.version_id !== undefined && own.get(key) === String(payload.version_id));
   if (!mine) bump(domain, section);

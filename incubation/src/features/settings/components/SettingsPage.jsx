@@ -152,22 +152,25 @@ export function Option({ title, description, icon, checked, disabled = false, on
 // card (the graph_customize shell): header, scrolling body, footer with a
 // hint and the actions. Escape, × or a click outside closes it (not while
 // busy). It is portalled to the window's frame so it covers the whole
-// window rather than the scrolling tab area.
-export function SettingsPopup({ title, subtitle, hint, footer, wide = false, narrow = false, busy = false, onClose, children }) {
+// window rather than the scrolling tab area. `hostSelector`: another
+// window's frame to cover (the Reports window's popups use it);
+// `backdropClassName`: a class of its own for the backdrop.
+export function SettingsPopup({ title, subtitle, hint, footer, wide = false, narrow = false, busy = false, hostSelector = '.settings_window_workspace', backdropClassName = '', onClose, children }) {
   const anchorRef = useRef(null);
   const cardRef = useRef(null);
   const [host, setHost] = useState(null);
   const titleId = `${useId()}-title`;
 
   useEffect(() => {
-    setHost(anchorRef.current?.closest('.settings_window_workspace') || anchorRef.current?.parentElement || null);
-  }, []);
+    setHost(anchorRef.current?.closest(hostSelector) || anchorRef.current?.parentElement || null);
+  }, [hostSelector]);
   useEffect(() => {
     if (host) cardRef.current?.querySelector('input, select, textarea, button:not(.graph_customize_close)')?.focus();
   }, [host]);
   useEffect(() => {
     const onKey = (event) => {
-      if (event.key !== 'Escape' || busy) return;
+      // Escape a confirmation over the popup handled (defaultPrevented) is not ours.
+      if (event.key !== 'Escape' || busy || event.defaultPrevented) return;
       // With one popup open over another, Escape closes only the top one.
       const open = document.querySelectorAll('.settings_popup_backdrop');
       const top = open[open.length - 1];
@@ -179,7 +182,7 @@ export function SettingsPopup({ title, subtitle, hint, footer, wide = false, nar
   }, [busy, onClose]);
 
   const popup = (
-    <div className="graph_customize_backdrop settings_popup_backdrop" onPointerDown={(event) => { if (event.target === event.currentTarget && !busy) onClose(); }}>
+    <div className={`graph_customize_backdrop settings_popup_backdrop${backdropClassName ? ` ${backdropClassName}` : ''}`} onPointerDown={(event) => { if (event.target === event.currentTarget && !busy) onClose(); }}>
       <div ref={cardRef} className={`graph_customize is-report settings_popup${wide ? ' is-wide' : ''}${narrow ? ' is-narrow' : ''}`} role="dialog" aria-modal="true" aria-labelledby={titleId}>
         <header className="graph_customize_header">
           <div className="graph_customize_heading">

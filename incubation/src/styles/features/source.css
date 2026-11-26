@@ -884,8 +884,12 @@
 	display: flex;
 	flex-direction: column;
 	gap: 8px;
+	/* The panel is a fixed height: the list scrolls, the problem stays in view. */
+	flex: 1 1 auto;
+	min-height: 0;
 	margin: 0;
 	padding: 0;
+	overflow: auto;
 	list-style: none;
 }
 

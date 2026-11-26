@@ -276,4 +276,5 @@
   --libraries-upload-bad-text: var(--settings-danger-text);
   --libraries-pending-border: var(--settings-card-border);
   --libraries-pending-text: var(--settings-text-muted);
+  --libraries-template-thumbnail-shadow: 0 4px 12px rgb(0 0 0 / 0.12);
 }

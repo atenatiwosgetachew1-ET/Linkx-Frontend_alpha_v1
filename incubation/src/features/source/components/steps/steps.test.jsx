@@ -424,4 +424,10 @@ describe('ModeChooser', () => {
     await user.click(screen.getByRole('button', { name: 'Continue' }));
     expect(onSelectMode).toHaveBeenCalledWith(SOURCE_MODES.REALTIME, 'broker');
   });
+
+  it('explains the input options in a tooltip and has no Back on the first page', () => {
+    renderChooser();
+    expect(screen.getByRole('note', { name: /Batch makes one dataframe/ })).toHaveAttribute('data-tooltip', expect.stringContaining('message broker'));
+    expect(screen.queryByRole('button', { name: 'Back' })).toBeNull();
+  });
 });

@@ -3,6 +3,7 @@ import React, { useLayoutEffect, useRef, useState } from 'react';
 import WorkspaceWindowBody from './WorkspaceWindowBody.jsx';
 import { WORKSPACE_WINDOW_TYPES } from '../state/workspaceTypes.js';
 import { CHART_ICON, TABLE_ICON } from '../../shared/icons/windowIcons.js';
+import { windowDetail } from '../lib/windowSwitcher.js';
 
 const tabIconPaths = {
   [WORKSPACE_WINDOW_TYPES.SOURCE]: 'M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v13a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 18.5v-13Zm4 2h8M8 12h8M8 16h5',
@@ -86,8 +87,8 @@ export default function WindowDock({ workspace }) {
         <div ref={tabsRef} className="workspace_window_dock_tabs" role="tablist" aria-label="Open windows">
           {workspace.windows.map((windowItem) => {
           const isActive = windowItem.id === activeWindow.id;
-          const tabLabel = windowItem.customTitle && windowItem.customTitle !== 'Placeholder'
-            ? `${windowItem.title} - ${windowItem.customTitle}`
+          const detail = windowDetail(windowItem);
+          const tabLabel = detail ? `${windowItem.title} - ${detail}`
             : windowItem.title;
 
           return (
@@ -126,8 +127,8 @@ export default function WindowDock({ workspace }) {
               <input
                 className="workspace_window_dock_tab_title_input"
                 type="text"
-                value={windowItem.customTitle ?? windowItem.status ?? 'Placeholder'}
-                placeholder="Placeholder"
+                value={windowItem.customTitle ?? ''}
+                placeholder="Add a label"
                 aria-label={windowItem.title + ' custom title'}
                 maxLength={120}
                 onFocus={() => workspace.focusWindow(windowItem.id)}
@@ -180,7 +181,7 @@ export default function WindowDock({ workspace }) {
                     <WindowTabIcon type={windowItem.type} />
                     <span>
                       <strong>{windowItem.title}</strong>
-                      <small>{windowItem.customTitle || 'Placeholder'}</small>
+                      {windowDetail(windowItem) ? <small>{windowDetail(windowItem)}</small> : null}
                     </span>
                   </button>
                 );

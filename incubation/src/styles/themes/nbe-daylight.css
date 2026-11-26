@@ -117,6 +117,12 @@
   --right-chat-word-counter-color: #7A7A7A;
   --step-label-desc-color: #54595F;
   --central-secondary-box-text: #54595F;
+  /* System panel charts in the NBE palette: gold, navy, grey, teal (red only
+     for failed). */
+  --central-dash-chart-1: #AE874F;
+  --central-dash-chart-2: #131E2A;
+  --central-dash-chart-3: #8A919B;
+  --central-dash-chart-5: #1C6F8A;
   --right-form-label-color: #54595F;
   --right-theme-card-desc-color: #54595F;
   --central-drop-modal-body-color: #54595F;
@@ -140,7 +146,6 @@
   --central-overlay-top: #E8EFF7;
   --central-overlay-bottom: #E8EFF7;
   --stream-log-bg: #f4f7fa;
-  --central-graph-node: #1C6F8A;
 
   /* Official CTA gradient (bronze → gold, 250deg) */
   --central-analyze-btn-gradient-angle: 250deg;
@@ -332,29 +337,6 @@
   color: #AE874F;
 }
 
-[data-theme="nbe-daylight"] .workspace_context_button {
-  border-color: #D5DEE8;
-  background: #FFFFFF;
-  color: #131E2A;
-}
-
-[data-theme="nbe-daylight"] .workspace_context_button:hover:not(:disabled) {
-  border-color: #AE874F;
-  background: rgba(174, 135, 79, 0.10);
-}
-
-[data-theme="nbe-daylight"] .workspace_context_button.is-active,
-[data-theme="nbe-daylight"] .workspace_context_button.is-active:hover:not(:disabled) {
-  border-color: #AE874F;
-  background: #131E2A;
-  color: #FFFFFF;
-}
-
-[data-theme="nbe-daylight"] .workspace_context_button.is-danger {
-  border-color: color-mix(in srgb, #e5484d 45%, transparent);
-  background: color-mix(in srgb, #e5484d 10%, #FFFFFF);
-}
-
 [data-theme="nbe-daylight"] .workspace_context_form_stack button {
   border-color: #131E2A;
 }
@@ -364,8 +346,8 @@
   background: #202F3F;
 }
 
-[data-theme="nbe-daylight"] .workspace_panel_disabled_icon {
-  background: #EFEFEF;
+[data-theme="nbe-daylight"] {
+  --right-disabled-icon-bg: #EFEFEF;
 }
 
 /* Left launcher sidebar: official NBE navy background with white text/icons.
@@ -464,6 +446,11 @@
   --window-scrollbar-thumb-bg: rgba(122, 122, 122, 0.6);
   --window-scrollbar-thumb-hover-bg: rgba(174, 135, 79, 0.75);
   --window-scrollbar-thumb-active-bg: rgba(131, 107, 73, 0.65);
+  /* Right panel scrollbar: same as the windows' */
+  --right-page-scrollbar-track: #ebedef;
+  --right-page-scrollbar-thumb: rgba(122, 122, 122, 0.6);
+  --right-page-scrollbar-thumb-hover: rgba(174, 135, 79, 0.75);
+  --right-page-scrollbar-thumb-active: rgba(131, 107, 73, 0.65);
   --window-maximize-border: transparent;
   --window-maximize-hover-bg: #30435a;
   --window-maximize-hover-border: #30435a;
@@ -498,7 +485,6 @@
   --storage-table-header-text: #131e2a;
   --storage-table-header-border: #ae874f;
   --storage-browser-border: #dce4ee;
-  --storage-browser-columns: #000000;
   --dataframe-actions-card-bg: #ffffff;
   --dataframe-desc-banner-border: #f0e9df;
   --dataframe-desc-banner-bg: #efefef;
@@ -640,4 +626,19 @@
   --settings-users-wizard-head-i-done-text: #fff;
   --settings-service-target-template-tag-bg: var(--window-chrome-bg);
   --settings-service-target-template-tag-text: #fff;
+}
+
+/* Reports ▸ record details popup: the current section tab (Overview /
+   Payload) is navy with white words in this theme. */
+[data-theme="nbe-daylight"] {
+  --reports-detail-tab-on-bg: #131E2A;
+  --reports-detail-tab-on-text: #FFFFFF;
+}
+
+/* Reports ▸ STR alert, step 2: the Result button in the theme's navy with
+   white words. */
+[data-theme="nbe-daylight"] {
+  --reports-alert-result-bg: #131E2A;
+  --reports-alert-result-hover-bg: #202F3F;
+  --reports-alert-result-text: #FFFFFF;
 }

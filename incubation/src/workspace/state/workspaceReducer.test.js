@@ -21,4 +21,36 @@ describe('workspaceReducer: single windows', () => {
     const again = open(first, WORKSPACE_WINDOW_TYPES.REPORTS);
     expect(again.windows).toBe(first.windows);
   });
+
+  it('opens a window with an empty custom title unless one is given', () => {
+    const state = open(open(initialWorkspaceState, WORKSPACE_WINDOW_TYPES.REPORTS), WORKSPACE_WINDOW_TYPES.SETTINGS, { customTitle: 'Mine' });
+    expect(state.windows.map((windowItem) => windowItem.customTitle)).toEqual(['', 'Mine']);
+  });
+});
+
+describe('workspaceReducer: minimize all (Ctrl+`)', () => {
+  const toggle = (state) => workspaceReducer(state, { type: WORKSPACE_ACTIONS.TOGGLE_MINIMIZE_ALL });
+  const focus = (state, id) => workspaceReducer(state, { type: WORKSPACE_ACTIONS.FOCUS_WINDOW, payload: { id } });
+  const minimized = (state) => state.windows.map((windowItem) => Boolean(windowItem.minimized));
+
+  it('minimizes every window, and brings them all back when pressed again', () => {
+    let state = open(open(initialWorkspaceState, WORKSPACE_WINDOW_TYPES.REPORTS), WORKSPACE_WINDOW_TYPES.SETTINGS);
+    state = toggle(state);
+    expect(minimized(state)).toEqual([true, true]);
+    state = toggle(state);
+    expect(minimized(state)).toEqual([false, false]);
+  });
+
+  it('brings back only the window switched to, even the one that was active', () => {
+    let state = open(open(initialWorkspaceState, WORKSPACE_WINDOW_TYPES.REPORTS), WORKSPACE_WINDOW_TYPES.SETTINGS);
+    const [reports, settings] = state.windows.map((windowItem) => windowItem.id);
+    state = toggle(state);
+    state = focus(state, settings);
+    expect(minimized(state)).toEqual([true, false]);
+    // Not all minimized now: Ctrl+` minimizes again.
+    expect(minimized(toggle(state))).toEqual([true, true]);
+    state = open(state, WORKSPACE_WINDOW_TYPES.REPORTS);
+    expect(state.activeWindowId).toBe(reports);
+    expect(minimized(state)).toEqual([false, false]);
+  });
 });

@@ -10,6 +10,7 @@ import { useSession } from '../../../shared/session/useSession.js';
 import { useBackgroundAnimations } from '../../../utils/backgroundAnimations.js';
 import { useWorkspaceActions } from '../../../workspace/hooks/useWorkspace.js';
 import { WORKSPACE_WINDOW_TYPES } from '../../../workspace/state/workspaceTypes.js';
+import { requestWorkspaceSignOut } from '../../../workspace/lib/signOutRequest.js';
 import { getActiveDomainKey } from '../../configuration/lib/configModel.js';
 import { SESSION_STORAGE_KEY, settingsTabDescriptions, settingsTabs } from '../lib/settingsModel.js';
 import { IntegrationPanel } from './panels/IntegrationPanel.jsx';
@@ -73,8 +74,10 @@ export default function SettingsWindowBody({ windowItem }) {
 
 
 
+  // The launcher's sign-out (asks about running runs); logout() only when no
+  // workspace frame is there to take it.
   const handleLogout = useCallback(() => {
-    logout();
+    if (!requestWorkspaceSignOut()) logout();
   }, [logout]);
 
   const handleRefresh = useCallback(() => {
@@ -115,7 +118,7 @@ export default function SettingsWindowBody({ windowItem }) {
           <dl className="settings_window_session_chip">
             <div>
               <dt>Session</dt>
-              <dd title={sessionId || undefined}>{sessionId || 'not initialized'}</dd>
+              <dd title={sessionId || undefined}>{sessionId || 'Not started'}</dd>
             </div>
           </dl>
         </header>

@@ -12,6 +12,7 @@ import { canTerminateTask, getTasksSnapshot, isTaskActive, subscribeTasks, termi
 import { formatRowProgress, rowProgress } from '../../features/source/lib/rowProgress.js';
 import { getStreamLogLines, getStreamRowTally, subscribeStreamLog } from '../../features/source/lib/streamLogs.js';
 import { uploadAcceptValue } from '../../features/source/lib/sourceModel.js';
+import SystemDashboard from './SystemDashboard.jsx';
 
 // The quick analysis panel (B-35; analyst decision 2026-11-24): a real, short
 // run on the formal pipeline with the Service's limits (quick/lib/quickRun.js);
@@ -34,80 +35,8 @@ function ChevronUpIcon() {
   );
 }
 
-function MockLineGraph() {
-  return (
-    <div className="workspace_home_graph_container" aria-label="Ingestion throughput line graph">
-      <div className="workspace_home_graph_meta">
-        <span className="workspace_home_graph_val">4.8 MB/s</span>
-        <span className="workspace_home_graph_trend is-up">+14.2%</span>
-      </div>
-      <svg className="workspace_home_svg_graph" viewBox="0 0 280 64" preserveAspectRatio="none">
-        <defs>
-          <linearGradient id="lineGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="var(--central-graph-stroke, #FCC676)" stopOpacity="0.35" />
-            <stop offset="100%" stopColor="var(--central-graph-stroke, #FCC676)" stopOpacity="0" />
-          </linearGradient>
-        </defs>
-        <line x1="0" y1="18" x2="280" y2="18" stroke="var(--central-graph-grid, rgba(174, 135, 79, 0.18))" strokeDasharray="4 4" />
-        <line x1="0" y1="42" x2="280" y2="42" stroke="var(--central-graph-grid, rgba(174, 135, 79, 0.18))" strokeDasharray="4 4" />
-        <path d="M0,52 Q40,20 80,36 T160,12 T240,28 T280,8 L280,64 L0,64 Z" fill="url(#lineGrad)" />
-        <path d="M0,52 Q40,20 80,36 T160,12 T240,28 T280,8" fill="none" stroke="var(--central-graph-stroke, #FCC676)" strokeWidth="2.5" strokeLinecap="round" />
-        <circle cx="80" cy="36" r="3" fill="var(--central-secondary-card-bg, #FFFFFF)" stroke="var(--central-graph-stroke, #FCC676)" strokeWidth="2" />
-        <circle cx="160" cy="12" r="3" fill="var(--central-secondary-card-bg, #FFFFFF)" stroke="var(--central-graph-stroke, #FCC676)" strokeWidth="2" />
-        <circle cx="280" cy="8" r="3" fill="var(--central-graph-stroke, #FCC676)" strokeWidth="2" />
-      </svg>
-    </div>
-  );
-}
 
-function MockNetworkGraph() {
-  return (
-    <div className="workspace_home_graph_container" aria-label="Graph analytics network map">
-      <div className="workspace_home_graph_meta">
-        <span className="workspace_home_graph_val">1,248 Nodes</span>
-        <span className="workspace_home_graph_badge">3 Clusters</span>
-      </div>
-      <svg className="workspace_home_svg_graph" viewBox="0 0 280 64">
-        <line x1="40" y1="32" x2="90" y2="16" stroke="var(--central-graph-grid, rgba(174, 135, 79, 0.35))" strokeWidth="1.5" />
-        <line x1="40" y1="32" x2="80" y2="48" stroke="var(--central-graph-grid, rgba(174, 135, 79, 0.35))" strokeWidth="1.5" />
-        <line x1="90" y1="16" x2="140" y2="28" stroke="var(--central-graph-grid, rgba(174, 135, 79, 0.35))" strokeWidth="1.5" />
-        <line x1="80" y1="48" x2="140" y2="28" stroke="var(--central-graph-grid, rgba(174, 135, 79, 0.35))" strokeWidth="1.5" />
-        <line x1="140" y1="28" x2="200" y2="16" stroke="var(--central-graph-grid, rgba(174, 135, 79, 0.35))" strokeWidth="1.5" />
-        <line x1="140" y1="28" x2="190" y2="48" stroke="var(--central-graph-grid, rgba(174, 135, 79, 0.35))" strokeWidth="1.5" />
-        <line x1="200" y1="16" x2="250" y2="32" stroke="var(--central-graph-grid, rgba(174, 135, 79, 0.35))" strokeWidth="1.5" />
-        <line x1="190" y1="48" x2="250" y2="32" stroke="var(--central-graph-grid, rgba(174, 135, 79, 0.35))" strokeWidth="1.5" />
 
-        <circle cx="40" cy="32" r="6" fill="var(--central-graph-stroke, #FCC676)" />
-        <circle cx="90" cy="16" r="4.5" fill="var(--central-graph-node, #213447)" stroke="var(--central-graph-stroke, #FCC676)" strokeWidth="1.5" />
-        <circle cx="80" cy="48" r="4.5" fill="var(--central-graph-node, #213447)" stroke="var(--central-graph-stroke, #FCC676)" strokeWidth="1.5" />
-        <circle cx="140" cy="28" r="8" fill="var(--central-graph-stroke, #FCC676)" />
-        <circle cx="200" cy="16" r="4.5" fill="var(--central-graph-node, #213447)" stroke="var(--central-graph-stroke, #FCC676)" strokeWidth="1.5" />
-        <circle cx="190" cy="48" r="4.5" fill="var(--central-graph-node, #213447)" stroke="var(--central-graph-stroke, #FCC676)" strokeWidth="1.5" />
-        <circle cx="250" cy="32" r="6" fill="var(--central-graph-stroke, #FCC676)" />
-      </svg>
-    </div>
-  );
-}
-
-function MockBarGraph() {
-  return (
-    <div className="workspace_home_graph_container" aria-label="Security compliance bar graph">
-      <div className="workspace_home_graph_meta">
-        <span className="workspace_home_graph_val">99.98%</span>
-        <span className="workspace_home_graph_trend is-neutral">0 Violations</span>
-      </div>
-      <svg className="workspace_home_svg_graph" viewBox="0 0 280 64">
-        <line x1="0" y1="56" x2="280" y2="56" stroke="var(--central-graph-grid, rgba(174, 135, 79, 0.25))" />
-        <rect x="20" y="24" width="22" height="32" rx="3" fill="var(--central-graph-fill, rgba(174, 135, 79, 0.35))" />
-        <rect x="60" y="16" width="22" height="40" rx="3" fill="var(--central-graph-fill, rgba(174, 135, 79, 0.35))" />
-        <rect x="100" y="36" width="22" height="20" rx="3" fill="var(--central-graph-fill, rgba(174, 135, 79, 0.35))" />
-        <rect x="140" y="12" width="22" height="44" rx="3" fill="var(--central-graph-stroke, #FCC676)" />
-        <rect x="180" y="20" width="22" height="36" rx="3" fill="var(--central-graph-fill, rgba(174, 135, 79, 0.35))" />
-        <rect x="220" y="8" width="22" height="48" rx="3" fill="var(--central-graph-stroke, #FCC676)" />
-      </svg>
-    </div>
-  );
-}
 
 function UploadIcon() {
   return (
@@ -189,7 +118,7 @@ function useQuickLog(task) {
   return task?.frozenLog || lines;
 }
 
-function WorkspaceHome({ openWindowsCount = 0, onOpenWindow, onOpenTask, unseenTasks = 0, unseenReports = 0, nextSourceWindowNumber = 1, apiFetch, signedIn = false, sessionsFull = '' }) {
+function WorkspaceHome({ openWindowsCount = 0, onOpenWindow, onOpenTask, unseenTasks = 0, unseenReports = 0, nextSourceWindowNumber = 1, apiFetch, signedIn = false, sessionsFull = '', sessionUsage = null }) {
   const [isDragOver, setIsDragOver] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState([]);
   const [selectedSourceMode, setSelectedSourceMode] = useState(null); // Options: null, 'realtime', 'batch', 'tasks', 'reports'
@@ -203,11 +132,13 @@ function WorkspaceHome({ openWindowsCount = 0, onOpenWindow, onOpenTask, unseenT
   const sourceDefaults = useMemo(() => resolveSourceDefaults(configuration), [configuration]);
   const [isResetSpinning, setIsResetSpinning] = useState(false);
   const [isSecondaryResetSpinning, setIsSecondaryResetSpinning] = useState(false);
+  const [dashboardRefresh, setDashboardRefresh] = useState(0);
   const [analyzeButtonLabelText, setAnalyzeButtonLabelText] = useState('Analyze');
 
   const handleResetSecondaryPanel = () => {
     if (isSecondaryResetSpinning) return;
     setIsSecondaryResetSpinning(true);
+    setDashboardRefresh((value) => value + 1);
     setTimeout(() => {
       setIsSecondaryResetSpinning(false);
     }, 650);
@@ -435,8 +366,8 @@ function WorkspaceHome({ openWindowsCount = 0, onOpenWindow, onOpenTask, unseenT
         <button
           type="button"
           className={`workspace_home_page_dot linkx_tooltip_anchor${isScrolledToSecondary ? ' is-active' : ''}`}
-          data-tooltip="System Overview Panel"
-          aria-label="Navigate to System Overview Panel"
+          data-tooltip="System Panel"
+          aria-label="Navigate to System Panel"
           onClick={handleScrollBottom}
         />
       </nav>
@@ -695,57 +626,34 @@ function WorkspaceHome({ openWindowsCount = 0, onOpenWindow, onOpenTask, unseenT
 
       {/* Full-Page Viewport Section 2: Secondary Central Box */}
       <div className="workspace_home_viewport_section workspace_home_section_secondary" ref={secondaryBoxRef}>
-        <section className="workspace_home_secondary_box" aria-label="Central workspace overview">
-          <header className="workspace_home_secondary_header">
-            <div className="workspace_home_secondary_title_group">
-              <div className="workspace_home_panel_badge">Central workspace overview</div>
-              <h3>Overview & System Status</h3>
-              <p>Detailed analysis telemetry, pipeline logs, and resource allocation overview.</p>
+        <section className="workspace_home_secondary_box" aria-label="System panel">
+          <header className="workspace_home_panel_header">
+            <div className="workspace_home_header_left">
+              <div className="workspace_home_panel_badge">System panel</div>
+              <div className="workspace_home_panel_subtitle" role="note">
+                What your windows hold, at a glance: your work, the session and, for your access, the team and the Service.
+              </div>
             </div>
             <button
               type="button"
               className={`workspace_home_panel_reset_btn linkx_tooltip_anchor${isSecondaryResetSpinning ? ' is-spinning' : ''}`}
-              data-tooltip="Refresh system overview"
-              aria-label="Refresh system overview"
+              data-tooltip="Refresh system panel"
+              aria-label="Refresh system panel"
               onClick={handleResetSecondaryPanel}
             >
               <ResetIcon />
             </button>
           </header>
 
-          <div className="workspace_home_secondary_content">
-            <div className="workspace_home_secondary_grid">
-              <div className="workspace_home_secondary_card">
-                <div className="workspace_home_secondary_card_header">
-                  <span className="workspace_home_secondary_card_icon">⚡</span>
-                  <strong>Pipeline Ingestion Engine</strong>
-                </div>
-                <p>Auto-detect ingestion engine initialized for real-time streaming & batch workloads.</p>
-                <MockLineGraph />
-                <div className="workspace_home_secondary_pill">Engine: Active</div>
-              </div>
-
-              <div className="workspace_home_secondary_card">
-                <div className="workspace_home_secondary_card_header">
-                  <span className="workspace_home_secondary_card_icon">📊</span>
-                  <strong>Graph Analytics Engine</strong>
-                </div>
-                <p>GDS centrality algorithms and Louvain community detection pre-configured for graph queries.</p>
-                <MockNetworkGraph />
-                <div className="workspace_home_secondary_pill">Algorithms: Ready</div>
-              </div>
-
-              <div className="workspace_home_secondary_card">
-                <div className="workspace_home_secondary_card_header">
-                  <span className="workspace_home_secondary_card_icon">🛡️</span>
-                  <strong>Security & Compliance</strong>
-                </div>
-                <p>Encrypted multi-tenant workspace pipeline with automated privilege validation and session logs.</p>
-                <MockBarGraph />
-                <div className="workspace_home_secondary_pill">Status: Protected</div>
-              </div>
-            </div>
-          </div>
+          <SystemDashboard
+            visible={isScrolledToSecondary}
+            refreshKey={dashboardRefresh}
+            apiFetch={apiFetch}
+            sessionUsage={sessionUsage}
+            openWindowsCount={openWindowsCount}
+            onOpenWindow={onOpenWindow}
+            onOpenTask={onOpenTask}
+          />
         </section>
       </div>
       </div>

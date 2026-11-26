@@ -25,5 +25,6 @@ A theme may override component tokens when it needs a deliberate deviation (see 
 ### Rules
 
 - Component CSS uses component tokens (or semantic ones). Don't hard-code colors in `main.css`.
+- Exception: the element picker's own chrome (`.element_picker_*` in `main.css`) is hard-coded on purpose, so it stays readable under any theme or override.
 - New component tokens go in `tokens.css` and must reference a semantic token unless they are theme-neutral (status colors, black shadows).
 - The pre-paint boot script in `index.html` mirrors the storage keys in `themeRegistry.js`. Keep them in sync.

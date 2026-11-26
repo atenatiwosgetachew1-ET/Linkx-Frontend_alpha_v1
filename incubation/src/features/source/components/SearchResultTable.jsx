@@ -1,6 +1,7 @@
 import React from 'react';
 
 import { SourceModeIcon } from './sourceUi.jsx';
+import WindowLoadScreen from '../../../shared/components/WindowLoadScreen.jsx';
 import { t, tn } from '../../../shared/i18n/index.js';
 
 // The Storage and Elasticsearch pages' search row and results while the Source window's flow
@@ -148,7 +149,9 @@ export default function SearchResultTable({
               </tbody>
             ) : null}
           </table>
-          {listed ? null : <p className="source_window_flow_table_empty" role="status" aria-live="polite">{emptyMessage}</p>}
+          {listed ? null : searching
+            ? <WindowLoadScreen className="is-block" label={emptyMessage} />
+            : <p className="source_window_flow_table_empty" role="status" aria-live="polite">{emptyMessage}</p>}
         </div>
 
         {listed && hasMore ? (

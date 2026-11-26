@@ -86,6 +86,18 @@ describe('SessionLifecycle (production lock / unlock / logout flow)', () => {
     expect(session.unlockBackendSession).not.toHaveBeenCalled();
     expect(session.notifyBackendLogout).toHaveBeenCalledWith('user_logout');
   });
+
+  it('signs the shared auto-login account out without /auth/logout (it would end every visitor’s work)', async () => {
+    auth.authMethod = 'auto';
+    try {
+      render(<Harness initiallyLocked={false} />);
+      await act(async () => { await userEvent.click(screen.getByRole('button', { name: 'Menu sign out' })); });
+      await waitFor(() => expect(auth.logout).toHaveBeenCalled());
+      expect(session.notifyBackendLogout).not.toHaveBeenCalled();
+    } finally {
+      delete auth.authMethod;
+    }
+  });
 });
 
 describe('idle sign-out', () => {
@@ -144,7 +156,8 @@ describe('a domain changed by an administrator (B-47)', () => {
     expect(notify).toHaveBeenCalledTimes(1);
     await send({ domain: 'cdr', section: 'mapping', version_id: 1 });
     expect(notify).toHaveBeenCalledTimes(1);
-    expect(session.apiFetch).not.toHaveBeenCalled();
+    // The list of domains is read once signed in (round 4); the configuration is not loaded again.
+    expect(session.apiFetch.mock.calls.filter(([url]) => url !== '/domains')).toEqual([]);
   });
 
   it('a configuration of another domain is not taken', async () => {

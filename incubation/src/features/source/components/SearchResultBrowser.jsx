@@ -1,6 +1,7 @@
 import React from 'react';
 
 import { SourceModeIcon } from './sourceUi.jsx';
+import WindowLoadScreen from '../../../shared/components/WindowLoadScreen.jsx';
 import { t, tn } from '../../../shared/i18n/index.js';
 
 // Shared result browser for the Storage (raw HDFS) and Elastic (hybrid)
@@ -148,6 +149,10 @@ export default function SearchResultBrowser({
               </button>
             ) : null}
           </>
+        ) : searching ? (
+          <div className="source_window_storage_placeholder_row">
+            <WindowLoadScreen className="is-block" label={emptyMessage} />
+          </div>
         ) : (
           <div className="source_window_storage_placeholder_row" role="status" aria-live="polite">
             <span />

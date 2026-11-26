@@ -6,10 +6,9 @@ import { NotificationContext } from './notificationContext.js';
 
 const NOTICE_LEVELS = new Set(['success', 'warning', 'error', 'info']);
 
-// Time on screen follows importance: errors stay until dismissed (they
-// usually need action), warnings linger, routine success/info notices are
-// brief. A caller's explicit durationMs still wins.
-const NOTICE_DURATIONS_MS = { error: 0, warning: 8000, success: 4000, info: 4000 };
+// Time on screen follows importance: errors and warnings stay twice as long
+// as routine success/info notices. A caller's explicit durationMs still wins.
+const NOTICE_DURATIONS_MS = { error: 8000, warning: 8000, success: 4000, info: 4000 };
 
 const NOTICE_ICONS = {
   success: <polyline points="5 12.5 10 17 19 7" />,

@@ -440,4 +440,12 @@
   --settings-theme-studio-cat-badge-text: #131e2a;
   --settings-theme-studio-empty-search-text: #4a5568;
   --settings-theme-studio-search-hint-text: var(--muted-text);
+  /* Theme Studio coverage, 2026-11-26: values that were written into the CSS. */
+  --settings-error-border: rgba(209, 0, 0, 0.24);
+  --settings-studio-menu-shadow: 0 8px 20px rgba(0, 0, 0, 0.16);
+  --settings-theme-option-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  --settings-theme-option-hover-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  --settings-theme-option-selected-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  --settings-theme-badge-shadow: 0 0 6px rgba(0, 0, 0, 0.4);
+  --settings-service-target-tab-border: rgba(127, 127, 127, 0.25);
 }

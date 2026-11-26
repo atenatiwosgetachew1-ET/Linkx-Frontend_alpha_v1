@@ -25,7 +25,7 @@ import { describeFilterPayload } from '../../source/lib/dataframeFilter.js';
 import { readSettingsUsed, settingsRemark } from '../../../shared/runSettings.js';
 
 export const MAX_ANALYSIS_SESSIONS = 3;
-const MAX_TASKS = 50; // finished tasks beyond this are dropped, oldest first
+export const MAX_TASKS = 50; // finished tasks beyond this are dropped, oldest first
 
 export const TASK_STATUSES = Object.freeze({
   STARTING: 'starting',

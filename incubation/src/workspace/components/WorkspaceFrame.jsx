@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExtern
 import { createPortal } from 'react-dom';
 
 import WorkspaceHome from './WorkspaceHome.jsx';
+import { useAuth } from '../../auth/useAuth.js';
 import NetworkBackground from './NetworkBackground.jsx';
 import RightWorkspace from './RightWorkspace.jsx';
 import WindowManager from './WindowManager.jsx';
@@ -71,6 +72,7 @@ import { resetPermissionCatalog } from '../../auth/permissions.js';
 import { clearChartResults } from '../../features/chart/lib/chartResultCache.js';
 import { resetGraphLinkBus } from '../../features/graph/lib/graphLinkBus.js';
 import { resetAlerts } from '../../features/alerts/lib/alertStore.js';
+import { onSignOutRequest } from '../lib/signOutRequest.js';
 
 // Signed out / workspace gone: the next workspace reuses window ids
 // (source-1, reports-4…), so nothing kept per window may survive into it:
@@ -421,6 +423,12 @@ export default function WorkspaceFrame({ user, token, mainSessionId, sessionErro
   // (analyst decision 2026-11-25). How they ended is told at the next sign-in.
   // Finished runs' kept sessions are released.
   const ownerRef = React.useRef('');
+  // The shared auto-login account signs out without /auth/logout (it would
+  // end every visitor's work, Service round 4 §2.3): this browser's own
+  // Source window sessions are closed here instead.
+  const { authMethod } = useAuth() || {};
+  const sharedAccountRef = React.useRef(false);
+  sharedAccountRef.current = authMethod === 'auto';
   ownerRef.current = workspaceOwnerKey(user);
   useEffect(() => {
     const onPageHide = (event) => {
@@ -442,6 +450,11 @@ export default function WorkspaceFrame({ user, token, mainSessionId, sessionErro
       rememberAwayRuns(ownerRef.current);
       endAllAbandonedStreams(apiFetchRef.current, { reason: 'workspace_closed', keepalive: true, except: unattendedWindowIds() }).catch(() => null);
       releaseAllTaskSessions({ keepalive: true });
+      if (sharedAccountRef.current) {
+        windowsRef.current.filter((item) => item.type === WORKSPACE_WINDOW_TYPES.SOURCE && !getActiveStream(item.id)).forEach((item) => {
+          releaseSourceSessionRef.current(item, 'signed_out', { keepalive: true });
+        });
+      }
       forgetActiveStreams();
       clearWorkspaceSessionData();
     };
@@ -536,6 +549,10 @@ export default function WorkspaceFrame({ user, token, mainSessionId, sessionErro
     await endAllAbandonedStreams(apiFetch, { reason: 'user_logout' }).catch(() => null);
     onSignOut();
   };
+  // Settings → Log out takes the same flow.
+  const requestSignOutRef = useRef(requestSignOut);
+  requestSignOutRef.current = requestSignOut;
+  useEffect(() => onSignOutRequest(() => requestSignOutRef.current()), []);
 
   const windowWorkspace = useMemo(() => ({
     ...workspace,
@@ -702,6 +719,7 @@ export default function WorkspaceFrame({ user, token, mainSessionId, sessionErro
               apiFetch={latestApiFetch}
               signedIn={Boolean(token && mainSessionId)}
               sessionsFull={sessionUsage.available <= 0 ? sessionLimitMessage(sessionUsage) : ''}
+              sessionUsage={sessionUsage}
             />
             {(sessionError || sourceOpenError) && (
               <div className="workspace_session_notice" role="status">

@@ -2,6 +2,7 @@ import React from 'react';
 
 import GraphCardNode from './GraphCardNode.jsx';
 import GraphOverlayPanel from './GraphOverlayPanel.jsx';
+import WindowLoadScreen from '../../../shared/components/WindowLoadScreen.jsx';
 
 // Production's Graph Alerts panel (graphs_basic.html #alerts-overlay) in the
 // shared overlay frame. "Name by" picks the node property that names each
@@ -94,7 +95,7 @@ export default function GraphAlertsPanel({
       </div>
       <div className="graph_overlay_list graph_card_list">
         {scanning ? (
-          <div className="graph_overlay_loading"><span className="graph_window_spinner" aria-hidden="true" />Scanning graph for alerts…</div>
+          <WindowLoadScreen className="is-block" label="Scanning graph for alerts…" />
         ) : alerts.length ? GROUPS.map(({ severity, title: groupTitle }) => {
           const items = alerts.filter((alert) => (alert.severity === 'high') === (severity === 'high'));
           if (!items.length) return null;

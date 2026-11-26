@@ -16,6 +16,8 @@ let state = {
   drafts: {}, // alertId -> draft (Extract results)
   events: {}, // alertId -> [{ at, type, text }] newest first
   busy: {}, // alertId -> 'analysing' | 'extracting' | 'sending'
+  loading: false, // the list is being asked for (first load or a reload)
+  loadError: '', // why the last list request failed ('' when it did not)
 };
 const listeners = new Set();
 const emit = (next) => {
@@ -32,7 +34,7 @@ export const getAlert = (id) => state.alerts.find((alert) => alert.id === String
 
 export const setAlertsMode = (mode, { userId = state.userId, username = '', sub = '' } = {}) => {
   if (mode === state.mode && userId === state.userId) return;
-  emit({ mode, userId, identity: { userId, username, sub }, alerts: [], drafts: {}, events: {}, busy: {} });
+  emit({ mode, userId, identity: { userId, username, sub }, alerts: [], drafts: {}, events: {}, busy: {}, loading: false, loadError: '' });
 };
 
 // A record from the service (H-1/H-3 shape). -> { alert, previous }
@@ -76,5 +78,8 @@ export const setAlertBusy = (id, value) => {
   emit({ busy });
 };
 
+// The list request: { loading, loadError } (either may be left out).
+export const setAlertsLoad = (patch) => emit(patch);
+
 // Tests and sign-out.
-export const resetAlerts = () => emit({ mode: 'off', userId: '', identity: {}, alerts: [], drafts: {}, events: {}, busy: {} });
+export const resetAlerts = () => emit({ mode: 'off', userId: '', identity: {}, alerts: [], drafts: {}, events: {}, busy: {}, loading: false, loadError: '' });

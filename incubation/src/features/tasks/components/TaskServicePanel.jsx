@@ -73,33 +73,38 @@ export default function TaskServicePanel({ task, dialogHost = null, graphMissing
     metadata: { reportsTab: 'evidence', reportsRequester: 'analyst', reportsSelect: task.evidenceId || null, openSeq: Date.now() },
   });
 
+  // One line each: what it says on the left, its button (if any) on the right.
+  const row = (key, text, action = null) => (
+    <div className="tasks_service_row" key={key}>
+      <p className="tasks_service_note">{text}</p>
+      {action ? <div className="tasks_service_actions">{action}</div> : null}
+    </div>
+  );
+
   return (
     <div className={`tasks_service is-${task.lifecycle || 'active'}${task.evidenceId ? ' is-saved' : ''}`} aria-label="Service record">
-      {task.lifecycle === TASK_LIFECYCLES.EXPIRING ? (
-        <p className="tasks_service_note">Expires soon{task.expiresAt ? ` (${formatDateTime(task.expiresAt)})` : ''}. Save or report it before then.</p>
+      {task.lifecycle === TASK_LIFECYCLES.EXPIRING
+        ? row('expiring', `Expires soon${task.expiresAt ? ` (${formatDateTime(task.expiresAt)})` : ''}. Save or report it before then.`)
+        : null}
+      {expired ? row(
+        'expired',
+        `${task.lifecycle === TASK_LIFECYCLES.ARCHIVED ? 'Archived' : 'Expired'}: read-only. Reconfirm it to save it or report it back.`,
+        !task.foreign ? (
+          <button type="button" className="tasks_action" disabled={busy === 'reconfirm'} onClick={reconfirm}>
+            {busy === 'reconfirm' ? 'Reconfirming…' : 'Reconfirm'}
+          </button>
+        ) : null,
       ) : null}
-      {expired ? (
-        <p className="tasks_service_note">
-          {task.lifecycle === TASK_LIFECYCLES.ARCHIVED ? 'Archived' : 'Expired'}: read-only. Reconfirm it to save it or report it back.
-          {!task.foreign ? (
-            <button type="button" className="tasks_action" disabled={busy === 'reconfirm'} onClick={reconfirm}>
-              {busy === 'reconfirm' ? 'Reconfirming…' : 'Reconfirm'}
-            </button>
-          ) : null}
-        </p>
-      ) : null}
-      {task.foreign && task.ownerName ? <p className="tasks_service_note">Run by {task.ownerName}.</p> : null}
+      {task.foreign && task.ownerName ? row('owner', `Run by ${task.ownerName}.`) : null}
 
-      {task.evidenceId ? (
-        <p className="tasks_service_note">
-          <span className="tasks_evidence_badge">Saved as evidence</span>
-          <button type="button" className="tasks_action tasks_service_end" onClick={openEvidence}>Open in Reports</button>
-        </p>
-      ) : canSave ? (
-        <p className="tasks_service_note">
-          Keep this run as a permanent record in Reports.
-          <button type="button" className="tasks_action tasks_evidence_button tasks_service_end" onClick={() => { setMessage(''); setDialogOpen(true); }}>Save as evidence</button>
-        </p>
+      {task.evidenceId ? row(
+        'saved',
+        <span className="tasks_evidence_badge">Saved as evidence</span>,
+        <button type="button" className="tasks_action" onClick={openEvidence}>Open in Reports</button>,
+      ) : canSave ? row(
+        'save',
+        'Keep this run as a permanent record in Reports.',
+        <button type="button" className="tasks_action tasks_evidence_button" onClick={() => { setMessage(''); setDialogOpen(true); }}>Save as evidence</button>,
       ) : null}
       {message ? <p className="tasks_service_message" role="status">{message}</p> : null}
       {dialog && dialogHost ? createPortal(dialog, dialogHost) : dialog}

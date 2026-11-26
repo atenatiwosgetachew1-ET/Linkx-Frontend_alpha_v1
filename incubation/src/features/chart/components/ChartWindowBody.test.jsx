@@ -142,6 +142,20 @@ describe('ChartWindowBody', () => {
     expect(screen.queryByRole('menuitem', { name: 'New Graph window' })).not.toBeInTheDocument();
   });
 
+  it('an empty graph still fetching: the loader; failed: says so; truly empty: no data yet', async () => {
+    const { store } = setup();
+    act(() => {
+      store.replace({ nodes: [], edges: [] });
+      store.setStatus({ state: 'queued', message: 'Queued…' });
+    });
+    expect(await screen.findByText('Loading the graph…')).toBeInTheDocument();
+    act(() => store.setStatus({ state: 'error', message: 'The Service refused the request.' }));
+    expect(await screen.findByText('The linked graph could not be loaded.')).toBeInTheDocument();
+    expect(screen.getByText('The Service refused the request.')).toBeInTheDocument();
+    act(() => store.setStatus({ state: 'empty' }));
+    expect(await screen.findByText('The linked graph has no data yet.')).toBeInTheDocument();
+  });
+
   it('Automatic (the default): once linked, the Global-level charts come up by themselves, once', async () => {
     setup({ chartMetadata: { chartGraph: 'graph-1' } });
     const globals = ['Assortativity', 'Reciprocity', 'Global Metrics', 'Cohesion Metrics', 'Temporal Metrics', 'Heat Matrix (Day \u00d7 Hour)', 'Histogram', 'Degree Distribution', 'Community Sizes'];

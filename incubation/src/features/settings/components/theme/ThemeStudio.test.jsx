@@ -51,7 +51,7 @@ describe('Theme Studio', () => {
     expect(within(nav).queryByRole('button', { name: 'Notification Popups' })).not.toBeInTheDocument();
     expect(within(pane()).getByRole('heading', { name: 'Notification Popups' })).toBeInTheDocument();
     expect(within(pane()).queryByRole('button', { expanded: true })).not.toBeInTheDocument();
-    expect(rows()).toHaveLength(13);
+    expect(rows()).toHaveLength(14);
   });
 
   it('searches every part at once, and opens a part from its results', async () => {

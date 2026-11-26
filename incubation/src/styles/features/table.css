@@ -147,7 +147,7 @@
 	border: 1px solid var(--graph-border);
 	border-radius: 8px;
 	background: var(--graph-toolbar-bg);
-	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+	box-shadow: var(--table-menu-shadow);
 }
 
 .table_columns_menu ol {
@@ -231,15 +231,10 @@
    row's place in the list, so it holds while scrolling (only the rows in
    sight are drawn). Dark themes take a lighter navy to show at all. */
 .table_window {
-	--table-stripe: color-mix(in srgb, #1e3a5f 5%, transparent);
+	--table-stripe: var(--table-row-stripe);
 	/* The header: a firmer navy over the toolbar's colour, opaque (it stays
 	   on top while scrolling) (analyst decision 2026-11-18). */
-	--table-head: color-mix(in srgb, #1e3a5f 14%, var(--graph-toolbar-bg));
-}
-
-:is([data-theme*='dark'], [data-theme='deep-space'], [data-theme='cyberpunk']) .table_window {
-	--table-stripe: color-mix(in srgb, #8fb3e0 6%, transparent);
-	--table-head: color-mix(in srgb, #8fb3e0 14%, var(--graph-toolbar-bg));
+	--table-head: color-mix(in srgb, var(--table-head-tint) 14%, var(--graph-toolbar-bg));
 }
 
 .table_row.is-alt {

@@ -24,11 +24,12 @@ import {
   setTaskHandlers,
   updateTask,
 } from '../lib/taskRegistry.js';
+import { loadServerTasks, resetServerTaskLoad } from '../lib/serverTasks.js';
 import TasksWindowBody from './TasksWindowBody.jsx';
 
 afterEach(() => {
   cleanup();
-  act(() => resetTasks());
+  act(() => { resetTasks(); resetServerTaskLoad(); });
 });
 
 let workspaceRef;
@@ -61,6 +62,19 @@ describe('TasksWindowBody', () => {
     renderTasks();
     expect(screen.getByText('No analysis tasks yet')).toBeInTheDocument();
     expect(screen.getByRole('meter', { name: 'Analysis sessions in use' })).toHaveAttribute('aria-valuenow', '0');
+  });
+
+  it('the Service’s list: its loader on the first load, then why it failed in the empty state', async () => {
+    let fail;
+    const apiFetch = vi.fn(() => new Promise((_resolve, reject) => { fail = reject; }));
+    renderTasks({ apiFetch });
+    let loading;
+    act(() => { loading = loadServerTasks(apiFetch, { scope: 'mine' }); });
+    expect(screen.getByText('Loading tasks…')).toBeInTheDocument();
+    expect(screen.queryByText('No analysis tasks yet')).toBeNull();
+    await act(async () => { fail(new Error('down')); await loading; });
+    expect(screen.getByText('No analysis tasks yet')).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('The task list could not be loaded from the Service.');
   });
 
   it('lists active and finished tasks and shows the selected one', async () => {

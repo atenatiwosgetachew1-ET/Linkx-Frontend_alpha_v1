@@ -12,6 +12,7 @@ vi.mock('./RightWorkspace.jsx', () => ({ default: () => null }));
 vi.mock('./NetworkBackground.jsx', () => ({ default: () => null }));
 
 import WorkspaceFrame from './WorkspaceFrame.jsx';
+import { requestWorkspaceSignOut } from '../lib/signOutRequest.js';
 import { AuthContext } from '../../auth/authContext.js';
 import { SessionContext } from '../../shared/session/sessionContext.js';
 import { NotificationProvider } from '../../shared/notifications/NotificationContext.jsx';
@@ -201,6 +202,17 @@ describe('leaving', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Sign out' }));
     await userEvent.click(screen.getByRole('button', { name: 'Sign out anyway' }));
     expect(onSignOut).toHaveBeenCalledTimes(2);
+  });
+
+  it('a sign-out asked from a window (Settings) takes the same flow', async () => {
+    const { onSignOut } = open();
+    await settle(400);
+    running();
+    let taken;
+    act(() => { taken = requestWorkspaceSignOut(); });
+    expect(taken).toBe(true);
+    expect(onSignOut).not.toHaveBeenCalled();
+    expect(screen.getByRole('dialog', { name: 'Sign out now?' })).toHaveTextContent('1 running analysis will be stopped.');
   });
 
   it('closes the Source sessions of a page that goes away', async () => {

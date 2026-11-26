@@ -959,7 +959,7 @@
 	border: 2px solid var(--score-color);
 	border-radius: 50%;
 	background: var(--config-form-slider-thumb-bg);
-	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+	box-shadow: var(--config-form-slider-thumb-shadow);
 	transition: transform 120ms ease;
 	-webkit-appearance: none;
 	appearance: none;
@@ -971,7 +971,7 @@
 	border: 2px solid var(--score-color);
 	border-radius: 50%;
 	background: var(--config-form-slider-thumb-bg);
-	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+	box-shadow: var(--config-form-slider-thumb-shadow);
 }
 
 .config_page .config_score input[type="range"]:hover:not(:disabled)::-webkit-slider-thumb,
@@ -1880,7 +1880,7 @@
 	object-fit: cover;
 	border: 1px solid var(--libraries-template-thumb-border);
 	border-radius: 3px;
-	box-shadow: 0 4px 12px rgb(0 0 0 / 0.12);
+	box-shadow: var(--libraries-template-thumbnail-shadow);
 }
 
 .libraries_template_body {
@@ -2047,7 +2047,7 @@
    custom icon, and the upload popup's drop area and list. */
 .libraries_sets {
 	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+	grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr));
 	gap: 8px;
 	margin: 0;
 	padding: 0;
@@ -2465,31 +2465,106 @@ button.libraries_icon {
 
 .config_domain_presets {
 	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-	gap: 8px;
+	grid-template-columns: repeat(auto-fill, minmax(min(230px, 100%), 1fr));
+	gap: 6px;
 	margin: 0;
 	padding: 0;
 	list-style: none;
 }
 
-.config_domain_presets li {
+/* Sensitivity ▸ presets: light, compact cards. Only the one in use takes
+   a tone, by how strict it is (relaxed green … strictest red). */
+.config_domain_presets li.config_preset {
+	--preset-tone: var(--config-preset-tone-unknown);
 	display: flex;
 	align-items: center;
-	justify-content: space-between;
-	gap: 10px;
-	padding: 9px 11px;
+	gap: 9px;
+	padding: 7px 9px;
 	border: 1px solid var(--settings-service-target-tabs-border);
-	border-radius: 8px;
+	border-radius: 6px;
+	background: transparent;
+	transition: border-color 140ms ease, background-color 140ms ease;
 }
 
-.config_domain_presets li.is-on {
-	border-color: var(--settings-service-target-tab-active-border);
+.config_domain_presets li.config_preset.is-on.is-level-0 { --preset-tone: var(--config-preset-tone-0); }
+.config_domain_presets li.config_preset.is-on.is-level-1 { --preset-tone: var(--config-preset-tone-1); }
+.config_domain_presets li.config_preset.is-on.is-level-2 { --preset-tone: var(--config-preset-tone-2); }
+.config_domain_presets li.config_preset.is-on.is-level-3 { --preset-tone: var(--config-preset-tone-3); }
+
+.config_domain_presets li.config_preset.is-on {
+	border-color: color-mix(in srgb, var(--preset-tone) 55%, transparent);
+	background: color-mix(in srgb, var(--preset-tone) 7%, transparent);
 }
 
-.config_domain_presets li > span {
-	display: flex;
-	flex-direction: column;
+.config_preset_icon {
+	display: grid;
+	flex: none;
+	place-items: center;
+	width: 26px;
+	height: 26px;
+	border-radius: 6px;
+	background: color-mix(in srgb, currentColor 8%, transparent);
+	color: var(--settings-text-secondary);
+}
+
+.config_preset_icon svg {
+	width: 16px;
+	height: 16px;
+}
+
+.config_preset.is-on .config_preset_icon {
+	background: color-mix(in srgb, var(--preset-tone) 16%, transparent);
+	color: var(--preset-tone);
+}
+
+.config_preset_text {
+	display: grid;
+	flex: 1 1 auto;
+	gap: 1px;
 	min-width: 0;
+}
+
+.config_domain_presets .config_preset_text small {
+	color: var(--settings-text-secondary);
+	font-size: 9.5px;
+	font-weight: 600;
+	letter-spacing: 0.05em;
+	text-transform: uppercase;
+}
+
+.config_domain_presets .config_preset.is-on .config_preset_text small {
+	color: var(--preset-tone);
+}
+
+.config_preset_text strong {
+	overflow: hidden;
+	color: var(--config-active-rule-name-text);
+	font-size: 12.5px;
+	font-weight: 600;
+	line-height: 1.25;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.config_preset_tags {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+}
+
+.config_preset_tags em {
+	color: var(--settings-text-secondary);
+	font-size: 10.5px;
+	font-style: normal;
+}
+
+.config_preset_tags em + em::before {
+	content: '· ';
+}
+
+.config_preset.is-on .config_preset_tags em:first-child {
+	color: var(--preset-tone);
+	font-weight: 600;
 }
 
 .config_domain_presets small,
@@ -2549,4 +2624,236 @@ button.libraries_icon {
 .config_domain_add .settings_input {
 	width: auto;
 	min-width: 200px;
+}
+
+/* Configuration ▸ Domain profiles (round 4) */
+.config_profile_fields {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(min(260px, 100%), 1fr));
+	gap: 12px 16px;
+}
+
+.config_profile_field {
+	display: flex;
+	flex-direction: column;
+	gap: 5px;
+	min-width: 0;
+}
+
+.config_profile_field.is-changed .settings_input {
+	border-color: var(--settings-service-target-tab-active-border);
+}
+
+.config_profile_field_head {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 6px;
+}
+
+.config_profile_field_head small {
+	opacity: 0.7;
+}
+
+.config_profile_value {
+	overflow-wrap: anywhere;
+	opacity: 0.85;
+}
+
+/* Domain profiles: "New domain", a pill like the domains, dashed. */
+.config_system_domain.is-new {
+	border-style: dashed;
+	background: transparent;
+}
+
+.config_system_domain.is-new span {
+	font-size: 13px;
+	line-height: 1;
+}
+
+.config_system_domain.is-new:disabled {
+	opacity: 0.55;
+	cursor: not-allowed;
+}
+
+/* New domain popup: label, description, input, one under the other. */
+.config_profile_fields.is-stacked {
+	grid-template-columns: 1fr;
+	gap: 14px;
+}
+
+.config_profile_field_label {
+	font-weight: 600;
+}
+
+.config_profile_field_help {
+	opacity: 0.75;
+	line-height: 1.4;
+}
+
+/* Domain profiles popups (New domain, Deactivate / Activate): the normal
+   Settings popup, its padding kept, only narrower (the "narrow" size also
+   drops the body's padding, for the Create user popup's own layout). */
+.graph_customize.is-report.settings_popup:has(.config_profile_popup) {
+	width: min(660px, 100%);
+}
+
+/* New domain ▸ Preview: a plain summary, a line per field. */
+.config_profile_summary {
+	display: grid;
+	gap: 5px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+	font-size: 12px;
+	line-height: 1.45;
+}
+
+.config_profile_summary li {
+	overflow-wrap: anywhere;
+}
+
+.config_profile_summary span {
+	color: var(--settings-popup-muted-text);
+}
+
+.config_profile_summary span::after {
+	content: ':';
+}
+
+/* The New domain form's textarea: taller than the one-line inputs (which
+   the Create user form fixes at 32px), its mark at its first line. */
+.settings_popup .config_profile_popup .users_input_wrap textarea.graph_customize_input {
+	height: auto;
+	min-height: 52px;
+	resize: vertical;
+}
+
+.config_profile_popup .users_input_wrap:has(textarea) .users_input_state {
+	top: 16px;
+}
+
+/* New domain ▸ Preview: as wide as its longest line, within bounds. */
+.graph_customize.is-report.settings_popup:has(.config_profile_summary) {
+	width: fit-content;
+	min-width: min(320px, 100%);
+	max-width: min(560px, 100%);
+}
+
+/* The New domain form's dropdowns: the mark sits left of the browser's
+   arrow instead of on it. */
+.settings_popup .config_profile_popup .users_input_wrap select.graph_customize_input {
+	padding-right: 52px;
+}
+
+.config_profile_popup .users_input_wrap:has(select) .users_input_state {
+	right: 28px;
+}
+
+/* Domain profiles ▸ Profile: Patterns on its own line; the active switch
+   in the header. */
+.config_profile_field.is-wide {
+	grid-column: 1 / -1;
+}
+
+.config_profile_field {
+	gap: 6px;
+	line-height: 1.4;
+}
+
+.config_profile_patterns {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.config_profile_patterns li {
+	padding: 3px 9px;
+	border: 1px solid var(--settings-service-target-tab-border, rgba(127, 127, 127, 0.25));
+	border-radius: 999px;
+	font-size: 11px;
+	font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.config_profile_actions_rule {
+	align-self: center;
+	width: 1px;
+	height: 18px;
+	margin: 0 4px;
+	background: currentColor;
+	opacity: 0.1;
+	transform: scaleX(0.5);
+}
+
+.settings_switch.config_profile_active {
+	gap: 8px;
+}
+
+.config_profile_inactive {
+	margin-bottom: 8px;
+	padding: 8px 12px;
+	border: 1px dashed var(--settings-service-target-tab-active-border);
+	border-radius: 6px;
+	line-height: 1.4;
+}
+
+/* Domain profiles ▸ Profile in one card like the Domains page: the grid
+   fills as many columns as fit. */
+.config_card_grid.config_profile_grid {
+	grid-template-columns: repeat(auto-fill, minmax(min(240px, 100%), 1fr));
+}
+
+/* Domain profiles ▸ Profile: the actions take the rest of the header line,
+   so the active switch ends at its right edge, even once they wrap under
+   the title. */
+.settings_block_actions:has(> .config_profile_active) {
+	flex: 1 1 auto;
+	justify-content: flex-end;
+}
+
+/* Domains page: its blocks' actions end at the right edge, as on Domain
+   profiles, also once they wrap under the title. */
+.config_sensitivity .settings_block_actions {
+	flex: 1 1 auto;
+	justify-content: flex-end;
+}
+
+/* Domain profiles: the field's origin badge (Built in, Superuser), small
+   and quiet beside the label. */
+.config_profile_field_head .config_domain_origin {
+	padding: 0 5px;
+	border-color: color-mix(in srgb, currentColor 22%, transparent);
+	font-size: 9px;
+	font-weight: 500;
+	line-height: 14px;
+	letter-spacing: 0.02em;
+	/* Faded by colour, not opacity: the "i"'s tooltip inside stays solid. */
+	color: color-mix(in srgb, var(--settings-text-secondary) 80%, transparent);
+}
+
+.config_profile_field_head .config_domain_origin.is-admin {
+	border-color: color-mix(in srgb, var(--settings-service-target-tab-active-border) 50%, transparent);
+}
+
+/* The field's "i" inside its origin badge. */
+.config_profile_field_head .config_domain_origin.has-info {
+	display: inline-flex;
+	align-items: center;
+	gap: 3px;
+	padding-right: 3px;
+}
+
+.config_profile_field_head .config_domain_origin.has-info .config_info {
+	display: inline-grid;
+	place-items: center;
+	margin: 0;
+	color: inherit;
+}
+
+.config_profile_field_head .config_domain_origin.has-info .config_info svg {
+	width: 9px;
+	height: 9px;
 }

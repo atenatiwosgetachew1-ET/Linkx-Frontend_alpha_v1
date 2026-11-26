@@ -38,10 +38,21 @@ const DOMAIN_PILLAR_LABELS = {
 
 export const DEFAULT_REGISTERED_DOMAINS = ['bank', 'microfinance', 'cdr', 'insurance', 'social_media'];
 
+// The Service's list of domains (GET /domains, round 4), set by
+// shared/domains/domainRegistry.js; null until the Service offers it.
+let directory = null;
+export const setDomainDirectory = (domains) => {
+  directory = Array.isArray(domains) ? new Map(domains.map((domain) => [domain.id, domain])) : null;
+};
+// An inactive domain takes no new work: selectors do not offer it.
+export const isDomainInactive = (domainKey) => directory?.get(String(domainKey || '').trim().toLowerCase())?.active === false;
+
 export const getActiveDomainKey = (config) => String(config?.active_domain || config?.domain || 'bank').trim().toLowerCase();
 
 export const formatDomainPillarLabel = (domainKey) => {
   const cleanKey = String(domainKey || '').trim().toLowerCase();
+  const named = directory?.get(cleanKey)?.displayName;
+  if (named) return named;
   if (DOMAIN_PILLAR_LABELS[cleanKey]) return DOMAIN_PILLAR_LABELS[cleanKey];
   if (!cleanKey) return 'Banking';
   return cleanKey.charAt(0).toUpperCase() + cleanKey.slice(1).replace(/_/g, ' ');
@@ -57,7 +68,8 @@ export const getRegisteredDomains = (config) => {
   if (!named.length) return DEFAULT_REGISTERED_DOMAINS;
   const active = getActiveDomainKey(config);
   const byLabel = new Map();
-  [...named, active].forEach((key) => {
+  // Inactive ones are left out, except the one in use (it is still shown).
+  [...named.filter((key) => !isDomainInactive(key)), active].forEach((key) => {
     const label = formatDomainPillarLabel(key);
     if (!byLabel.has(label) || key === active) byLabel.set(label, key);
   });

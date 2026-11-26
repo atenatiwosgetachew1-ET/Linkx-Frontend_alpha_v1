@@ -19,6 +19,9 @@ import { isTypingTarget, matchesWindow, useWindowMru, windowDetail } from '../li
 //   it landed.
 // - Alt+` (Shift reverses), also while typing: steps through the list while
 //   Alt is held, like Alt+Tab; releasing Alt switches.
+// - Ctrl+`, also while typing: minimizes every window; pressed again while
+//   all are minimized, brings them all back. Switching to a window (` or
+//   the list) brings back that one.
 // Alt+Tab and Ctrl+Tab belong to the operating system and the browser. In
 // the open list: ↑ / ↓, Enter, Escape.
 const WALK_IDLE_MS = 1000;
@@ -26,7 +29,7 @@ const TAG_MS = 1100;
 
 // renderIcon(path, className?): the launcher's icon.
 export default function WindowSwitcher({ workspace, iconPaths = {}, fallbackIcon, renderIcon, onSwitched }) {
-  const { windows, activeWindowId, focusWindow, closeWindow } = workspace;
+  const { windows, activeWindowId, focusWindow, closeWindow, toggleMinimizeAll } = workspace;
   // A ` walk in progress: { ids, index } (the order at its first press).
   const [walking, setWalking] = useState(false);
   const walkRef = useRef(null);
@@ -122,6 +125,13 @@ export default function WindowSwitcher({ workspace, iconPaths = {}, fallbackIcon
         close();
         return;
       }
+      if (event.code === 'Backquote' && event.ctrlKey && !event.altKey && !event.metaKey && !event.shiftKey) {
+        if (event.repeat || !stateRef.current.windows.length || !toggleMinimizeAll) return;
+        event.preventDefault();
+        if (stateRef.current.isOpen) close();
+        toggleMinimizeAll();
+        return;
+      }
       if (event.code === 'Backquote' && !event.altKey && !event.ctrlKey && !event.metaKey) {
         if (event.repeat || stateRef.current.isOpen || isTypingTarget(event.target)) return;
         if (walkStep(event.shiftKey ? -1 : 1)) event.preventDefault();
@@ -157,7 +167,7 @@ export default function WindowSwitcher({ workspace, iconPaths = {}, fallbackIcon
       window.removeEventListener('keyup', onKeyUp, true);
       window.removeEventListener('blur', onBlur);
     };
-  }, [switchTo, close, walkStep]);
+  }, [switchTo, close, walkStep, toggleMinimizeAll]);
 
   const onListKeyDown = (event) => {
     if (event.key === 'Escape') {
@@ -182,7 +192,7 @@ export default function WindowSwitcher({ workspace, iconPaths = {}, fallbackIcon
       <button
         className="workspace_launcher_button workspace_switcher_button linkx_tooltip_anchor"
         type="button"
-        data-tooltip="Switch window (` next window)"
+        data-tooltip="Switch window (` next window, Ctrl+` minimize all)"
         aria-label={`Switch window: ${windows.length} open`}
         aria-expanded={isOpen}
         aria-haspopup="dialog"

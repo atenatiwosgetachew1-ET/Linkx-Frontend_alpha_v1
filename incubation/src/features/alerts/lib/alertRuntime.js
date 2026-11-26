@@ -12,7 +12,7 @@ import {
   INTAKE, RESPONSE, alertNotice, analyseBlocker, canSendFeedback, feedbackPayload, feedbackSizeProblem, noticeTypesFor,
 } from './alertModel.js';
 import {
-  getAlert, getAlertsSnapshot, logAlertEvent, patchAlert, setAlertBusy, setAlertDraft, setAlertsMode, upsertAlert,
+  getAlert, getAlertsSnapshot, logAlertEvent, patchAlert, setAlertBusy, setAlertDraft, setAlertsLoad, setAlertsMode, upsertAlert,
 } from './alertStore.js';
 import {
   TASK_ORIGINS, TASK_STATUSES, createTask, finishTask, getTask, getTaskByServerId, linkServerTask, markTaskRunning, updateTask,
@@ -143,10 +143,8 @@ const onEvent = (event) => {
         finishTask(taskId, TASK_STATUSES.COMPLETED, { message: 'Link analysis finished.' });
       }
       setAlertBusy(event.alertId, null);
-      if (alert) {
-        announce('analysis_completed', alert, { flags: event.flags });
-        openAlertGraph(alert.id);
-      }
+      // The graph opens only from Open graph (user decision 2026-11-26).
+      if (alert) announce('analysis_completed', alert, { flags: event.flags });
       return;
     }
     if (event.phase === 'failed') {
@@ -165,8 +163,11 @@ export const startAlertService = (nextService, { mode, userId = '', username = '
   service = nextService;
   stopService = service.start(onEvent);
   // A summary of what is waiting, once (the seeded or listed alerts).
+  if (service.list) setAlertsLoad({ loading: true, loadError: '' });
   Promise.resolve(service.list?.({ assignee: alertScope })).then((list) => {
-    if (service !== nextService || !Array.isArray(list)) return;
+    if (service !== nextService) return;
+    if (nextService.list) setAlertsLoad({ loading: false });
+    if (!Array.isArray(list)) return;
     list.forEach((raw) => upsertAlert(raw));
     // Ready for the analyst (data complete; one still arriving is announced when it completes).
     const waiting = getAlertsSnapshot().alerts.filter((alert) => alert.mine && alert.intake === INTAKE.COMPLETE && [RESPONSE.AWAITING, RESPONSE.ANALYSED, RESPONSE.FAILED].includes(alert.response));
@@ -179,19 +180,28 @@ export const startAlertService = (nextService, { mode, userId = '', username = '
         action: { label: 'Open in Reports', onClick: () => env.openReports(waiting[0].id) },
       });
     }
-  }).catch(() => {});
+  }).catch((error) => {
+    // Shown on the Alert reports tab (with Retry), not as a notice.
+    if (service === nextService) setAlertsLoad({ loading: false, loadError: getServiceRefusalMessage(error) || 'The alerts could not be loaded from the Service.' });
+  });
 };
 
 // The list again, for 'me' or 'all' (alerts:read_all). -> { ok, message? }
 export const reloadAlerts = async (assignee = alertScope) => {
   alertScope = assignee === 'all' ? 'all' : 'me';
   if (!service?.list) return { ok: false };
+  const asked = service;
+  setAlertsLoad({ loading: true, loadError: '' });
   try {
-    const list = await service.list({ assignee: alertScope });
+    const list = await asked.list({ assignee: alertScope });
+    if (service !== asked) return { ok: false };
     if (Array.isArray(list)) list.forEach((raw) => upsertAlert(raw));
+    setAlertsLoad({ loading: false });
     return { ok: true };
   } catch (error) {
-    return { ok: false, message: getServiceRefusalMessage(error) || 'The alerts could not be loaded from the Service.' };
+    const message = getServiceRefusalMessage(error) || 'The alerts could not be loaded from the Service.';
+    if (service === asked) setAlertsLoad({ loading: false, loadError: message });
+    return { ok: false, message };
   }
 };
 export const getAlertScope = () => alertScope;
@@ -311,6 +321,8 @@ export const extractAlertResults = async (alertId) => {
       // chooses ("clean" is never assumed). What they chose stays.
       verdict: current.verdictEdited ? current.verdict : flagged ? 'suspicious' : alert.verdict || '',
       verdictEdited: Boolean(current.verdictEdited),
+      // The verdict the system set (marked Auto; changing it asks first).
+      systemVerdict: flagged ? 'suspicious' : alert.verdict || '',
       include: current.include || { graph: true, table: true, charts: true },
     });
     logAlertEvent(alertId, 'extracted', 'Results extracted');
@@ -320,6 +332,37 @@ export const extractAlertResults = async (alertId) => {
   } finally {
     setAlertBusy(alertId, null);
   }
+};
+
+// The extracted results' Table / Chart windows (Extracted results popup ▸
+// Open): the alert's Graph window's linked one, focused when open, else a
+// new one linked to it, as the Graph window's own Open as table / chart.
+// Without the alert's Graph window open, it opens first and the companion
+// follows once the window exists. kind: 'table' | 'chart'.
+const COMPANION = {
+  table: { type: WORKSPACE_WINDOW_TYPES.TABLE, key: 'tableGraph', title: 'Table' },
+  chart: { type: WORKSPACE_WINDOW_TYPES.CHART, key: 'chartGraph', title: 'Chart' },
+};
+const nextTick = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
+
+export const openAlertCompanion = async (alertId, kind) => {
+  const spec = COMPANION[kind];
+  const alert = getAlert(alertId);
+  if (!spec || !alert) return { ok: false, message: 'No alert.' };
+  if (!alertHasGraph(alert)) return { ok: false, message: 'Run the analysis first: the alert has no graph yet.' };
+  let graphWindow = alertGraphWindow(alertId);
+  if (!graphWindow) {
+    openAlertGraph(alertId);
+    for (let tries = 0; tries < 40 && !graphWindow; tries += 1) {
+      await nextTick(50);
+      graphWindow = alertGraphWindow(alertId);
+    }
+    if (!graphWindow) return { ok: false, message: 'The alert’s Graph window did not open.' };
+  }
+  const existing = env.getWindows().find((item) => item.type === spec.type && item.metadata?.[spec.key] === graphWindow.id);
+  if (existing) env.focusWindow(existing.id);
+  else env.openWindow(spec.type, { title: spec.title, metadata: { [spec.key]: graphWindow.id } });
+  return { ok: true };
 };
 
 /* ── 3 Report back ───────────────────────────────────────────────────── */
