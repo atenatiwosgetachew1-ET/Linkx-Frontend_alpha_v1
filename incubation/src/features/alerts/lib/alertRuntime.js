@@ -7,6 +7,7 @@
 // The environment (notify, the workspace) is set by the workspace frame
 // (useParentAlerts); the service is the mock or the Service's (alertService).
 
+import { formatDomainPillarLabel } from '../../configuration/lib/configModel.js';
 import {
   INTAKE, RESPONSE, alertNotice, analyseBlocker, canSendFeedback, feedbackPayload, feedbackSizeProblem, noticeTypesFor,
 } from './alertModel.js';
@@ -384,7 +385,9 @@ export const downloadAlertFeedbackPdf = async (alertId) => {
   const context = evidenceReportContext({ graphData, evidence: { traceId: alert.traceId || sessionGraphKey(alert), reportId: alert.reportId || alert.id, externalReferenceId: alert.reference, systemRules: rules } });
   const verdict = { suspicious: 'Suspicious', clean: 'Clean', undetermined: 'Undetermined' }[draft.verdict] || '—';
   await downloadGraphReport({
-    input: { ...context.input(''), kind: 'alert' },
+    // The run's own settings, whichever way its graph was read.
+    input: { ...context.input(''), kind: 'alert', ...(alert.settingsUsed ? { runSettings: [{ id: alert.taskId, settings: alert.settingsUsed }] } : {}) },
+    domain: alert.settingsUsed?.domain ? formatDomainPillarLabel(alert.settingsUsed.domain) : '',
     values: {
       title: `STR Feedback · ${alert.reference || alert.id}`,
       caseId: alert.reference,

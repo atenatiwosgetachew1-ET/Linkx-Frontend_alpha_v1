@@ -4,6 +4,8 @@
 // never reach workspace metadata. Cleared on sign-out: window ids are reused
 // by the next workspace.
 
+import { clearDomainDrafts } from './domainDrafts.js';
+
 const drafts = new Map(); // windowId -> { draft, base, sessionId }
 
 export const getConfigurationDraft = (windowId) => (windowId ? drafts.get(String(windowId)) || null : null);
@@ -14,7 +16,10 @@ export const keepConfigurationDraft = (windowId, entry) => {
   else drafts.delete(String(windowId));
 };
 
-export const clearConfigurationDrafts = () => drafts.clear();
+export const clearConfigurationDrafts = () => {
+  drafts.clear();
+  clearDomainDrafts();
+};
 
 // Keys the backend owns for the session domain. Production edits one shared
 // configuration object, so its save always carries the current domain; the

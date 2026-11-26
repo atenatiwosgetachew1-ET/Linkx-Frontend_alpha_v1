@@ -135,6 +135,11 @@ const CODE_MESSAGES = {
   unattended_limit: 'You already have a run that keeps going.',
   unattended_not_allowed: 'Only a batch run can keep going without you.',
   quick_limit: 'This is over the limits of a quick analysis.',
+  no_data: 'The source has no data for this run.',
+  rule_not_available: 'The rule is not available for this data.',
+  required_field_removed: 'The fetch columns no longer hold a field the rules need.',
+  version_conflict: 'Someone saved another version meanwhile.',
+  feature_disabled: 'This is switched off on the Service.',
   use_end_session: 'A running analysis is stopped with Terminate.',
 };
 const SHOW_DETAIL = new Set(['session_limit', 'intake_not_complete', 'invalid_dataframe_filter', 'delivery_failed', 'quick_limit']);
@@ -144,9 +149,9 @@ export const getServiceRefusalCode = (input) => {
   const code = String(payload?.code || '').trim();
   if (code) return code;
   const message = String(payload?.message || '').trim();
-  if (message === 'session_limit' || message === 'invalid_dataframe_filter') return message;
+  if (['session_limit', 'invalid_dataframe_filter', 'domain_not_granted', 'endpoint_admin_only', 'version_conflict', 'feature_disabled'].includes(message)) return message;
   const detail = String(payload?.detail || '').trim();
-  if (detail === 'alerts_read_all_required' || detail === 'session_not_owned' || detail === 'password_required') return detail;
+  if (['alerts_read_all_required', 'session_not_owned', 'password_required', 'domain_not_granted', 'feature_disabled'].includes(detail)) return detail;
   if (payload?.permission) return 'permission';
   return '';
 };
@@ -163,6 +168,21 @@ export const getServiceRefusalMessage = (input) => {
     const fields = [payload?.invalid_fields, payload?.fields].find(Array.isArray) || [];
     const named = fields.filter((field) => typeof field === 'string').slice(0, 6).map((field) => field.slice(0, 60)).join(', ');
     return named ? `${CODE_MESSAGES[code]} (${named})` : CODE_MESSAGES[code];
+  }
+  if (code === 'rule_not_available') {
+    const rule = String(payload?.rule || '').slice(0, 80);
+    return rule ? `The rule “${rule}” is not available for this data. Choose another.` : CODE_MESSAGES[code];
+  }
+  if (code === 'domain_not_granted') {
+    const domain = String(payload?.domain || '').slice(0, 40);
+    return `You don’t have access to ${domain ? `the domain “${domain}”` : 'this domain'}.`;
+  }
+  if (code === 'required_field_removed') {
+    const fields = (Array.isArray(payload?.fields) ? payload.fields.flat() : []).filter((field) => typeof field === 'string').slice(0, 8);
+    return fields.length ? `${CODE_MESSAGES[code]} (${fields.join(', ').slice(0, 200)})` : CODE_MESSAGES[code];
+  }
+  if (code === 'configuration_changed' && Array.isArray(payload?.changed) && payload.changed.includes('column_mapping')) {
+    return 'The domain’s column mapping has changed since the dataframe was made. Create the dataframe again.';
   }
   if (code === 'configuration_changed') {
     const made = String(payload?.dataframe_domain || '').slice(0, 40);

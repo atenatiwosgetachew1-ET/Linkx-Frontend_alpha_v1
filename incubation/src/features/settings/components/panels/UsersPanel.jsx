@@ -19,6 +19,8 @@ import {
   userDraftFrom,
 } from '../../lib/settingsModel.js';
 import { normalizeUserRules } from '../../lib/userRules.js';
+import { userDomainsText } from '../../lib/userDomains.js';
+import UserDomainsPopup from '../UserDomainsPopup.jsx';
 import { Masthead, PageHero, Pill, SettingsPage, SettingsPopup, Stat, Stats } from '../SettingsPage.jsx';
 
 // The privileges matrix is hidden for now (analyst decision 2026-11-20:
@@ -327,6 +329,8 @@ export function UsersPanel({ apiFetch, canManageUsers, canManageSuperusers, curr
   const [modifying, setModifying] = useState(null);
   // The privileges open in a popup of their own, over the form.
   const [privilegesOpen, setPrivilegesOpen] = useState(false);
+  // Domain access of an account, in a popup over the list.
+  const [domainsOf, setDomainsOf] = useState(null);
   const createDraftStashRef = useRef(null);
   // A new account needs its password twice; a modified one only when a new
   // password is being set.
@@ -1001,6 +1005,18 @@ export function UsersPanel({ apiFetch, canManageUsers, canManageSuperusers, curr
         );
       })() : null}
 
+      {domainsOf ? (
+        <UserDomainsPopup
+          apiFetch={apiFetch}
+          user={domainsOf}
+          onClose={() => setDomainsOf(null)}
+          onSaved={(user, domains) => {
+            setDomainsOf(null);
+            setUsers((list) => list.map((item) => (String(item.id) === String(user.id) ? { ...item, domains } : item)));
+            onNotice?.({ title: 'Domain access saved', message: `${user.username}: ${userDomainsText(domains)}.`, level: 'success' });
+          }}
+        />
+      ) : null}
       {isExistingOpen ? (() => {
         const activeUser = filteredUsers.find((user) => String(user.id) === selectedUserId) || null;
         const activeId = activeUser ? String(activeUser.id) : '';
@@ -1058,6 +1074,12 @@ export function UsersPanel({ apiFetch, canManageUsers, canManageSuperusers, curr
                           {modified ? <em className="users_row_modified" title="This user has unsaved changes">modified</em> : null}
                           {user.is_locked ? <span className="users_row_status"><i aria-hidden="true" />Locked</span> : null}
                           <span className="users_level_count" title="Privileges granted">{permissionCount} of {allPermissions.length}</span>
+                          {/* Its domains, where the Service lists them (B-45). */}
+                          {'domains' in user ? (
+                            <button type="button" className="settings_link_button users_person_domains" title={`Domain access: ${userDomainsText(user.domains)}`} aria-label={`Domain access of ${user.username}`} disabled={saving || above} onClick={() => setDomainsOf(user)}>
+                              {Array.isArray(user.domains) ? `${user.domains.length} domain${user.domains.length === 1 ? '' : 's'}` : 'All domains'}
+                            </button>
+                          ) : null}
                           {/* The card's two actions: edit, and active / inactive. */}
                           <button type="button" className="users_person_edit linkx_tooltip_anchor" data-tooltip={above ? 'Changing an admin or superuser needs superuser:manage' : 'Edit'} aria-label={'Edit ' + user.username} disabled={saving || above} onClick={() => openModify(user)}>
                             <LevelIcon d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z" size={14} />

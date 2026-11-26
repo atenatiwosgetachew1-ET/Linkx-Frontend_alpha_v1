@@ -174,7 +174,7 @@ export default function ReportDetail({ record, isCdr, graph, onClose, onCopyPayl
   const jsonLines = jsonText ? jsonText.split('\n').length : 0;
   const figures = networkFigures(payload);
   const entity = payload.account_no || payload.entity_id || record.leadingEntity;
-  const domain = payload.domain || payload.resolved_domain;
+  const domain = payload.domain || payload.resolved_domain || record.domain;
   const signals = record.flaggedRules.length ? record.flaggedRules : record.anomaly ? [record.anomaly] : [];
   const blacklisted = payload.beneficiary_blacklisted;
 
@@ -273,6 +273,16 @@ export default function ReportDetail({ record, isCdr, graph, onClose, onCopyPayl
         ) : null}
 
         <ScoreBreakdown evidence={payload.score_evidence} isCdr={isCdr} />
+
+        {record.runRemark ? (
+          <section className="reports_section" aria-label="Run settings">
+            <div className="reports_section_head">
+              <span className="reports_section_label">Run settings</span>
+              {record.runRemark.marked ? <span className="reports_run_mark">{record.runRemark.label}</span> : null}
+            </div>
+            <p className="reports_reason">{record.runRemark.text.replace(/^Run settings: /, '')}</p>
+          </section>
+        ) : null}
 
         <section className="reports_section" aria-label="Identifiers">
           <div className="reports_section_head"><span className="reports_section_label">Identifiers</span></div>

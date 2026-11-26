@@ -6,6 +6,8 @@
 // evidence record of docs/backend-handoff-analysis-results.md), so the
 // backend's unified shape will be a change in this adapter only.
 
+import { readSettingsUsed, settingsRemark } from '../../../shared/runSettings.js';
+
 export const REPORTS_PAGE_SIZE = 50;
 export const ARCHIVE_AFTER_MS = 180 * 24 * 60 * 60 * 1000;
 // Vigilance runs open the findings with a ±5 minute margin around the window.
@@ -209,6 +211,10 @@ export const toReportRecord = (raw = {}, tabId = 'parent') => {
     // Moved to cold storage after 180 days (has_graph false; B-31 asks the
     // Service for graph_archived): shown as archived, not as "no graph".
     graphArchived: truthy(raw.graph_archived),
+    // What it was made with (B-42). Evidence saved by an analyst always says:
+    // without it, it was not recorded. Other records use the domain's settings.
+    runRemark: raw.settings_used ? settingsRemark(readSettingsUsed(raw.settings_used)) : tab.id === 'evidence' && raw.requester_type === 'analyst' ? settingsRemark(null) : null,
+    domain: typeof raw.domain === 'string' ? raw.domain : '',
     runId: payload.run_id ?? null,
     payload,
     raw,

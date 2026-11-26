@@ -10,6 +10,8 @@
 import { getServiceRefusalMessage } from '../../../services/apiErrors.js';
 import { cancelJob } from '../../../services/jobs.js';
 import { fetchGraphProgressive } from '../../../services/graphApi.js';
+import { resolveGraphRuns } from '../../../services/runSettingsApi.js';
+import { UNKNOWN_RUN } from '../../../shared/runSettings.js';
 
 const isAbort = (error) => error?.name === 'AbortError';
 
@@ -35,6 +37,7 @@ export const runGraphFetch = async ({ store, apiFetch, payload, source, label = 
         if (!received) {
           received = true;
           store.replace(chunk);
+          store.setRunSettings(UNKNOWN_RUN); // until the answer is whole
           onFirstChunk?.();
         } else {
           store.mergeChunk(chunk);
@@ -58,8 +61,13 @@ export const runGraphFetch = async ({ store, apiFetch, payload, source, label = 
       onEmpty?.();
       return result;
     }
+    // What its runs were made with: before it is ready, so nothing leaves the
+    // window without the remark.
+    const runSettings = await resolveGraphRuns(apiFetch, result.runs, { signal: controller.signal, id: payload?.task_id || payload?.trace_id || '' });
+    if (!current()) return null;
+    store.setRunSettings(runSettings);
     store.setStatus({ state: 'ready', source, request: payload, ...extra, ...(result.partial ? { partial: true, truncatedBy: result.truncatedBy || '', expected: result.expected, received: { nodes: result.nodes, edges: result.edges } } : {}) });
-    onLoaded?.({ ...result, raw: () => ({ nodes: chunks.flatMap((chunk) => chunk.nodes), edges: chunks.flatMap((chunk) => chunk.edges) }) });
+    onLoaded?.({ ...result, runSettings, raw: () => ({ nodes: chunks.flatMap((chunk) => chunk.nodes), edges: chunks.flatMap((chunk) => chunk.edges) }) });
     return result;
   } catch (error) {
     if (isAbort(error) || !current()) {

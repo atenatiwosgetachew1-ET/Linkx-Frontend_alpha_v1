@@ -57,6 +57,7 @@ const ICONS = {
   source: ['M12 3c4.4 0 8 1.3 8 3s-3.6 3-8 3-8-1.3-8-3 3.6-3 8-3Z', 'M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6'],
   empty: ['M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16Z', 'm21 21-4.35-4.35'],
   lock: ['M7 11V7a5 5 0 0 1 10 0v4', 'M5 11h14v10H5z'],
+  info: ['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z', 'M12 11v5', 'M12 8h.01'],
 };
 
 function Icon({ d, className = 'reports_icon' }) {
@@ -496,7 +497,11 @@ export default function ReportsWindowBody({ windowItem }) {
 
   const copyPayload = () => {
     if (!selected) return;
-    const text = JSON.stringify(selected.raw.payload, null, 2);
+    // With what it was made with: the payload alone does not say.
+    const payload = selected.raw.settings_used && selected.payload && typeof selected.payload === 'object' && !('settings_used' in selected.payload)
+      ? { ...selected.payload, settings_used: selected.raw.settings_used }
+      : selected.raw.payload;
+    const text = JSON.stringify(payload, null, 2);
     navigator.clipboard?.writeText(text).then(
       () => notify({ title: 'Copied', message: 'Payload copied to clipboard.', level: 'info', source: 'Reports' }),
       () => notify({ title: 'Copy failed', message: 'The clipboard is not available.', level: 'warning', source: 'Reports' }),
@@ -592,7 +597,7 @@ export default function ReportsWindowBody({ windowItem }) {
                   onKeyDown={(event) => handleRowKeyDown(event, record)}
                 >
                   <td>
-                    <span className="reports_cell_icon"><Icon d={ICONS.tag} /><strong>{record.reportType || '—'}</strong></span>
+                    <span className="reports_cell_icon"><Icon d={ICONS.tag} /><strong>{record.reportType || '—'}</strong>{record.runRemark?.marked ? <span className="reports_run_mark" title={record.runRemark.text}>{record.runRemark.label}</span> : null}</span>
                   </td>
                   <td>
                     <span className="reports_cell_icon is-muted"><Icon d={ICONS.source} />{record.sourceSystem || '—'}</span>
@@ -708,6 +713,13 @@ export default function ReportsWindowBody({ windowItem }) {
             onChange={(value) => updateFilter('sort', value, { resetPage: false })}
           />
         </div>
+
+        {tabId === 'parent' ? (
+          <p className="reports_policy_note" role="note">
+            <Icon d={ICONS.info} />
+            <span><strong>STR alerts use the domain’s settings only.</strong> An analyst’s own columns or column mapping are not used for them, because their findings go to the parent service.</span>
+          </p>
+        ) : null}
 
         <div className={`reports_window_main${selected ? ' has-detail' : ''}`}>
           <section className="reports_list" aria-label={tab.label} aria-busy={loading}>

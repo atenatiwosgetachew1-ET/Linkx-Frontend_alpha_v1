@@ -49,7 +49,8 @@ describe('buildConfigurationSavePayload', () => {
   it('cleans lists and mappings', () => {
     const payload = buildConfigurationSavePayload(base);
     expect(payload.storage_tables).toEqual(['a', 'b']);
-    expect(payload.column_mapping).toEqual({ K: 'V' });
+    // The domain's own: never sent with the configuration (round 3, C1).
+    expect(payload).not.toHaveProperty('column_mapping');
     expect(payload.trusted_entities[0]).toMatchObject({ key: 'ACC', value: '1', category: 'Trusted' });
   });
 

@@ -7,6 +7,7 @@ import {
 } from '../lib/alertRuntime.js';
 import { useCan } from '../../../auth/useCan.js';
 import { SOURCE_PERMISSIONS } from '../../../auth/permissions.js';
+import { settingsRemark } from '../../../shared/runSettings.js';
 import { requestTaskFocus } from '../../tasks/lib/taskRegistry.js';
 import { useWorkspaceActions } from '../../../workspace/hooks/useWorkspace.js';
 import { WORKSPACE_CONTEXT_TABS, WORKSPACE_WINDOW_TYPES } from '../../../workspace/state/workspaceTypes.js';
@@ -96,6 +97,7 @@ export default function AlertWorkflow({ alertId, mockControls = false }) {
                 ? `The last run failed: ${alert.responseNote} Run it again when ready.`
                 : 'Run link analysis on the alert’s data. A task is recorded and the alert’s graph opens in a Graph window.')}
         </p>
+        {analysed && alert.settingsUsed ? <p className="reports_alert_reason">{settingsRemark(alert.settingsUsed).text}</p> : null}
         {alert.intake === INTAKE.INCOMPLETE && alert.intakeNote ? <p className="reports_alert_reason">{alert.intakeNote}</p> : null}
         <div className="reports_alert_actions">
           {!sent ? (

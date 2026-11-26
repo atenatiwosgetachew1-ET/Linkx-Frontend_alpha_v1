@@ -15,6 +15,8 @@
 // input: it is bounded and cleaned before it reaches the graph (sanitizeItem).
 // An encrypted, server-checked LinkX format is backend request B-25.
 
+import { exportRunSettings, importRunSettings } from '../../../shared/runSettings.js';
+
 export const GRAPH_FILE_MAX_BYTES = 50 * 1024 * 1024;
 export const GRAPH_FILE_ACCEPT = '.json,application/json';
 export const GRAPH_FILE_LIMITS = Object.freeze({
@@ -56,7 +58,7 @@ export const buildGraphExport = (store, view, settings = null) => {
   return {
     graphData: { type: 'Graph', nodes, edges },
     networkOptions: {},
-    linkx: { format: 1, exportedAt: new Date().toISOString(), ...(settings ? { settings } : {}) },
+    linkx: { format: 1, exportedAt: new Date().toISOString(), runSettings: exportRunSettings(store.getRunSettings?.()), ...(settings ? { settings } : {}) },
   };
 };
 
@@ -104,7 +106,7 @@ const fromParsed = (parsed) => {
   throw new GraphFileError('This JSON file does not contain a valid graph.');
 };
 
-// (file name, its text) -> { nodes, edges, positions: [[id, {x, y}]] | null }
+// (file name, its text) -> { nodes, edges, positions: [[id, {x, y}]] | null, runSettings }
 export const parseGraphFile = (name, text) => {
   const ext = String(name || '').split('.').pop().toLowerCase();
   if (ext !== 'json') throw new GraphFileError('Unsupported file type. Only .json graph files are allowed.');
@@ -145,7 +147,8 @@ export const parseGraphFile = (name, text) => {
   };
   const placed = nodes.every((node) => coordinate(node.x) !== null && coordinate(node.y) !== null);
   const positions = placed ? nodes.map((node) => [node.id, { x: coordinate(node.x), y: coordinate(node.y) }]) : null;
-  return { nodes, edges, positions };
+  // A file that does not say what its runs were made with: not recorded.
+  return { nodes, edges, positions, runSettings: importRunSettings(parsed?.linkx?.runSettings) };
 };
 
 // A file's text (FileReader where Blob.text is missing).

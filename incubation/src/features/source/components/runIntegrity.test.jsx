@@ -3,7 +3,7 @@
 // records (docs/integrity-audit-2026-11-24.md B1, B2, B3, B5, B6).
 import React, { useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
 
@@ -259,5 +259,66 @@ describe('a domain switch', () => {
     const service = await pick((permission) => !['config:write', 'analysis:run'].includes(permission));
     expect(service.of('/configuration')).toEqual([]);
     expect(screen.getAllByText(/You need config:write to switch the domain/).length).toBeGreaterThan(0);
+  });
+});
+
+describe('a column mapping for one dataframe (B-41)', () => {
+  const INFO = { ...READY.dataframeInfo, missingFields: ['ACCOUNTNO', 'TRANSACTIONTIME'], sourceColumns: ['PAYER ACC', 'WHEN'], ownMapping: {} };
+  const AT = { ...READY, dataframeInfo: INFO, step: 'dataframe', dataframeDomain: 'bank' };
+  const made = (more = {}) => () => ({ message: 'success', results: { columns: ['A', 'B', 'ACCOUNTNO'], total_rows: 100, rules: ['R1'], tool: 'neo4j', source_columns: ['PAYER ACC', 'WHEN'], missing_fields: ['TRANSACTIONTIME'], dataframe_mapping: { 'PAYER ACC': 'ACCOUNTNO' }, ...more } });
+  const map = async (field, column) => {
+    await press(/^Map columns/);
+    await userEvent.selectOptions(screen.getByLabelText(`Column for ${field}`), column);
+    await press('Make it again');
+  };
+
+  it('is sent with that create_DF only, shown from the Service’s answer, and clears the filter', async () => {
+    const service = await mount(batch(AT), { dataframe: made() });
+    expect(screen.getByText(/Fields this data does not have/).closest('p')).toHaveTextContent('ACCOUNTNO, TRANSACTIONTIME');
+    await map('ACCOUNTNO', 'PAYER ACC');
+    expect(service.of('create_DF')[0]).toMatchObject({ kind: 'files', dataframe_mapping: { 'PAYER ACC': 'ACCOUNTNO' } });
+    expect(state()).toMatchObject({ step: 'dataframe', dataframeStatus: 'ready', dataframeFilter: null });
+    expect(state().dataframeInfo.ownMapping).toEqual({ 'PAYER ACC': 'ACCOUNTNO' });
+    expect(screen.getByText('Own column mapping:').closest('p')).toHaveTextContent('PAYER ACC → ACCOUNTNO');
+    // Without it again: the key is left out.
+    await press(/^Map columns/);
+    await userEvent.selectOptions(screen.getByLabelText('Column for ACCOUNTNO'), '');
+    await press('Make it again');
+    expect(service.of('create_DF')[1]).not.toHaveProperty('dataframe_mapping');
+  });
+
+  it('a refusal says why, keeps the dataframe there was and what was picked', async () => {
+    await mount(batch(AT), { dataframe: () => { throw Object.assign(new Error('failed'), { jobStatus: 'failed', jobResponse: { code: 'target_present', fields: ['ACCOUNTNO'], results: { source_columns: [], missing_fields: [] } } }); } });
+    await map('ACCOUNTNO', 'PAYER ACC');
+    expect(screen.getByRole('alert')).toHaveTextContent('The data has this field already: ACCOUNTNO');
+    expect(screen.getByLabelText('Column for ACCOUNTNO')).toHaveValue('PAYER ACC');
+    expect(state()).toMatchObject({ step: 'dataframe', dataframeStatus: 'ready', dataframeFilter: FILTER });
+  });
+
+  it('any other failure leaves no dataframe to analyse, back at the input', async () => {
+    await mount(batch(AT), { dataframe: () => { throw new Error('boom'); } });
+    await map('ACCOUNTNO', 'PAYER ACC');
+    expect(state()).toMatchObject({ step: 'upload', dataframeStatus: 'failed' });
+  });
+
+  it('one column fills one field; not offered without the permission, the columns, or for a live source', async () => {
+    await mount(batch(AT), { dataframe: made() });
+    await press(/^Map columns/);
+    await userEvent.selectOptions(screen.getByLabelText('Column for ACCOUNTNO'), 'WHEN');
+    expect(within(screen.getByLabelText('Column for TRANSACTIONTIME')).getByRole('option', { name: 'WHEN' })).toBeDisabled();
+    for (const [fields, options] of [[AT, { can: (key) => key !== 'mapping:override' }], [{ ...AT, dataframeInfo: { ...INFO, sourceColumns: null } }, {}]]) {
+      cleanup();
+      disposeAllSourceRuntimes();
+      await mount(batch(fields), options);
+      expect(screen.queryByRole('button', { name: /^Map columns/ })).toBeNull();
+    }
+  });
+
+  it('a dataframe of another domain is not mapped; Continue makes it without a mapping', async () => {
+    const service = await mount(batch({ ...AT, dataframeInfo: { ...INFO, ownMapping: { 'PAYER ACC': 'ACCOUNTNO' } } }), { configuration: CDR, dataframe: made() });
+    expect(screen.queryByRole('button', { name: /^Map columns/ })).toBeNull();
+    await press('Back');
+    await press('Continue');
+    expect(service.of('create_DF')[0]).not.toHaveProperty('dataframe_mapping');
   });
 });

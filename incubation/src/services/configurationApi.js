@@ -8,9 +8,15 @@ import {
   normalizeLoadedConfiguration,
 } from '../features/configuration/lib/configModel.js';
 
+// Saved passwords the Service dropped because their host changed (B-46).
+const readCredentialsCleared = (data) => {
+  const list = [data?.credentials_cleared, data?.results?.credentials_cleared].find(Array.isArray) || [];
+  return list.filter((item) => typeof item === 'string').slice(0, 20);
+};
+
 const toResult = (data, fallback) => (
   isSuccessResponse(data)
-    ? { ok: true, data, configuration: normalizeLoadedConfiguration(extractConfigurationPayload(data)), returned: Boolean(extractConfigurationPayload(data)) }
+    ? { ok: true, data, configuration: normalizeLoadedConfiguration(extractConfigurationPayload(data)), returned: Boolean(extractConfigurationPayload(data)), credentialsCleared: readCredentialsCleared(data) }
     : { ok: false, data, message: getConfigurationErrorMessage(data, fallback) }
 );
 
@@ -30,6 +36,17 @@ export const saveConfiguration = async (apiFetch, sessionId, configuration, { si
   await apiFetch('/configuration', { method: 'POST', body: { id: 'save', session_id: sessionId, configuration }, signal }),
   'Could not save configuration. Try again.',
 );
+
+// One's own columns in the session's domain (B-43): only the lists changed;
+// null: back to the domain's. Kept per user and per domain by the Service.
+export const saveOwnColumns = (apiFetch, sessionId, lists) => saveConfiguration(apiFetch, sessionId, lists);
+// All of them: the open session's copy, then the account's.
+export const resetOwnColumns = async (apiFetch, sessionId, domain) => {
+  const result = await saveOwnColumns(apiFetch, sessionId, { fetch_columns: null, search_columns_strict: null, search_columns_fuzzy: null });
+  if (!result.ok) return result;
+  await apiFetch('/account/configuration/reset', { method: 'POST', body: { section: 'columns', domain } });
+  return result;
+};
 
 // Rule upload: production posts the whole configuration form as multipart
 // (named fields + rule_file + rule_name) with id=save.
@@ -156,6 +173,7 @@ export const fetchRuleThresholdHistory = (apiFetch, domain) => apiFetch(`/rule-t
 export const saveRuleThresholds = (apiFetch, domain, values) => apiFetch('/rule-thresholds', { method: 'POST', body: { ...values, domain: domain || 'bank' } });
 export const fetchScoreLineage = (apiFetch, domain) => apiFetch(`/config/score-lineage?${byDomain(domain)}`, { suppressForbiddenHandler: true });
 export const saveScoreLineage = (apiFetch, domain, payload) => apiFetch('/config/score-lineage', { method: 'POST', body: { ...payload, domain: domain || 'bank' } });
+export const fetchScoreLineageHistory = (apiFetch, domain) => apiFetch(`/config/score-lineage/history?${byDomain(domain)}&limit=50`, { suppressForbiddenHandler: true });
 
 /* ── Activity log (cleanup audit) ───────────────────────────────────── */
 

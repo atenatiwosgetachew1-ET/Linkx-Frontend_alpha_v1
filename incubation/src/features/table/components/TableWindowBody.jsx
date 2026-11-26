@@ -3,6 +3,8 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import { useWorkspace } from '../../../workspace/hooks/useWorkspace.js';
 import { WORKSPACE_WINDOW_TYPES, getWindowLimitBlock } from '../../../workspace/state/workspaceTypes.js';
 import { graphDataNotice } from '../../graph/lib/graphDataNotice.js';
+import RunRemarkFlag from '../../../shared/components/RunRemarkFlag.jsx';
+import { runRemark, runSettingsCell } from '../../../shared/runSettings.js';
 import { getGraphStore, hasGraphStore } from '../../graph/lib/graphStore.js';
 import { getGraphState, requestGraphAction, subscribeGraphState } from '../../graph/lib/graphLinkBus.js';
 import StrokeIcon from '../../../shared/icons/StrokeIcon.jsx';
@@ -161,6 +163,7 @@ export default function TableWindowBody({ windowItem }) {
   const subscribeLink = useCallback((listener) => (graphId ? subscribeGraphState(graphId, listener) : () => {}), [graphId]);
   const link = useSyncExternalStore(subscribeLink, () => getGraphState(graphId));
   const dataNotice = graphDataNotice(snapshot, link, state.scope);
+  const remark = runRemark(snapshot?.runSettings);
 
   // Refresh (just in case, analyst decision 2026-11-18): the rows are read
   // again from the linked graph, and the list goes back to its top.
@@ -226,10 +229,10 @@ export default function TableWindowBody({ windowItem }) {
       return;
     }
     if (id === 'csv') {
-      downloadBlob(tableFileName(windowItem.title, tabKey), new Blob([rowsToCsv(rows, shownColumns)], { type: 'text/csv;charset=utf-8' }));
+      downloadBlob(tableFileName(windowItem.title, tabKey), new Blob([rowsToCsv(rows, shownColumns, runSettingsCell(remark))], { type: 'text/csv;charset=utf-8' }));
     } else if (id === 'copy') {
       try {
-        await navigator.clipboard.writeText(rowsToTsv(rows, shownColumns));
+        await navigator.clipboard.writeText(rowsToTsv(rows, shownColumns, runSettingsCell(remark)));
         notify({ title: 'Copy rows', message: `${rows.length.toLocaleString()} ${rows.length === 1 ? 'row' : 'rows'} copied; paste them into a spreadsheet.`, level: 'success', source: windowItem.title });
       } catch {
         notify({ title: 'Copy rows', message: 'The browser did not allow copying. Export CSV instead.', level: 'warning', source: windowItem.title });
@@ -254,6 +257,7 @@ export default function TableWindowBody({ windowItem }) {
     return rows;
   };
   const printFrame = (rowsMode, count) => ({
+    remark: remark?.marked ? remark.short : '',
     source: `Source: ${graphWindow?.title || 'Graph'} \u00b7 ${nodesTab ? 'Nodes' : 'Links'} \u00b7 ${TABLE_SCOPES.find((entry) => entry.id === state.scope)?.label || ''} scope${rowsMode === 'selected' ? ' \u00b7 selected' : rowsMode === 'shown' && filter ? ` \u00b7 filter "${filter}"` : ''}`,
     details: `${windowItem.title} \u00b7 ${count > TABLE_PDF_MAX_ROWS ? `first ${TABLE_PDF_MAX_ROWS.toLocaleString()} of ${count.toLocaleString()}` : count.toLocaleString()} ${count === 1 ? 'row' : 'rows'} \u00b7 ${new Date().toLocaleString('en-GB')}`,
   });
@@ -411,6 +415,7 @@ export default function TableWindowBody({ windowItem }) {
             <strong>{counts.nodes.toLocaleString()}</strong> {counts.nodes === 1 ? 'node' : 'nodes'} · <strong>{counts.links.toLocaleString()}</strong> {counts.links === 1 ? 'link' : 'links'}
             <span className="graph_window_hint"> · {TABLE_SCOPES.find((entry) => entry.id === state.scope)?.label.toLowerCase()}</span>
           </p>
+          <RunRemarkFlag remark={remark} />
           {dataNotice ? <span className="graph_window_flag is-warning linkx_tooltip_anchor" role="status" data-tooltip-placement="bottom" data-tooltip={dataNotice.detail}>{dataNotice.label}</span> : null}
           <LinkedGraphMenu icon={TABLE_ICON} graphs={graphs} graphId={graphId} onLink={linkTo} onShow={() => focusWindow(graphId)} />
           <div className="table_tabs" role="tablist" aria-label="Rows">

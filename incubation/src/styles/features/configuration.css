@@ -772,6 +772,93 @@
 	cursor: default;
 }
 
+/* ── Domains: the parts of a domain, as tabs. ── */
+.config_domain_tabs {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	border-bottom: 1px solid var(--settings-service-target-tabs-border);
+}
+
+.config_domain_tabs button {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 7px 8px;
+	border: 0;
+	border-bottom: 2px solid transparent;
+	background: transparent;
+	color: var(--settings-service-target-tab-button-text);
+	font: inherit;
+	font-size: 12px;
+	font-weight: 600;
+	cursor: pointer;
+}
+
+.config_domain_tabs button.is-active {
+	border-bottom-color: var(--settings-service-target-tab-active-border);
+}
+
+.config_domain_tabs small,
+.config_domain_mark {
+	color: var(--settings-text-secondary);
+	font-size: 10.5px;
+	font-weight: 500;
+}
+
+.config_domain_mark {
+	margin-left: 5px;
+}
+
+.config_domain_part {
+	display: flex;
+	flex-direction: column;
+	gap: inherit;
+}
+
+.config_domain_part[hidden] {
+	display: none;
+}
+
+/* A threshold with an unsaved change, and why one cannot be saved. */
+.config_window_field.is-changed .settings_input {
+	border-color: var(--settings-service-target-tab-active-border);
+}
+
+.config_switch_row.is-changed {
+	border-color: var(--settings-service-target-tab-active-border);
+}
+
+.config_domain_error {
+	color: var(--settings-danger-text);
+	font-size: 11px;
+}
+
+.config_domain_others {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+	gap: 4px 16px;
+	margin: 0;
+	font-size: 12px;
+}
+
+.config_domain_others div {
+	display: flex;
+	justify-content: space-between;
+	gap: 10px;
+	min-width: 0;
+}
+
+.config_domain_others dt {
+	overflow-wrap: anywhere;
+	color: var(--settings-text-secondary);
+}
+
+.config_domain_others dd {
+	margin: 0;
+	font-variant-numeric: tabular-nums;
+}
+
 /* ── Detection sensitivity: threshold fields three across, switch rows,
    score sliders with a value badge, and score tiers as short rows. ── */
 .config_card_grid.is-thresholds {
@@ -2365,4 +2452,101 @@ button.libraries_icon {
 
 .config_window_rule_list small {
 	color: var(--muted-text);
+}
+
+/* Domains ▸ Sensitivity, Columns and Column mapping */
+.config_domain_notice {
+	padding: 8px 10px;
+	border: 1px solid var(--settings-service-target-tabs-border);
+	border-radius: 8px;
+	color: var(--settings-text-secondary);
+	font-size: 12px;
+}
+
+.config_domain_presets {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+	gap: 8px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.config_domain_presets li {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 10px;
+	padding: 9px 11px;
+	border: 1px solid var(--settings-service-target-tabs-border);
+	border-radius: 8px;
+}
+
+.config_domain_presets li.is-on {
+	border-color: var(--settings-service-target-tab-active-border);
+}
+
+.config_domain_presets li > span {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+}
+
+.config_domain_presets small,
+.config_domain_columns_head small {
+	color: var(--settings-text-secondary);
+	font-size: 11px;
+}
+
+.config_domain_columns {
+	display: flex;
+	flex-direction: column;
+	gap: 5px;
+}
+
+.config_domain_columns + .config_domain_columns {
+	margin-top: 12px;
+}
+
+.config_domain_columns.is-changed .settings_input,
+.config_window_table tr.is-changed .settings_input {
+	border-color: var(--settings-service-target-tab-active-border);
+}
+
+.config_domain_columns_head {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+	font-size: 12.5px;
+}
+
+.config_domain_origin {
+	display: inline-block;
+	padding: 1px 7px;
+	border: 1px solid var(--settings-service-target-tabs-border);
+	border-radius: 999px;
+	color: var(--settings-text-secondary);
+	font-size: 10.5px;
+	font-weight: 600;
+	white-space: nowrap;
+}
+
+.config_domain_origin.is-admin,
+.config_domain_origin.is-override {
+	border-color: var(--settings-service-target-tab-active-border);
+	color: var(--settings-service-target-tab-button-text);
+}
+
+.config_domain_add {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+	margin-top: 10px;
+}
+
+.config_domain_add .settings_input {
+	width: auto;
+	min-width: 200px;
 }

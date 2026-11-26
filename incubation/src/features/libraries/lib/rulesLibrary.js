@@ -6,6 +6,7 @@
 
 import {
   buildConfigurationSavePayload,
+  withoutColumnLists,
   checkIsBuiltinRule,
   getRuleItemName,
   getRuleNames,
@@ -68,7 +69,8 @@ export const describeRules = (configuration, known = knownBuiltin) => {
 // the Configuration window's unsaved draft), with its current domain.
 export const buildRuleUploadFields = (sessionConfiguration) => {
   const config = normalizeLoadedConfiguration(sessionConfiguration || {});
-  const fields = buildConfigurationSavePayload(config);
+  // Column lists sent here would become the user's own (round 3, C1 12).
+  const fields = withoutColumnLists(buildConfigurationSavePayload(config));
   ['domain', 'active_domain'].forEach((key) => {
     if (config[key]) fields[key] = config[key];
   });

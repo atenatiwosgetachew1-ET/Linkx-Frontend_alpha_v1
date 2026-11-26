@@ -22,6 +22,7 @@
 // supervisor's view of all tasks) is shown read-only.
 
 import { describeFilterPayload } from '../../source/lib/dataframeFilter.js';
+import { readSettingsUsed, settingsRemark } from '../../../shared/runSettings.js';
 
 export const MAX_ANALYSIS_SESSIONS = 3;
 const MAX_TASKS = 50; // finished tasks beyond this are dropped, oldest first
@@ -390,6 +391,8 @@ const serverFields = (raw) => {
     ...(typeof raw.ended_reason === 'string' && raw.ended_reason ? { endedReason: raw.ended_reason.slice(0, 40) } : {}),
     ...(rowCountOf(raw.limit_seconds) ? { limitSeconds: rowCountOf(raw.limit_seconds) } : {}),
     ...(raw.config_versions && typeof raw.config_versions === 'object' && !Array.isArray(raw.config_versions) ? { configVersions: versionsOf(raw.config_versions) } : {}),
+    // What it was made with (B-42); null: not recorded.
+    ...('settings_used' in raw ? { settingsUsed: readSettingsUsed(raw.settings_used), settingsKnown: true } : {}),
     ...(raw.quick === true ? { quick: true, windowStart: time(raw.window_start), windowEnd: time(raw.window_end) } : {}),
     // Not started by this page: what the Service has of it (R2-2).
     ...(typeof raw.status === 'string' ? { serverStatus: raw.status } : {}),
@@ -398,6 +401,10 @@ const serverFields = (raw) => {
     own: Boolean((owner && owner === serverOwner.userId) || (ownerName && ownerName === serverOwner.username)),
   };
 };
+
+// The remark of a task's run: null until the Service has recorded the task
+// (a run just started here), and for one that analyses nothing it knows.
+export const taskRemark = (task) => (task?.serverId && (task.settingsKnown || !isTaskActive(task)) ? settingsRemark(task.settingsUsed || null) : null);
 
 // A Service task with no local run, in the registry's shape.
 const fromServer = (raw) => {

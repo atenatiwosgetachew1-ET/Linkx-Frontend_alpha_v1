@@ -17,19 +17,21 @@ import {
   readClassifiedEntities,
   isRiskCategory,
 } from '../lib/configModel.js';
+import { grantedDomains } from '../../../auth/useAllowedDomains.js';
 import { sanitizeText } from '../../../utils/inputSecurity.js';
 import { CONFIG_PROFILE_KEY, PROFILE_FIELDS, profileToConfiguration, resolveProfileSettings } from '../../graph/lib/nodeProfile.js';
 import { CONFIG_FORMATTING_KEY, describeRule, resolveDomainFormatting } from '../../graph/lib/conditionalFormatting.js';
 import GraphFormattingBox, { RuleSample } from '../../graph/components/GraphFormattingBox.jsx';
+import { OriginBadge } from './DomainHistory.jsx';
 import { Block, Masthead, Option, PageHero, Pill, SettingsPage, Stat, Stats } from '../../settings/components/SettingsPage.jsx';
 
 const truthy = (value) => value === true || value === 'true';
 
 /* ── System ─────────────────────────────────────────────────────────── */
 
-export function SystemPanel({ draft, onChange, onSwitchDomain, isSwitchingDomain, canWrite, canSwitchDomain = canWrite, idleSettings, idlePolicyMeta, onIdleSettingsChange }) {
+export function SystemPanel({ draft, onChange, onSwitchDomain, isSwitchingDomain, canWrite, canSwitchDomain = canWrite, allowedDomains = null, idleSettings, idlePolicyMeta, onIdleSettingsChange }) {
   const activeDomain = getActiveDomainKey(draft);
-  const registeredDomains = getRegisteredDomains(draft);
+  const registeredDomains = grantedDomains(getRegisteredDomains(draft), allowedDomains, activeDomain);
   const domainConnections = draft?.domain_connections && typeof draft.domain_connections === 'object' ? draft.domain_connections : {};
   const activeConn = domainConnections[activeDomain] || {};
   const configured = activeConn.configured !== false;
@@ -210,7 +212,8 @@ const FIELD_ICONS = {
 
 const countOf = (list) => (Array.isArray(list) ? list.filter(Boolean).length : 0);
 
-export function ConnectionsPanel({ draft, onChange, canWrite }) {
+// columns: the account's own columns, saved apart from this form.
+export function ConnectionsPanel({ draft, onChange, canWrite, columns = null }) {
   const largeSearchBackend = normalizeLargeSearchBackend(draft?.large_search_backend);
   const tableCount = countOf(draft?.storage_tables);
   const endpointCount = ENDPOINT_FIELDS.filter(([name]) => String(draft?.[name] || '').trim()).length;
@@ -318,7 +321,7 @@ export function ConnectionsPanel({ draft, onChange, canWrite }) {
           </div>
         </Block>
 
-        <Block title="Search" description="Endpoints and columns used by file, Elastic and Hive searches.">
+        <Block title="Search" description="Endpoints used by file, Elastic and Hive searches.">
           <div className="config_card">
             <p className="config_card_label">Endpoints</p>
             <div className="config_card_grid">
@@ -327,18 +330,6 @@ export function ConnectionsPanel({ draft, onChange, canWrite }) {
                   <DraftInput name={name} value={draft?.[name] || ''} placeholder={label} onCommit={onChange} />
                 </Field>
               ))}
-            </div>
-            <p className="config_card_label">Columns</p>
-            <div className="config_card_grid is-stacked">
-              <Field icon={FIELD_ICONS.columns} label="Search columns – fuzzy" hint="Comma separated.">
-                <ListTextarea name="search_columns_fuzzy" value={draft?.search_columns_fuzzy} onCommit={onChange} />
-              </Field>
-              <Field icon={FIELD_ICONS.columns} label="Search columns – strict" hint="Comma separated.">
-                <ListTextarea name="search_columns_strict" value={draft?.search_columns_strict} onCommit={onChange} />
-              </Field>
-              <Field icon={FIELD_ICONS.columns} label="Fetch columns" hint="Comma separated.">
-                <ListTextarea name="fetch_columns" value={draft?.fetch_columns} onCommit={onChange} />
-              </Field>
             </div>
             <p className="config_card_label">Large searches</p>
             <div className="config_card_grid">
@@ -363,6 +354,7 @@ export function ConnectionsPanel({ draft, onChange, canWrite }) {
           </div>
         </Block>
       </fieldset>
+      {columns}
     </SettingsPage>
   );
 }
@@ -516,6 +508,7 @@ export function RulesPanel({
   canWrite,
   knownBuiltinRules,
   onManageRules,
+  onOpenDomainMapping,
   onNotice,
 }) {
   const isCdr = getActiveDomainKey(draft) === 'cdr';
@@ -523,7 +516,7 @@ export function RulesPanel({
   const activeRule = normalizeActiveRuleValue(draft?.active_rule);
 
   const columnMapping = useMemo(() => normalizeColumnMappingEntries(draft?.column_mapping, { preserveEmpty: true }), [draft?.column_mapping]);
-  const setColumnMapping = (entries) => onChange('column_mapping', entries);
+  const mappingOrigins = draft?.column_mapping_origins && typeof draft.column_mapping_origins === 'object' ? draft.column_mapping_origins : {};
 
   const entities = useMemo(() => readClassifiedEntities(draft), [draft]);
   const setEntities = (entries) => onChange('classified_entities', entries);
@@ -633,15 +626,17 @@ export function RulesPanel({
         </div>
       </Block>
 
+      {/* Read-only: the Service uses the domain's own and ignores one that is
+          sent with the configuration (round 3, C1). */}
       <Block
         title="Column mapping"
-        description="Maps database columns to data model columns."
-        actions={<button type="button" className="settings_button" onClick={() => setColumnMapping([...columnMapping, { key: '', value: '' }])}>Add row</button>}
+        description="Which source column is which field of the domain. It is the domain's, for everyone, and is changed in Domains."
+        actions={onOpenDomainMapping ? <button type="button" className="settings_button" onClick={onOpenDomainMapping}>Open in Domains</button> : null}
       >
         <div className="config_window_table_wrap">
           <table className="config_window_table" aria-label="Column mapping">
             <thead>
-              <tr><th>#</th><th>Database column</th><th>Data model column</th><th aria-label="Actions" /></tr>
+              <tr><th>#</th><th>Database column</th><th>Data model column</th><th>From</th></tr>
             </thead>
             <tbody>
               {columnMapping.length === 0 ? (
@@ -649,15 +644,9 @@ export function RulesPanel({
               ) : columnMapping.map((entry, index) => (
                 <tr key={`mapping-${index}`}>
                   <td className="config_window_table_index">{index + 1}</td>
-                  <td>
-                    <input className="settings_input" value={entry.key} placeholder="e.g. CREATEDDATE" onChange={(event) => setColumnMapping(columnMapping.map((item, i) => (i === index ? { ...item, key: sanitizeText(event.target.value, { maxLength: 160 }) } : item)))} />
-                  </td>
-                  <td>
-                    <input className="settings_input" value={entry.value} placeholder={isCdr ? 'e.g. START_TIME' : 'e.g. TRANSACTIONDATE'} onChange={(event) => setColumnMapping(columnMapping.map((item, i) => (i === index ? { ...item, value: sanitizeText(event.target.value, { maxLength: 160 }) } : item)))} />
-                  </td>
-                  <td className="config_window_table_actions">
-                    <RemoveRowButton label={`Remove mapping row ${index + 1}`} onClick={() => setColumnMapping(columnMapping.filter((_, i) => i !== index))} />
-                  </td>
+                  <td><code>{entry.key}</code></td>
+                  <td><code>{entry.value || 'not mapped'}</code></td>
+                  <td>{mappingOrigins[entry.key] ? <OriginBadge origin={mappingOrigins[entry.key]} /> : '—'}</td>
                 </tr>
               ))}
             </tbody>

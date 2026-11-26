@@ -2,6 +2,7 @@
 // (src/App.jsx): the source window id `${windowId}_${mainSessionId}` returned
 // by /init_source is the `session_id` / `source_id` for every later call.
 
+import { mappingRefusalText, readMappingInfo, readMappingRefusal } from '../features/source/lib/dataframeMapping.js';
 import { isSuccessResponse } from './apiClient.js';
 import {
   getApiProblemPayload,
@@ -210,6 +211,7 @@ export const normalizeDataframeInfo = (results) => {
     rules: toList(pickValue(source.rules, source.analysis_rules, source.link_analysis_rules, legacy[5])).map(String),
     storage: asText(pickValue(source.storage, source.storage_name, source.storageName, source.dataset, source.dataframe, source.dataframe_name, source.dataframeName, legacy[6])),
     tool: asText(pickValue(source.tool, source.tool_name, source.toolName, source.graph_tool, legacy[7])),
+    ...readMappingInfo(source),
   };
 };
 
@@ -224,6 +226,9 @@ const normalizeCompletedDataframeJob = (data) => {
 };
 
 export const formatDataframeFailureMessage = (errorOrData, fallback) => {
+  // A refused column mapping of the dataframe (B-41).
+  const mapping = readMappingRefusal(errorOrData?.jobResponse || errorOrData?.data ? errorOrData : { data: errorOrData });
+  if (mapping && mapping.code !== 'permission') return mappingRefusalText(mapping);
   // A coded refusal (B-5, B-6; also on a failed job).
   const coded = getServiceRefusalMessage(errorOrData?.jobResponse?.code ? errorOrData.jobResponse : errorOrData);
   if (coded) return coded;

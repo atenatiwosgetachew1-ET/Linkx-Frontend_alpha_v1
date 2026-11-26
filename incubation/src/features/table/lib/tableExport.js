@@ -19,7 +19,15 @@ const csvCell = (value) => {
   return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 };
 
-export const rowsToCsv = (rows, columns) => {
+// run: what the data's runs were made with ('' when it is not from a run): the
+// last column, "Run settings", on every row (a line above the header would
+// break spreadsheets; analyst decision 2026-11-25).
+const withRun = (rows, columns, run) => (run
+  ? { rows: rows.map((row) => ({ ...row, values: { ...row.values, '@runSettings': run } })), columns: [...columns, { key: '@runSettings', label: 'Run settings' }] }
+  : { rows, columns });
+
+export const rowsToCsv = (givenRows, givenColumns, run = '') => {
+  const { rows, columns } = withRun(givenRows, givenColumns, run);
   const lines = [columns.map((column) => csvCell(column.label)).join(',')];
   rows.forEach((row) => lines.push(columns.map((column) => csvCell(row.values[column.key])).join(',')));
   // A BOM, so a spreadsheet reads it as UTF-8 (Amharic names included).
@@ -28,10 +36,13 @@ export const rowsToCsv = (rows, columns) => {
 
 const tsvCell = (value) => safeCell(value).replace(/[\t\r\n]+/g, ' ');
 
-export const rowsToTsv = (rows, columns) => [
-  columns.map((column) => tsvCell(column.label)).join('\t'),
-  ...rows.map((row) => columns.map((column) => tsvCell(row.values[column.key])).join('\t')),
-].join('\n');
+export const rowsToTsv = (givenRows, givenColumns, run = '') => {
+  const { rows, columns } = withRun(givenRows, givenColumns, run);
+  return [
+    columns.map((column) => tsvCell(column.label)).join('\t'),
+    ...rows.map((row) => columns.map((column) => tsvCell(row.values[column.key])).join('\t')),
+  ].join('\n');
+};
 
 // "LinkxTable_<title>_<nodes|links>_<yyyymmdd-hhmm>.csv"
 export const tableFileName = (title, tab, extension = 'csv', now = new Date()) => {

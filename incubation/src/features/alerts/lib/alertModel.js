@@ -7,6 +7,8 @@
 // the same shapes (features/alerts/mock). Pure: tests run these directly.
 
 // Arrival: the alert's data, as the parent sends it.
+import { readSettingsUsed } from '../../../shared/runSettings.js';
+
 export const INTAKE = Object.freeze({ RECEIVING: 'receiving', COMPLETE: 'complete', INCOMPLETE: 'incomplete' });
 // The response, as H-3 (with "analysed": the run finished, feedback not yet
 // sent; and the browser's own "sending" while the request is out).
@@ -106,6 +108,8 @@ export const toAlertRecord = (raw = {}, identity = {}) => {
     receivedAt: iso(raw.created_at),
     updatedAt: iso(raw.updated_at || raw.created_at),
     mock: raw.mock === true,
+    // What its run was made with (B-42): the domain's settings, always.
+    settingsUsed: readSettingsUsed(raw.settings_used),
   };
 };
 

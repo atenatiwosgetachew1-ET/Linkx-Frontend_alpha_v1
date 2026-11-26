@@ -8,7 +8,7 @@ import { renderTablePdf } from './tablePdf.js';
 // options: renderTablePdf's (rows, columns, orientation, source, details).
 export const buildTablePdf = async (options) => {
   const logo = await rasterizeSvg(svgDataUrl(nbeLogoSvg));
-  const ethiopic = options.rows.some((row) => ETHIOPIC_RE.test(Object.values(row.values || {}).join(' ')));
+  const ethiopic = options.rows.some((row) => ETHIOPIC_RE.test(Object.values(row.values || {}).join(' '))) || ETHIOPIC_RE.test(options.remark || '');
   const fonts = ethiopic ? await loadEthiopicFonts() : null;
   return renderTablePdf({ ...options, logo, fonts });
 };

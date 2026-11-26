@@ -18,6 +18,7 @@
 // name } | { type: 'subheading', text }.
 
 import { parseAmount } from '../../../shared/numbers/values.js';
+import { runRemark } from '../../../shared/runSettings.js';
 import { findCutPoints, isAnnotation, nodeTypeOf } from '../lib/graphAnalysis.js';
 import { TIME_UNITS, formatBucket, timelineBuckets, timelineItems, timelineKeys } from '../lib/graphTimeline.js';
 
@@ -403,6 +404,7 @@ export const buildGraphReport = (input) => {
   const { graph, view } = input;
   const nameOf = (g, id) => entityName(g, id, input.nameKey);
   const generatedAt = input.generatedAt || new Date();
+  const remark = runRemark(input.runSettings);
   const cover = {
     header: 'NBE',
     title: plainText(input.cover?.title) || reportKindOf(input.kind).name,
@@ -414,6 +416,8 @@ export const buildGraphReport = (input) => {
       ['Analyst / Investigator Details', plainText(input.cover?.analyst) || '—'],
       ['System Flagged Rule', plainText(input.cover?.systemRule, 400) || '—'],
       ['Graph Alert', plainText(input.cover?.graphAlert, 400) || '—'],
+      // What the runs behind the graph were made with (B-42).
+      ...(remark ? [['Run Settings', plainText(remark.short.replace(/^Run settings: /, ''), 600)]] : []),
     ],
     domain: plainText(input.cover?.domain),
     marking: plainText(input.cover?.marking) || DEFAULT_MARKING,
@@ -649,6 +653,7 @@ export const buildGraphReport = (input) => {
     { type: 'bullets', items: [
       `Source: ${sourceLine}`,
       ...(runSettingsLine(source.run) ? [runSettingsLine(source.run)] : []),
+      ...(remark ? [plainText(remark.text, 2000)] : []),
       reportKindOf(input.kind).provenance,
       `Generated ${reportDateTime(generatedAt)} with the ${REPORT_TEMPLATE.name} template (version ${REPORT_TEMPLATE.version}).`,
       shownAll

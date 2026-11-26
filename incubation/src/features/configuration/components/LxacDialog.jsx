@@ -67,6 +67,8 @@ export default function LxacDialog({ mode, file, onSelectFile, onDropFile, onSub
             : 'Enter the decryption password to import and merge this multi-domain configuration into the active session.'}
         </p>
 
+        <p className="settings_hint">{isExport ? 'It holds your own columns of this session, if you have any.' : 'Column lists in it that differ from the domain’s become your own columns (Connections ▸ Own columns, where they can be restored).'}</p>
+
         {!isExport ? (
           file ? (
             <div className="config_window_file_badge">

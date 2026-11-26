@@ -455,6 +455,7 @@ export const STALE_DATAFRAME_PATCH = Object.freeze({
   dataframeStatus: DATAFRAME_STATUSES.NONE,
   dataframeInfo: null,
   dataframeFilter: null,
+  dataframeMappingDraft: null,
   dataframeMessage: '',
   dataframeDomain: '',
   dataframeMapping: '',

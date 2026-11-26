@@ -75,10 +75,12 @@ export const subscribePinnedEvidence = (listener) => {
 
 // GA:5017 pushPinnedEvidenceItem, for several items: new ones go first,
 // already pinned ones are left where they are. -> number added
-export const pinEvidence = (items) => {
+// runRemark: what the pinned data's runs were made with ('' when nothing is to
+// be said); kept with each item, as its data is.
+export const pinEvidence = (items, runRemark = '') => {
   const existing = new Set(current().map(itemKey));
   const pinnedAt = new Date().toISOString();
-  const added = normalizeList(items, Infinity).filter((item) => !existing.has(itemKey(item))).map((item) => ({ ...item, pinnedAt }));
+  const added = normalizeList(items, Infinity).filter((item) => !existing.has(itemKey(item))).map((item) => ({ ...item, pinnedAt, ...(runRemark ? { runRemark: String(runRemark).slice(0, 2000) } : {}) }));
   if (!added.length) return 0;
   // Production unshifted one at a time, so the last one pinned is first.
   commit([...added.reverse(), ...current()].slice(0, MAX_PINNED_EVIDENCE));

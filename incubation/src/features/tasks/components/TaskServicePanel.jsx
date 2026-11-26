@@ -9,7 +9,7 @@ import { getServiceRefusalMessage } from '../../../services/apiErrors.js';
 import { reconfirmTask } from '../../../services/tasksApi.js';
 import TaskEvidenceDialog from './TaskEvidenceDialog.jsx';
 import { canSaveAsEvidence, saveRunAsEvidence } from '../lib/saveEvidence.js';
-import { TASK_LIFECYCLES, applyServerTask, releaseTaskSession } from '../lib/taskRegistry.js';
+import { TASK_LIFECYCLES, applyServerTask, releaseTaskSession, taskRemark } from '../lib/taskRegistry.js';
 import { formatDateTime } from '../lib/taskFormat.js';
 
 // A task's record on the Service (frontend alignment 2026-11-20): its
@@ -60,6 +60,7 @@ export default function TaskServicePanel({ task, dialogHost = null, graphMissing
     <TaskEvidenceDialog
       initial={{ title: `${task.title} #${task.number}`, summary: '', includeGraph: true }}
       graphMissing={graphMissing}
+      remark={taskRemark(task)}
       taskLabel={`${task.title} #${task.number}`}
       onSave={save}
       onCancel={() => setDialogOpen(false)}

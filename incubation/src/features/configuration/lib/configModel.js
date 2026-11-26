@@ -5,7 +5,7 @@
 // write the backend configuration identically.
 
 import { sanitizeConnectionValue, sanitizeText } from '../../../utils/inputSecurity.js';
-import { getApiProblemPayload, getApiProblemStatus, getSharedApiErrorMessage, sanitizeBackendUserMessage } from '../../../services/apiErrors.js';
+import { getApiProblemPayload, getApiProblemStatus, getServiceRefusalMessage, getSharedApiErrorMessage, sanitizeBackendUserMessage } from '../../../services/apiErrors.js';
 
 export const CONFIG_SECRET_FIELD_KEYS = ['active_tool_password', 'tool_password', 'neo4j_password', 'postgres_password', 'api_secret', 'api_key'];
 export const CONFIG_SECRET_REF_KEYS = {
@@ -372,12 +372,9 @@ export const buildConfigurationSavePayload = (configuration) => {
   rest.risk_entities = split.risk_entities;
   ['trusted_catalog', 'trusted_list', 'trustedList', 'active_tool_trusted_list', 'classified_entities', 'classifiedEntities'].forEach((key) => { delete rest[key]; });
 
-  if (rest.column_mapping) {
-    rest.column_mapping = normalizeColumnMappingEntries(rest.column_mapping).reduce((acc, entry) => {
-      if (entry.key) acc[entry.key] = entry.value;
-      return acc;
-    }, {});
-  }
+  // The domain's own (Configuration ▸ Domains): the Service resolves it on
+  // every load and ignores one that is sent (round 3, C1). Origins are answers.
+  ['column_mapping', 'column_mapping_origins', 'columns_origins', 'columns_default'].forEach((key) => { delete rest[key]; });
 
   ADDRESS_GROUPS.forEach((group) => {
     const state = mergeConfigAddressOptions({
@@ -401,6 +398,11 @@ export const buildConfigurationSavePayload = (configuration) => {
     elastic_scroll_limit: normalizeElasticScrollLimit(rest.elastic_scroll_limit),
   };
 };
+
+// The column lists, out of a payload: one that is sent and differs from the
+// domain's becomes the user's own, so they are saved apart (OwnColumns.jsx).
+export const COLUMN_LIST_KEYS = ['fetch_columns', 'search_columns_strict', 'search_columns_fuzzy'];
+export const withoutColumnLists = (payload) => Object.fromEntries(Object.entries(payload).filter(([key]) => !COLUMN_LIST_KEYS.includes(key)));
 
 export const getRuleNames = (config) => {
   if (Array.isArray(config?.rule_names) && config.rule_names.length > 0) return config.rule_names;
@@ -463,6 +465,8 @@ export const getConfigurationErrorMessage = (input, fallback = 'Could not save c
   if (status === 400 && message === 'validation_error' && field === 'risk_entities') return 'Risk entities are invalid.';
   if (message === 'failed!' && String(payload?.error || '') === 'rule_upload_failed') return 'Rule upload failed.';
   if (status === 500 && message === 'failed!' && String(payload?.error || '') === 'configuration_load_failed') return 'Could not load configuration. Try again.';
+  const refusal = getServiceRefusalMessage(input);
+  if (refusal) return refusal;
   if (detail && !/^(json_object_required|internal_server_error)$/i.test(detail)) return detail;
   return getSharedApiErrorMessage(input, fallback);
 };

@@ -90,3 +90,13 @@ describe('Configuration · System', () => {
     expect(screen.getByRole('switch', { name: /Remote requests/ })).toBeDisabled();
   });
 });
+
+describe('granted domains (C10)', () => {
+  it('offers the account’s own only; the one in use is always shown', () => {
+    renderSystem({ allowedDomains: ['cdr'] });
+    expect(screen.getAllByRole('radio').map((item) => item.textContent)).toHaveLength(2);
+    cleanup();
+    renderSystem({ allowedDomains: ['bank'] });
+    expect(screen.getAllByRole('radio')).toHaveLength(1);
+  });
+});

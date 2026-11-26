@@ -11,6 +11,8 @@ import { TABLE_SCOPES } from '../../table/lib/tableRows.js';
 import { COLOR_SCHEMAS, DEFAULT_SCHEMA, SCHEMA_NAMES, nodeOwnColor } from '../lib/chartColors.js';
 import { ADVANCED_HINT, CHART_METRICS, METRIC_GROUPS, isMetricAvailable, metricById } from '../lib/chartMetrics.js';
 import { graphDataNotice } from '../../graph/lib/graphDataNotice.js';
+import RunRemarkFlag from '../../../shared/components/RunRemarkFlag.jsx';
+import { runRemark } from '../../../shared/runSettings.js';
 import { resultCache } from '../lib/chartResultCache.js';
 import { normalizeChartState, scopeInput, toneStep } from '../lib/chartState.js';
 import { getChartDefaults, subscribeChartDefaults } from '../lib/chartDefaults.js';
@@ -129,6 +131,7 @@ export default function ChartWindowBody({ windowItem, hidden = false }) {
   const snapshot = useFrozenWhile(hidden, liveSnapshot);
   const link = useFrozenWhile(hidden, liveLink);
   const dataNotice = graphDataNotice(snapshot, link, state.scope);
+  const remark = runRemark(snapshot?.runSettings);
   const selectedNodes = link.selection.nodes;
 
   // The scope's entities and the links among them (theme lines left out,
@@ -545,6 +548,7 @@ export default function ChartWindowBody({ windowItem, hidden = false }) {
   };
   // The frame's right-hand lines: where the charts come from, and the snap.
   const snapFrame = (count) => ({
+    remark: remark?.marked ? remark.short : '',
     logoUrl: NBE_LOGO_URL,
     source: `Source: ${graphWindow?.title || 'Graph'} \u00b7 ${TABLE_SCOPES.find((entry) => entry.id === state.scope)?.label || ''} scope`,
     details: `${windowItem.title} \u00b7 ${count} ${count === 1 ? 'chart' : 'charts'} \u00b7 ${new Date().toLocaleString('en-GB')}`,
@@ -559,7 +563,7 @@ export default function ChartWindowBody({ windowItem, hidden = false }) {
   // -> [{ title, page }]
   const singlePages = async (ids, nameKey = '') => {
     const cells = await pictures(ids, CELLS.single, nameKey);
-    return Promise.all(cells.map(async (cell) => ({ title: cell.title, page: (await framePages([cell], { ...snapFrame(1), layout: 'single' }))[0] || cell.url })));
+    return Promise.all(cells.map(async (cell) => ({ title: cell.title, page: (await framePages([cell], { ...snapFrame(1), layout: 'single' }))[0] || (remark?.marked ? null : cell.url) }))); // never without the frame that says it
   };
   const previewTiles = async (nameKey) => Object.fromEntries(Object.values(await cellsFor(nameKey)).map((picture) => [picture.id, picture.url]));
   const exportWarning = (message) => notify({ title: exportPopup === 'print' ? 'Print charts' : 'Take snaps', message, level: 'warning', source: windowItem.title });
@@ -585,7 +589,11 @@ export default function ChartWindowBody({ windowItem, hidden = false }) {
       else if (exportPopup === 'print') printImage(pages, { pages: true });
       else pages.forEach((url, index) => downloadDataUrl(snapFileName(windowItem.title, '', now, pages.length > 1 ? { number: index + 1, count: pages.length } : null), url));
     } else {
-      const pages = await singlePages(ids, nameKey);
+      const pages = (await singlePages(ids, nameKey)).filter((entry) => entry.page);
+      if (!pages.length) {
+        exportWarning('The charts could not be drawn on a page.');
+        return;
+      }
       if (exportPopup === 'print' && action === 'download') await downloadPagesPdf(pages.map((entry) => entry.page), now);
       else if (exportPopup === 'print') printImage(pages.map((entry) => entry.page), { pages: true });
       else pages.forEach((entry) => downloadDataUrl(snapFileName(windowItem.title, entry.title, now), entry.page));
@@ -657,6 +665,7 @@ export default function ChartWindowBody({ windowItem, hidden = false }) {
           <p className="graph_window_counts" aria-live="polite">
             <strong>{input.nodeIds.length.toLocaleString()}</strong> {input.nodeIds.length === 1 ? 'entity' : 'entities'} · <strong>{input.edges.length.toLocaleString()}</strong> {input.edges.length === 1 ? 'link' : 'links'} in scope
           </p>
+          <RunRemarkFlag remark={remark} />
           {dataNotice ? <span className="graph_window_flag is-warning linkx_tooltip_anchor" role="status" data-tooltip-placement="bottom" data-tooltip={dataNotice.detail}>{dataNotice.label}</span> : null}
           <LinkedGraphMenu icon={CHART_ICON} graphs={graphs} graphId={graphId} onLink={linkTo} onShow={() => focusWindow(graphId)} />
           <ScopeMenu scopes={TABLE_SCOPES} scope={state.scope} onScope={(scope) => setState({ scope })} />

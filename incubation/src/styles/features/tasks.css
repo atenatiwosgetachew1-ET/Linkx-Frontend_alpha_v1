@@ -1884,3 +1884,12 @@
 	color: var(--tasks-status-failed);
 	font-size: 11.5px;
 }
+
+/* What the run was made with, before it is saved as evidence */
+.tasks_evidence_remark {
+	margin: 8px 0 0;
+	padding: 8px 10px;
+	border: 1px solid currentColor;
+	border-radius: 8px;
+	font-size: 12px;
+}

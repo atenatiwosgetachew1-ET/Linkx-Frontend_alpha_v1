@@ -17,7 +17,7 @@ export const buildReportRows = (records, tabId) => {
     record.leadingEntity || '-',
     record.id || '-',
     record.externalReferenceId || '-',
-    record.reportType || '-',
+    `${record.reportType || '-'}${record.runRemark?.marked ? `\n(${record.runRemark.label})` : ''}`,
     tab.scored ? scoreCell(record) : (record.sourceSystem || '-'),
     String(record.status || '').toUpperCase(),
     record.createdAt ? new Date(record.createdAt).toLocaleString() : '-',
@@ -66,6 +66,11 @@ export async function downloadReportsListPdf({ records, tabId, offset, total, is
   const last = Math.min(offset + limit, total);
   doc.text(`Showing Records: ${first} to ${last} of ${total}`, 14, y);
   doc.text(`Generated At: ${new Date().toLocaleString()}`, 200, y);
+
+  if (records.some((record) => record.runRemark?.marked)) {
+    doc.setFontSize(8.5);
+    doc.text('Records marked in the Type column were made with an analyst\'s own columns or column mapping, or it was not recorded whether they were.', 14, y + 7);
+  }
 
   const { head, body } = buildReportRows(records, tabId);
   const tableStyle = {

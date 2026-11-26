@@ -233,12 +233,32 @@ export const pageLayout = (layout = 'group') => {
   return { size, columns, rows, perPage: columns * rows };
 };
 
+// One line, two when it is long.
+const drawRemark = (context, remark, right, room) => {
+  context.fillStyle = FRAME.gold;
+  let size = 9.5;
+  context.font = `700 ${size}px ${FONT}`;
+  while (size > 6 && context.measureText(remark).width > room * 2) {
+    size -= 0.5;
+    context.font = `700 ${size}px ${FONT}`;
+  }
+  const lines = [''];
+  remark.split(' ').forEach((part) => {
+    const next = lines[lines.length - 1] ? `${lines[lines.length - 1]} ${part}` : part;
+    if (lines.length < 2 && context.measureText(next).width > room) lines.push(part);
+    else lines[lines.length - 1] = next;
+  });
+  lines.forEach((line, index) => context.fillText(line, right, 78 + index * (size + 0.5)));
+};
+
 // A page in the frame: { canvas, context, body: { x, y, width, height },
 // finish() } (null without a canvas). paper: { width, height } (A4 portrait
 // or landscape); finish() lays the watermark over the body, draws the footer
 // and returns the PNG data URL. Header: navy; the logo left, the heading,
 // the source and the details right.
-export const framedPage = (logo, { title, source, details }, paper, page = 1, pages = 1) => {
+// remark: what the data's runs were made with, under the details, always
+// whole (its letters made smaller to fit).
+export const framedPage = (logo, { title, source, details, remark = '' }, paper, page = 1, pages = 1) => {
   const { scale } = SNAP;
   const { margin } = FRAME;
   const { width, height } = paper;
@@ -268,7 +288,8 @@ export const framedPage = (logo, { title, source, details }, paper, page = 1, pa
   if (source) context.fillText(source, width - margin, 54);
   context.fillStyle = FRAME.title;
   context.font = `9.5px ${FONT}`;
-  if (details) context.fillText(details, width - margin, 70);
+  if (details) context.fillText(details, width - margin, remark ? 66 : 70);
+  if (remark) drawRemark(context, remark, width - margin, width - margin * 2 - 200);
   context.textAlign = 'left';
   const body = { x: 0, y: FRAME.header, width, height: height - FRAME.header - FRAME.footer };
   context.fillStyle = '#ffffff';
@@ -313,12 +334,12 @@ export const A4_LANDSCAPE = Object.freeze({ width: A4.height, height: A4.width }
 // whole inside the body's margins (centred), with a thin border.
 // orientation: 'portrait' | 'landscape'. -> a PNG data URL, or null.
 export const framePicture = async (url, {
-  title = 'LINK ANALYSIS \u00b7 GRAPH SNAP', source = '', details = '', logoUrl = '', orientation = 'landscape',
+  title = 'LINK ANALYSIS \u00b7 GRAPH SNAP', source = '', details = '', remark = '', logoUrl = '', orientation = 'landscape',
 } = {}) => {
   const [logo, image] = await Promise.all([loadImage(logoUrl), loadImage(url)]);
   if (!image) return null;
   const paper = orientation === 'portrait' ? A4 : A4_LANDSCAPE;
-  const framed = framedPage(logo, { title, source, details }, paper);
+  const framed = framedPage(logo, { title, source, details, remark }, paper);
   if (!framed) return null;
   const { context, body } = framed;
   const room = { width: body.width - FRAME.margin * 2, height: body.height - FRAME.margin * 2 };
@@ -340,7 +361,7 @@ export const framePicture = async (url, {
 // layout: 'group' | 'single'. -> [PNG data URL], a page each (empty when
 // nothing could be drawn).
 export const framePages = async (cells, {
-  title = 'LINK ANALYSIS \u00b7 CHART SNAP', source = '', details = '', logoUrl = '', layout = 'group',
+  title = 'LINK ANALYSIS \u00b7 CHART SNAP', source = '', details = '', remark = '', logoUrl = '', layout = 'group',
 } = {}) => {
   const [logo, ...images] = await Promise.all([loadImage(logoUrl), ...cells.map((cell) => loadImage(cell.url))]);
   const pictures = images.filter(Boolean);
@@ -349,7 +370,7 @@ export const framePages = async (cells, {
   const pages = Math.ceil(pictures.length / place.perPage);
   const out = [];
   for (let page = 0; page < pages; page += 1) {
-    const url = drawPage(pictures.slice(page * place.perPage, (page + 1) * place.perPage), logo, { title, source, details }, place, page + 1, pages);
+    const url = drawPage(pictures.slice(page * place.perPage, (page + 1) * place.perPage), logo, { title, source, details, remark }, place, page + 1, pages);
     if (!url) return [];
     out.push(url);
   }

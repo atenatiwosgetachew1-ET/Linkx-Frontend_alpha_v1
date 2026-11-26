@@ -87,7 +87,7 @@ The overrides are for a user's **own** runs. They never change another user's, a
 | 4 | Refuse a target that is not a canonical field of the domain: `400 { code: "unknown_target", fields }` |
 | 5 | **One effective mapping per run, resolved once on the Service when the run is queued:** profile, then admin, then the user's override. A copy kept in a session from before Phase 6 is not a layer of its own |
 | 6 | **A dataframe made with another mapping than the run would use** is refused: `409 configuration_changed` with `changed: ["column_mapping"]`. Today it runs: the dataframe keeps one mapping and Analyze takes another (Q2). With overrides this will happen often |
-| 7 | **Alert (STR) runs, service accounts and xVigilance use the domain's mapping and columns only**, because their results leave the Service or run with nobody there. *(Our proposal. Please say if you see it otherwise)* |
+| 7 | **Alert (STR) runs, service accounts and xVigilance use the domain's mapping and columns only**, because their results leave the Service or run with nobody there. **Decided by our analyst;** our Reports window says so on the STR alerts tab. Please confirm that an alert run takes nothing from the session of the analyst who starts it |
 | 8 | Every override is in the audit: who, domain, when, before and after |
 
 **If you refuse D4**, please say why, and whether a run-only mapping would do: sent with one `create_DF`, recorded on its task, never stored.
@@ -124,7 +124,7 @@ Copied when the run is queued and never changed after. `overridden: false` when 
 | 1 | Task: `GET /api/v1/tasks`, `task_updated` | Tasks, the run's windows, quick runs |
 | 2 | Evidence record, on saving a run (H-6), as a **copy** | It outlives the task (retention) and the analyst's account |
 | 3 | Report records of every tab (H-1) | The Reports window and its exports |
-| 4 | Alert record and its feedback to the parent | If alert runs may use overrides after all (C1, 7). Please carry the remark to the parent too |
+| 4 | Alert record and its feedback to the parent | Shows that no override was used (C1, 7) |
 | 5 | **`/get_graph`, every form:** by `task_id`, by evidence, by session. Also `task_id` in the answer by session | A graph drawn by session does not say which run it comes from. Graph, Table and Chart windows and all their exports take the remark from here |
 | 6 | Archived graphs (180 days) | Kept with the archive |
 | 7 | AI assistant and MCP answers, if they read these records | So an answer about a finding names it |
@@ -132,7 +132,7 @@ Copied when the run is queued and never changed after. `overridden: false` when 
 | # | Please also say |
 |---|---|
 | 8 | **A search** (Elastic, Hive) made with one's own search columns and then turned into a dataframe: are those columns recorded too? They decide which rows were found |
-| 9 | May the verdict stay `clean` under a mapping override? We would show it as **"Clean (own mapping)"**, never plain Clean |
+| 9 | May the verdict stay `clean` under a mapping override? We show it as **"Clean (own mapping)"**, never plain Clean (decided) |
 | 10 | Filter: `overridden` on `GET /api/v1/tasks` and the reports, for a reviewer |
 | 11 | Evidence of a run with an override: allowed for everyone with `evidence:create`, or should an admin confirm it first? We would allow it, with the remark |
 
@@ -171,7 +171,7 @@ Your rule 2 and Verify step 3 conflict with other answers. Please confirm that t
 Our page knows two fixed lists: CDR, and one for every other domain. They are copied from production.
 1. Does `GET /rule-thresholds?domain=D` return **exactly** the keys that the domain accepts?
 2. **Request:** per key, its type, minimum, maximum, default and a short label, so the form is not a copy of your rules. If refused, please send the list for `microfinance`, `insurance` and `social_media`.
-3. Until Phase 6 a save from our page sends **every** key of its list, not only the changed ones. Is that harmful today: do unchanged keys count in `modified_since_applied`, or come back as 400 on those three domains?
+3. Since 2026-11-25 our page sends **only the changed keys**. Before, and in production, a save sends every key of the list: did that mark unchanged keys as `modified_since_applied`, or fail on those three domains? Keys you send that we have no field for are shown read-only.
 4. **Please check `bank`'s history:** until 2026-11-25 our page saved the thresholds and score lineage of microfinance, insurance and social media to `bank`. (Also with the owner.)
 
 ### C6. Two admins at once (Request, P1)
@@ -233,6 +233,7 @@ B-8, B-12, B-14, B-25, B-34 and `columns` of B-28 can stay as they are.
 
 ## E. New on our side, for your information
 
+- **The Domains page** is in Configuration now, with Thresholds and Score lineage for any domain (D1, first step). An admin confirms the exact changes. Score lineage still sends the whole version, with the typologies we have no field for kept as you sent them.
 - **Quick runs** have a source session of their own, opened by `/init_source` with a new number and closed by `/close_source_window` when they end. One at a time per page. Cancelled while it gets ready: a queued `create_DF` is cancelled; a start already sent gets `end_session`.
 - **A quick run is stopped before it is sent** if the domain or the active rule changed while it was getting ready.
 - **Result wording:** a quick run without flags reads "No flags raised, in this short run only". Never Clean.

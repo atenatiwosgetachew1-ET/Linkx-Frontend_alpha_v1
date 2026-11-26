@@ -80,7 +80,7 @@ export default function GraphPinnedPanel({ items, elsewhere, summary, onFocus, o
                   <button
                     type="button"
                     className="graph_card_row_main"
-                    title="Click to focus it and open its details in the Info tab."
+                    title={`${entry.item?.runRemark ? `${entry.item.runRemark}\n` : ''}Click to focus it and open its details in the Info tab.`}
                     onClick={() => onFocus(entry.item)}
                   >
                     <span className="graph_card_row_mark" aria-hidden="true"><PinSign /></span>

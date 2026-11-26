@@ -52,7 +52,7 @@ export const pageOrientation = (orientation, columnCount) => (orientation === 'a
 // null; fonts: Noto Sans Ethiopic ({ regular, bold }) or null.
 // -> the jsPDF document.
 export async function renderTablePdf({
-  rows, columns, title = 'LINK ANALYSIS · TABLE', source = '', details = '', orientation = 'auto', logo = null, fonts = null,
+  rows, columns, title = 'LINK ANALYSIS · TABLE', source = '', details = '', remark = '', orientation = 'auto', logo = null, fonts = null,
 }) {
   const [{ jsPDF }, { default: autoTable }] = await Promise.all([import('jspdf'), import('jspdf-autotable')]);
   const landscape = pageOrientation(orientation, columns.length) === 'landscape';
@@ -61,7 +61,7 @@ export async function renderTablePdf({
   const shown = rows.slice(0, TABLE_PDF_MAX_ROWS);
   const body = shown.map((row) => columns.map((column) => pdfText(row.values[column.key] ?? '')));
   const head = [columns.map((column) => pdfText(column.label))];
-  installEthiopic(doc, ETHIOPIC_RE.test(JSON.stringify([head, body])) ? fonts : null);
+  installEthiopic(doc, ETHIOPIC_RE.test(JSON.stringify([head, body, remark])) ? fonts : null);
   doc.setProperties({ title: pdfText(source || 'Table'), subject: 'LinkX table', creator: 'LinkX · NBE LinkX Table' });
 
   // Header and footer bands (page numbers once the pages are known).
@@ -88,7 +88,21 @@ export async function renderTablePdf({
     if (source) doc.text(pdfText(source), right, 14, { align: 'right' });
     doc.setTextColor(...HEAD_TITLE);
     doc.setFontSize(7);
-    if (details) doc.text(pdfText(details), right, 18.5, { align: 'right' });
+    if (details) doc.text(pdfText(details), right, remark ? 17.5 : 18.5, { align: 'right' });
+    // What the data's runs were made with: whole, two lines when it is long.
+    if (remark) {
+      const room = page.width - FRAME.margin * 2 - 50;
+      doc.setTextColor(212, 168, 90);
+      doc.setFont('helvetica', 'bold');
+      let size = 6.5;
+      doc.setFontSize(size);
+      while (size > 4 && doc.splitTextToSize(pdfText(remark), room).length > 2) {
+        size -= 0.5;
+        doc.setFontSize(size);
+      }
+      doc.splitTextToSize(pdfText(remark), room).forEach((line, index) => doc.text(line, right, 20.6 + index * size * 0.36, { align: 'right' }));
+      doc.setFont('helvetica', 'normal');
+    }
     doc.setFillColor(...NAVY);
     doc.rect(0, page.height - FRAME.footer, page.width, FRAME.footer, 'F');
     doc.setTextColor(...HEAD_TEXT);

@@ -12,6 +12,7 @@ import { getNodeValue, normalizeGraphId, PROPERTY_KEY_HIDDEN } from './graphMode
 import { normalizeLimitRange } from './graphSettings.js';
 import { searchNodes } from './graphSearch.js';
 import { sortByValue } from '../../../shared/numbers/values.js';
+import { exportRunSettings, importRunSettings, mergeRunSettings } from '../../../shared/runSettings.js';
 
 export const MARKER_KINDS = ['path', 'traversal', 'alert', 'pinned'];
 export const HIGHLIGHT_FLASH_MS = 1000;
@@ -54,13 +55,15 @@ export const createGraphStore = () => {
   // What the window currently shows (for the right panel's counts).
   let viewStats = { ...EMPTY_VIEW_STATS };
   let alertReport = null;
+  // What the runs behind the data were made with (shared/runSettings.js).
+  let runSettings = [];
   // dataVersion: bumped only when the graph's data changes, not for a
   // highlight (markers, the expand flash) nor for showing / hiding nodes
   // (reveal, expand, collapse, hide): what the Chart window measures (analyst
   // report 2026-11-18: a chart click revealing its entity recomputed every
   // chart).
   let dataVersion = 0;
-  let snapshot = { version: 0, dataVersion: 0, nodes: 0, edges: 0, danglingEdges: 0, selection: [], status, viewStats, alertReport, history: { canUndo: false, canRedo: false } };
+  let snapshot = { version: 0, dataVersion: 0, nodes: 0, edges: 0, danglingEdges: 0, selection: [], status, viewStats, alertReport, runSettings, history: { canUndo: false, canRedo: false } };
   // Laid-out positions (kept across remounts; a docked tab switch must not
   // re-run the layout) and the selected node ids (read by the right panel).
   let positions = new Map();
@@ -126,7 +129,7 @@ export const createGraphStore = () => {
       dataVersion += 1;
       propertyKeysCache = null;
     }
-    snapshot = { version, dataVersion, nodes: graph.order, edges: graph.size, danglingEdges, selection, status, viewStats, alertReport, history: historyState() };
+    snapshot = { version, dataVersion, nodes: graph.order, edges: graph.size, danglingEdges, selection, status, viewStats, alertReport, runSettings, history: historyState() };
     listeners.forEach((listener) => listener());
   };
 
@@ -186,6 +189,7 @@ export const createGraphStore = () => {
   const reset = () => {
     // New data starts a new history (production resetGraphHistoryBuffer).
     history = { undo: [], redo: [] };
+    runSettings = [];
     graph = new MultiDirectedGraph({ allowSelfLoops: true });
     anonymousEdgeCounts = new Map();
     danglingEdges = 0;
@@ -630,7 +634,7 @@ export const createGraphStore = () => {
     graph.forEachEdge((key, attributes, source, target) => {
       if (set.has(source) && set.has(target)) edges.push({ ...cloneDeep(attributes), from: source, to: target });
     });
-    return { nodes, edges };
+    return { nodes, edges, runSettings: exportRunSettings(runSettings) };
   };
 
   // Production pasteNodes: new ids ("Group…" nodes stay groups), placed from
@@ -655,6 +659,8 @@ export const createGraphStore = () => {
       if (!from || !to) return;
       addEdgeInternal(from, to, { ...cloneDeep(edge), id: uniqueEdgeId(`paste_edge_${index}`) });
     });
+    // Both remarks stand; taking the paste back keeps them, to be safe.
+    runSettings = mergeRunSettings(runSettings, importRunSettings(clip.runSettings));
     showAuthored(pasted, viewKey, visibleIds);
     emit();
     return pasted;
@@ -1063,6 +1069,11 @@ export const createGraphStore = () => {
     setPositions,
     setSelection,
     setAlertReport,
+    setRunSettings: (entries) => {
+      runSettings = mergeRunSettings([], entries || []);
+      emit({ dataChanged: false });
+    },
+    getRunSettings: () => runSettings,
     setStatus,
     setViewStats,
     beginFetch: () => {

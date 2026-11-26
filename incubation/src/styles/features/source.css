@@ -872,3 +872,35 @@
 		display: none;
 	}
 }
+
+/* Dataframe step: fields the data lacks, and its own column mapping */
+.source_window_df_missing {
+	margin: 8px 0 0;
+	font-size: 12px;
+	overflow-wrap: anywhere;
+}
+
+.source_window_df_mapping {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.source_window_df_mapping li {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+	align-items: center;
+	gap: 10px;
+	font-size: 12px;
+}
+
+.source_window_df_mapping li > span {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	min-width: 0;
+	overflow-wrap: anywhere;
+}

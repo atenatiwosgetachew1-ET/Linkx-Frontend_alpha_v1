@@ -20,6 +20,8 @@ import {
 import GraphFileMenu from './GraphFileMenu.jsx';
 import { forgetLayoutOwner, requestMeasure } from '../lib/layoutClient.js';
 import { runGraphFetch } from '../lib/graphFetchRunner.js';
+import RunRemarkFlag from '../../../shared/components/RunRemarkFlag.jsx';
+import { UNKNOWN_RUN, runRemark } from '../../../shared/runSettings.js';
 import { getGraphSession, subscribeGraphSession } from '../lib/graphStatus.js';
 import { isSessionStreaming, linkGraphToSession, linkableSources, resolveSourceWindow, unlinkGraph } from '../lib/graphLinkFlow.js';
 import {
@@ -364,6 +366,7 @@ export default function GraphWindowBody({ windowItem }) {
         return;
       }
       store.replace({ nodes: cached.nodes, edges: cached.edges });
+      store.setRunSettings(cached.runSettings || UNKNOWN_RUN);
       store.setStatus({ state: 'ready', source: 'evidence' });
       return;
     }
@@ -378,7 +381,7 @@ export default function GraphWindowBody({ windowItem }) {
         closeAsEmpty();
       },
       // What the Service sent, whole: never this window's edits, nor a part.
-      onLoaded: (result) => { if (!result.partial) cacheEvidenceGraph(source.traceId, { data: null, ...result.raw() }); },
+      onLoaded: (result) => { if (!result.partial) cacheEvidenceGraph(source.traceId, { data: null, ...result.raw(), runSettings: result.runSettings }); },
     });
   }, [apiFetch, closeAsEmpty, source, store]);
 
@@ -404,6 +407,9 @@ export default function GraphWindowBody({ windowItem }) {
   useEffect(() => {
     if (source.kind === 'run' && store.getStatus().state === 'idle' && store.getSnapshot().nodes === 0 && !emptyRun) loadRun();
   }, [emptyRun, loadRun, source.kind, store]);
+
+  // What the runs behind the graph were made with (B-42).
+  const remark = useMemo(() => runRemark(snapshot.runSettings), [snapshot.runSettings]);
 
   /* ── Linked session: relationships load the graph ───────────────────── */
   // The run this window shows (opened from Tasks, else the session's latest).
@@ -1172,7 +1178,7 @@ export default function GraphWindowBody({ windowItem }) {
     const visible = new Set(view.nodeIds);
     return pinnedHere.map((item) => {
       if (item.type === 'node') {
-        return { key: `node:${item.id}`, item, kind: 'node', name: alertNodeName(graph, item.id), detail: formatPinnedAt(item.pinnedAt), hidden: !visible.has(item.id) };
+        return { key: `node:${item.id}`, item, kind: 'node', name: alertNodeName(graph, item.id), detail: `${formatPinnedAt(item.pinnedAt)}${item.runRemark ? ` · ${item.runRemark.split('.')[0]}` : ''}`, hidden: !visible.has(item.id) };
       }
       const key = edgeKeyForPinned(graph, item.id);
       const [from, to] = [graph.source(key), graph.target(key)];
@@ -1752,6 +1758,7 @@ export default function GraphWindowBody({ windowItem }) {
       logoUrl: NBE_LOGO_URL,
       source: `Source: ${windowItem.title} \u00b7 ${formatCount(view.nodeIds.length)} nodes \u00b7 ${formatCount(view.edgeIds.length)} links drawn`,
       details: new Date().toLocaleString('en-GB'),
+      remark: remark?.marked ? remark.short : '',
       orientation,
     });
   };
@@ -1841,6 +1848,7 @@ export default function GraphWindowBody({ windowItem }) {
         return { fields: profile.fields.map((entry) => [entry.label, entry.value]), portrait: profile.portrait };
       },
       source: { kind: source.kind, evidence: source.evidence, run: source.kind === 'run' || source.kind === 'session' ? runTask : null, sessionId, relationship: metadata.graphRelationship, fileName: metadata.graphImported },
+      runSettings: store.getRunSettings(),
       score: source.evidence?.score || null,
       scope: {
         searched: view.searched,
@@ -1939,6 +1947,7 @@ export default function GraphWindowBody({ windowItem }) {
       metadata: { evidence: null, graphLinkSource: null, graphTaskId: null, graphLinkAction: null, graphRelationship: null, graphSearch: null, graphBlank: true, graphImported: file.name.slice(0, 200) },
     });
     store.replace({ nodes: parsed.nodes, edges: parsed.edges });
+    store.setRunSettings(parsed.runSettings);
     // A file with every position (ours) is drawn as it was.
     if (parsed.positions) {
       store.setPositions(parsed.positions);
@@ -2174,7 +2183,7 @@ export default function GraphWindowBody({ windowItem }) {
     } else if (action === 'run_alert_scan') {
       runAlertScan();
     } else if (action === 'pin_evidence') {
-      if (menu && pinEvidence(evidenceItems(store.graph(), evidenceTargets(menu)))) {
+      if (menu && pinEvidence(evidenceItems(store.graph(), evidenceTargets(menu)), remark?.marked ? remark.text : '')) {
         setPinnedPanel((current) => ({ ...current, open: true }));
         setOverlayPref('pinned', true);
         setFrontCard('pinned');
@@ -2193,7 +2202,7 @@ export default function GraphWindowBody({ windowItem }) {
       confirmClearPinned();
     }
   }, [
-    cap, configureAlertRules, configureEdgeBundling, confirmClearPinned, toggleEdgeBundling, runSelectAction, loadView, menu, removeViews, runEditAction, saveView, notifyDrawingLimit, record, report, runAlertScan, runAllPaths, runCommunities,
+    cap, remark, configureAlertRules, configureEdgeBundling, confirmClearPinned, toggleEdgeBundling, runSelectAction, loadView, menu, removeViews, runEditAction, saveView, notifyDrawingLimit, record, report, runAlertScan, runAllPaths, runCommunities,
     runCutPoints, runElementFilter, runShortestPath, runVisualProperty, setFrontCard, setPinnedPanel, showPinnedEvidence, store, toggleAlertRules, toggleLinks, runMeasure, setFormattingOpen, openTable, openChart, openNewCompanion,
     view.nodeIds, viewKey,
   ]);
@@ -2310,6 +2319,7 @@ export default function GraphWindowBody({ windowItem }) {
             {busy && hasData ? <span className="graph_window_hint"> · {status.message}</span> : null}
             {isLayingOut ? <span className="graph_window_hint"> · arranging…</span> : null}
           </p>
+          <RunRemarkFlag remark={remark} />
           {status.state === 'ready' && status.partial ? (
             <span className="graph_window_flag is-warning linkx_tooltip_anchor" role="status" data-tooltip-placement="bottom" data-tooltip={`The Service finished with part of the graph missing: ${describePartial(status)}. Load it again before relying on it.`}>
               Incomplete

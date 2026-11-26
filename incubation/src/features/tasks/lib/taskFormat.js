@@ -1,4 +1,4 @@
-import { TASK_ORIGINS, TASK_STATUSES } from './taskRegistry.js';
+import { TASK_ORIGINS, TASK_STATUSES, taskRemark } from './taskRegistry.js';
 
 export const TASK_FILTERS = Object.freeze([
   { id: 'all', label: 'All' },
@@ -8,6 +8,8 @@ export const TASK_FILTERS = Object.freeze([
   // Analyst decision 2026-11-24: background runs whose session is kept for
   // their graph, and runs saved as evidence.
   { id: 'kept', label: 'Kept', hint: 'Background runs whose session is kept for their graph', empty: 'No session is kept. A background run that completes is listed here until you save it with its graph or release it.' },
+  // Made with own columns or an own column mapping (B-42).
+  { id: 'overridden', label: 'Own settings', hint: 'Runs made with own columns or an own column mapping', empty: 'No run in this list was made with own columns or an own column mapping.' },
   { id: 'saved', label: 'Saved', hint: 'Runs saved as evidence', empty: 'No run in this list is saved as evidence.' },
 ]);
 
@@ -16,6 +18,7 @@ export const matchesTaskFilter = (task, filter) => {
   if (filter === 'completed') return task.status === TASK_STATUSES.COMPLETED;
   if (filter === 'stopped') return task.status === TASK_STATUSES.TERMINATED || task.status === TASK_STATUSES.FAILED;
   if (filter === 'kept') return Boolean(task.heldSession);
+  if (filter === 'overridden') return Boolean(task.settingsUsed?.overridden);
   if (filter === 'saved') return Boolean(task.evidenceId);
   return true;
 };
@@ -46,6 +49,12 @@ export const endedText = (task) => task?.message || ENDED[task?.endedReason] || 
 export const taskOriginLabel = (task) => (task.origin === TASK_ORIGINS.QUICK || task.quick
   ? 'Quick analysis panel'
   : task.windowTitle || 'Source window');
+
+// A log file's first line: what the run was made with.
+export const taskLogHead = (task) => {
+  const remark = taskRemark(task);
+  return remark ? `${remark.text}\n` : '';
+};
 
 // 0:42 · 3m 05s · 1h 02m
 export const formatDuration = (ms) => {

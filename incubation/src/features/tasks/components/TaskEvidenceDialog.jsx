@@ -10,10 +10,11 @@ import { EVIDENCE_SUMMARY_MAX, EVIDENCE_TITLE_MAX } from '../../../services/task
 // graphMissing: why the run's graph cannot be kept ('' when it can); the
 // graph is then not asked for.
 // overScreen: over the whole workspace (its Source window being closed).
+// remark: what the run was made with (shared/runSettings.js), said before saving.
 // initial: { title, summary, includeGraph }; onSave(values, { includeGraph })
 // -> Promise<{ ok, message?, offerWithoutGraph? }> (busy until it settles;
 // closed by the caller on success).
-export default function TaskEvidenceDialog({ initial, taskLabel, onSave, onCancel, graphMissing = '', overScreen = false }) {
+export default function TaskEvidenceDialog({ initial, taskLabel, onSave, onCancel, graphMissing = '', remark = null, overScreen = false }) {
   const [values, setValues] = useState(initial);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
@@ -94,6 +95,7 @@ export default function TaskEvidenceDialog({ initial, taskLabel, onSave, onCance
                 <small id={`${idBase}-graph`} className={`graph_customize_hint graph_report_hint${graphMissing ? ' tasks_evidence_missing' : ''}`}>{graphMissing || 'Up to 5,000 relationships; it opens from Reports after the run’s session is gone.'}</small>
               </div>
             </fieldset>
+            {remark?.marked ? <p className="tasks_evidence_remark" role="note"><strong>{remark.label}.</strong> {remark.text} The evidence says so too.</p> : null}
             {message ? <p className="tasks_evidence_message" role="alert">{message}</p> : null}
           </div>
         </div>

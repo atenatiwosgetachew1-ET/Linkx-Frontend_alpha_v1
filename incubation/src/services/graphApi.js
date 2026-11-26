@@ -5,6 +5,7 @@
 
 import { JOB_CANCEL_STATUSES, JOB_FAILURE_STATUSES, JOB_POLL_DEFAULT_INTERVAL_MS, JOB_SUCCESS_STATUSES, getJobErrorMessage, getJobResult, getJobStatus, getQueuedPollPath, isQueuedJobResponse } from './jobs.js';
 import { parseJsonExact } from '../shared/numbers/values.js';
+import { readGraphRuns, resolveGraphRuns } from './runSettingsApi.js';
 
 const GRAPH_POLL_TIMEOUT_MS = 120 * 1000;
 
@@ -87,6 +88,7 @@ export const buildEvidencePayload = (traceId, report) => ({
 // POST /get_graph, following a queued job and its chunks (as the Graph window
 // reads them). -> { data, nodes, edges, partial, expected }; rejects with the
 // Service's message. partial: the Service announced more than it delivered.
+// runSettings: what the runs behind it were made with (shared/runSettings.js).
 export const fetchGraph = async (apiFetch, payload, { signal, onQueued, intervalMs } = {}) => {
   const nodes = [];
   const edges = [];
@@ -101,7 +103,8 @@ export const fetchGraph = async (apiFetch, payload, { signal, onQueued, interval
   });
   // Nothing that reads as a graph, not even an empty one.
   if (!nodes.length && !edges.length && !result.readable) throw new Error(getJobErrorMessage(result.data, 'Graph request failed'));
-  return { data: result.data, nodes, edges, partial: result.partial, truncatedBy: result.truncatedBy, expected: result.expected };
+  const runSettings = nodes.length || edges.length ? await resolveGraphRuns(apiFetch, result.runs, { signal, id: payload?.task_id || payload?.trace_id || '' }) : [];
+  return { data: result.data, nodes, edges, partial: result.partial, truncatedBy: result.truncatedBy, expected: result.expected, runSettings };
 };
 
 /* ── Progressive fetch (production pollGraphJob, src/App.jsx ~3213) ────
@@ -171,7 +174,7 @@ export const fetchGraphProgressive = async (apiFetch, payload, {
     const graph = extractNodesEdges(response);
     onChunk?.(graph);
     const cut = cutOf(response);
-    return { data: response, nodes: graph.nodes.length, edges: graph.edges.length, chunked: false, partial: cut.partial, truncatedBy: cut.truncatedBy, expected: cut.expected, readable: true };
+    return { data: response, nodes: graph.nodes.length, edges: graph.edges.length, chunked: false, partial: cut.partial, truncatedBy: cut.truncatedBy, expected: cut.expected, readable: true, runs: readGraphRuns(response) };
   }
 
   const pollPath = getQueuedPollPath(response);
@@ -190,7 +193,7 @@ export const fetchGraphProgressive = async (apiFetch, payload, {
     const cut = cutOf(job);
     const short = cut.partial || (expected ? nodes < expected.nodes || edges < expected.edges : !complete);
     const readable = chunks > 0 || Array.isArray(job?.results?.chunks) || [job, getJobResult(job)].some(hasGraphPayload);
-    return { data: job, nodes, edges, chunked: chunks > 0, partial: short, truncatedBy: cut.truncatedBy, expected, readable };
+    return { data: job, nodes, edges, chunked: chunks > 0, partial: short, truncatedBy: cut.truncatedBy, expected, readable, runs: readGraphRuns(response, job) };
   };
   while (Date.now() - startedAt < timeoutMs) {
     if (signal?.aborted) throw abortError();

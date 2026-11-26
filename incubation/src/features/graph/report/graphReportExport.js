@@ -1,3 +1,4 @@
+import { UNKNOWN_RUN, runRemark } from '../../../shared/runSettings.js';
 import { createGraphStore } from '../lib/graphStore.js';
 import { systemRulesOf } from '../lib/graphAnalysis.js';
 import { downloadBlob } from '../lib/graphFile.js';
@@ -18,13 +19,17 @@ import nbeLogoSvg from './nbe_logo.svg?raw';
 // measures / tables: the Measures section's chart sets and the appendix
 // tables (B, C, …), drawn beforehand (buildGraphReport).
 export const downloadGraphReport = async ({ input, values, domain = '', snapshot = null, measures = null, tables = [] }) => {
+  // An override is said beside every chart set and table too: they may be read
+  // on their own.
+  const remark = runRemark(input.runSettings);
+  const marked = (list) => (remark?.kind === 'overridden' ? (list || []).map((item) => ({ ...item, source: `${item.source ? `${String(item.source).replace(/\.$/, '')}. ` : ''}${remark.short}` })) : list);
   const report = buildGraphReport({
     ...input,
     hasSnapshot: Boolean(snapshot),
     cover: { ...values, domain },
     analyst: { findings: values.findings, assessment: values.assessment, actions: values.actions },
-    measures,
-    tables,
+    measures: marked(measures),
+    tables: marked(tables),
     range: values.range, // Generate report ▸ Range (none: everything)
   });
   // The logo as it is: its own colours on a transparent background.
@@ -60,6 +65,7 @@ export const evidenceReportTitle = (evidence = {}) => `Evidence Report · ${evid
 export const evidenceReportContext = ({ graphData, evidence = {}, profileSettings = null, isCdr = false, formatDomain = (key) => key }) => {
   const store = createGraphStore();
   store.replace({ nodes: graphData?.nodes || [], edges: graphData?.edges || [] });
+  store.setRunSettings(graphData?.runSettings || UNKNOWN_RUN);
   const graph = store.graph();
   const view = { nodeIds: graph.nodes(), edgeIds: graph.edges(), searched: false, viewKey: EVIDENCE_VIEW_KEY };
   const input = (nameKey = '') => ({
@@ -83,6 +89,7 @@ export const evidenceReportContext = ({ graphData, evidence = {}, profileSetting
     },
     kind: 'evidence',
     source: { kind: 'evidence', evidence },
+    runSettings: store.getRunSettings(),
     score: evidence.score || null,
     scope: { searched: false, period: null, filtersOff: [] },
   });

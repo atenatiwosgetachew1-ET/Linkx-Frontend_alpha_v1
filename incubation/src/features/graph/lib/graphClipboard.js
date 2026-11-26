@@ -6,6 +6,10 @@
 
 export const CLIPBOARD_KEY = 'linkx_graph_clipboard_v1';
 
+// What the copied elements' runs were made with; another page's or an older
+// copy without it is pasted as "not recorded".
+const withRuns = (payload) => (Array.isArray(payload?.runSettings) ? { runSettings: payload.runSettings } : {});
+
 const EMPTY = Object.freeze({ nodes: [], edges: [] });
 let cache = null;
 const listeners = new Set();
@@ -17,11 +21,13 @@ export const normalizeClipboard = (payload) => {
     return {
       nodes: payload.filter((node) => node && typeof node === 'object').map((node) => ({ ...node })),
       edges: Array.isArray(payload.__edges) ? payload.__edges.map((edge) => ({ ...edge })) : [],
+      ...withRuns(payload),
     };
   }
   return {
     nodes: Array.isArray(payload?.nodes) ? payload.nodes.filter((node) => node && typeof node === 'object').map((node) => ({ ...node })) : [],
     edges: Array.isArray(payload?.edges) ? payload.edges.filter((edge) => edge && typeof edge === 'object').map((edge) => ({ ...edge })) : [],
+    ...withRuns(payload),
   };
 };
 

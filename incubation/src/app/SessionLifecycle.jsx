@@ -9,6 +9,10 @@ import { useWorkspace } from '../workspace/hooks/useWorkspace.js';
 import { WORKSPACE_WINDOW_TYPES } from '../workspace/state/workspaceTypes.js';
 import { getTasks } from '../features/tasks/lib/taskRegistry.js';
 import { isTaskUnattended } from '../features/tasks/lib/unattendedSeats.js';
+import { loadConfiguration } from '../services/configurationApi.js';
+import { noteDomainChange } from '../features/configuration/lib/domainChanges.js';
+import { formatDomainPillarLabel, getActiveDomainKey, preserveDomainRegistry } from '../features/configuration/lib/configModel.js';
+import { withoutPresentation } from '../features/graph/lib/domainPresentation.js';
 import { isRunGoing } from '../workspace/lib/leaveReasons.js';
 import { createLogger } from '../shared/logger.js';
 
@@ -119,6 +123,7 @@ export default function SessionLifecycle({ isLocked, setLocked, loginLogo, child
   return (
     <>
       <SourceSessionNotifications />
+      <DomainChangeNotices />
       {children(performLogout)}
       {isLocked && (
         <WorkspaceLockOverlay
@@ -133,6 +138,58 @@ export default function SessionLifecycle({ isLocked, setLocked, loginLogo, child
       )}
     </>
   );
+}
+
+// An administrator changed a domain's settings (socket, B-47). The open
+// Domains page reads them again; in the session's own domain it is said, and
+// its columns and mapping are loaded again (the Service resolves them on
+// every load). Runs on their way keep what they were queued with.
+const DOMAIN_CHANGES = {
+  thresholds: ['thresholds', 'Runs that start from now on use them.'],
+  sensitivity: ['sensitivity', 'Runs that start from now on use it.'],
+  lineage: ['score lineage', 'Runs that start from now on use it.'],
+  columns: ['columns', 'The next search and dataframe use them.'],
+  mapping: ['column mapping', 'Dataframes made before must be made again.'],
+};
+
+function DomainChangeNotices() {
+  const { socket, apiFetch, mainSessionId, configuration, setConfiguration } = useSession();
+  const { notify } = useNotifications();
+  const latest = useRef(null);
+  latest.current = { apiFetch, mainSessionId, configuration, setConfiguration, notify };
+  const announced = useRef('');
+
+  useEffect(() => {
+    if (!socket) return undefined;
+    const handle = async (payload = {}) => {
+      const change = noteDomainChange(payload);
+      const now = latest.current;
+      if (!change || change.domain !== getActiveDomainKey(now.configuration)) return;
+      if (!change.own) {
+        // A preset says it twice, under one version.
+        const key = `${change.domain}|${payload.version_id ?? ''}|${['sensitivity', 'thresholds'].includes(change.section) ? 'thresholds' : change.section}`;
+        if (payload.version_id == null || announced.current !== key) {
+          const [what, effect] = DOMAIN_CHANGES[change.section];
+          now.notify({ title: `${formatDomainPillarLabel(change.domain)} settings changed`, message: `An administrator changed the ${what}. ${effect}`, source: 'Configuration', level: 'info', durationMs: 8000 });
+        }
+        announced.current = key;
+      }
+      if (!['columns', 'mapping'].includes(change.section) || !now.mainSessionId) return;
+      try {
+        const result = await loadConfiguration(now.apiFetch, now.mainSessionId);
+        const { setConfiguration: set, configuration: current, mainSessionId: session } = latest.current;
+        // Signed out, or another domain meanwhile: not this one's any more.
+        if (!result.ok || !result.returned || session !== now.mainSessionId || getActiveDomainKey(current) !== change.domain || getActiveDomainKey(result.configuration) !== change.domain) return;
+        set((previous) => preserveDomainRegistry(previous, withoutPresentation(result.configuration, change.domain)));
+      } catch (error) {
+        log.warn('Configuration not reloaded after a domain change', { status: error?.status });
+      }
+    };
+    socket.on('domain_config_changed', handle);
+    return () => socket.off('domain_config_changed', handle);
+  }, [socket]);
+
+  return null;
 }
 
 // Backend notices for each open Source window's session (production

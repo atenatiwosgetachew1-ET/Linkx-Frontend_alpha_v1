@@ -16,6 +16,7 @@ import { bindStreamLogSocket, disposeAllStreamLogs, disposeStreamLog, peekStream
 import { clearReportsPages } from '../../features/reports/lib/reportsPageCache.js';
 import { clearEvidenceGraphs } from '../../features/reports/lib/evidenceGraphs.js';
 import { clearConfigurationDrafts } from '../../features/configuration/lib/configDraft.js';
+import { resetDomainChanges } from '../../features/configuration/lib/domainChanges.js';
 import { clearKnownBuiltinRules } from '../../features/libraries/lib/rulesLibrary.js';
 import { clearGraphStores, disposeGraphStore, getGraphStore, hasGraphStore } from '../../features/graph/lib/graphStore.js';
 import { forgetGraphState } from '../../features/graph/lib/graphLinkBus.js';
@@ -43,6 +44,7 @@ import {
   requestTaskFocus,
   resetTasks,
   sessionLimitMessage,
+  taskRemark,
 } from '../../features/tasks/lib/taskRegistry.js';
 import { useNotifications } from '../../shared/notifications/useNotifications.js';
 import CloseAnalysisDialog from './CloseAnalysisDialog.jsx';
@@ -86,6 +88,7 @@ const clearWorkspaceSessionData = () => {
   clearEvidenceGraphs();
   resetAlerts();
   clearConfigurationDrafts();
+  resetDomainChanges();
   clearKnownBuiltinRules();
   clearGraphStores();
   clearGraphStatus();
@@ -742,6 +745,7 @@ export default function WorkspaceFrame({ user, token, mainSessionId, sessionErro
                 initial={{ title: `${pendingSaveTask.title} #${pendingSaveTask.number}`, summary: '', includeGraph: true }}
                 taskLabel={`${pendingSaveTask.title} #${pendingSaveTask.number}`}
                 graphMissing={runGraphMissingReason(pendingSaveTask, workspace.windows)}
+                remark={taskRemark(pendingSaveTask)}
                 overScreen
                 onSave={savePending}
                 onCancel={() => setPendingSave(null)}

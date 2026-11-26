@@ -114,3 +114,42 @@ describe('idle sign-out', () => {
     expect(session.notifyIdleTimeout).toHaveBeenCalled();
   });
 });
+
+describe('a domain changed by an administrator (B-47)', () => {
+  const setUp = (answer = { message: 'success', results: { configuration: { domain: 'bank', active_domain: 'bank', fetch_columns: ['NEW'] } } }) => {
+    const handlers = {};
+    Object.assign(session, {
+      socket: { on: (name, handler) => { handlers[name] = handler; }, off: vi.fn(), emit: vi.fn(), connected: true },
+      mainSessionId: 'main-1',
+      configuration: { domain: 'bank', active_domain: 'bank', fetch_columns: ['OLD'] },
+      setConfiguration: vi.fn(),
+      apiFetch: vi.fn(async () => answer),
+    });
+    render(<Harness initiallyLocked={false} />);
+    return (payload) => act(async () => { await handlers.domain_config_changed(payload); });
+  };
+
+  it('its column mapping: said, and the session’s configuration is loaded again', async () => {
+    const send = setUp();
+    await send({ domain: 'bank', section: 'mapping', version_id: 4 });
+    expect(notify).toHaveBeenCalledWith(expect.objectContaining({ title: 'Banking settings changed', message: expect.stringContaining('must be made again') }));
+    expect(session.apiFetch).toHaveBeenCalledWith('/configuration', expect.objectContaining({ body: { id: 'load', session_id: 'main-1' } }));
+    expect(session.setConfiguration.mock.calls[0][0]({}).fetch_columns).toEqual(['NEW']);
+  });
+
+  it('a preset is said once; another domain’s change is not said', async () => {
+    const send = setUp();
+    await send({ domain: 'bank', section: 'sensitivity', version_id: 7 });
+    await send({ domain: 'bank', section: 'thresholds', version_id: 7 });
+    expect(notify).toHaveBeenCalledTimes(1);
+    await send({ domain: 'cdr', section: 'mapping', version_id: 1 });
+    expect(notify).toHaveBeenCalledTimes(1);
+    expect(session.apiFetch).not.toHaveBeenCalled();
+  });
+
+  it('a configuration of another domain is not taken', async () => {
+    const send = setUp({ message: 'success', results: { configuration: { domain: 'cdr', active_domain: 'cdr' } } });
+    await send({ domain: 'bank', section: 'columns', version_id: 2 });
+    expect(session.setConfiguration).not.toHaveBeenCalled();
+  });
+});

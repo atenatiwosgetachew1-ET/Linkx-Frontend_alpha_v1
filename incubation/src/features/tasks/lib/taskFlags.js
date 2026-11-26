@@ -219,6 +219,12 @@ const skippedText = (task) => {
   return count ? `${count} ${count === 1 ? 'rule' : 'rules'} could not run` : '';
 };
 
+// Never plain Clean under an override (analyst decision 2026-11-25).
+const cleanLabel = ({ settingsUsed }) => {
+  if (!settingsUsed?.overridden) return 'Clean';
+  return Object.keys(settingsUsed.mapping).length ? 'Clean (own mapping)' : 'Clean (own columns)';
+};
+
 // The Service's verdict and flags (H-7: on the task, provisional per batch,
 // final at the end), when it has them; the log is not a contract.
 const serverVerdict = (task) => {
@@ -241,7 +247,7 @@ const serverVerdict = (task) => {
   if (task.verdict === 'clean' && task.status === TASK_STATUSES.COMPLETED && !task.endedReason) {
     return { state: FLAG_STATES.UNDETERMINED, flags, count, label: 'Clean (unconfirmed)', detail: 'Recorded before the Service noted which rules could not run. Run it again to confirm.' };
   }
-  if (task.verdict === 'clean' && task.status === TASK_STATUSES.COMPLETED) return { state: FLAG_STATES.CLEAN, flags, count, label: 'Clean', detail: [task.endedReason === 'time_limit' ? 'No flags on the rows received before its time limit' : 'No flags raised', skippedText(task)].filter(Boolean).join('; ') };
+  if (task.verdict === 'clean' && task.status === TASK_STATUSES.COMPLETED) return { state: FLAG_STATES.CLEAN, flags, count, label: cleanLabel(task), detail: [task.endedReason === 'time_limit' ? 'No flags on the rows received before its time limit' : 'No flags raised', skippedText(task)].filter(Boolean).join('; ') };
   // A quick run is never Clean: a short window cannot show patterns over time.
   if (task.quick && task.verdict === 'undetermined' && task.status === TASK_STATUSES.COMPLETED && !task.rulesSkipped?.length) {
     return { state: FLAG_STATES.UNDETERMINED, flags, count, label: 'No flags raised', detail: 'In this short run only; it cannot show patterns over time' };

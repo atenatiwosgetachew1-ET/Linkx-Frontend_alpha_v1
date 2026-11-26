@@ -34,6 +34,7 @@ import {
   startStreamRequest,
   waitForStreamJob,
 } from '../../../services/sourceApi.js';
+import { useAllowedDomains } from '../../../auth/useAllowedDomains.js';
 import { useNotifications } from '../../../shared/notifications/useNotifications.js';
 import { useSession } from '../../../shared/session/useSession.js';
 import {
@@ -129,6 +130,9 @@ import { ModeChooser } from './ModeChooser.jsx';
 import { SessionBadge, SourceWindowHeading, WorkflowTimeline } from './sourceUi.jsx';
 import { WorkflowBody } from './steps/WorkflowBody.jsx';
 import DataframeFilterDialog from './DataframeFilterDialog.jsx';
+import DataframeMappingDialog from './DataframeMappingDialog.jsx';
+import { MAPPING_PERMISSION, mappingRefusalText, readMappingRefusal } from '../lib/dataframeMapping.js';
+import { fetchDomainSection } from '../../../services/domainConfigApi.js';
 import { describeFilterPayload, filterPayload, filterProblems } from '../lib/dataframeFilter.js';
 import { createLogger } from '../../../shared/logger.js';
 
@@ -152,6 +156,11 @@ export default function SourceWindowBody({ windowItem }) {
   const [validationMessage, setValidationMessage] = useState('');
   // Dataframe ▸ Filter dataframe… open (analyst decision 2026-11-19).
   const [filterOpen, setFilterOpen] = useState(false);
+  // Map columns (B-41): the popup, why the last one was refused, and which
+  // fields the domain requires (to mark them).
+  const [mappingOpen, setMappingOpen] = useState(false);
+  const [mappingMessage, setMappingMessage] = useState('');
+  const [requiredFields, setRequiredFields] = useState([]);
   const [toolValidationMessage, setToolValidationMessage] = useState('');
   // Production's per-action RBAC (getWindowActionPermission + requirePermission):
   // the action is refused with a "Permission denied" notice and an inline
@@ -166,7 +175,11 @@ export default function SourceWindowBody({ windowItem }) {
   // Memoised so derived values (accessible steps, defaults merge) only
   // recompute when this window's state actually changes.
   const sourceState = useMemo(() => mergeSourceState(windowItem.sourceState), [windowItem.sourceState]);
-  const sourceDefaults = useMemo(() => resolveSourceDefaults(configuration), [configuration]);
+  const allowedDomains = useAllowedDomains();
+  const sourceDefaults = useMemo(() => {
+    const defaults = resolveSourceDefaults(configuration);
+    return allowedDomains ? { ...defaults, domains: defaults.domains.filter(({ key }) => key === defaults.domain || allowedDomains.includes(key)) } : defaults;
+  }, [configuration, allowedDomains]);
   const hasConfiguration = Boolean(configuration && Object.keys(configuration).length);
   const activeMode = sourceState.mode;
   const modeKey = activeMode === SOURCE_MODES.REALTIME ? 'realtime' : 'batch';
@@ -690,6 +703,8 @@ export default function SourceWindowBody({ windowItem }) {
     if (!started.accepted) {
       // Made under another domain than this page knew (Q1).
       if (started.data?.code === 'configuration_changed' && started.data.dataframe_domain) patchModeState({ dataframeDomain: String(started.data.dataframe_domain) }, key);
+      // … or under another column mapping of the domain (round 3, C1 6): make it again.
+      if (started.data?.code === 'configuration_changed' && Array.isArray(started.data.changed) && started.data.changed.includes('column_mapping')) patchModeState({ dataframeMapping: 'changed on the Service' }, key);
       failStream(key, started.message);
       return;
     }
@@ -1066,17 +1081,43 @@ export default function SourceWindowBody({ windowItem }) {
     });
   };
 
+  // A column mapping for this dataframe: only for its own domain, not live, and
+  // not once a run of it is on its way.
+  const canMapColumns = can(MAPPING_PERMISSION) && modeKey !== 'realtime' && !isStreamActive(modeState) && !dataframeNoticeOf(modeState)
+    && modeState.dataframeStatus === DATAFRAME_STATUSES.READY && Boolean(modeState.dataframeInfo?.sourceColumns);
+  const openMapping = () => {
+    setMappingMessage('');
+    setMappingOpen(true);
+    const domain = modeState.dataframeDomain || sourceDefaults.domain;
+    if (!can('config:read') || !domain) return;
+    // Only to mark the required ones: without it the fields are listed plainly.
+    fetchDomainSection(apiFetch, domain, 'mapping').then((section) => setRequiredFields(section?.requiredFields || [])).catch(() => setRequiredFields([]));
+  };
+
   // Continue on the input step: (upload files ->) (connect tool ->) create_DF,
   // then move to the dataframe step. Mirrors the production page I -> III path.
-  const prepareDataframe = async () => {
+  // ownMapping: a column mapping for this dataframe only (B-41).
+  const prepareDataframe = async ({ ownMapping = null } = {}) => {
     const key = modeKey;
+    const before = modeState;
     const flow = getDataframeFlow(activeMode, modeState);
     const sourceSessionId = normalizeWindowSessionId(windowItem);
     const read = () => sourceStateRef.current[key];
     const patch = (values) => patchModeState(values, key);
     const domainAtStart = sourceDefaults.domain;
+    // The mapping was refused: nothing was made, so the dataframe there was
+    // stays, and the popup says why.
+    const mappingRefused = (failure) => {
+      const refusal = ownMapping ? readMappingRefusal(failure) : null;
+      if (!refusal || before.dataframeStatus !== DATAFRAME_STATUSES.READY) return false;
+      patch({ dataframeStatus: DATAFRAME_STATUSES.READY, dataframeMessage: '', preparing: '' });
+      setMappingMessage(mappingRefusalText(refusal));
+      setMappingOpen(true);
+      return true;
+    };
     const failDataframe = (message) => {
-      patch({ dataframeStatus: DATAFRAME_STATUSES.FAILED, dataframeMessage: message, preparing: '' });
+      // Made again from the Dataframe step: there is none now, back to the input.
+      patch({ dataframeStatus: DATAFRAME_STATUSES.FAILED, dataframeMessage: message, preparing: '', ...(read().step === 'dataframe' ? { step: key === 'realtime' ? 'connect' : 'upload' } : {}) });
       notify({ title: 'Dataframe not created', message, level: 'error', source: windowItem.title });
     };
 
@@ -1160,6 +1201,7 @@ export default function SourceWindowBody({ windowItem }) {
         });
       }
 
+      if (ownMapping && Object.keys(ownMapping).length && key !== 'realtime') payload = { ...payload, dataframe_mapping: ownMapping };
       patch({ dataframeStatus: DATAFRAME_STATUSES.CREATING, dataframeMessage: '', preparing: 'Creating dataframe…' });
       const result = await createDataframe(apiFetch, payload, {
         signal: request.signal,
@@ -1167,6 +1209,7 @@ export default function SourceWindowBody({ windowItem }) {
       });
       if (request.signal.aborted) return;
       if (!result.ok) {
+        if (mappingRefused({ data: result.data })) return;
         failDataframe(formatDataframeFailureMessage(result.data, 'The dataframe could not be created from this source. Please check it and try again.'));
         return;
       }
@@ -1203,6 +1246,7 @@ export default function SourceWindowBody({ windowItem }) {
         dataframeMapping: mappingNow,
         // A new dataframe starts unfiltered (a filter is made for its columns).
         dataframeFilter: null,
+        dataframeMappingDraft: null,
         dataframeMessage: '',
         preparing: '',
         step: 'dataframe',
@@ -1217,12 +1261,13 @@ export default function SourceWindowBody({ windowItem }) {
       });
       notify({
         title: 'Dataframe created',
-        message: `${info.totalRows} rows · ${info.totalColumns} columns ready for analysis.`,
+        message: `${info.totalRows} rows · ${info.totalColumns} columns ready for analysis.${Object.keys(info.ownMapping).length ? ` With ${Object.keys(info.ownMapping).length} column${Object.keys(info.ownMapping).length === 1 ? '' : 's'} mapped by you.` : ''}`,
         level: 'success',
         source: windowItem.title,
       });
     } catch (error) {
       if (error?.name === 'AbortError' || request.signal.aborted) return;
+      if (mappingRefused(error)) return;
       log.error('Dataframe preparation failed', { status: error?.status, jobStatus: error?.jobStatus });
       if (read().uploadStatus === UPLOAD_STATUSES.UPLOADING) {
         patch({ uploadStatus: UPLOAD_STATUSES.FAILED, preparing: '' });
@@ -1744,7 +1789,7 @@ export default function SourceWindowBody({ windowItem }) {
         ...(state.storageSearchStatus === 'loading_more' ? { storageSearchStatus: 'done' } : {}),
         ...(state.elasticSearchStatus === 'loading' ? { elasticSearchStatus: 'idle', elasticSearchLast: null } : {}),
         ...(state.elasticSearchStatus === 'loading_more' ? { elasticSearchStatus: 'done' } : {}),
-        ...(state.dataframeStatus === DATAFRAME_STATUSES.CREATING ? { dataframeStatus: DATAFRAME_STATUSES.NONE, dataframeMessage: '' } : {}),
+        ...(state.dataframeStatus === DATAFRAME_STATUSES.CREATING ? { dataframeStatus: DATAFRAME_STATUSES.NONE, dataframeMessage: '', ...(state.step === 'dataframe' ? { step: key === 'realtime' ? 'connect' : 'upload' } : {}) } : {}),
       }, key);
     });
     notify({ title: 'Cancelled', message: 'The running action was stopped.', level: 'info', source: windowItem.title });
@@ -1820,6 +1865,7 @@ export default function SourceWindowBody({ windowItem }) {
           onOpenConfiguration={openConfigurationWindow}
           onOpenLibrary={openLibrariesWindow}
           onOpenFilter={() => setFilterOpen(true)}
+          onOpenMapping={canMapColumns ? openMapping : null}
         />
         </div>
         {filterOpen && modeState.dataframeInfo ? (
@@ -1839,6 +1885,26 @@ export default function SourceWindowBody({ windowItem }) {
               setValidationMessage('');
             }}
             onCancel={() => setFilterOpen(false)}
+          />
+        ) : null}
+        {mappingOpen && !busyLabel && modeState.dataframeInfo?.sourceColumns ? (
+          <DataframeMappingDialog
+            info={modeState.dataframeInfo}
+            draft={modeState.dataframeMappingDraft || null}
+            required={requiredFields}
+            domainLabel={formatDomainLabel(modeState.dataframeDomain || sourceDefaults.domain)}
+            message={mappingMessage}
+            onApply={(ownMapping, dataframeMappingDraft) => {
+              setMappingOpen(false);
+              setMappingMessage('');
+              patchModeState({ dataframeMappingDraft });
+              prepareDataframe({ ownMapping });
+            }}
+            onCancel={(dataframeMappingDraft) => {
+              setMappingOpen(false);
+              setMappingMessage('');
+              patchModeState({ dataframeMappingDraft });
+            }}
           />
         ) : null}
         {busyLabel ? <WindowLoadScreen overlay label={busyLabel} onCancel={cancelBusyAction} /> : null}

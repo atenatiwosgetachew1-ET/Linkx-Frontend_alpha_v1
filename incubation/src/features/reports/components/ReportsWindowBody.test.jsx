@@ -112,6 +112,14 @@ describe('ReportsWindowBody', () => {
     expect(screen.getByLabelText('From date and time')).toBeInTheDocument();
   });
 
+  it('notes on the STR alerts tab only that they use the domain’s settings', async () => {
+    renderReports({ metadata: { reportsTab: 'parent', openSeq: 902 } });
+    await screen.findByText('core-banking');
+    expect(screen.getByRole('note')).toHaveTextContent('STR alerts use the domain’s settings only.');
+    await userEvent.click(screen.getByRole('tab', { name: 'System reports' }));
+    expect(screen.queryByRole('note')).not.toBeInTheDocument();
+  });
+
   it('never shows another tab\'s rows while a tab is loading', async () => {
     let releaseEvidence;
     const base = makeApi();

@@ -35,6 +35,9 @@ export const parseAuthResponse = (data, fallbackToken = null) => {
     directUser
   );
   const token = data?.token || data?.access_token || data?.payload?.token || fallbackToken;
+  // Beside the actor, in /auth/me only (C10): null = every domain.
+  const beside = [data, data?.results, data?.payload].find((item) => Array.isArray(item?.allowed_domains));
+  if (user) user.allowed_domains = beside && beside.domain_access_enforced !== false ? beside.allowed_domains.filter((item) => typeof item === 'string').map((item) => item.toLowerCase()) : null;
   return { user, token };
 };
 

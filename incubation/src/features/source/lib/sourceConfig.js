@@ -63,7 +63,9 @@ export const resolveSourceDefaults = (configuration) => {
     return '';
   };
   // Domain-specific lists win (they describe the active domain's schema).
+  // … but the account's own columns come before them.
   const pickList = (key) => {
+    if (config.columns_origins?.[key] === 'override') return toStringList(config[key]);
     const domainList = toStringList(domainConfig[key]);
     return domainList.length ? domainList : toStringList(config[key]);
   };

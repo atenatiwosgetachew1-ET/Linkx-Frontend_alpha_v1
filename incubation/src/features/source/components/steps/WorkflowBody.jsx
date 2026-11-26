@@ -17,7 +17,7 @@ import { StreamStep } from './StreamStep.jsx';
 import { ToolConnectionPanel } from './ToolConnectionPanel.jsx';
 import { UploadStep } from './UploadStep.jsx';
 
-export function WorkflowBody({ mode, modeState, windowId, sessionId, streamLogLines, defaults, validationMessage, toolValidationMessage, toolOptions, handlers, onPatchModeState, onOpenConfiguration, onOpenLibrary, onOpenFilter, keepRunning, dataframeNotice = '' }) {
+export function WorkflowBody({ mode, modeState, windowId, sessionId, streamLogLines, defaults, validationMessage, toolValidationMessage, toolOptions, handlers, onPatchModeState, onOpenConfiguration, onOpenLibrary, onOpenFilter, onOpenMapping = null, keepRunning, dataframeNotice = '' }) {
   // Upload flow connects the tool automatically; the panel only appears when
   // that failed so the analyst can correct the details.
   const uploadToolPanel = modeState.uploadStatus === UPLOAD_STATUSES.UPLOADED && modeState.toolStatus !== TOOL_STATUSES.CONNECTED ? (
@@ -107,8 +107,8 @@ export function WorkflowBody({ mode, modeState, windowId, sessionId, streamLogLi
   if (mode === SOURCE_MODES.BATCH && modeState.step === 'upload') {
     return <UploadStep state={modeState} windowId={windowId} validationMessage={validationMessage} toolPanel={uploadToolPanel} onPatchModeState={onPatchModeState} />;
   }
-  if (modeState.step === 'dataframe') return <DataframeStep mode={mode} state={modeState} defaults={defaults} validationMessage={validationMessage || dataframeNotice} onPatchModeState={onPatchModeState} onOpenConfiguration={onOpenConfiguration} onOpenLibrary={onOpenLibrary} onOpenFilter={onOpenFilter} />;
-  if (modeState.step === 'stream') return <StreamStep state={modeState} sessionId={sessionId} logLines={streamLogLines} validationMessage={validationMessage} keepRunning={keepRunning} />;
+  if (modeState.step === 'dataframe') return <DataframeStep mode={mode} state={modeState} defaults={defaults} validationMessage={validationMessage || dataframeNotice} onPatchModeState={onPatchModeState} onOpenConfiguration={onOpenConfiguration} onOpenLibrary={onOpenLibrary} onOpenFilter={onOpenFilter} onOpenMapping={onOpenMapping} />;
+  if (modeState.step === 'stream') return <StreamStep state={modeState} sessionId={sessionId} windowId={windowId} logLines={streamLogLines} validationMessage={validationMessage} keepRunning={keepRunning} />;
   return (
     <ConnectStep
       mode={mode}

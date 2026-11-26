@@ -10,9 +10,10 @@ import {
 import { DataframeField, SourceModeIcon } from '../sourceUi.jsx';
 import { countFilters, summarizeFilter } from '../../lib/dataframeFilter.js';
 
-export function DataframeStep({ mode, state, defaults, validationMessage, onPatchModeState, onOpenConfiguration, onOpenLibrary, onOpenFilter }) {
+export function DataframeStep({ mode, state, defaults, validationMessage, onPatchModeState, onOpenConfiguration, onOpenLibrary, onOpenFilter, onOpenMapping = null }) {
   const info = state.dataframeInfo;
   const filterCount = countFilters(state.dataframeFilter);
+  const ownMapped = Object.keys(info?.ownMapping || {}).length;
   const isReady = state.dataframeStatus === DATAFRAME_STATUSES.READY && Boolean(info);
   // Real dataframe columns/rules once create_DF answered; configuration
   // (fetch_columns / rule names) is the fallback for flows not wired yet.
@@ -93,6 +94,14 @@ export function DataframeStep({ mode, state, defaults, validationMessage, onPatc
             {/* Filter (analyst decision 2026-11-19): strip columns and rows
                 the analyst does not want ingested or analysed; the count of
                 filters applied, the details inside the popup. */}
+            {/* A column mapping for this dataframe only (B-41). */}
+            {isReady && onOpenMapping ? (
+              <button type="button" className={`source_window_df_filter_open${ownMapped ? ' is-active' : ''}`} aria-label={ownMapped ? `Map columns (${ownMapped} mapped)` : 'Map columns'} title={ownMapped ? `Mapped for this dataframe: ${Object.entries(info.ownMapping).map(([source, target]) => `${source} → ${target}`).join(', ')}` : 'Say which columns hold the fields this data does not have, for this dataframe only'} onClick={onOpenMapping}>
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 6h6M4 18h6M14 6h6M14 18h6M10 6l4 12M10 18l4-12" /></svg>
+                <span>Map columns</span>
+                {ownMapped ? <span className="source_window_df_filter_count" aria-hidden="true">{ownMapped}</span> : null}
+              </button>
+            ) : null}
             <button
               type="button"
               className={`source_window_df_filter_open${filterCount ? ' is-active' : ''}`}
@@ -125,6 +134,14 @@ export function DataframeStep({ mode, state, defaults, validationMessage, onPatc
             <dl><dt>Tool</dt><dd>{info?.tool || (defaults.tool.name === 'neo4j' ? 'Neo4j' : defaults.tool.name)}</dd></dl>
           </div>
         </dl>
+        {isReady && info.missingFields?.length ? (
+          <p className="source_window_df_missing" role="note" title={info.missingFields.join(', ')}>
+            <strong>Fields this data does not have:</strong> {info.missingFields.slice(0, 8).join(', ')}{info.missingFields.length > 8 ? ` and ${info.missingFields.length - 8} more` : ''}. Rules that need them may not run.
+          </p>
+        ) : null}
+        {isReady && ownMapped ? (
+          <p className="source_window_df_missing is-own" role="note"><strong>Own column mapping:</strong> {Object.entries(info.ownMapping).map(([source, target]) => `${source} → ${target}`).join(', ')}. Everything made from this dataframe says so.</p>
+        ) : null}
       </section>
       <section className="source_window_dataframe_card source_window_dataframe_actions_card">
         <div className="source_window_dataframe_form_grid">

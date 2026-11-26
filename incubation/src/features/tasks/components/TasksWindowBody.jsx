@@ -24,7 +24,9 @@ import {
   removeFinishedTasks,
   subscribeTasks,
   terminateTask,
+  taskRemark,
 } from '../lib/taskRegistry.js';
+import { overrideLabel } from '../../../shared/runSettings.js';
 import { FLAG_STATES, taskFlagVerdict } from '../lib/taskFlags.js';
 import { getServerTaskScope, loadServerTasks } from '../lib/serverTasks.js';
 import KeptSessionsDialog from './KeptSessionsDialog.jsx';
@@ -37,6 +39,7 @@ import {
   matchesTaskFilter,
   taskDuration,
   taskLogFileName,
+  taskLogHead,
   taskOriginLabel,
   taskStatusLabel,
   endedText,
@@ -380,12 +383,15 @@ function TaskSummary({ task }) {
                 </PropTile>
               ) : null}
               {task.domain ? <PropTile icon={ICONS.session} label="Domain">{formatDomainPillarLabel(task.domain)}</PropTile> : null}
+              {taskRemark(task) ? <PropTile icon={ICONS.tool} label="Run settings">{taskRemark(task).text.replace(/^Run settings: /, '')}</PropTile> : null}
+              {task.settingsUsed?.missingFields?.length ? <PropTile icon={ICONS.rows} label="Fields the data did not have">{task.settingsUsed.missingFields.join(', ')}</PropTile> : null}
               {task.configVersions ? (
                 <PropTile icon={ICONS.tool} label="Settings it ran with">
                   {Object.entries(task.configVersions).map(([key, version]) => `${key} ${version === null ? 'built-in' : /^\d+$/.test(version) ? `v${version}` : version}`).join(' · ')}
                 </PropTile>
               ) : null}
-              {task.windowStart && task.windowEnd ? <PropTile icon={ICONS.rows} label="Covers">{`${formatDateTime(task.windowStart)} to ${formatDateTime(task.windowEnd)}`}</PropTile> : null}
+              {/* A live one has its end only once it ended by itself (R3-3). */}
+              {task.windowStart ? <PropTile icon={ICONS.rows} label="Covers">{task.windowEnd ? `${formatDateTime(task.windowStart)} to ${formatDateTime(task.windowEnd)}` : `From ${formatDateTime(task.windowStart)}, ${isTaskActive(task) ? 'still going' : 'ended early'}`}</PropTile> : null}
               {graphNote(task) ? <PropTile icon={ICONS.graph} label="Graph">{graphNote(task)}</PropTile> : null}
               <PropTile icon={ICONS.origin} label="Origin">
                 {task.origin === TASK_ORIGINS.QUICK || task.quick ? 'Quick analysis panel' : task.origin === TASK_ORIGINS.PARENT ? `STR alert ${task.windowTitle || ''}`.trim() : (task.windowTitle || 'Source window')}
@@ -449,7 +455,7 @@ function TaskLog({ task, lines, isActive }) {
   };
 
   const downloadLog = () => {
-    const blob = new Blob([formatStreamLog(lines)], { type: 'text/plain;charset=utf-8' });
+    const blob = new Blob([taskLogHead(task) + formatStreamLog(lines)], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
@@ -619,6 +625,7 @@ function TaskRow({ task, now, isSelected, isTabStop, onSelect }) {
         <span className="tasks_row_chips">
           {task.background && isTaskActive(task) && <span className="tasks_chip">Background</span>}
           {task.heldSession && <span className="tasks_chip">Session kept</span>}
+          {task.settingsUsed?.overridden ? <span className="tasks_chip is-own" title={taskRemark(task).text}>{overrideLabel([task.settingsUsed])}</span> : null}
           {task.lifecycle === 'expiring' || task.lifecycle === 'expired' || task.lifecycle === 'archived'
             ? <span className={`tasks_chip is-${task.lifecycle}`}>{{ expiring: 'Expires soon', expired: 'Expired', archived: 'Archived' }[task.lifecycle]}</span>
             : null}

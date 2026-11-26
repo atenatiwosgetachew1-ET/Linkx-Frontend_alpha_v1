@@ -18,12 +18,12 @@ const fit = (context, text, width) => {
 // rows: [{ values }]; columns: [{ key, label, numeric? }]. -> a PNG data URL,
 // or null (no canvas).
 export const tablePreview = async (rows, allColumns, {
-  title = 'LINK ANALYSIS · TABLE', source = '', details = '', logoUrl = '', orientation = 'auto',
+  title = 'LINK ANALYSIS · TABLE', source = '', details = '', remark = '', logoUrl = '', orientation = 'auto',
 } = {}) => {
   let columns = allColumns;
   const paper = pageOrientation(orientation, columns.length) === 'landscape' ? A4_LANDSCAPE : A4;
   const logo = await loadImage(logoUrl);
-  const framed = framedPage(logo, { title, source, details }, paper);
+  const framed = framedPage(logo, { title, source, details, remark }, paper);
   if (!framed) return null;
   const { context, body } = framed;
   const left = FRAME.margin;

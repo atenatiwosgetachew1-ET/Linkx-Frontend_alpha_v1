@@ -195,3 +195,46 @@ describe('UsersPanel', () => {
     expect(within(levels).getByRole('radio', { name: /Analyst/ })).toBeChecked();
   });
 });
+
+describe('domain access (C10)', () => {
+  const people = [{ ...USERS[0], domains: null }, { ...USERS[1], domains: ['bank'] }];
+  const open = async (answer) => {
+    const apiFetch = vi.fn(async (url, options) => {
+      if (url === '/auth/admin/user-rules') return RULES;
+      if (String(url).endsWith('/domains')) return options?.method === 'PUT' ? { domains: options.body.domains, unrestricted: false, enforced: true } : answer;
+      return people;
+    });
+    const onNotice = vi.fn();
+    render(<div className="settings_window_workspace"><UsersPanel apiFetch={apiFetch} canManageUsers canManageSuperusers={false} currentActor={{ id: 9, username: 'boss' }} onNotice={onNotice} requestConfirmation={vi.fn()} /></div>);
+    await userEvent.click(screen.getByRole('button', { name: /Existing users/ }));
+    return { apiFetch, onNotice };
+  };
+
+  it('shows it in the list and saves the chosen domains, never an empty list', async () => {
+    const { apiFetch, onNotice } = await open({ domains: null, unrestricted: true, enforced: true });
+    expect(await screen.findByRole('button', { name: 'Domain access of vic' })).toHaveTextContent('1 domain');
+    await userEvent.click(screen.getByRole('button', { name: 'Domain access of ana' }));
+    const dialog = screen.getByRole('dialog', { name: 'Domain access' });
+    const save = within(dialog).getByRole('button', { name: 'Save domains' });
+    const all = await within(dialog).findByRole('switch', { name: /All domains/ });
+    expect(all).toBeChecked();
+    expect(save).toBeDisabled();
+    await userEvent.click(all);
+    expect(save).toBeDisabled();
+    expect(within(dialog).getByRole('alert')).toHaveTextContent('at least one domain');
+    await userEvent.click(within(dialog).getByRole('checkbox', { name: 'Banking' }));
+    await userEvent.click(save);
+    const put = apiFetch.mock.calls.find(([, options]) => options?.method === 'PUT');
+    expect(put[0]).toBe('/auth/admin/users/1/domains');
+    expect(put[1].body).toEqual({ domains: ['bank'] });
+    expect(onNotice).toHaveBeenCalledWith(expect.objectContaining({ title: 'Domain access saved' }));
+    expect(screen.getByRole('button', { name: 'Domain access of ana' })).toHaveTextContent('1 domain');
+  });
+
+  it('is not offered where the Service does not list it', async () => {
+    renderUsers();
+    await userEvent.click(screen.getByRole('button', { name: /Existing users/ }));
+    await screen.findByText('ana');
+    expect(screen.queryByRole('button', { name: /Domain access/ })).toBeNull();
+  });
+});

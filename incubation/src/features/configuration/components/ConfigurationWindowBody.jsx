@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 
+import { useAllowedDomains } from '../../../auth/useAllowedDomains.js';
 import { useCan } from '../../../auth/useCan.js';
 import { useSession } from '../../../shared/session/useSession.js';
 import { useNotifications } from '../../../shared/notifications/useNotifications.js';
@@ -10,19 +11,23 @@ import { CONFIG_PROFILE_KEY, profileFromConfiguration, setProfileSettings } from
 import { adoptPresentation, getPresentationSeq, getPresentationVersion, subscribePresentation, isPresentationLoaded, loadPresentation, withoutPresentation } from '../../graph/lib/domainPresentation.js';
 import { savePresentation } from '../../../services/domainConfigApi.js';
 import { CONFIG_FORMATTING_KEY, setDomainFormatting } from '../../graph/lib/conditionalFormatting.js';
-import DetectionSensitivityPanel from './DetectionSensitivityPanel.jsx';
+import DomainsPanel from './DomainsPanel.jsx';
+import OwnColumns from './OwnColumns.jsx';
 import ActivityLogPanel from './ActivityLogPanel.jsx';
 import LxacDialog from './LxacDialog.jsx';
 import {
   applyConfigurationChange,
   buildConfigurationSavePayload,
   withoutAdminKeys,
+  withoutColumnLists,
   formatDomainPillarLabel,
   getActiveDomainKey,
+  getRegisteredDomains,
   getConfigurationErrorMessage,
   normalizeLoadedConfiguration,
   preserveDomainRegistry,
 } from '../lib/configModel.js';
+import { keepDomainsView } from '../lib/domainDrafts.js';
 import { getConfigurationDraft, keepConfigurationDraft, rebaseConfigurationDraft } from '../lib/configDraft.js';
 import { getKnownBuiltinRules, subscribeKnownBuiltinRules } from '../../libraries/lib/rulesLibrary.js';
 import { WORKSPACE_WINDOW_TYPES } from '../../../workspace/state/workspaceTypes.js';
@@ -41,8 +46,8 @@ const TABS = [
   { id: 'system', label: 'System', description: 'Domain pillar, session timeout policy and service toggles.' },
   { id: 'connections', label: 'Connections', description: 'Broker, storage and search endpoints used by Source windows.' },
   { id: 'tools', label: 'Tools', description: 'Graph tool (Neo4j) connection defaults.' },
-  { id: 'rules', label: 'Rules', description: 'Analysis rules, column mapping, classified entities, profile mapping and formatting rules.' },
-  { id: 'sensitivity', label: 'Detection sensitivity', description: 'Rule thresholds and score lineage.', permission: 'config:read' },
+  { id: 'rules', label: 'Rules', description: 'Analysis rules, classified entities, profile mapping and formatting rules.' },
+  { id: 'domains', label: 'Domains', description: 'Each domain’s thresholds, sensitivity, score lineage, columns and column mapping.', permission: 'config:read' },
   { id: 'activity', label: 'Activity log', description: 'Session cleanup and cleanup audit trail.', permission: 'users:manage' },
 ];
 // Tabs whose fields belong to the session configuration draft (Save/Reset).
@@ -74,6 +79,7 @@ export default function ConfigurationWindowBody({ windowItem }) {
   const { notify, requestConfirmation } = useNotifications();
   const workspace = useWorkspaceActions();
 
+  const allowedDomains = useAllowedDomains();
   const canRead = canAccess('config:read');
   const canWrite = canAccess('config:write');
   const canManageUsers = canAccess('users:manage');
@@ -82,7 +88,9 @@ export default function ConfigurationWindowBody({ windowItem }) {
 
   // Every tab stays visible; tabs the account can't use explain why inside.
   const visibleTabs = TABS;
-  const storedTab = windowItem?.metadata?.configurationUi?.activeTab;
+  // 'sensitivity': what this tab was called in a kept workspace.
+  const keptTab = windowItem?.metadata?.configurationUi?.activeTab;
+  const storedTab = keptTab === 'sensitivity' ? 'domains' : keptTab;
   const [activeTab, setActiveTab] = useState(visibleTabs.some((tab) => tab.id === storedTab) ? storedTab : 'system');
   const activeTabMeta = visibleTabs.find((tab) => tab.id === activeTab) || visibleTabs[0];
 
@@ -175,8 +183,8 @@ export default function ConfigurationWindowBody({ windowItem }) {
 
   // Keep the draft in step with session changes made elsewhere (e.g. a Source
   // window domain switch). With unsaved edits, untouched keys and the domain
-  // follow the session and the edited keys stay, so the header, Detection
-  // sensitivity and the next save never carry a stale domain (production edits
+  // follow the session and the edited keys stay, so the header, Domains
+  // and the next save never carry a stale domain (production edits
   // one shared configuration, so its save is always current).
   useEffect(() => {
     const loadedConfig = normalizeLoadedConfiguration(configuration);
@@ -308,11 +316,12 @@ export default function ConfigurationWindowBody({ windowItem }) {
     }
     try {
       const built = buildConfigurationSavePayload(draftRef.current);
-      const payload = canManageUsers ? built : withoutAdminKeys(built);
+      const savedPayload = buildConfigurationSavePayload(baseRef.current || {});
+      // Columns are saved apart (Own columns), so an old copy never becomes one's own.
+      const payload = withoutColumnLists(canManageUsers ? built : withoutAdminKeys(built));
       // Never left out in silence: what was edited and only an administrator may save.
       if (!canManageUsers) {
-        const before = buildConfigurationSavePayload(baseRef.current || {});
-        const refused = Object.keys(built).filter((key) => !(key in payload) && JSON.stringify(built[key]) !== JSON.stringify(before[key]));
+        const refused = Object.keys(built).filter((key) => !(key in payload) && JSON.stringify(built[key]) !== JSON.stringify(savedPayload[key]));
         if (refused.length) notify({ title: 'Not all of it can be saved', message: `Only an administrator can change: ${refused.map((key) => key.replace(/_/g, ' ')).join(', ')}. The rest is saved.`, level: 'warning', source: 'Configuration' });
       }
       // The session domain is switched by its own request; a save never
@@ -335,6 +344,9 @@ export default function ConfigurationWindowBody({ windowItem }) {
       if (!result.ok) {
         notify({ title: 'Configuration notice', message: result.message, level: 'warning', source: 'Configuration' });
         return;
+      }
+      if (result.credentialsCleared?.length) {
+        notify({ title: 'Saved password cleared', message: `The address changed, so the Service dropped: ${result.credentialsCleared.map((key) => key.split('.').slice(-2).join(' ').replace(/_/g, ' ')).join(', ')}. Enter it again.`, level: 'warning', source: 'Configuration' });
       }
       // A Service without the shared settings: a copy in this browser.
       if (!shared && draftRef.current?.[CONFIG_PROFILE_KEY]) {
@@ -432,6 +444,21 @@ export default function ConfigurationWindowBody({ windowItem }) {
     }
   }, [adoptConfiguration, apiFetch, mainSessionId, notify, reload, canSwitchDomain, requestConfirmation, requirePermission, requireSession, runBusy]);
 
+  // The session's configuration with the new columns; unsaved edits of the form
+  // stay (they are rebased onto it).
+  const handleColumnsSaved = useCallback(async (saved) => {
+    let next = saved;
+    if (!next) {
+      const loaded = await loadConfiguration(apiFetch, mainSessionId).catch(() => null);
+      next = loaded?.ok ? loaded.configuration : null;
+    }
+    if (!next || !Object.keys(next).length) {
+      notify({ title: 'Configuration notice', message: 'Saved, but the new columns could not be loaded. Use Reload.', level: 'warning', source: 'Configuration' });
+      return;
+    }
+    setConfiguration((current) => preserveDomainRegistry(current, withoutPresentation(next, getActiveDomainKey(next))));
+  }, [apiFetch, mainSessionId, notify, setConfiguration]);
+
   /* ── Encrypted export / import ── */
 
   const openExport = () => {
@@ -492,7 +519,6 @@ export default function ConfigurationWindowBody({ windowItem }) {
 
   /* ── Render ── */
 
-  const isCdr = getActiveDomainKey(draft) === 'cdr';
   const showDraftActions = DRAFT_TABS.has(activeTab);
 
   let content = null;
@@ -507,13 +533,33 @@ export default function ConfigurationWindowBody({ windowItem }) {
         isSwitchingDomain={Boolean(busy?.label?.startsWith('Switching domain'))}
         canWrite={canWrite}
         canSwitchDomain={canSwitchDomain}
+        allowedDomains={allowedDomains}
         idleSettings={idleSettings}
         idlePolicyMeta={idlePolicyMeta}
         onIdleSettingsChange={updateIdleSettings}
       />
     );
   } else if (activeTab === 'connections') {
-    content = <ConnectionsPanel draft={draft} onChange={handleChange} canWrite={canWrite} />;
+    content = (
+      <ConnectionsPanel
+        draft={draft}
+        onChange={handleChange}
+        canWrite={canWrite}
+        columns={(
+          <OwnColumns
+            windowId={windowId}
+            apiFetch={apiFetch}
+            sessionId={mainSessionId}
+            domain={getActiveDomainKey(configuration)}
+            configuration={configuration}
+            canOverride={canAccess('columns:override') && canAccess('analysis:run') && Boolean(mainSessionId)}
+            notify={notify}
+            requestConfirmation={requestConfirmation}
+            onSaved={handleColumnsSaved}
+          />
+        )}
+      />
+    );
   } else if (activeTab === 'tools') {
     content = <ToolsPanel draft={draft} onChange={handleChange} canWrite={canWrite} />;
   } else if (activeTab === 'rules') {
@@ -525,11 +571,12 @@ export default function ConfigurationWindowBody({ windowItem }) {
         canWrite={canWrite}
         knownBuiltinRules={knownBuiltinRules}
         onManageRules={() => workspace.openWindow(WORKSPACE_WINDOW_TYPES.LIBRARIES, { metadata: { librariesUi: { activeTab: 'rules' }, librariesRequest: { tab: 'rules', seq: Date.now() } } })}
+        onOpenDomainMapping={() => { keepDomainsView(windowId, { domain: getActiveDomainKey(draft), part: 'mapping' }); selectTab('domains'); }}
         onNotice={notify}
       />
     );
-  } else if (activeTab === 'sensitivity') {
-    content = <DetectionSensitivityPanel key={getActiveDomainKey(draft)} apiFetch={apiFetch} domain={getActiveDomainKey(draft)} isCdr={isCdr} canManage={canManageUsers} notify={notify} />;
+  } else if (activeTab === 'domains') {
+    content = <DomainsPanel windowId={windowId} apiFetch={apiFetch} domains={getRegisteredDomains(draft)} activeDomain={getActiveDomainKey(draft)} canManage={canManageUsers} notify={notify} requestConfirmation={requestConfirmation} />;
   } else if (activeTab === 'activity') {
     content = <ActivityLogPanel apiFetch={apiFetch} canManage={canManageUsers} defaultSessionId={mainSessionId} />;
   }

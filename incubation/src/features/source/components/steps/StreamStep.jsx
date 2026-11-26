@@ -1,11 +1,13 @@
 import React, { useEffect, useRef } from 'react';
 
 import { formatLogTimestamp, formatStreamLog, STREAM_STATUSES } from '../../lib/sourceModel.js';
+import { taskLogHead } from '../../../tasks/lib/taskFormat.js';
+import { getLatestTaskForWindow } from '../../../tasks/lib/taskRegistry.js';
 import { StatusPill } from '../sourceUi.jsx';
 import LogLines from '../../../../shared/logs/LogLines.jsx';
 
 // keepRunning: the run's "Keep running while I'm away" option.
-export function StreamStep({ state, sessionId, logLines = [], validationMessage, keepRunning = null }) {
+export function StreamStep({ state, sessionId, windowId = '', logLines = [], validationMessage, keepRunning = null }) {
   const isLive = state.streamStatus === STREAM_STATUSES.RUNNING;
   // Hot while the backend is ingesting (red dot), passive once it completed
   // (green dot); other states keep the neutral title.
@@ -24,7 +26,7 @@ export function StreamStep({ state, sessionId, logLines = [], validationMessage,
   const downloadLog = () => {
     if (!logEntries.length) return;
     const stamp = formatLogTimestamp().replace(/[: ]/g, '-');
-    const blob = new Blob([formatStreamLog(logEntries) + '\n'], { type: 'text/plain;charset=utf-8' });
+    const blob = new Blob([taskLogHead(getLatestTaskForWindow(windowId)) + formatStreamLog(logEntries) + '\n'], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;

@@ -245,3 +245,68 @@ describe('what only an administrator may save (R2-18)', () => {
     auth.hasRole = () => true;
   });
 });
+
+describe('columns and column mapping (round 3)', () => {
+  const initial = { ...BANK, fetch_columns: ['A', 'B'], search_columns_strict: ['A'], columns_origins: { fetch_columns: 'admin' }, column_mapping: { ACC: 'ACCOUNTNO' }, column_mapping_origins: { ACC: 'profile' } };
+  const at = (tab) => ({ ...windowItem, metadata: { configurationUi: { activeTab: tab } } });
+  const saves = (apiFetch) => apiFetch.mock.calls.filter(([, options]) => options?.body?.id === 'save').map(([, options]) => options.body.configuration);
+
+  const own = { ...initial, fetch_columns: ['A', 'FEE'], columns_origins: { fetch_columns: 'override', search_columns_strict: 'profile' }, columns_default: { fetch_columns: ['A', 'B'] } };
+  const confirm = async (name) => userEvent.click(await screen.findByRole('button', { name }));
+
+  it('own columns are saved apart, the changed list only, and leave the form’s edits alone', async () => {
+    const apiFetch = vi.fn(async () => ({ message: 'success', results: { configuration: own } }));
+    render(<Harness apiFetch={apiFetch} item={at('connections')} initial={initial} />);
+    const region = screen.getByRole('region', { name: 'Own columns' });
+    const input = within(region).getByRole('textbox', { name: 'Own Fetch columns' });
+    await userEvent.clear(input);
+    await userEvent.type(input, 'A, B C');
+    expect(within(region).getByRole('alert')).toHaveTextContent('“B C”');
+    await userEvent.clear(input);
+    await userEvent.type(input, 'A, FEE');
+    await userEvent.click(within(region).getByRole('button', { name: 'Save own columns' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent('added FEE, removed B');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(saves(apiFetch)).toEqual([{ fetch_columns: ['A', 'FEE'] }]));
+    await waitFor(() => expect(within(region).getByText('Own')).toBeInTheDocument());
+  });
+
+  it('restores one list with null, and all of them in the session and the account', async () => {
+    const apiFetch = vi.fn(async () => ({ message: 'success', results: { configuration: initial } }));
+    const view = render(<Harness apiFetch={apiFetch} item={at('connections')} initial={own} />);
+    let region = screen.getByRole('region', { name: 'Own columns' });
+    expect(region).toHaveTextContent('The domain’s: A, B.');
+    await userEvent.click(within(region).getByRole('button', { name: 'Restore Fetch columns' }));
+    await confirm('Restore');
+    await waitFor(() => expect(saves(apiFetch)).toEqual([{ fetch_columns: null }]));
+    view.unmount();
+    apiFetch.mockClear();
+    render(<Harness apiFetch={apiFetch} item={at('connections')} initial={own} />);
+    region = screen.getByRole('region', { name: 'Own columns' });
+    await userEvent.click(within(region).getByRole('button', { name: 'Restore all' }));
+    await confirm('Restore');
+    await waitFor(() => expect(apiFetch.mock.calls.map(([url, options]) => [url, options.body])).toContainEqual(['/account/configuration/reset', { section: 'columns', domain: 'bank' }]));
+    expect(saves(apiFetch)).toEqual([{ fetch_columns: null, search_columns_strict: null, search_columns_fuzzy: null }]);
+  });
+
+  it('a save of the form sends no columns and no column mapping', async () => {
+    const apiFetch = vi.fn(async () => ({ message: 'success', results: { configuration: initial } }));
+    render(<Harness apiFetch={apiFetch} item={at('tools')} initial={initial} />);
+    await editToolUrl('bolt://edited');
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(saves(apiFetch)).toHaveLength(1));
+    ['fetch_columns', 'search_columns_strict', 'search_columns_fuzzy', 'column_mapping', 'columns_origins', 'column_mapping_origins', 'columns_default'].forEach((key) => expect(saves(apiFetch)[0]).not.toHaveProperty(key));
+  });
+
+  it('Rules shows the column mapping read-only and leads to its place in Domains', async () => {
+    const apiFetch = vi.fn(async () => ({ results: { config: {} } }));
+    render(<Harness apiFetch={apiFetch} item={at('rules')} initial={initial} />);
+    const table = screen.getByRole('table', { name: 'Column mapping' });
+    expect(table).toHaveTextContent('ACCOUNTNO');
+    expect(table).toHaveTextContent('Profile');
+    expect(within(table).queryByRole('textbox')).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'Open in Domains' }));
+    expect(screen.getByRole('tab', { name: /Column mapping/ })).toHaveAttribute('aria-selected', 'true');
+  });
+});
